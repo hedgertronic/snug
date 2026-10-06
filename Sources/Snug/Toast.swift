@@ -5,6 +5,8 @@ import AppKit
 @MainActor
 final class Toast: NSPanel, NSDraggingSource {
     private static var current: Toast?
+    /// Debug runs set this so scripted copies never put a toast on screen.
+    static var isSuppressed = false
     private let png: Data?
     private var file: URL?
     private var reveals: Bool
@@ -13,6 +15,7 @@ final class Toast: NSPanel, NSDraggingSource {
 
     /// A color toast passes `color` instead of a PNG and shows a swatch in place of the thumbnail.
     static func show(png: Data? = nil, message: String, file: URL? = nil, color: NSColor? = nil) {
+        guard !isSuppressed else { return }
         current?.orderOut(nil)
         let toast = Toast(png: png, message: message, file: file, color: color)
         current = toast

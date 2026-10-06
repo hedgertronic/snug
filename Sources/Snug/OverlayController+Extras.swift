@@ -95,7 +95,7 @@ extension OverlayController {
         mode = .area
         helpPanel.isHidden = true
         listPanel.isHidden = true
-        previousApp?.activate()
+        if !isHeadless { previousApp?.activate() }
         previousApp = nil
     }
 

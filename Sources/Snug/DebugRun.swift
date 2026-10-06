@@ -7,6 +7,13 @@ import ScreenshotCore
 @MainActor
 enum DebugRun {
     static func privateSetup(_ overlay: OverlayController) -> URL {
+        overlay.isHeadless = true
+        Toast.isSuppressed = true
+        Task {
+            try? await Task.sleep(for: .seconds(120))
+            FileHandle.standardError.write(Data("Debug run timed out after 120 s\n".utf8))
+            exit(EXIT_FAILURE)
+        }
         let defaults = UserDefaults(suiteName: "local.snug.verify")!
         defaults.removePersistentDomain(forName: "local.snug.verify")
         Pref.register(in: defaults)

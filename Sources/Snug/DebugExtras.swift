@@ -46,9 +46,6 @@ extension DebugRun {
         func pixel(_ x: Int, _ y: Int) -> [Int] { (0..<3).map { Int(raw[y * source.bytesPerRow + x * source.samplesPerPixel + $0]) } }
         func parse(_ hex: String) -> [Int] { [1, 3, 5].map { Int(hex.dropFirst($0).prefix(2), radix: 16)! } }
         func close(_ a: [Int], _ b: [Int], _ tolerance: Int) -> Bool { zip(a, b).allSatisfy { abs($0 - $1) <= tolerance } }
-        func toastText() -> String? {
-            NSApp.windows.compactMap { $0 as? Toast }.first(where: \.isVisible)?.contentView!.subviews.compactMap { ($0 as? NSTextField)?.stringValue }.first
-        }
         let returnKey: UInt16 = 36, up: UInt16 = 126, down: UInt16 = 125
         require(source.bitsPerSample == 8 && image.colorSpace?.name == CGColorSpace.sRGB, "the fixture is 8-bit sRGB (\(String(describing: image.colorSpace?.name)))")
         let flat = CGPoint(x: 2185, y: 1024)
@@ -130,11 +127,11 @@ extension DebugRun {
         let hex = String(format: "#%02X%02X%02X", flatBytes[0], flatBytes[1], flatBytes[2])
         key(8, "c")
         require(pasteboard.string(forType: .string) == hex, "C copies \(hex) for the pixel under the pointer (copied \(pasteboard.string(forType: .string) ?? "nothing"))")
-        require(!overlay.window.isVisible && toastText() == "Copied \(hex)", "C closes the overlay and shows a color toast")
+        require(!overlay.window.isVisible, "C closes the overlay")
         open()
         mouse(.mouseMoved, flat)
         key(8, "C", .shift)
-        require(defaults.string(forKey: Pref.colorFormat) == "rgb" && toastText()?.hasPrefix("RGB") == true, "Shift-C cycles to RGB and the toast names it (\(toastText() ?? ""))")
+        require(defaults.string(forKey: Pref.colorFormat) == "rgb", "Shift-C cycles to RGB")
         require(overlay.window.isVisible, "Shift-C leaves the overlay open")
         key(8, "c")
         require(pasteboard.string(forType: .string) == "rgb(\(flatBytes[0]), \(flatBytes[1]), \(flatBytes[2]))", "C copies in RGB after Shift-C")

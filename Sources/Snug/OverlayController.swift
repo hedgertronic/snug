@@ -33,6 +33,8 @@ final class OverlayController {
     var pasteboard = NSPasteboard.general
     var defaults = UserDefaults.standard
     var mode = Mode.area
+    /// Debug runs drive the window with synthesized events; it stays transparent, below other apps' windows' level, and never takes focus.
+    var isHeadless = false
 
     var selection: AreaSelection?
     private(set) var snapPreview: CGRect?
@@ -97,14 +99,21 @@ final class OverlayController {
         scale = CGFloat(image.width) / frame.width
         extent = CGRect(x: 0, y: 0, width: image.width, height: image.height)
         windows = []
-        previousApp = displayID == nil ? nil : NSWorkspace.shared.frontmostApplication
+        previousApp = displayID == nil || isHeadless ? nil : NSWorkspace.shared.frontmostApplication
         pointer = CGPoint(x: (NSEvent.mouseLocation.x - frame.minX) * scale, y: (frame.maxY - NSEvent.mouseLocation.y) * scale)
         view.scale = scale
         view.image = image
         window.setFrame(frame, display: false)
-        window.makeKeyAndOrderFront(nil)
+        if isHeadless {
+            window.level = .normal
+            window.alphaValue = 0
+            window.ignoresMouseEvents = true
+            window.orderFrontRegardless()
+        } else {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate()
+        }
         window.makeFirstResponder(view)
-        NSApp.activate()
         signposter.endInterval("overlay shown", shown)
         let opened = ContinuousClock.now
         let draw = signposter.beginInterval("first draw")
