@@ -265,11 +265,12 @@ enum DebugRun {
         _ = privateSetup(overlay)
         let rough = CGRect(x: 350, y: 458, width: 580, height: 64)
         var stages: [(name: String, values: [Double])] = ["open overlay", "first draw", "snap", "encode", "pasteboard", "encode + pasteboard"].map { ($0, []) }
+        var snapCount = 0
         for _ in 0..<30 {
             overlay.present(image: image, frame: frame, displayID: nil)
             var run = [overlay.lastOpenMilliseconds, overlay.lastFirstDrawMilliseconds]
             var start = ContinuousClock.now
-            _ = try await SmartSnap().suggest(in: image, roughBounds: rough)
+            snapCount = try await SmartSnap().suggest(in: image, roughBounds: rough).count
             run.append(start.duration(to: .now).milliseconds)
             start = ContinuousClock.now
             let output = try await Output.encode(image, crop: rough, style: .tight, scale: overlay.scale)
@@ -291,6 +292,7 @@ enum DebugRun {
             print(stage.name.padding(toLength: 21, withPad: " ", startingAt: 0),
                   String(format: "%8.2f  %9.2f  %9.2f", stage.values[0], percentile(warm, 0.5), percentile(warm, 0.95)))
         }
+        print("snap suggestions per run: \(snapCount)")
         if CGPreflightScreenCaptureAccess() {
             let id = CGMainDisplayID()
             let start = ContinuousClock.now
