@@ -22,6 +22,14 @@ struct SelectionSessionTests {
         #expect(session.selected?.kind == .display)
     }
 
+    @Test func pickSelectsTheShortlistEntryAndLocks() {
+        var session = SelectionSession(candidates: regions, extent: extent, anchor: CGPoint(x: 150, y: 150))
+        session.pick(1)
+        #expect(session.selected?.id == session.shortlist[1].id && session.isLocked)
+        session.pick(99)
+        #expect(session.selected?.id == session.shortlist[1].id)
+    }
+
     @Test func expandingAndShrinkingRestoresExactRegion() {
         var session = SelectionSession(candidates: regions, extent: extent, anchor: CGPoint(x: 150, y: 150))
         session.expand(); #expect(session.selected?.id == "table")
