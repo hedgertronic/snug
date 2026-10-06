@@ -5,6 +5,8 @@ import AppKit
 @MainActor
 final class Toast: NSPanel, NSDraggingSource {
     private static var current: Toast?
+    /// Debug runs set this so scripted copies never put a toast on screen.
+    static var isSuppressed = false
     private let png: Data
     private var file: URL?
     private var reveals: Bool
@@ -12,6 +14,7 @@ final class Toast: NSPanel, NSDraggingSource {
     private var dragStart: NSPoint?
 
     static func show(png: Data, message: String, file: URL?) {
+        guard !isSuppressed else { return }
         current?.orderOut(nil)
         let toast = Toast(png: png, message: message, file: file)
         current = toast

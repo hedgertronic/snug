@@ -19,7 +19,7 @@ extension DebugRun {
             passed.append(message)
         }
         func waitFor(_ message: String, _ condition: () -> Bool) async throws {
-            for _ in 0..<12000 where !condition() { try await Task.sleep(for: .milliseconds(10)) }
+            for _ in 0..<3000 where !condition() { try await Task.sleep(for: .milliseconds(10)) }
             require(condition(), message)
         }
         func windowPoint(_ pixel: CGPoint) -> CGPoint {
