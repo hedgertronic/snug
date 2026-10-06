@@ -6,7 +6,7 @@ import ScreenshotCore
 /// Headless checks driven by `--image PATH`: `--verify-area-ui` and `--measure`.
 @MainActor
 enum DebugRun {
-    private static func privateSetup(_ overlay: OverlayController) -> URL {
+    static func privateSetup(_ overlay: OverlayController) -> URL {
         let defaults = UserDefaults(suiteName: "local.snug.verify")!
         defaults.removePersistentDomain(forName: "local.snug.verify")
         Pref.register(in: defaults)

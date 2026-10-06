@@ -30,12 +30,14 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: arguments[index + 1]) as CFURL, nil)!
             return CGImageSourceCreateImageAtIndex(source, 0, nil)!
         }
-        if let image, arguments.contains("--verify-area-ui") || arguments.contains("--measure") {
+        if let image, arguments.contains("--verify-area-ui") || arguments.contains("--measure") || arguments.contains("--verify-text-ui") {
             let frame = imageFrame(for: image)
             Task {
                 do {
                     if arguments.contains("--measure") {
                         try await DebugRun.measure(image: image, frame: frame, overlay: overlay)
+                    } else if arguments.contains("--verify-text-ui") {
+                        try await DebugRun.verifyText(image: image, frame: frame, overlay: overlay)
                     } else {
                         try await DebugRun.verifyArea(image: image, frame: frame, overlay: overlay)
                     }
@@ -85,8 +87,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         item.button!.image = NSImage(systemSymbolName: "rectangle.dashed", accessibilityDescription: "Snug")
         let menu = NSMenu()
         captureItem = menu.addItem(withTitle: "Capture", action: #selector(captureFromMenu), keyEquivalent: "")
-        let copyText = menu.addItem(withTitle: "Copy Text", action: nil, keyEquivalent: "")
-        copyText.isEnabled = false
+        menu.addItem(withTitle: "Copy Text", action: #selector(copyTextFromMenu), keyEquivalent: "")
         menu.addItem(withTitle: "Repeat Last Area", action: #selector(repeatLastArea), keyEquivalent: "")
         menu.addItem(withTitle: "Open Image...", action: #selector(openImage), keyEquivalent: "")
         menu.addItem(.separator())
@@ -98,6 +99,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     @objc private func captureFromMenu() { capture() }
 
+    @objc private func copyTextFromMenu() { capture(text: true) }
+
     // MARK: Capture
 
     private func screenUnderPointer() -> (screen: NSScreen, id: CGDirectDisplayID) {
@@ -105,7 +108,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         return (screen, CGDirectDisplayID((screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value))
     }
 
-    private func capture() {
+    private func capture(text: Bool = false) {
         guard !overlay.window.isVisible else { return }
         guard CGPreflightScreenCaptureAccess() else { return showFirstRun() }
         let (screen, id) = screenUnderPointer()
@@ -117,6 +120,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 signposter.endInterval("capture", capturing)
                 try Task.checkCancellation()
                 overlay.present(image: image, frame: screen.frame, displayID: id)
+                if text { overlay.enterText() }
                 let rects = await DisplayCapture.windowRects(on: id, pixelScale: overlay.scale)
                 if overlay.image === image { overlay.setWindows(rects, pointer: NSEvent.mouseLocation) }
             } catch is CancellationError {

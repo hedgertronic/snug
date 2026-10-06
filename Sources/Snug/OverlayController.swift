@@ -34,7 +34,7 @@ final class OverlayController {
     var defaults = UserDefaults.standard
     var mode = Mode.area
 
-    private(set) var selection: AreaSelection?
+    var selection: AreaSelection?
     private(set) var snapPreview: CGRect?
     private(set) var image: CGImage?
     private(set) var scale: CGFloat = 1
@@ -45,10 +45,14 @@ final class OverlayController {
     /// The running debounce/snap or on-demand fit computation, if any.
     private(set) var snapTask: Task<Void, any Error>?
     /// The running encode and pasteboard/save work after a commit.
-    private(set) var commitTask: Task<Void, Never>?
+    var commitTask: Task<Void, Never>?
+    /// Text mode: the drag, region, OCR result, and picked item; the running OCR; and how links open.
+    var text = TextSession()
+    var textTask: Task<Void, Never>?
+    var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
 
     private let bar = StyleBar()
-    private var extent = CGRect.zero
+    private(set) var extent = CGRect.zero
     private var windows: [CGRect] = []
     private var hoverWindow: CGRect?
     private var interaction = Interaction.none
@@ -79,6 +83,7 @@ final class OverlayController {
     /// Shows the frozen image in the reused window. `frame` is in screen points.
     func present(image: CGImage, frame: CGRect, displayID: CGDirectDisplayID?) {
         cancelWork()
+        mode = .area
         let start = ContinuousClock.now
         let shown = signposter.beginInterval("overlay shown")
         self.image = image
@@ -120,10 +125,13 @@ final class OverlayController {
         selection = nil
         interaction = .none
         spaceHeld = false
+        text = TextSession()
         refresh()
     }
 
-    private func cancelWork() {
+    func cancelWork() {
+        textTask?.cancel()
+        textTask = nil
         snapTask?.cancel()
         snapTask = nil
         snapPreview = nil
@@ -141,6 +149,7 @@ final class OverlayController {
     }
 
     func mouseDown(_ event: NSEvent) {
+        guard mode != .text else { return textMouseDown(event) }
         let point = view.pixelPoint(event)
         hadSelection = selection != nil
         if let selection {
@@ -161,6 +170,7 @@ final class OverlayController {
     }
 
     func mouseDragged(_ event: NSEvent) {
+        guard mode != .text else { return textMouseDragged(event) }
         let point = view.pixelPoint(event)
         switch interaction {
         case .none:
@@ -179,6 +189,7 @@ final class OverlayController {
     }
 
     func mouseUp(_ event: NSEvent) {
+        guard mode != .text else { return textMouseUp(event) }
         let point = view.pixelPoint(event)
         let finished = interaction
         interaction = .none
@@ -261,7 +272,8 @@ final class OverlayController {
         let handled: Bool
         switch mode {
         case .area: handled = handleAreaKey(event)
-        case .text, .element: handled = false
+        case .text: handled = handleTextKey(event)
+        case .element: handled = false
         }
         refresh()
         return handled
@@ -283,6 +295,7 @@ final class OverlayController {
         case (_, true, "1"): style = .tight
         case (_, true, "2"): style = .margin
         case (_, true, "3"): style = .backdrop
+        case (_, false, "t"): enterText()
         case (_, false, "m"): style = style.next
         case (_, false, "s"): defaults.set(!snapEnabled, forKey: Pref.snap)
         case (_, false, "f"):
@@ -328,7 +341,12 @@ final class OverlayController {
 
     // MARK: Drawing
 
-    private func refresh() {
+    func refresh() {
+        guard mode != .text else {
+            bar.isHidden = true
+            return refreshText()
+        }
+        view.textOverlay.layer.isHidden = true
         var overlays = OverlayView.Overlays()
         if case .drawing(let drag) = interaction, drag.rect.width > 0 || drag.rect.height > 0 { overlays.ghost = drag.rect }
         overlays.preview = snapPreview
