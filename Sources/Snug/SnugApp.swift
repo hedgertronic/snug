@@ -30,12 +30,14 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: arguments[index + 1]) as CFURL, nil)!
             return CGImageSourceCreateImageAtIndex(source, 0, nil)!
         }
-        if let image, arguments.contains("--verify-area-ui") || arguments.contains("--measure") {
+        if let image, arguments.contains("--verify-area-ui") || arguments.contains("--verify-extras-ui") || arguments.contains("--measure") {
             let frame = imageFrame(for: image)
             Task {
                 do {
                     if arguments.contains("--measure") {
                         try await DebugRun.measure(image: image, frame: frame, overlay: overlay)
+                    } else if arguments.contains("--verify-extras-ui") {
+                        try await DebugRun.verifyExtras(image: image, frame: frame, overlay: overlay)
                     } else {
                         try await DebugRun.verifyArea(image: image, frame: frame, overlay: overlay)
                     }

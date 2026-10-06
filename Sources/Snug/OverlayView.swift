@@ -16,6 +16,7 @@ final class OverlayView: NSView {
     var image: CGImage? { didSet { imageLayer.contents = image } }
     var overlays = Overlays() { didSet { layoutOverlays() } }
 
+    let guides = Guides()
     private let imageLayer = CALayer()
     private let dimLayer = CAShapeLayer()
     private let hoverLayer = CAShapeLayer()
@@ -33,6 +34,7 @@ final class OverlayView: NSView {
             shape.fillColor = nil
             layer!.addSublayer(shape)
         }
+        layer!.addSublayer(guides.root)
         dimLayer.fillColor = NSColor.black.withAlphaComponent(0.45).cgColor
         dimLayer.fillRule = .evenOdd
         styleLayer.strokeColor = NSColor.white.cgColor
