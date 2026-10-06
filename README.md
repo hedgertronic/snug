@@ -1,6 +1,6 @@
 # Smart Screenshot Lab
 
-Latest checkpoint and next steps: [October 5 handoff](notes/handoff-2026-10-05.md).
+Latest checkpoint and next steps: [October 6 handoff](notes/handoff-2026-10-06.md) (product direction, plan, and agent instructions). Lab detector history: [October 5 handoff](notes/handoff-2026-10-05.md).
 
 Two local macOS screenshot-selection prototypes in one native app. Geometry finds visual boundaries and grid cells, supplemented by Apple OCR for text. Apple Vision finds document structures and uses geometry for grid cells and edge panels. Switch detectors while inspecting the same image, hover to preview a crop, and use the keyboard to correct the selection.
 
