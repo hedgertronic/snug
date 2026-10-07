@@ -103,7 +103,7 @@ extension DebugRun {
         // render(in:) filters slightly, so cell centers match within a few levels, not exactly.
         let size = Int(Guides.loupeSize)
         let context = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8, bytesPerRow: 0,
-                                space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         guides.loupe.render(in: context)
         let rendered = NSBitmapImageRep(cgImage: context.makeImage()!)
         let cell = Guides.loupeSize / CGFloat(Guides.loupePixels)
@@ -121,7 +121,7 @@ extension DebugRun {
         require(guides.loupe.isHidden && guides.rulers.isHidden && guides.crosshair.isHidden, "L, R, X hide the layers again")
         overlay.dismiss()
 
-        // C copies the pixel color; Shift-C cycles the format and shows it in the toast.
+        // C copies the pixel color; Shift-C cycles the format.
         open()
         mouse(.mouseMoved, flat)
         let hex = String(format: "#%02X%02X%02X", flatBytes[0], flatBytes[1], flatBytes[2])
