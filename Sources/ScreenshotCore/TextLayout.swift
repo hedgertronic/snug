@@ -48,6 +48,14 @@ public enum TextLayout {
         return rows.map { $0.sorted { $0.bounds.minX < $1.bounds.minX } }
     }
 
+    /// The paragraph-like block of lines under a point, or the single line under it; empty over whitespace.
+    public static func block(at point: CGPoint, in lines: [TextLine]) -> [TextLine] {
+        let hit = lines.first { $0.bounds.insetBy(dx: -4, dy: -4).contains(point) }
+        guard let hit else { return [] }
+        let block = groupedTextCandidates(from: lines.map(\.bounds)).first { $0.hitRegions!.contains(hit.bounds) }
+        return block.map { block in lines.filter { block.hitRegions!.contains($0.bounds) } } ?? [hit]
+    }
+
     /// Lines of one row joined by a space, rows joined by newlines.
     public static func readingOrder(_ rows: [[TextLine]]) -> String {
         rows.map { $0.map(\.text).joined(separator: " ") }.joined(separator: "\n")

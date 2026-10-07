@@ -45,3 +45,24 @@ struct TextLayoutTests {
         #expect(TextLayout.openable(nil) == nil)
     }
 }
+
+struct TextBlockTests {
+    let lines = [
+        TextLine(text: "Title", bounds: CGRect(x: 20, y: 20, width: 200, height: 20)),
+        TextLine(text: "Second", bounds: CGRect(x: 20, y: 50, width: 150, height: 20)),
+        TextLine(text: "Third", bounds: CGRect(x: 20, y: 80, width: 180, height: 20)),
+        TextLine(text: "Far away", bounds: CGRect(x: 20, y: 600, width: 100, height: 20))
+    ]
+
+    @Test func clickTakesTheWholeParagraph() {
+        #expect(TextLayout.block(at: CGPoint(x: 60, y: 60), in: lines).map(\.text) == ["Title", "Second", "Third"])
+    }
+
+    @Test func loneLineIsItsOwnBlock() {
+        #expect(TextLayout.block(at: CGPoint(x: 50, y: 610), in: lines).map(\.text) == ["Far away"])
+    }
+
+    @Test func whitespaceFindsNothing() {
+        #expect(TextLayout.block(at: CGPoint(x: 400, y: 300), in: lines).isEmpty)
+    }
+}

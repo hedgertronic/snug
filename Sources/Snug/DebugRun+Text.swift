@@ -1,6 +1,7 @@
 import AppKit
 import CoreImage
 import ScreenshotCore
+import Translation
 
 extension DebugRun {
     /// `--verify-text-ui`: drives Text mode through synthesized events on form-test.png with a QR code drawn in.
@@ -38,7 +39,8 @@ extension DebugRun {
                     isARepeat: false, keyCode: code)!)
             }
         }
-        let tab: UInt16 = 48, returnKey: UInt16 = 36, escape: UInt16 = 53, tKey: UInt16 = 17
+        let tab: UInt16 = 48, returnKey: UInt16 = 36, escape: UInt16 = 53, tKey: UInt16 = 17, fKey: UInt16 = 3, space: UInt16 = 49, cKey: UInt16 = 8
+        let left: UInt16 = 123, right: UInt16 = 124, down: UInt16 = 125
 
         // The fixture plus a QR code in an empty area.
         let qr = CIFilter(name: "CIQRCodeGenerator", parameters: ["inputMessage": Data("https://example.com/snug".utf8)])!.outputImage!
@@ -81,6 +83,8 @@ extension DebugRun {
         require(overlay.mode == .area, "the overlay opens in Area mode")
         key(tKey, "t")
         require(overlay.mode == .text, "T enters Text mode")
+        require(texts(in: overlay.chrome.hints) == ["Drag: select text", "Click: copy block", "F: all text", "A: back to area", "?: keys"], "Text mode with no region shows its hint strip")
+        require(overlay.textPage == nil, "nothing is recognized until Text mode needs it")
         overlay.dismiss()
 
         // Region over the cart: reading order, then table.
@@ -88,7 +92,7 @@ extension DebugRun {
         try await select(cart)
         require(overlay.snapPreview == nil && overlay.text.rect == cart, "a Text drag selects exactly the dragged region without snapping")
         let chrome = overlay.chrome
-        require(texts(in: chrome.hints) == ["Return: copy text", "Shift-Return: copy as table", "Tab: links", "A: back to area"], "Text mode shows its hint strip")
+        require(texts(in: chrome.hints) == ["Handles: resize", "Arrows: nudge", "Return: copy", "Option-Return: translate", "Tab: links", "F: all text"], "a Text region shows its hint strip")
         require(chrome.styleBar.isHidden && !chrome.bottomBar.isHidden && chrome.bottomBar.modeButtons[.text]!.layer!.backgroundColor != nil, "Text mode keeps the bottom bar with Text filled")
         let counts = texts(in: chrome.count)
         require(!chrome.count.isHidden && counts.count == 1 && counts[0].hasPrefix("9 lines, 2 columns"), "the region badge counts lines and columns: \(counts)")
@@ -163,6 +167,158 @@ extension DebugRun {
         key(escape)
         try await Task.sleep(for: .seconds(2))
         require(overlay.text.result == nil && overlay.textTask == nil, "dismiss cancels in-flight OCR")
+
+
+        // Click with no region copies the text block under the pointer; the page OCR is lazy and reused.
+        open()
+        let dead = CGPoint(x: 1000, y: 1250)
+        pasteboard.clearContents()
+        mouse(.leftMouseDown, dead)
+        mouse(.leftMouseUp, dead)
+        await overlay.textTask?.value
+        let page = overlay.textPage
+        require(page != nil && pasteboard.string(forType: .string) == nil && overlay.window.isVisible, "a click on empty space starts the page OCR and copies nothing")
+        let lineAt = try await page!.value.lines.first { $0.text.contains("Brief description") }!
+        let spot = CGPoint(x: lineAt.bounds.midX, y: lineAt.bounds.midY)
+        mouse(.leftMouseDown, spot)
+        mouse(.leftMouseUp, spot)
+        require(overlay.textPage == page, "the second click reuses the page OCR instead of starting another")
+        await overlay.textTask?.value
+        let block = await copied() ?? ""
+        require(!overlay.window.isVisible, "a click on text closes the overlay")
+        require(block.contains("Brief description") && block.contains("\n") && !block.contains("Billing"), "a click copies the text block under the pointer: \(block.debugDescription)")
+
+        // F selects all text on screen using the same page OCR.
+        open()
+        key(fKey, "f")
+        require(overlay.text.rect == overlay.extent, "F selects the whole screen as the region")
+        try await waitFor("whole-screen OCR") { overlay.text.result != nil }
+        require(overlay.text.result!.lines.contains { $0.text.contains("Billing") } && overlay.text.result!.lines.contains { $0.text.contains("Product name") }, "F recognizes text across the whole screen")
+        require(overlay.chrome.hints.frame.width > 0 && texts(in: overlay.chrome.hints).contains("Arrows: nudge"), "the whole-screen region is editable")
+
+        // The region stays editable: arrows, handles, move, Space-drag.
+        open()
+        try await select(cart)
+        let one = overlay.scale
+        key(right, "")
+        key(right, "")
+        require(overlay.text.rect == cart.offsetBy(dx: 2 * one, dy: 0) && overlay.text.result == nil, "arrows nudge the region and drop the stale OCR")
+        key(down, "", .shift)
+        require(overlay.text.rect == cart.offsetBy(dx: 2 * one, dy: 10 * one), "Shift-arrow nudges 10 pt")
+        let nudged = overlay.text.rect!
+        try await waitFor("OCR after nudges") { overlay.text.result != nil }
+        require(overlay.text.result!.lines.allSatisfy { nudged.insetBy(dx: -4, dy: -4).contains($0.bounds) }, "OCR re-runs once for the final nudged region")
+        overlay.dismiss()
+        open()
+        try await select(cart)
+
+        let before = overlay.text.rect!
+        mouse(.leftMouseDown, CGPoint(x: before.maxX, y: before.maxY))
+        mouse(.leftMouseDragged, CGPoint(x: before.maxX, y: before.midY))
+        mouse(.leftMouseUp, CGPoint(x: before.maxX, y: before.midY))
+        let shrunk = overlay.text.rect!
+        require(shrunk.maxY == before.midY && shrunk.minY == before.minY && overlay.text.result == nil, "dragging a handle resizes the region")
+        try await waitFor("OCR after resize") { overlay.text.result != nil }
+        require(overlay.text.result!.lines.count < lines.count && overlay.text.result!.lines.allSatisfy { shrunk.insetBy(dx: -4, dy: -4).contains($0.bounds) }, "OCR re-runs for the resized region")
+
+        mouse(.leftMouseDown, CGPoint(x: shrunk.midX, y: shrunk.midY))
+        mouse(.leftMouseDragged, CGPoint(x: shrunk.midX - 60, y: shrunk.midY + 30))
+        mouse(.leftMouseUp, CGPoint(x: shrunk.midX - 60, y: shrunk.midY + 30))
+        require(overlay.text.rect == shrunk.offsetBy(dx: -60, dy: 30), "dragging inside moves the region")
+        try await waitFor("OCR after move") { overlay.text.result != nil }
+        overlay.dismiss()
+
+        open()
+        let start = CGPoint(x: 400, y: 300)
+        mouse(.leftMouseDown, start)
+        mouse(.leftMouseDragged, CGPoint(x: 700, y: 500))
+        overlay.window.sendEvent(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: overlay.window.windowNumber, context: nil, characters: " ", charactersIgnoringModifiers: " ", isARepeat: false, keyCode: space)!)
+        mouse(.leftMouseDragged, CGPoint(x: 800, y: 560))
+        mouse(.leftMouseUp, CGPoint(x: 800, y: 560))
+        require(overlay.text.rect == CGRect(x: 500, y: 360, width: 300, height: 200), "holding Space while dragging moves the region instead of resizing it")
+        overlay.dismiss()
+
+        // Clicking inside an unmoved region copies its text; clicking outside clears it.
+        open()
+        try await select(cart)
+        pasteboard.clearContents()
+        mouse(.leftMouseDown, CGPoint(x: cart.midX, y: cart.midY))
+        mouse(.leftMouseUp, CGPoint(x: cart.midX, y: cart.midY))
+        let inside = await copied() ?? ""
+        require(inside.contains("Product name $12") && !overlay.window.isVisible, "a click inside the region copies its text")
+        open()
+        try await select(cart)
+        mouse(.leftMouseDown, CGPoint(x: 200, y: 1300))
+        mouse(.leftMouseUp, CGPoint(x: 200, y: 1300))
+        require(overlay.text.rect == nil && overlay.window.isVisible, "a click outside the region clears it without copying a block")
+        overlay.dismiss()
+
+        // C and Shift-C.
+        open()
+        try await select(cart)
+        pasteboard.clearContents()
+        let format = overlay.defaults.string(forKey: Pref.colorFormat)
+        key(cKey, "C", .shift)
+        require(overlay.defaults.string(forKey: Pref.colorFormat) != format && overlay.window.isVisible, "Shift-C cycles the color format in Text mode")
+        key(cKey, "c")
+        let color = pasteboard.string(forType: .string) ?? ""
+        require(!color.isEmpty && !color.contains("Product") && !overlay.window.isVisible, "C copies the region's color in Text mode: \(color)")
+
+        // Option-Return: the language-pair decision, with injected status and translation.
+        let german = Locale.Language(identifier: "de")
+        let notInstalled = "\(TextTranslation.name(Locale.Language(identifier: "en"))) to \(TextTranslation.name(german)) is not installed. Add it in System Settings > General > Language & Region > Translation Languages."
+        overlay.targetLanguage = german
+        overlay.translationStatus = { _, _ in .supported }
+        overlay.translate = { _, _, _ in fatalError("translate must not run for a pair that is not installed") }
+        open()
+        try await select(cart)
+        pasteboard.clearContents()
+        key(returnKey, "\r", .option)
+        try await waitFor("the not-installed notice") { overlay.text.notice != nil }
+        require(overlay.text.notice == notInstalled && texts(in: overlay.chrome.status) == [notInstalled], "Option-Return shows the not-installed pill: \(overlay.text.notice ?? "")")
+        require(overlay.window.isVisible && pasteboard.string(forType: .string) == nil, "a missing language pair keeps the overlay open and copies nothing")
+        key(tab)
+        require(overlay.text.notice == nil && overlay.chrome.status.isHidden, "the pill goes away on the next key")
+        overlay.translationStatus = { _, _ in .unsupported }
+        key(returnKey, "\r", .option)
+        try await waitFor("the unsupported notice") { overlay.text.notice != nil }
+        require(overlay.text.notice!.hasSuffix("is not supported by system translation."), "an unsupported pair says so")
+        overlay.translationStatus = { _, _ in .installed }
+        var sent: String?
+        overlay.translate = { text, _, _ in sent = text; return "UEBERSETZT" }
+        key(returnKey, "\r", .option)
+        await overlay.textTask?.value
+        let translated = await copied()
+        require(translated == "UEBERSETZT" && sent?.contains("Product name") == true && !overlay.window.isVisible, "an installed pair translates the region's text and copies the translation")
+        overlay.translationStatus = { _, _ in .installed }
+        overlay.targetLanguage = Locale.Language(identifier: "en")
+        open()
+        try await select(cart)
+        key(returnKey, "\r", .option)
+        try await waitFor("the same-language notice") { overlay.text.notice != nil }
+        require(overlay.text.notice == "Text is already in \(TextTranslation.name(overlay.targetLanguage)).", "Option-Return on text already in the target language says so")
+        overlay.dismiss()
+
+        // The real pair on this Mac: either the notice or a real translation, never a prompt.
+        let spanish = Locale.Language(identifier: "es")
+        let realStatus = await LanguageAvailability().status(from: Locale.Language(identifier: "en"), to: spanish)
+        overlay.targetLanguage = spanish
+        overlay.translationStatus = { await LanguageAvailability().status(from: $0, to: $1) }
+        overlay.translate = { try await TranslationSession(installedSource: $1, target: $2).translate($0).targetText }
+        open()
+        try await select(cart)
+        pasteboard.clearContents()
+        key(returnKey, "\r", .option)
+        if realStatus == .installed {
+            await overlay.textTask?.value
+            let real = await copied() ?? ""
+            require(!real.isEmpty && real != reading, "REAL translation ran (en to es installed): \(real.debugDescription)")
+        } else {
+            try await waitFor("the real notice") { overlay.text.notice != nil }
+            require(overlay.text.notice!.contains("English to Spanish is not"), "REAL status for en to es is \(realStatus): the notice shows, no prompt")
+        }
+        overlay.dismiss()
 
         print("Text UI verification passed:")
         passed.forEach { print("- \($0)") }

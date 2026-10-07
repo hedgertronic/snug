@@ -1,5 +1,6 @@
 import AppKit
 import ScreenshotCore
+import Translation
 
 @MainActor
 final class OverlayWindow: NSWindow {
@@ -52,6 +53,14 @@ final class OverlayController {
     var text = TextSession()
     var textTask: Task<Void, Never>?
     var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
+    /// The whole image's OCR, started the first time Text mode needs it and reused for the capture.
+    var textPage: Task<TextResult, any Error>?
+    /// Option-Return: the language to translate into, the installed-pair check, and the translation; debug runs replace them.
+    var targetLanguage = Locale.current.language
+    var translationStatus: (Locale.Language, Locale.Language) async -> LanguageAvailability.Status = { await LanguageAvailability().status(from: $0, to: $1) }
+    var translate: (String, Locale.Language, Locale.Language) async throws -> String = {
+        try await TranslationSession(installedSource: $1, target: $2).translate($0).targetText
+    }
 
     let chrome = Chrome()
     /// Points at the top of the screen the camera housing covers; chrome stays below it.
@@ -79,7 +88,7 @@ final class OverlayController {
     private var snapSuggestions: [CGRect] = []
     var bypassSnap = false
     private var hadSelection = false
-    private var spaceHeld = false
+    var spaceHeld = false
 
     var snapEnabled: Bool { defaults.bool(forKey: Pref.snap) }
     var style: OutputStyle {
@@ -108,6 +117,8 @@ final class OverlayController {
     /// Shows the frozen image in the reused window. `frame` is in screen points.
     func present(image: CGImage, frame: CGRect, displayID: CGDirectDisplayID?) {
         cancelWork()
+        textPage?.cancel()
+        textPage = nil
         let start = ContinuousClock.now
         let shown = signposter.beginInterval("overlay shown")
         self.image = image
@@ -156,6 +167,8 @@ final class OverlayController {
     /// Closes the overlay, cancels pending work, and releases the frozen image.
     func dismiss() {
         cancelWork()
+        textPage?.cancel()
+        textPage = nil
         window.orderOut(nil)
         view.image = nil
         image = nil

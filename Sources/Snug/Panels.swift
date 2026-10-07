@@ -59,11 +59,11 @@ final class CandidateList: NSVisualEffectView {
 @MainActor
 final class HelpSheet: NSView {
     static let columns: [(title: String, rows: [(keys: String, action: String)])] = [
-        ("Capture", [("drag", "Select a region"), ("click", "Copy window under pointer"), ("Option-drag", "Exact, no snap"),
-                     ("F", "Full screen"), ("Return", "Copy"), ("Cmd-S", "Save"), ("C", "Copy color"), ("Esc", "Cancel")]),
+        ("Capture", [("drag", "Select a region"), ("click", "Window, or text block in Text"), ("Option-drag", "Exact, no snap"),
+                     ("F", "Full screen, or all text"), ("Return", "Copy"), ("Cmd-S", "Save"), ("C", "Copy color"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
         ("Adjust", [("Tab", "Other fits, found items"), ("Arrows", "Nudge (Shift: 10 pt)"), ("Up / Down", "Bigger / smaller element"),
                     ("1-5", "Pick a candidate"), ("Cmd-1/2/3", "Tight / Margin / Backdrop"), ("M", "Cycle output style"),
-                    ("Shift-Return", "Copy text as table"), ("Cmd-Return", "Open picked link"), ("Shift-C", "Cycle color format")]),
+                    ("Shift-Return", "Copy text as table"), ("Option-Return", "Translate text"), ("Cmd-Return", "Open picked link"), ("Shift-C", "Cycle color format")]),
         ("Modes and view", [("A", "Area"), ("E", "Element"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),
                             ("X", "Crosshair"), ("N", "Candidate list"), ("B", "Bottom bar"), ("?", "This sheet")])
     ]

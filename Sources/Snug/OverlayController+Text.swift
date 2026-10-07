@@ -2,9 +2,19 @@ import AppKit
 import ScreenshotCore
 import Vision
 
-/// Text mode state: the drag in progress, the released region, its OCR result, and the picked found item.
+/// Text mode state: the drag or handle edit in progress, the released region, its OCR result, and the picked found item.
 struct TextSession {
+    enum Edit {
+        case resizing(Handle)
+        case moving(last: CGPoint, moved: Bool)
+    }
+
     var drag: AreaDrag?
+    var edit: Edit?
+    /// The press landed with a region on screen, so a click without a drag only clears it.
+    var hadRegion = false
+    /// A dark pill that explains why Option-Return did nothing.
+    var notice: String?
     var rect: CGRect?
     var result: (lines: [TextLine], items: [FoundItem])?
     var picked: Int?
@@ -42,37 +52,177 @@ final class TextOverlay {
     }
 }
 
+typealias TextResult = (lines: [TextLine], items: [FoundItem])
+
 extension OverlayController {
     func textMouseDown(_ event: NSEvent) {
+        let point = view.pixelPoint(event)
+        text.notice = nil
+        if let rect = text.rect {
+            if let handle = AreaSelection(extent: extent, exact: rect).handle(at: point, tolerance: 8 * scale) {
+                text.edit = .resizing(handle)
+                return
+            }
+            if rect.contains(point) {
+                text.edit = .moving(last: point, moved: false)
+                return
+            }
+        }
+        let hadRegion = text.rect != nil
         cancelWork()
-        text = TextSession(drag: AreaDrag(extent: extent, origin: view.pixelPoint(event)))
+        text = TextSession(drag: AreaDrag(extent: extent, origin: point), hadRegion: hadRegion)
         refresh()
     }
 
     func textMouseDragged(_ event: NSEvent) {
-        text.drag?.update(to: view.pixelPoint(event), moving: false)
+        let point = view.pixelPoint(event)
+        pointer = point
+        switch text.edit {
+        case .resizing(let handle):
+            var selection = AreaSelection(extent: extent, exact: text.rect!)
+            selection.resize(handle, to: point)
+            setTextRegion(selection.rect)
+        case .moving(let last, _):
+            var selection = AreaSelection(extent: extent, exact: text.rect!)
+            selection.move(by: CGPoint(x: point.x - last.x, y: point.y - last.y))
+            text.edit = .moving(last: point, moved: true)
+            setTextRegion(selection.rect)
+        case nil:
+            text.drag?.update(to: point, moving: spaceHeld)
+        }
         refresh()
     }
 
     func textMouseUp(_ event: NSEvent) {
+        let point = view.pixelPoint(event)
+        if let edit = text.edit {
+            text.edit = nil
+            if case .moving(_, false) = edit {
+                copyText(translating: false)
+            } else if text.result == nil {
+                recognizeRegion()
+            }
+            return refresh()
+        }
         guard var drag = text.drag else { return }
-        drag.update(to: view.pixelPoint(event), moving: false)
+        drag.update(to: point, moving: false)
         text.drag = nil
         let rect = drag.rect
-        if rect.width >= AreaSelection.minimumSize && rect.height >= AreaSelection.minimumSize, let image {
-            text.rect = rect
-            textTask = Task {
-                do {
-                    let result = try await Self.recognize(image, crop: rect)
-                    try Task.checkCancellation()
-                    text.result = result
-                    refresh()
-                } catch {
-                    report(error)
-                }
-            }
+        if rect.width >= AreaSelection.minimumSize && rect.height >= AreaSelection.minimumSize {
+            setTextRegion(rect)
+            recognizeRegion()
+        } else if !text.hadRegion {
+            copyBlock(at: point)
         }
         refresh()
+    }
+
+    /// Replaces the region; the old result and OCR no longer describe it.
+    private func setTextRegion(_ rect: CGRect) {
+        textTask?.cancel()
+        textTask = nil
+        text.rect = rect
+        text.result = nil
+        text.picked = nil
+    }
+
+    /// OCRs the region after a short pause; a newer edit cancels it. The whole screen reuses the one-per-session page result.
+    private func recognizeRegion() {
+        guard let rect = text.rect, let image else { return }
+        textTask?.cancel()
+        textTask = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(120))
+                let result = rect == extent ? try await pageText().value : try await Self.recognize(image, crop: rect)
+                try Task.checkCancellation()
+                text.result = result
+                refresh()
+            } catch {
+                report(error)
+            }
+        }
+    }
+
+    /// The whole frozen image, recognized once per capture and only when first needed.
+    private func pageText() -> Task<TextResult, any Error> {
+        if let textPage { return textPage }
+        let image = image!, extent = extent
+        let task = Task { try await Self.recognize(image, crop: extent) }
+        textPage = task
+        return task
+    }
+
+    /// A click with no region: copies the text block under the pointer.
+    private func copyBlock(at point: CGPoint) {
+        textTask = Task {
+            do {
+                let page = try await pageText().value
+                try Task.checkCancellation()
+                let block = TextLayout.block(at: point, in: page.lines)
+                guard !block.isEmpty else { return NSSound.beep() }
+                let rows = TextLayout.rows(block)
+                deliverText(TextLayout.readingOrder(rows), message: "Copied \(rows.count) \(rows.count == 1 ? "line" : "lines")",
+                            rect: block.dropFirst().reduce(block[0].bounds) { $0.union($1.bounds) })
+            } catch {
+                report(error)
+            }
+        }
+    }
+
+    /// Puts text on the pasteboard, closes the overlay, and toasts with a thumbnail of `rect`.
+    private func deliverText(_ copied: String, message: String, detail: String = "", rect: CGRect) {
+        guard !copied.isEmpty, let image else { return NSSound.beep() }
+        pasteboard.clearContents()
+        pasteboard.setString(copied, forType: .string)
+        let scale = scale
+        dismiss()
+        commitTask = Task {
+            do {
+                let png = try await Output.encode(image, crop: rect, style: .tight, scale: scale).png
+                Toast.show(png: png, message: message, detail: detail, file: nil)
+            } catch {
+                report(error)
+            }
+        }
+    }
+
+    /// Copies, or with `translating` translates and copies, the picked item or the region's text.
+    private func copyText(translating: Bool, asTable: Bool = false) {
+        guard let result = text.result, let rect = text.rect else { return NSSound.beep() }
+        let rows = TextLayout.rows(result.lines)
+        let string: String, message: String
+        if let picked = text.picked {
+            string = result.items[picked].text
+            message = "Copied \(result.items[picked].kind.rawValue)"
+        } else if asTable {
+            string = TextLayout.table(rows)
+            message = "Copied as table, \(rows.count) rows"
+        } else {
+            string = TextLayout.readingOrder(rows)
+            message = "Copied \(rows.count) lines"
+        }
+        guard translating else { return deliverText(string, message: message, rect: rect) }
+        guard let source = TextTranslation.language(of: string) else {
+            text.notice = "Could not tell the language of this text."
+            return
+        }
+        let target = targetLanguage
+        textTask = Task {
+            do {
+                let status = await translationStatus(source, target)
+                switch TextTranslation.plan(source: source, target: target, status: status) {
+                case .sameLanguage(let notice), .unavailable(let notice):
+                    text.notice = notice
+                    refresh()
+                case .translate:
+                    let translated = try await translate(string, source, target)
+                    try Task.checkCancellation()
+                    deliverText(translated, message: "Copied translation", detail: TextTranslation.name(target), rect: rect)
+                }
+            } catch {
+                report(error)
+            }
+        }
     }
 
     /// Runs OCR and barcode detection on the crop only; boxes come back in full-image pixels.
@@ -100,50 +250,45 @@ extension OverlayController {
         return (lines, try TextLayout.foundItems(in: lines) + barcodes)
     }
 
-    /// Esc: back to the whole text, then close. Tab / Shift-Tab: step through found items.
-    /// Return: copy; Shift-Return: copy as a table; Cmd-Return: open the picked item's link.
+    /// Esc: back to the whole text, then close. Tab / Shift-Tab: step through found items. F: all text on screen.
+    /// Arrows nudge the region (Shift: 10 pt); Space while dragging moves it.
+    /// Return: copy; Shift-Return: copy as a table; Option-Return: translate; Cmd-Return: open the picked item's link.
     func handleTextKey(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags
+        text.notice = nil
         switch event.keyCode {
         case 53:
             if text.picked == nil { dismiss() } else { text.picked = nil }
+        case 49:
+            spaceHeld = true
+        case 3 where !flags.contains(.command):
+            cancelWork()
+            setTextRegion(extent)
+            recognizeRegion()
+        case 123...126 where text.rect != nil:
+            let step = (flags.contains(.shift) ? 10 : 1) * scale
+            let delta = switch event.keyCode {
+            case 123: CGPoint(x: -step, y: 0)
+            case 124: CGPoint(x: step, y: 0)
+            case 125: CGPoint(x: 0, y: step)
+            default: CGPoint(x: 0, y: -step)
+            }
+            var selection = AreaSelection(extent: extent, exact: text.rect!)
+            selection.move(by: delta)
+            setTextRegion(selection.rect)
+            recognizeRegion()
         case 48:
             let count = text.result?.items.count ?? 0
             guard count > 0 else { break }
             let step = flags.contains(.shift) ? -1 : 1
             text.picked = text.picked.map { ($0 + step + count) % count } ?? (step > 0 ? 0 : count - 1)
         case 36, 76:
-            guard let result = text.result, let rect = text.rect, let image else { NSSound.beep(); break }
             if flags.contains(.command) {
-                guard let url = text.picked.flatMap({ result.items[$0].url }) else { NSSound.beep(); break }
+                guard let result = text.result, let url = text.picked.flatMap({ result.items[$0].url }) else { NSSound.beep(); break }
                 openURL(url)
                 dismiss()
-                break
-            }
-            let rows = TextLayout.rows(result.lines)
-            let copied: String, message: String
-            if let picked = text.picked {
-                copied = result.items[picked].text
-                message = "Copied \(result.items[picked].kind.rawValue)"
-            } else if flags.contains(.shift) {
-                copied = TextLayout.table(rows)
-                message = "Copied as table, \(rows.count) rows"
             } else {
-                copied = TextLayout.readingOrder(rows)
-                message = "Copied \(rows.count) lines"
-            }
-            guard !copied.isEmpty else { NSSound.beep(); break }
-            pasteboard.clearContents()
-            pasteboard.setString(copied, forType: .string)
-            let scale = scale
-            dismiss()
-            commitTask = Task {
-                do {
-                    let png = try await Output.encode(image, crop: rect, style: .tight, scale: scale).png
-                    Toast.show(png: png, message: message, file: nil)
-                } catch {
-                    report(error)
-                }
+                copyText(translating: flags.contains(.option), asTable: flags.contains(.shift))
             }
         default:
             return false
@@ -155,6 +300,7 @@ extension OverlayController {
         var overlays = OverlayView.Overlays()
         if let drag = text.drag, drag.rect.width > 0 || drag.rect.height > 0 { overlays.ghost = drag.rect }
         overlays.selection = text.rect
+        overlays.showsHandles = text.rect != nil
         view.overlays = overlays
         view.textOverlay.show(lines: text.result?.lines.map { view.viewRect($0.bounds) } ?? [],
                               pick: text.picked.map { view.viewRect(text.result!.items[$0].bounds) })

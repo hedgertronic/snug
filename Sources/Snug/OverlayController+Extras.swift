@@ -84,7 +84,7 @@ extension OverlayController {
 
     private var pickedColor: SRGBColor? {
         guard let image else { return nil }
-        return ColorFormat.average(of: image, in: selection?.rect ?? CGRect(origin: pointerPixel, size: CGSize(width: 1, height: 1)))
+        return ColorFormat.average(of: image, in: selection?.rect ?? text.rect ?? CGRect(origin: pointerPixel, size: CGSize(width: 1, height: 1)))
     }
 
     private func swatch(_ color: SRGBColor) -> NSColor { NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1) }

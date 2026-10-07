@@ -5,7 +5,8 @@ import ScreenshotCore
 extension OverlayController {
     private var hints: [String] {
         switch mode {
-        case .text: ["Return: copy text", "Shift-Return: copy as table", "Tab: links", "A: back to area"]
+        case .text where text.rect != nil: ["Handles: resize", "Arrows: nudge", "Return: copy", "Option-Return: translate", "Tab: links", "F: all text"]
+        case .text: ["Drag: select text", "Click: copy block", "F: all text", "A: back to area", "?: keys"]
         case .element: ["Click: copy", "Up / Down: bigger / smaller", "1-5: pick", "A: back to area", "?: keys"]
         case .area where selection != nil: ["Handles: resize", "Arrows: nudge", "Tab: other fits", "Esc: cancel"]
         case .area: [snapEnabled ? "Pause to snap" : "S: snap back on", "Return: copy", "Option: exact", "Click: window", "Option-click: no shadow", "F: full screen", "?: keys"]
@@ -114,6 +115,11 @@ extension OverlayController {
                 c.reading.show("reading") { [NSTextField("Reading text...", size: 12, color: .white)] }
                 centered(c.reading, in: box)
             }
+        }
+
+        if mode == .text, let notice = text.notice {
+            c.status.show(notice) { [NSTextField(notice, size: 12, color: .white)] }
+            centered(c.status, y: floor)
         }
 
         c.list.isHidden = !(mode == .element && !listHidden && session != nil)
