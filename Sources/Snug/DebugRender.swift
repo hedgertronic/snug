@@ -144,10 +144,12 @@ extension DebugRun {
         require(menu.items.map(\.title) == ["Capture", "Copy Text", "Repeat Last Area", "Open Image...", "", "Settings...", "Quit"], "menu items: \(menu.items.map(\.title))")
         require(capture.keyEquivalent == " " && capture.keyEquivalentModifierMask == [.control, .shift], "Capture shows the shortcut as a key equivalent")
         require(menu.items[5].keyEquivalent == "," && menu.items[6].keyEquivalent == "q", "Settings and Quit carry their command keys")
-        defaults.set("\u{2303}\u{2325}K", forKey: Pref.hotKeyLabel)
+        require(Shortcut.label(from: defaults) == "\u{2303}\u{21E7}Space", "the default shortcut displays as glyphs: \(Shortcut.label(from: defaults))")
+        defaults.set(40, forKey: Pref.hotKeyCode)
         defaults.set(Int(NSEvent.ModifierFlags([.control, .option]).rawValue), forKey: Pref.hotKeyModifiers)
         capture.setShortcut(from: defaults)
         require(capture.keyEquivalent == "k" && capture.keyEquivalentModifierMask == [.control, .option], "a recorded letter shortcut updates the key equivalent")
+        require(Shortcut.label(from: defaults) == "\u{2303}\u{2325}K", "the recorded shortcut displays from code and modifiers: \(Shortcut.label(from: defaults))")
         let hintFill = overlay.chrome.hints.layer!.backgroundColor.flatMap(NSColor.init(cgColor:))!
         require(hintFill.alphaComponent >= 0.9, "the hint strip is nearly opaque: \(hintFill.alphaComponent)")
         exit(EXIT_SUCCESS)

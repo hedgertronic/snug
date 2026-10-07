@@ -13,7 +13,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     private var captureTask: Task<Void, Never>?
     private var settingsWindow: NSWindow?
     private var firstRunWindow: NSWindow?
-    private var registeredShortcut = ""
+    private var registeredShortcut: [Int] = []
 
     static func main() {
         let app = NSApplication.shared
@@ -74,12 +74,12 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     private func registerHotKey() {
         let defaults = UserDefaults.standard
-        let label = defaults.string(forKey: Pref.hotKeyLabel)!
-        guard label != registeredShortcut else { return }
+        let current = [defaults.integer(forKey: Pref.hotKeyCode), defaults.integer(forKey: Pref.hotKeyModifiers)]
+        guard current != registeredShortcut else { return }
         do {
             try hotKey!.register(keyCode: UInt32(defaults.integer(forKey: Pref.hotKeyCode)),
                                  modifiers: NSEvent.ModifierFlags(rawValue: UInt(defaults.integer(forKey: Pref.hotKeyModifiers))))
-            registeredShortcut = label
+            registeredShortcut = current
             captureItem?.setShortcut(from: defaults)
         } catch {
             NSApp.presentError(error)
@@ -203,8 +203,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 extension NSMenuItem {
     /// Shows the recorded hot key as this item's right-aligned key equivalent.
     func setShortcut(from defaults: UserDefaults) {
-        let label = defaults.string(forKey: Pref.hotKeyLabel)!
-        keyEquivalent = label.hasSuffix("Space") ? " " : String(label.last!).lowercased()
+        let name = Shortcut.keyNames[defaults.integer(forKey: Pref.hotKeyCode)]!
+        keyEquivalent = name == "Space" ? " " : name.lowercased()
         keyEquivalentModifierMask = NSEvent.ModifierFlags(rawValue: UInt(defaults.integer(forKey: Pref.hotKeyModifiers)))
     }
 }

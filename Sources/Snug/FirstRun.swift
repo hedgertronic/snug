@@ -3,7 +3,8 @@ import SwiftUI
 
 /// The Screen Recording permission screen.
 struct FirstRunView: View {
-    @AppStorage(Pref.hotKeyLabel) private var shortcut = ""
+    @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
+    @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
     @State private var tucked = false
     var onLater: () -> Void = {}
 
@@ -26,7 +27,7 @@ struct FirstRunView: View {
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 8) {
                 step(1, Text("Open System Settings and switch on Snug"))
-                step(2, Text("Press \(Text(shortcut).bold()) anywhere to capture"))
+                step(2, Text("Press \(Text(Shortcut.label(code: hotKeyCode, modifiers: hotKeyModifiers)).bold()) anywhere to capture"))
                 step(3, Text("Press \(Text("?").bold()) in the overlay any time you forget a key"))
             }
             .font(.system(size: 13))
