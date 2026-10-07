@@ -57,6 +57,8 @@ extension DebugRun {
         try snapshot("area-released")
         key(0, "2", .command)
         try snapshot("area-margin")
+        key(0, "3", .command)
+        try snapshot("area-backdrop")
         overlay.dismiss()
         defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
 
@@ -64,6 +66,14 @@ extension DebugRun {
         overlay.setWindows([CGRect(x: 300, y: 300, width: 1300, height: 1000)], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, CGPoint(x: 900, y: 700))
         try snapshot("window-hover")
+        overlay.dismiss()
+
+        open()
+        let rounded = CGRect(x: 1100, y: 250, width: 1000, height: 700)
+        overlay.setWindows([rounded], names: ["Rounded window"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        overlay.radii[rounded] = 40
+        mouse(.mouseMoved, CGPoint(x: 1600, y: 600))
+        try snapshot("window-hover-rounded")
         overlay.dismiss()
 
         open()

@@ -126,7 +126,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 overlay.present(image: image, frame: screen.frame, displayID: id)
                 if text { overlay.setMode(.text) }
                 let windows = await DisplayCapture.windows(on: id, pixelScale: overlay.scale)
-                if overlay.image === image { overlay.setWindows(windows.map(\.rect), names: windows.map(\.name), pointer: NSEvent.mouseLocation) }
+                if overlay.image === image { overlay.setWindows(windows.map(\.rect), names: windows.map(\.name), ids: windows.map(\.id), pointer: NSEvent.mouseLocation) }
             } catch is CancellationError {
             } catch {
                 NSApp.presentError(error)

@@ -226,7 +226,7 @@ extension DebugRun {
         require(chrome.bottomBar.modeButtons[.area]!.layer!.backgroundColor != nil && chrome.bottomBar.modeButtons[.text]!.layer!.backgroundColor == nil, "only the current mode is filled")
         require(abs(chrome.bottomBar.frame.midX - overlay.view.bounds.midX) <= 1 && chrome.bottomBar.frame.minY == 32, "the bottom bar is centered, 32 pt above the bottom edge")
         require(chrome.styleBar.isHidden && chrome.size.isHidden && chrome.hover.isHidden, "idle Area shows no style bar, badges, or hover title")
-        require(texts(in: chrome.hints) == ["Pause to snap", "Return: copy", "Option: exact", "Click: window", "F: full screen", "?: keys"], "idle Area hints: \(texts(in: chrome.hints))")
+        require(texts(in: chrome.hints) == ["Pause to snap", "Return: copy", "Option: exact", "Click: window", "Option-click: no shadow", "F: full screen", "?: keys"], "idle Area hints: \(texts(in: chrome.hints))")
         require(chrome.hints.frame.minY >= chrome.bottomBar.frame.maxY, "the hint strip sits above the bar")
         key(1, "s")
         require(texts(in: chrome.hints).first == "S: snap back on" && chrome.bottomBar.toggles[2].1.layer!.backgroundColor == nil, "snap off changes the first hint and the Snap toggle")
@@ -242,7 +242,12 @@ extension DebugRun {
         defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
         overlay.setWindows([CGRect(x: 300, y: 300, width: 400, height: 200)], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
-        require(texts(in: chrome.hover) == ["Browser", "400 x 200", "Click to capture this window"], "hovering a window shows its title and size: \(texts(in: chrome.hover))")
+        require(texts(in: chrome.hover) == ["Browser", "400 x 200  +  shadow", "Click to capture this window"], "hovering a window shows its title, size, and shadow: \(texts(in: chrome.hover))")
+        overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: .option, timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
+        require(texts(in: chrome.hover)[1] == "400 x 200", "holding Option drops the shadow from the hover size line: \(texts(in: chrome.hover))")
+        overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
         mouse(.mouseMoved, CGPoint(x: 40, y: 40))
         require(chrome.hover.isHidden, "the hover title goes away off the window")
         mouse(.leftMouseDown, rough.origin)

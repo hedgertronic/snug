@@ -87,13 +87,17 @@ enum DebugRun {
 
         // Pause-to-snap, release takes the preview.
         open()
+        require(overlay.view.dimLayer.path!.isEmpty, "an idle Area has no dim")
         pressDrag(rough)
+        require(!overlay.view.dimLayer.path!.isEmpty, "dragging dims everything outside the drag")
         require(overlay.snapPreview == nil, "no preview before the debounce")
         try await waitFor("drag + pause shows a snap preview") { overlay.snapPreview != nil }
         let preview = overlay.snapPreview!
         require(preview != rough && Detection.overlap(preview, rough) > 0.5, "preview \(preview) refines the drag and stays related to it")
         release(rough)
         require(overlay.selection?.rect == preview, "release takes the preview")
+        try await waitFor("the snap's corner radius") { overlay.view.overlays.radius > 0 }
+        require(overlay.view.overlays.radius == overlay.radii[preview], "the released snap keeps its measured corner radius \(overlay.view.overlays.radius)")
 
         // Tab cycles to the exact drag and back.
         var reachedExact = false
@@ -112,6 +116,7 @@ enum DebugRun {
         let before = overlay.selection!.rect
         key(right)
         require(overlay.selection?.rect == before.offsetBy(dx: scale, dy: 0), "Right nudges 1 pt")
+        require(overlay.view.overlays.radius == 0, "a nudged selection has square corners")
         key(down, "", .shift)
         require(overlay.selection?.rect == before.offsetBy(dx: scale, dy: 10 * scale), "Shift-Down nudges 10 pt")
         key(left)
@@ -254,6 +259,7 @@ enum DebugRun {
         let windowRect = CGRect(x: 300, y: 300, width: 400, height: 200)
         overlay.setWindows([windowRect], pointer: CGPoint(x: frame.minX + 10, y: frame.maxY - 10))
         mouse(.mouseMoved, CGPoint(x: 350, y: 350))
+        require(overlay.view.overlays.hover == windowRect && !overlay.view.dimLayer.path!.isEmpty, "hovering a window dims everything outside it")
         defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
         pasteboard.clearContents()
         mouse(.leftMouseDown, CGPoint(x: 350, y: 350))

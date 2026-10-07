@@ -18,10 +18,28 @@ enum DisplayCapture {
         return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
     }
 
-    /// Visible windows on a display, front to back: rectangles in image pixels with a top-left origin, and titles
-    /// (the owning app's name when a window has none).
+    /// One window as macOS captures it: real rounded corners and, unless `shadow` is false, its shadow, on a transparent
+    /// background, including parts other windows cover. Needs Screen Recording.
     @concurrent
-    static func windows(on displayID: CGDirectDisplayID, pixelScale: CGFloat) async -> [(rect: CGRect, name: String)] {
+    static func image(ofWindow id: CGWindowID, shadow: Bool) async throws -> CGImage {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        guard let window = content.windows.first(where: { $0.windowID == id }) else { throw CocoaError(.fileNoSuchFile) }
+        let filter = SCContentFilter(desktopIndependentWindow: window)
+        let info = SCShareableContent.info(for: filter)
+        let configuration = SCStreamConfiguration()
+        configuration.width = Int((info.contentRect.width * CGFloat(info.pointPixelScale)).rounded())
+        configuration.height = Int((info.contentRect.height * CGFloat(info.pointPixelScale)).rounded())
+        configuration.shouldBeOpaque = false
+        configuration.ignoreGlobalClipSingleWindow = true
+        configuration.ignoreShadowsSingleWindow = !shadow
+        configuration.showsCursor = false
+        return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+    }
+
+    /// Visible windows on a display, front to back: rectangles in image pixels with a top-left origin, titles
+    /// (the owning app's name when a window has none), and window IDs.
+    @concurrent
+    static func windows(on displayID: CGDirectDisplayID, pixelScale: CGFloat) async -> [(rect: CGRect, name: String, id: CGWindowID)] {
         let display = CGDisplayBounds(displayID)
         let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as! [[String: Any]]
         return info.compactMap { window in
@@ -34,7 +52,8 @@ enum DisplayCapture {
             let title = window[kCGWindowName as String] as? String
             return (CGRect(x: (bounds.minX - display.minX) * pixelScale, y: (bounds.minY - display.minY) * pixelScale,
                            width: bounds.width * pixelScale, height: bounds.height * pixelScale),
-                    title.flatMap { $0.isEmpty ? nil : $0 } ?? window[kCGWindowOwnerName as String] as? String ?? "Window")
+                    title.flatMap { $0.isEmpty ? nil : $0 } ?? window[kCGWindowOwnerName as String] as? String ?? "Window",
+                    CGWindowID(window[kCGWindowNumber as String] as! Int))
         }
     }
 }

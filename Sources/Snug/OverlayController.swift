@@ -60,6 +60,13 @@ final class OverlayController {
     var windows: [CGRect] = []
     var hoverWindow: CGRect?
     var windowNames: [String] = []
+    var windowIDs: [CGWindowID] = []
+    /// Option is held: a window click drops the shadow.
+    var optionHeld = false
+    /// Corner radius in pixels of each snap fit, Tab fit, Element candidate, and hovered window, measured once per rectangle.
+    /// A rectangle that is not here (an exact drag, a nudged or resized selection) has square corners.
+    var radii: [CGRect: CGFloat] = [:]
+    private var radiusTasks: [CGRect: Task<CGFloat, Never>] = [:]
     /// The last pointer position in image pixels.
     var pointer = CGPoint.zero
     var session: SelectionSession?
@@ -109,6 +116,7 @@ final class OverlayController {
         extent = CGRect(x: 0, y: 0, width: image.width, height: image.height)
         windows = []
         windowNames = []
+        windowIDs = []
         topInset = NSScreen.screens.first { $0.frame == frame }?.safeAreaInsets.top ?? 0
         previousApp = displayID == nil || isHeadless ? nil : NSWorkspace.shared.frontmostApplication
         pointer = CGPoint(x: (NSEvent.mouseLocation.x - frame.minX) * scale, y: (frame.maxY - NSEvent.mouseLocation.y) * scale)
@@ -137,9 +145,10 @@ final class OverlayController {
     }
 
     /// Supplies window rectangles (image pixels, front to back) once they are built.
-    func setWindows(_ rects: [CGRect], names: [String] = [], pointer: CGPoint) {
+    func setWindows(_ rects: [CGRect], names: [String] = [], ids: [CGWindowID] = [], pointer: CGPoint) {
         windows = rects
         windowNames = names
+        windowIDs = ids
         if mode == .element { buildSession() }
         updateHover(pixel: CGPoint(x: (pointer.x - window.frame.minX) * scale, y: (window.frame.maxY - pointer.y) * scale))
     }
@@ -152,6 +161,9 @@ final class OverlayController {
         image = nil
         windows = []
         windowNames = []
+        windowIDs = []
+        radii = [:]
+        radiusTasks = [:]
         hoverWindow = nil
         selection = nil
         interaction = .none
@@ -172,7 +184,13 @@ final class OverlayController {
 
     // MARK: Pointer
 
+    func flagsChanged(_ event: NSEvent) {
+        optionHeld = event.modifierFlags.contains(.option)
+        refresh()
+    }
+
     func mouseMoved(_ event: NSEvent) {
+        optionHeld = event.modifierFlags.contains(.option)
         pointer = view.pixelPoint(event)
         updateHover(pixel: pointer)
         updateGuides()
@@ -241,7 +259,7 @@ final class OverlayController {
             let rect = drag.rect
             if rect.width < AreaSelection.minimumSize || rect.height < AreaSelection.minimumSize {
                 cancelWork()
-                if !hadSelection, let hoverWindow { finish(crop: hoverWindow, copy: true, save: afterCaptureSaves) }
+                if !hadSelection, let hoverWindow { clickWindow(hoverWindow, shadow: !event.modifierFlags.contains(.option)) }
             } else {
                 release(rect)
             }
@@ -359,10 +377,42 @@ final class OverlayController {
         finish(crop: rect, copy: false, save: true)
     }
 
+    /// A click on a hovered window. A live capture takes the window itself like macOS does (rounded corners, shadow,
+    /// transparent background); a frozen-image run has no window to capture and crops the window's rectangle.
+    private func clickWindow(_ rect: CGRect, shadow: Bool) {
+        guard displayID != nil else { return finish(crop: rect, copy: true, save: afterCaptureSaves) }
+        let id = windowIDs[windows.firstIndex(of: rect)!]
+        dismiss()
+        commitTask = Task { [pasteboard, defaults, afterCaptureSaves] in
+            do {
+                let image = try await DisplayCapture.image(ofWindow: id, shadow: shadow)
+                let png = try await Output.png(image)
+                try Output.publish(png: png, detail: "\(image.width) x \(image.height)  window", copy: true, save: afterCaptureSaves,
+                                   pasteboard: pasteboard, defaults: defaults)
+            } catch {
+                report(error)
+            }
+        }
+    }
+
+    /// Measures a fit's corner radius off the main thread, once, and redraws when it arrives.
+    private func measureRadius(_ rect: CGRect?) {
+        guard let rect, let image, radii[rect] == nil, radiusTasks[rect] == nil else { return }
+        radiusTasks[rect] = Task {
+            let radius = await Task.detached { cornerRadius(in: image, rect: rect) }.value
+            if self.image === image {
+                radii[rect] = radius
+                refresh()
+            }
+            return radius
+        }
+    }
+
     /// Closes the overlay first, then encodes off main and delivers.
     private func finish(crop: CGRect, copy: Bool, save: Bool) {
         guard let image else { return }
         let style = style, scale = scale
+        let known = radii[crop], measuring = radiusTasks[crop]
         if let displayID {
             let area = [Double(displayID)] + [crop.minX, crop.minY, crop.width, crop.height].map { Double($0 / scale) }
             defaults.set(area, forKey: Pref.lastArea)
@@ -370,7 +420,8 @@ final class OverlayController {
         dismiss()
         commitTask = Task { [pasteboard, defaults] in
             do {
-                try await Output.deliver(image, crop: crop, style: style, scale: scale, copy: copy, save: save,
+                let radius = if let known { known } else { await measuring?.value ?? 0 }
+                try await Output.deliver(image, crop: crop, style: style, scale: scale, cornerRadius: radius, copy: copy, save: save,
                                          pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
@@ -400,8 +451,12 @@ final class OverlayController {
         if case .drawing(let drag) = interaction, drag.rect.width > 0 || drag.rect.height > 0 { overlays.ghost = drag.rect }
         overlays.preview = snapPreview
         overlays.selection = selection?.rect
-        overlays.showsHandles = selection != nil
+        overlays.showsHandles = selection != nil && mode != .element
         if selection == nil, case .none = interaction { overlays.hover = hoverWindow }
+        let fit = mode == .element ? session?.selected?.bounds : selection.flatMap { $0.rect == $0.exact ? nil : $0.rect }
+        for rect in [snapPreview, fit, overlays.hover] { measureRadius(rect) }
+        overlays.radius = radii[selection?.rect ?? snapPreview ?? .null] ?? 0
+        overlays.hoverRadius = radii[overlays.hover ?? .null] ?? 0
         if let rect = selection?.rect, style != .tight { overlays.styleFrame = style.frame(around: rect, in: extent, scale: scale) }
         view.overlays = overlays
         refreshExtras()

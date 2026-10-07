@@ -8,6 +8,9 @@ final class OverlayView: NSView {
     struct Overlays {
         var selection, ghost, preview, hover, styleFrame: CGRect?
         var showsHandles = false
+        /// Corner radius in image pixels of the selection (or the snap preview when there is no selection), and of the hovered window.
+        var radius: CGFloat = 0
+        var hoverRadius: CGFloat = 0
     }
 
     weak var controller: OverlayController?
@@ -19,7 +22,7 @@ final class OverlayView: NSView {
     let textOverlay = TextOverlay()
     let guides = Guides()
     private let imageLayer = CALayer()
-    private let dimLayer = CAShapeLayer()
+    let dimLayer = CAShapeLayer()
     private let hoverLayer = CAShapeLayer()
     private let styleLayer = CAShapeLayer()
     private let ghostLayer = CAShapeLayer()
@@ -37,12 +40,12 @@ final class OverlayView: NSView {
         }
         layer!.addSublayer(textOverlay.layer)
         layer!.addSublayer(guides.root)
-        dimLayer.fillColor = NSColor.black.withAlphaComponent(0.45).cgColor
+        dimLayer.fillColor = NSColor.black.withAlphaComponent(0.42).cgColor
         dimLayer.fillRule = .evenOdd
         styleLayer.strokeColor = NSColor.white.cgColor
         styleLayer.lineDashPattern = [5, 4]
         ghostLayer.strokeColor = NSColor.white.withAlphaComponent(0.9).cgColor
-        outlineLayer.strokeColor = NSColor.white.cgColor
+        outlineLayer.lineWidth = 2
         handlesLayer.fillColor = NSColor.white.cgColor
         handlesLayer.lineWidth = 1.5
         applyAccent()
@@ -83,6 +86,7 @@ final class OverlayView: NSView {
     override func mouseDown(with event: NSEvent) { controller?.mouseDown(event) }
     override func mouseDragged(with event: NSEvent) { controller?.mouseDragged(event) }
     override func mouseUp(with event: NSEvent) { controller?.mouseUp(event) }
+    override func flagsChanged(with event: NSEvent) { controller?.flagsChanged(event) }
     override func keyDown(with event: NSEvent) { if controller?.handleKey(event) != true { super.keyDown(with: event) } }
     override func keyUp(with event: NSEvent) { controller?.keyUp(event) }
 
@@ -98,6 +102,7 @@ final class OverlayView: NSView {
             hoverLayer.lineWidth = 2
             previewLayer.strokeColor = accent.cgColor
             previewLayer.lineWidth = 2
+            outlineLayer.strokeColor = accent.cgColor
             handlesLayer.strokeColor = accent.cgColor
         }
     }
@@ -107,18 +112,23 @@ final class OverlayView: NSView {
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         let o = overlays
-        let cutout = (o.selection ?? o.preview ?? o.ghost).map(viewRect)
+        func path(_ rect: CGRect, radius: CGFloat = 0) -> CGPath {
+            CGPath(roundedRect: viewRect(rect), cornerWidth: radius / scale, cornerHeight: radius / scale, transform: nil)
+        }
         let dim = CGMutablePath()
-        if let cutout {
+        if let cutout = o.selection ?? o.preview ?? o.ghost {
             dim.addRect(bounds)
-            dim.addRect(cutout)
+            dim.addPath(path(cutout, radius: o.radius))
+        } else if let hover = o.hover {
+            dim.addRect(bounds)
+            dim.addPath(path(hover, radius: o.hoverRadius))
         }
         dimLayer.path = dim
-        hoverLayer.path = o.hover.map { CGPath(rect: viewRect($0), transform: nil) }
-        styleLayer.path = o.styleFrame.map { CGPath(rect: viewRect($0), transform: nil) }
-        ghostLayer.path = o.ghost.map { CGPath(rect: viewRect($0), transform: nil) }
-        outlineLayer.path = o.selection.map { CGPath(rect: viewRect($0), transform: nil) }
-        previewLayer.path = o.preview.map { CGPath(rect: viewRect($0), transform: nil) }
+        hoverLayer.path = o.hover.map { path($0, radius: o.hoverRadius) }
+        styleLayer.path = o.styleFrame.map { path($0) }
+        ghostLayer.path = o.ghost.map { path($0) }
+        outlineLayer.path = o.selection.map { path($0, radius: o.radius) }
+        previewLayer.path = o.preview.map { path($0, radius: o.radius) }
         let handles = CGMutablePath()
         if o.showsHandles, let selection = o.selection {
             for handle in Handle.allCases {

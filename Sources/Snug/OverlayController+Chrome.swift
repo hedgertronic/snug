@@ -8,7 +8,7 @@ extension OverlayController {
         case .text: ["Return: copy text", "Shift-Return: copy as table", "Tab: links", "A: back to area"]
         case .element: ["Click: copy", "Up / Down: bigger / smaller", "1-5: pick", "A: back to area", "?: keys"]
         case .area where selection != nil: ["Handles: resize", "Arrows: nudge", "Tab: other fits", "Esc: cancel"]
-        case .area: [snapEnabled ? "Pause to snap" : "S: snap back on", "Return: copy", "Option: exact", "Click: window", "F: full screen", "?: keys"]
+        case .area: [snapEnabled ? "Pause to snap" : "S: snap back on", "Return: copy", "Option: exact", "Click: window", "Option-click: no shadow", "F: full screen", "?: keys"]
         }
     }
 
@@ -89,7 +89,7 @@ extension OverlayController {
 
         if mode == .area, selection == nil, let rect = overlays.hover {
             let name = windows.firstIndex(of: rect).flatMap { windowNames.indices.contains($0) ? windowNames[$0] : nil } ?? "Window"
-            let size = "\(Int(rect.width)) x \(Int(rect.height))"
+            let size = "\(Int(rect.width)) x \(Int(rect.height))" + (optionHeld ? "" : "  +  shadow")
             c.hover.show("\(name)|\(size)") {
                 [NSTextField(name, size: 15, weight: .semibold, color: .white), NSTextField(size, size: 12, mono: true, color: NSColor.white.withAlphaComponent(0.7)),
                  NSTextField("Click to capture this window", size: 12, color: NSColor.white.withAlphaComponent(0.92))]
