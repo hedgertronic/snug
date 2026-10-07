@@ -16,6 +16,8 @@ struct TextSession {
     /// A dark pill that explains why Option-Return did nothing.
     var notice: String?
     var rect: CGRect?
+    /// Where a click with no region is waiting on the whole-page OCR.
+    var reading: CGPoint?
     var result: (lines: [TextLine], items: [FoundItem])?
     var picked: Int?
 }
@@ -154,7 +156,14 @@ extension OverlayController {
 
     /// A click with no region: copies the text block under the pointer.
     private func copyBlock(at point: CGPoint) {
+        text.reading = point
         textTask = Task {
+            defer {
+                if !Task.isCancelled {
+                    text.reading = nil
+                    refresh()
+                }
+            }
             do {
                 let page = try await pageText().value
                 try Task.checkCancellation()

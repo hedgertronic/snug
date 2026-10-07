@@ -164,8 +164,9 @@ extension DebugRun {
         mouse(.leftMouseDown, CGPoint(x: cart.minX, y: cart.minY))
         mouse(.leftMouseDragged, CGPoint(x: cart.maxX, y: cart.maxY))
         mouse(.leftMouseUp, CGPoint(x: cart.maxX, y: cart.maxY))
+        let inFlight = overlay.textTask
         key(escape)
-        try await Task.sleep(for: .seconds(2))
+        await inFlight?.value
         require(overlay.text.result == nil && overlay.textTask == nil, "dismiss cancels in-flight OCR")
 
 
@@ -175,7 +176,9 @@ extension DebugRun {
         pasteboard.clearContents()
         mouse(.leftMouseDown, dead)
         mouse(.leftMouseUp, dead)
+        require(!overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."], "a click with no region shows the Reading text... pill while the page OCR runs")
         await overlay.textTask?.value
+        require(overlay.chrome.reading.isHidden, "the Reading text... pill goes away when the click's OCR finishes")
         let page = overlay.textPage
         require(page != nil && pasteboard.string(forType: .string) == nil && overlay.window.isVisible, "a click on empty space starts the page OCR and copies nothing")
         let lineAt = try await page!.value.lines.first { $0.text.contains("Brief description") }!
@@ -192,7 +195,9 @@ extension DebugRun {
         open()
         key(fKey, "f")
         require(overlay.text.rect == overlay.extent, "F selects the whole screen as the region")
+        require(!overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."], "F shows the Reading text... pill while the whole-screen OCR runs")
         try await waitFor("whole-screen OCR") { overlay.text.result != nil }
+        require(overlay.chrome.reading.isHidden, "the Reading text... pill goes away when the whole-screen OCR finishes")
         require(overlay.text.result!.lines.contains { $0.text.contains("Billing") } && overlay.text.result!.lines.contains { $0.text.contains("Product name") }, "F recognizes text across the whole screen")
         require(overlay.chrome.hints.frame.width > 0 && texts(in: overlay.chrome.hints).contains("Arrows: nudge"), "the whole-screen region is editable")
 

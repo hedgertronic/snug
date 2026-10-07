@@ -117,6 +117,11 @@ extension OverlayController {
             }
         }
 
+        if mode == .text, let point = text.reading {
+            c.reading.show("reading") { [NSTextField("Reading text...", size: 12, color: .white)] }
+            centered(c.reading, in: view.viewRect(CGRect(origin: point, size: .zero)))
+        }
+
         if mode == .text, let notice = text.notice {
             c.status.show(notice) { [NSTextField(notice, size: 12, color: .white)] }
             centered(c.status, y: floor)
