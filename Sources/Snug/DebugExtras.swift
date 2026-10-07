@@ -283,27 +283,40 @@ extension DebugRun {
 
         // Chrome: bottom bar, hints, badges, style bar, hover title, and the safe area.
         let chrome = overlay.chrome
+        let width0 = overlay.view.bounds.width
         let guides2 = overlay.view.guides
         open()
         mouse(.mouseMoved, flat)
-        require(["Area", "Element", "Text", "Loupe", "Rulers", "Snap", "Tight", "M"].allSatisfy(texts(in: chrome.bottomBar).contains), "the bottom bar shows modes, toggles, and style with key caps: \(texts(in: chrome.bottomBar))")
-        require(chrome.bottomBar.modeButtons[.area]!.layer!.backgroundColor != nil && chrome.bottomBar.modeButtons[.text]!.layer!.backgroundColor == nil, "only the current mode is filled")
-        require(abs(chrome.bottomBar.frame.midX - overlay.view.bounds.midX) <= 1 && chrome.bottomBar.frame.minY == 32, "the bottom bar is centered, 32 pt above the bottom edge")
-        require(chrome.styleBar.isHidden && chrome.size.isHidden && chrome.hover.isHidden, "idle Area shows no style bar, badges, or hover title")
-        require(texts(in: chrome.hints) == ["Pause to snap", "Return: copy", "Option: exact", "Click: window", "Option-click: no shadow", "F: full screen", "?: keys"], "idle Area hints: \(texts(in: chrome.hints))")
-        require(chrome.hints.frame.minY >= chrome.bottomBar.frame.maxY, "the hint strip sits above the bar")
-        key(1, "s")
-        require(texts(in: chrome.hints).first == "S: snap back on" && chrome.bottomBar.toggles[2].1.layer!.backgroundColor == nil, "snap off changes the first hint and the Snap toggle")
-        key(1, "s")
-        chrome.bottomBar.toggles[0].1.onClick()
-        require(defaults.bool(forKey: Pref.loupe) && !overlay.view.guides.loupe.isHidden && chrome.bottomBar.toggles[0].1.layer!.backgroundColor != nil, "clicking Loupe turns it on")
-        chrome.bottomBar.toggles[0].1.onClick()
-        chrome.bottomBar.toggles[2].1.onClick()
-        require(!defaults.bool(forKey: Pref.snap), "clicking Snap turns snap off")
-        chrome.bottomBar.toggles[2].1.onClick()
-        chrome.bottomBar.styleButton.onClick()
-        require(overlay.style == .margin && texts(in: chrome.bottomBar).contains("Margin"), "clicking the style button cycles the style")
+        require(["Area", "Element", "Text", "Loupe", "Rulers", "Snap", "Tight", "M", "Shadow", "D"].allSatisfy(texts(in: chrome.bottomBar).contains), "the bottom bar shows modes, toggles, style, and shadow with key caps: \(texts(in: chrome.bottomBar))")
+        let bottom = chrome.bottomBar
+        let barButtons = [.area, .element, .text].map { bottom.modeButtons[$0]! } + bottom.toggles.map { $0.1 } + [bottom.styleButton, bottom.shadowButton]
+        func clipped() -> [String] {
+            barButtons.filter { $0.title.cell!.cellSize.width > $0.title.frame.width || $0.title.frame.maxX > $0.frame.width }.map { $0.title.stringValue }
+        }
+        let barWidth = bottom.frame.width
+        for style in OutputStyle.allCases {
+            for mode in [OverlayController.Mode.area, .element, .text] {
+                defaults.set(style.rawValue, forKey: Pref.style)
+                bottom.click(mode)
+                overlay.refresh()
+                require(clipped().isEmpty && bottom.frame.width == barWidth, "no bar title clips and the bar keeps its width with \(style) and \(mode) selected: \(clipped()) \(bottom.frame.width)")
+            }
+        }
         defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
+        bottom.click(.area)
+        overlay.refresh()
+        require(barButtons.allSatisfy { $0.cap.frame.maxY <= $0.title.frame.minY }, "every bar button shows its key cap below its title")
+        bottom.layoutSubtreeIfNeeded()
+        let d = bottom.dividers.map(\.frame.minX), toggles = bottom.toggles.map { $0.1 }
+        require(bottom.modeButtons[.text]!.frame.maxX <= d[0] && d[0] <= toggles[0].frame.minX && toggles[2].frame.maxX <= d[1] && d[1] <= bottom.styleButton.frame.minX
+                && bottom.styleButton.frame.maxX <= bottom.shadowButton.frame.minX, "the bar has three groups: modes | loupe, rulers, snap | style, shadow")
+        defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
+        require(defaults.bool(forKey: Pref.shadow) && bottom.shadowButton.layer!.backgroundColor != nil, "the window shadow defaults to on")
+        key(2, "d")
+        require(!defaults.bool(forKey: Pref.shadow) && bottom.shadowButton.layer!.backgroundColor == nil, "D turns the window shadow off and the Shadow button follows")
+        require(texts(in: chrome.hints).contains("Option-click: with shadow") && overlay.windowShadow(option: false) == false && overlay.windowShadow(option: true), "with the shadow off, Option-click puts it back")
+        bottom.shadowButton.onClick()
+        require(defaults.bool(forKey: Pref.shadow) && texts(in: chrome.hints).contains("Option-click: no shadow") && overlay.windowShadow(option: false) && !overlay.windowShadow(option: true), "the Shadow button turns it back on, and Option-click then drops it")
         overlay.setWindows([CGRect(x: 300, y: 300, width: 400, height: 200)], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
         require(texts(in: chrome.hover) == ["Browser", "400 x 200  +  shadow", "Click to capture this window"], "hovering a window shows its title, size, and shadow: \(texts(in: chrome.hover))")
@@ -312,6 +325,15 @@ extension DebugRun {
         require(texts(in: chrome.hover)[1] == "400 x 200", "holding Option drops the shadow from the hover size line: \(texts(in: chrome.hover))")
         overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
+        defaults.set(false, forKey: Pref.shadow)
+        overlay.refresh()
+        require(texts(in: chrome.hover)[1] == "400 x 200", "with the shadow off, the hover size line has no shadow: \(texts(in: chrome.hover))")
+        overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: .option, timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
+        require(texts(in: chrome.hover)[1] == "400 x 200  +  shadow", "with the shadow off, holding Option shows the shadow on the hover size line: \(texts(in: chrome.hover))")
+        overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
+        defaults.set(true, forKey: Pref.shadow)
         mouse(.mouseMoved, CGPoint(x: 40, y: 40))
         require(chrome.hover.isHidden, "the hover title goes away off the window")
         mouse(.leftMouseDown, rough.origin)
@@ -333,6 +355,16 @@ extension DebugRun {
         require(texts(in: chrome.status) == ["Exact - Tab: fits"], "Tab to the exact drag shows Exact")
         key(53, "")
         require(chrome.styleBar.isHidden && chrome.size.isHidden && chrome.status.isHidden, "Esc takes the style bar and badges away")
+
+        // Hint strip: on a narrow screen it drops hints from the end and keeps "?: keys" last.
+        open()
+        let fullHints = texts(in: chrome.hints)
+        overlay.view.setFrameSize(CGSize(width: 520, height: overlay.view.bounds.height))
+        overlay.refresh()
+        let narrowHints = texts(in: chrome.hints)
+        require(chrome.hints.frame.width <= 520 - 16 && narrowHints.count < fullHints.count && narrowHints.first == fullHints.first && narrowHints.last == "?: keys", "a 520 pt screen drops hints from the end and keeps ?: keys last: \(narrowHints)")
+        overlay.view.setFrameSize(CGSize(width: width0, height: overlay.view.bounds.height))
+        overlay.dismiss()
 
         // Safe area: with a simulated 38 pt inset, nothing sits under the camera housing.
         open()

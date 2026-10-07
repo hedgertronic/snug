@@ -57,6 +57,16 @@ extension DebugRun {
         overlay.dismiss()
 
         open()
+        defaults.set(OutputStyle.backdrop.rawValue, forKey: Pref.style)
+        defaults.set(false, forKey: Pref.shadow)
+        key(14, "e")
+        mouse(.mouseMoved, CGPoint(x: 1200, y: 1000))
+        try snapshot("bar-element-backdrop")
+        defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
+        defaults.set(true, forKey: Pref.shadow)
+        overlay.dismiss()
+
+        open()
         drag(rough, release: false)
         try await waitFor("a snap preview") { overlay.snapPreview != nil }
         try snapshot("area-drag-snap")

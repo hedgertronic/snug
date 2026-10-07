@@ -114,30 +114,25 @@ final class KeyCap: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
-/// A clickable title with a key cap, beside it or under it.
+/// A clickable title with its key cap under it. The width fits the widest of `titles` in semibold, so a changing or selected
+/// title never clips and the button never changes size.
 @MainActor
 final class BarButton: NSView {
     var onClick: () -> Void = {}
     let title: NSTextField
     let cap: KeyCap
 
-    init(_ title: String, key: String, width: CGFloat? = nil, height: CGFloat = 44, stacked: Bool = false) {
-        self.title = NSTextField(title, size: stacked ? 11 : 13)
+    init(_ title: String, key: String, titles: [String] = [], height: CGFloat = 46) {
+        self.title = NSTextField(title, size: 12)
         cap = KeyCap(key)
         super.init(frame: .zero)
         wantsLayer = true
         layer!.cornerRadius = 9
-        self.title.sizeToFit()
-        let content = stacked ? max(self.title.frame.width, cap.frame.width) : self.title.frame.width + 6 + cap.frame.width
-        frame.size = CGSize(width: width ?? content + 24, height: height)
-        if stacked {
-            self.title.frame.origin = CGPoint(x: (frame.width - self.title.frame.width) / 2, y: height - self.title.frame.height - 6)
-            cap.frame.origin = CGPoint(x: (frame.width - cap.frame.width) / 2, y: 6)
-        } else {
-            let x = (frame.width - content) / 2
-            self.title.frame.origin = CGPoint(x: x, y: (height - self.title.frame.height) / 2)
-            cap.frame.origin = CGPoint(x: x + self.title.frame.width + 6, y: (height - cap.frame.height) / 2)
-        }
+        let widest = (titles + [title]).map { NSTextField($0, size: 12, weight: .semibold).frame.width }.max()!
+        frame.size = CGSize(width: max(widest, cap.frame.width) + 20, height: height)
+        self.title.alignment = .center
+        self.title.frame = CGRect(x: 0, y: height - self.title.frame.height - 6, width: frame.width, height: self.title.frame.height)
+        cap.frame.origin = CGPoint(x: (frame.width - cap.frame.width) / 2, y: 6)
         addSubview(self.title)
         addSubview(cap)
     }
@@ -207,7 +202,7 @@ class Capsule: NSView {
     }
 }
 
-/// The bottom bar: modes, view toggles, and the output style.
+/// The bottom bar in three groups: modes, view toggles, and output (style and shadow).
 @MainActor
 final class BottomBar: Capsule {
     var onMode: (OverlayController.Mode) -> Void = { _ in }
@@ -215,17 +210,19 @@ final class BottomBar: Capsule {
     var onStyle: () -> Void = {}
     private(set) var modes: [OverlayController.Mode] = []
     let modeButtons: [OverlayController.Mode: BarButton] = [.area: BarButton("Area", key: "A"), .element: BarButton("Element", key: "E"), .text: BarButton("Text", key: "T")]
-    let toggles = [(Pref.loupe, BarButton("Loupe", key: "L", width: 52, stacked: true)),
-                   (Pref.rulers, BarButton("Rulers", key: "R", width: 52, stacked: true)),
-                   (Pref.snap, BarButton("Snap", key: "S", width: 52, stacked: true))]
-    let styleButton = BarButton("Tight", key: "M", width: 68, stacked: true)
-    private let divider = Capsule.divider()
+    let toggles = [(Pref.loupe, BarButton("Loupe", key: "L")),
+                   (Pref.rulers, BarButton("Rulers", key: "R")),
+                   (Pref.snap, BarButton("Snap", key: "S"))]
+    let styleButton = BarButton("Tight", key: "M", titles: OutputStyle.allCases.map { $0.rawValue.capitalized })
+    let shadowButton = BarButton("Shadow", key: "D")
+    let dividers = [Capsule.divider(), Capsule.divider()]
 
     override init(spacing: CGFloat = 4) {
         super.init(spacing: spacing)
         for (mode, button) in modeButtons { button.onClick = { [unowned self] in onMode(mode) } }
         for (key, button) in toggles { button.onClick = { [unowned self] in onToggle(key) } }
         styleButton.onClick = { [unowned self] in onStyle() }
+        shadowButton.onClick = { [unowned self] in onToggle(Pref.shadow) }
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -235,13 +232,13 @@ final class BottomBar: Capsule {
         let wanted: [OverlayController.Mode] = elementEnabled ? [.area, .element, .text] : [.area, .text]
         if wanted != modes {
             modes = wanted
-            setItems(wanted.map { modeButtons[$0]! } + [divider] + toggles.map(\.1) + [styleButton])
+            setItems(wanted.map { modeButtons[$0]! } + [dividers[0]] + toggles.map(\.1) + [dividers[1], styleButton, shadowButton])
         }
         for (current, button) in modeButtons {
             let selected = current == mode
             button.style(fill: selected ? .controlAccentColor : nil, text: selected ? .white : .labelColor, bold: selected)
         }
-        for (key, button) in toggles {
+        for (key, button) in toggles + [(Pref.shadow, shadowButton)] {
             let on = defaults.bool(forKey: key)
             button.style(fill: on ? NSColor.controlAccentColor.withAlphaComponent(0.15) : nil, text: on ? .controlAccentColor : .secondaryLabelColor)
         }
@@ -259,7 +256,7 @@ final class StyleBar: Capsule {
     var onStyle: (OutputStyle) -> Void = { _ in }
     var onSave: () -> Void = {}
     var onCopy: () -> Void = {}
-    let segments = OutputStyle.allCases.enumerated().map { BarButton($1.rawValue.capitalized, key: "\u{2318}\($0 + 1)", height: 38) }
+    let segments = OutputStyle.allCases.enumerated().map { BarButton($1.rawValue.capitalized, key: "\u{2318}\($0 + 1)") }
     let save = BarButton("Save", key: "\u{2318}S")
     let copy = BarButton("Copy", key: "Return")
 
