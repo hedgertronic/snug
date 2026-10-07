@@ -52,20 +52,15 @@ public enum OutputStyle: String, CaseIterable, Sendable {
                                       space: image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
         else { throw CocoaError(.fileWriteUnknown) }
-        context.setFillColor(CGColor(red: 0.91, green: 0.89, blue: 0.96, alpha: 1))
-        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
         // CGContext has a bottom-left origin; the padding is symmetric so the image rect needs no flip.
         let target = CGRect(x: crop.minX - frame.minX, y: crop.minY - frame.minY, width: crop.width, height: crop.height)
         let radius = cornerRadius > 0 ? cornerRadius : 10 * scale
-        context.setShadow(offset: CGSize(width: 0, height: -6 * scale), blur: 18 * scale,
-                          color: CGColor(gray: 0, alpha: 0.28))
-        context.addPath(CGPath(roundedRect: target, cornerWidth: radius, cornerHeight: radius, transform: nil))
-        context.setFillColor(CGColor(gray: 1, alpha: 1))
-        context.fillPath()
-        context.setShadow(offset: .zero, blur: 0)
+        context.setShadow(offset: CGSize(width: 0, height: -6 * scale), blur: 18 * scale, color: CGColor(gray: 0, alpha: 0.28))
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
         context.addPath(CGPath(roundedRect: target, cornerWidth: radius, cornerHeight: radius, transform: nil))
         context.clip()
         context.draw(source, in: target)
+        context.endTransparencyLayer()
         guard let output = context.makeImage() else { throw CocoaError(.fileWriteUnknown) }
         return output
     }

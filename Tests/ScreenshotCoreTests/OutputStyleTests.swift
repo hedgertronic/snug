@@ -58,4 +58,24 @@ struct OutputStyleTests {
         #expect(ColorFormat.average(of: margin, in: CGRect(x: 0, y: 0, width: margin.width, height: margin.height)) ==
                 ColorFormat.average(of: marginWithRadius, in: CGRect(x: 0, y: 0, width: marginWithRadius.width, height: marginWithRadius.height)))
     }
+
+    @Test func backdropIsTransparentPaddingWithASoftShadowBelow() throws {
+        let backdrop = try OutputStyle.backdrop.render(image(), crop: crop, scale: 2)
+        var bytes = [UInt8](repeating: 0, count: backdrop.width * backdrop.height * 4)
+        bytes.withUnsafeMutableBytes { storage in
+            let context = CGContext(data: storage.baseAddress, width: backdrop.width, height: backdrop.height,
+                                    bitsPerComponent: 8, bytesPerRow: backdrop.width * 4,
+                                    space: CGColorSpaceCreateDeviceRGB(),
+                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)!
+            context.draw(backdrop, in: CGRect(x: 0, y: 0, width: backdrop.width, height: backdrop.height))
+        }
+        func alpha(_ x: Int, _ y: Int) -> UInt8 { bytes[(y * backdrop.width + x) * 4 + 3] }
+        #expect(alpha(0, 0) == 0)
+        #expect(alpha(backdrop.width - 1, 0) == 0)
+        #expect(alpha(backdrop.width / 2, backdrop.height / 2) == 255)
+        // 48 px of padding below the image (top-left rows): the shadow falls just under it, and not above it.
+        let below = alpha(backdrop.width / 2, backdrop.height - 48 + 6)
+        #expect(below > 0 && below < 255)
+        #expect(alpha(backdrop.width / 2, 0) == 0)
+    }
 }
