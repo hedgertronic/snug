@@ -364,9 +364,20 @@ final class OverlayController {
                 try await Output.deliver(image, crop: crop, style: style, scale: scale, copy: copy, save: save,
                                          pasteboard: pasteboard, defaults: defaults)
             } catch {
-                NSApp.presentError(error)
+                report(error)
             }
         }
+    }
+
+    /// Shows a failure unless its task was cancelled (Vision reports cancellation with its own error, not
+    /// `CancellationError`). Debug runs print it and exit instead of opening an alert.
+    func report(_ error: any Error) {
+        guard !Task.isCancelled else { return }
+        if isHeadless {
+            FileHandle.standardError.write(Data("Debug run failed: \(error)\n".utf8))
+            exit(EXIT_FAILURE)
+        }
+        NSApp.presentError(error)
     }
 
     // MARK: Drawing

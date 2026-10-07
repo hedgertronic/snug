@@ -66,9 +66,8 @@ extension OverlayController {
                     try Task.checkCancellation()
                     text.result = result
                     refresh()
-                } catch is CancellationError {
                 } catch {
-                    NSApp.presentError(error)
+                    report(error)
                 }
             }
         }
@@ -142,7 +141,7 @@ extension OverlayController {
                     let png = try await Output.encode(image, crop: rect, style: .tight, scale: scale).png
                     Toast.show(png: png, message: message, file: nil)
                 } catch {
-                    NSApp.presentError(error)
+                    report(error)
                 }
             }
         default:

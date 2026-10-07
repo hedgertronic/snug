@@ -77,9 +77,8 @@ extension OverlayController {
                     try Task.checkCancellation()
                     elementCandidates = report.candidates
                     buildSession()
-                } catch is CancellationError {
                 } catch {
-                    NSApp.presentError(error)
+                    report(error)
                 }
             }
         }
