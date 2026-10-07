@@ -21,6 +21,7 @@ enum Pref {
     static let crosshair = "SnugCrosshair"
     static let colorFormat = "SnugColorFormat"
     static let elementMode = "SnugElementMode"
+    static let shadow = "SnugShadow"
 
     static func register(in defaults: UserDefaults) {
         defaults.register(defaults: [
@@ -32,7 +33,8 @@ enum Pref {
             hotKeyModifiers: Int(NSEvent.ModifierFlags([.control, .shift]).rawValue),
             modeBar: true,
             colorFormat: ColorFormat.hex.rawValue,
-            elementMode: true
+            elementMode: true,
+            shadow: true
         ])
     }
 }

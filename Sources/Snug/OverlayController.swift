@@ -76,7 +76,7 @@ final class OverlayController {
     var windowIDs: [CGWindowID] = []
     /// Per window: a Dock, menu bar, or menu target, cropped from the frozen image instead of captured as a window.
     var windowFrozen: [Bool] = []
-    /// Option is held: a window click drops the shadow.
+    /// Option is held: a window click inverts the shadow preference.
     var optionHeld = false
     /// Corner radius in pixels of each snap fit, Tab fit, Element candidate, and hovered window, measured once per rectangle.
     /// A rectangle that is not here (an exact drag, a nudged or resized selection) has square corners.
@@ -299,7 +299,7 @@ final class OverlayController {
             if rect.width < AreaSelection.minimumSize || rect.height < AreaSelection.minimumSize {
                 cancelWork()
                 if !hadSelection {
-                    if let hoverWindow { clickWindow(hoverWindow, shadow: !event.modifierFlags.contains(.option)) }
+                    if let hoverWindow { clickWindow(hoverWindow, shadow: windowShadow(option: event.modifierFlags.contains(.option))) }
                     else { selection = AreaSelection(extent: extent, exact: extent) }
                 }
             } else {

@@ -3,13 +3,17 @@ import ScreenshotCore
 
 /// Positions and fills the on-screen chrome: bars, hints, badges, hover title, candidate list, and keys sheet.
 extension OverlayController {
+    /// Whether a window click captures the shadow: the remembered preference, inverted while Option is down.
+    func windowShadow(option: Bool) -> Bool { defaults.bool(forKey: Pref.shadow) != option }
+
     private var hints: [String] {
-        switch mode {
+        let shadowHint = windowShadow(option: false) ? "Option-click: no shadow" : "Option-click: with shadow"
+        return switch mode {
         case .text where text.rect != nil: ["Handles: resize", "Arrows: nudge", "Return: copy text", "Option-Return: translate", "Tab: links", "F: all text", "C: color"]
         case .text: ["Drag: select text", "Click: copy text block", "F: all text", "C: color", "A: back to area", "?: keys"]
         case .element: ["Click: copy", "Drag: area", "Tab: next candidate", "Up / Down: bigger / smaller", "1-5: pick", "?: keys"]
         case .area where selection != nil: ["Handles: resize", "Arrows: nudge", "Tab: other fits", "Esc: cancel"]
-        case .area: [snapEnabled ? "Pause to snap" : "S: snap back on", "Return: copy", "Option: exact", "Click: window", "Option-click: no shadow", "F: full screen", "?: keys"]
+        case .area: [snapEnabled ? "Pause to snap" : "S: snap back on", "Return: copy", "Option: exact", "Click: window", shadowHint, "F: full screen", "?: keys"]
         }
     }
 
@@ -31,8 +35,13 @@ extension OverlayController {
         c.bottomBar.isHidden = released || !defaults.bool(forKey: Pref.modeBar)
         c.styleBar.style = style
         c.styleBar.isHidden = !released
-        let items = hints
-        c.hints.show(items.joined(separator: "|")) { items.map { NSTextField($0, size: 12, color: NSColor.white.withAlphaComponent(0.92)) } }
+        var items = hints
+        let kept = items.last == "?: keys" ? 1 : 0
+        while true {
+            c.hints.show(items.joined(separator: "|")) { items.map { NSTextField($0, size: 12, color: NSColor.white.withAlphaComponent(0.92)) } }
+            guard c.hints.frame.width > bounds.width - 16, items.count > kept + 1 else { break }
+            items.remove(at: items.count - 1 - kept)
+        }
         if released {
             centered(c.hints, y: 32)
             centered(c.styleBar, y: c.hints.frame.maxY + 6)
@@ -90,7 +99,7 @@ extension OverlayController {
 
         if mode == .area, selection == nil, let rect = overlays.hover {
             let name = windows.firstIndex(of: rect).flatMap { windowNames.indices.contains($0) ? windowNames[$0] : nil } ?? "Window"
-            let size = "\(Int(rect.width)) x \(Int(rect.height))" + (optionHeld ? "" : "  +  shadow")
+            let size = "\(Int(rect.width)) x \(Int(rect.height))" + (windowShadow(option: optionHeld) ? "  +  shadow" : "")
             c.hover.show("\(name)|\(size)") {
                 [NSTextField(name, size: 15, weight: .semibold, color: .white), NSTextField(size, size: 12, mono: true, color: NSColor.white.withAlphaComponent(0.7)),
                  NSTextField("Click to capture this window", size: 12, color: NSColor.white.withAlphaComponent(0.92))]
