@@ -13,7 +13,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     private var captureTask: Task<Void, Never>?
     private var settingsWindow: NSWindow?
     private var firstRunWindow: NSWindow?
-    private var registeredShortcut = ""
+    private var registeredShortcut: [Int] = []
 
     static func main() {
         let app = NSApplication.shared
@@ -74,13 +74,13 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     private func registerHotKey() {
         let defaults = UserDefaults.standard
-        let label = defaults.string(forKey: Pref.hotKeyLabel)!
-        guard label != registeredShortcut else { return }
+        let current = [defaults.integer(forKey: Pref.hotKeyCode), defaults.integer(forKey: Pref.hotKeyModifiers)]
+        guard current != registeredShortcut else { return }
         do {
             try hotKey!.register(keyCode: UInt32(defaults.integer(forKey: Pref.hotKeyCode)),
                                  modifiers: NSEvent.ModifierFlags(rawValue: UInt(defaults.integer(forKey: Pref.hotKeyModifiers))))
-            registeredShortcut = label
-            captureItem?.title = "Capture (\(label))"
+            registeredShortcut = current
+            captureItem?.setShortcut(from: defaults)
         } catch {
             NSApp.presentError(error)
         }
@@ -89,16 +89,23 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     private func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button!.image = NSImage(systemSymbolName: "rectangle.dashed", accessibilityDescription: "Snug")
+        let menu = Self.makeMenu(defaults: .standard)
+        captureItem = menu.items[0]
+        item.menu = menu
+        statusItem = item
+    }
+
+    static func makeMenu(defaults: UserDefaults) -> NSMenu {
         let menu = NSMenu()
-        captureItem = menu.addItem(withTitle: "Capture", action: #selector(captureFromMenu), keyEquivalent: "")
+        let capture = menu.addItem(withTitle: "Capture", action: #selector(captureFromMenu), keyEquivalent: "")
+        capture.setShortcut(from: defaults)
         menu.addItem(withTitle: "Copy Text", action: #selector(copyTextFromMenu), keyEquivalent: "")
         menu.addItem(withTitle: "Repeat Last Area", action: #selector(repeatLastArea), keyEquivalent: "")
         menu.addItem(withTitle: "Open Image...", action: #selector(openImage), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
-        menu.addItem(withTitle: "Quit Snug", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        item.menu = menu
-        statusItem = item
+        menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        return menu
     }
 
     @objc private func captureFromMenu() { capture() }
@@ -181,7 +188,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     private func showFirstRun() {
         if firstRunWindow == nil {
-            let window = NSWindow(contentViewController: NSHostingController(rootView: FirstRunView()))
+            let window = NSWindow(contentViewController: NSHostingController(rootView: FirstRunView(onLater: { [unowned self] in firstRunWindow?.close() })))
             window.title = "Welcome to Snug"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
@@ -190,5 +197,19 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         NSApp.activate()
         firstRunWindow!.center()
         firstRunWindow!.makeKeyAndOrderFront(nil)
+    }
+}
+
+extension NSMenuItem {
+    /// Shows the recorded hot key as this item's right-aligned key equivalent.
+    func setShortcut(from defaults: UserDefaults) {
+        let code = defaults.integer(forKey: Pref.hotKeyCode)
+        if let function = Shortcut.functionKeys[code] {
+            keyEquivalent = String(Character(UnicodeScalar(function.character)!))
+        } else {
+            let name = Shortcut.keyNames[code]!
+            keyEquivalent = name == "Space" ? " " : name.lowercased()
+        }
+        keyEquivalentModifierMask = NSEvent.ModifierFlags(rawValue: UInt(defaults.integer(forKey: Pref.hotKeyModifiers)))
     }
 }

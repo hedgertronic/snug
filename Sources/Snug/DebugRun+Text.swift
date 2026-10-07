@@ -83,7 +83,7 @@ extension DebugRun {
         require(overlay.mode == .area, "the overlay opens in Area mode")
         key(tKey, "t")
         require(overlay.mode == .text, "T enters Text mode")
-        require(texts(in: overlay.chrome.hints) == ["Drag: select text", "Click: copy block", "F: all text", "A: back to area", "?: keys"], "Text mode with no region shows its hint strip")
+        require(texts(in: overlay.chrome.hints) == ["Drag: select text", "Click: copy text block", "F: all text", "C: color", "A: back to area", "?: keys"], "Text mode with no region shows its hint strip")
         require(overlay.textPage == nil, "nothing is recognized until Text mode needs it")
         overlay.dismiss()
 
@@ -92,7 +92,7 @@ extension DebugRun {
         try await select(cart)
         require(overlay.snapPreview == nil && overlay.text.rect == cart, "a Text drag selects exactly the dragged region without snapping")
         let chrome = overlay.chrome
-        require(texts(in: chrome.hints) == ["Handles: resize", "Arrows: nudge", "Return: copy", "Option-Return: translate", "Tab: links", "F: all text"], "a Text region shows its hint strip")
+        require(texts(in: chrome.hints) == ["Handles: resize", "Arrows: nudge", "Return: copy text", "Option-Return: translate", "Tab: links", "F: all text", "C: color"], "a Text region shows its hint strip")
         require(chrome.styleBar.isHidden && !chrome.bottomBar.isHidden && chrome.bottomBar.modeButtons[.text]!.layer!.backgroundColor != nil, "Text mode keeps the bottom bar with Text filled")
         let counts = texts(in: chrome.count)
         require(!chrome.count.isHidden && counts.count == 1 && counts[0].hasPrefix("9 lines, 2 columns"), "the region badge counts lines and columns: \(counts)")

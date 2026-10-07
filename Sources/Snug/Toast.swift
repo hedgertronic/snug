@@ -60,7 +60,7 @@ final class Toast: NSPanel, NSDraggingSource {
             + (detail.isEmpty ? [] : [NSTextField(detail, size: 12, mono: true, color: .secondaryLabelColor)])
         let row = NSStackView(views: [mark] + texts)
         row.spacing = 10
-        row.edgeInsets = NSEdgeInsets(top: 10, left: 16, bottom: 10, right: 18)
+        row.edgeInsets = NSEdgeInsets(top: 9, left: 12, bottom: 9, right: 16)
         row.frame.size = row.fittingSize
         let content = NSVisualEffectView(frame: row.frame)
         content.material = .hudWindow

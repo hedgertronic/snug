@@ -259,8 +259,8 @@ final class StyleBar: Capsule {
     var onStyle: (OutputStyle) -> Void = { _ in }
     var onSave: () -> Void = {}
     var onCopy: () -> Void = {}
-    let segments = OutputStyle.allCases.enumerated().map { BarButton($1.rawValue.capitalized, key: "Cmd-\($0 + 1)", height: 38) }
-    let save = BarButton("Save", key: "Cmd-S")
+    let segments = OutputStyle.allCases.enumerated().map { BarButton($1.rawValue.capitalized, key: "\u{2318}\($0 + 1)", height: 38) }
+    let save = BarButton("Save", key: "\u{2318}S")
     let copy = BarButton("Copy", key: "Return")
 
     var style = OutputStyle.tight {
@@ -295,7 +295,7 @@ final class StyleBar: Capsule {
 final class Chrome {
     let bottomBar = BottomBar()
     let styleBar = StyleBar()
-    let hints = Pill.dark(0.72, radius: 8, insets: NSEdgeInsets(top: 5, left: 12, bottom: 5, right: 12), spacing: 14)
+    let hints = Pill.dark(0.92, radius: 8, insets: NSEdgeInsets(top: 5, left: 12, bottom: 5, right: 12), spacing: 14)
     let size = Pill.dark(0.86, radius: 6, insets: NSEdgeInsets(top: 4, left: 9, bottom: 4, right: 9))
     let status = Pill.dark(0.86, radius: 6, insets: NSEdgeInsets(top: 4, left: 9, bottom: 4, right: 9))
     let hover = Pill.dark(0.86, radius: 12, insets: NSEdgeInsets(top: 10, left: 18, bottom: 10, right: 18), spacing: 3, vertical: true)

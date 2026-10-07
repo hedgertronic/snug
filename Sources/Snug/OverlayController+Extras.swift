@@ -42,6 +42,8 @@ extension OverlayController {
         cancelWork()
         elementTask?.cancel()
         elementTask = nil
+        accessibilityTask?.cancel()
+        accessibilityTask = nil
         session = nil
         selection = nil
         hoverWindow = nil
@@ -55,14 +57,16 @@ extension OverlayController {
                 do {
                     elementCandidates = try await GeometryDetector().detect(in: image)
                     try Task.checkCancellation()
-                    buildSession()
-                    elementCandidates += try await VisionDetector().detectText(in: image)
+                    merge(elementCandidates)
+                    let text = try await VisionDetector().detectText(in: image)
                     try Task.checkCancellation()
-                    buildSession()
+                    elementCandidates += text
+                    merge(text)
                 } catch {
                     report(error)
                 }
             }
+            requestAccessibility(at: pointer)
         }
         refresh()
     }
@@ -71,6 +75,10 @@ extension OverlayController {
     func resetExtras() {
         elementTask?.cancel()
         elementTask = nil
+        accessibilityTask?.cancel()
+        accessibilityTask = nil
+        accessibilityStarted = nil
+        elementPress = nil
         session = nil
         elementCandidates = []
         mode = .area
@@ -107,17 +115,51 @@ extension OverlayController {
 
     // MARK: Element mode
 
-    /// Window rectangles join the detected candidates; the session starts at the pointer.
-    func buildSession() {
-        let windowCandidates = windows.enumerated().map {
+    var windowCandidates: [Candidate] {
+        windows.enumerated().map {
             Candidate(id: "window-\($0.offset)", label: "Window", bounds: $0.element, score: -Double($0.offset), kind: .window)
         }
+    }
+
+    /// Window rectangles join the detected candidates; the session starts at the pointer.
+    func buildSession() {
         session = SelectionSession(candidates: elementCandidates + windowCandidates, extent: extent, anchor: pointer)
         syncSelection()
     }
 
+    /// Late results (windows, OCR, accessibility) join the pool; a picked region and the list order stay as they are.
+    func merge(_ added: [Candidate]) {
+        guard session != nil else { return buildSession() }
+        session!.merge(added)
+        syncSelection()
+    }
+
+    /// While the capture is live and Accessibility is allowed, asks the window under `pixel` for the elements there, off main,
+    /// at most about every 150 ms. Nothing happens without permission, in debug runs, or when the lookup finds nothing.
+    func requestAccessibility(at pixel: CGPoint) {
+        guard displayID != nil, !isHeadless, AXIsProcessTrusted(), accessibilityTask == nil,
+              accessibilityStarted.map({ $0.duration(to: .now) >= .milliseconds(150) }) ?? true,
+              let index = windows.firstIndex(where: { $0.contains(pixel) }), windowIDs.indices.contains(index) else { return }
+        accessibilityStarted = .now
+        let id = windowIDs[index]
+        let primaryHeight = NSScreen.screens[0].frame.height
+        let origin = CGPoint(x: window.frame.minX, y: primaryHeight - window.frame.maxY)
+        let point = AccessibilityBounds.point(forPixel: pixel, displayOrigin: origin, scale: scale)
+        let (scale, extent) = (scale, extent)
+        accessibilityTask = Task {
+            defer { accessibilityTask = nil }
+            let info = CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]]
+            guard let pid = info?.first?[kCGWindowOwnerPID as String] as? Int32 else { return }
+            let frames = await Accessibility.frames(at: point, pid: pid)
+            guard !Task.isCancelled, mode == .element else { return }
+            let found = AccessibilityBounds.candidates(frames: frames, displayOrigin: origin, scale: scale, extent: extent)
+            if !found.isEmpty { merge(found) }
+        }
+    }
+
     /// Hover selects until the user draws, nudges, or locks the session with a key.
     func elementHover(pixel: CGPoint) {
+        requestAccessibility(at: pixel)
         guard var session, selection == nil || selection!.rect == session.selected?.bounds else { return }
         session.hover(at: pixel)
         self.session = session
@@ -133,6 +175,7 @@ extension OverlayController {
         let command = event.modifierFlags.contains(.command)
         let character = event.charactersIgnoringModifiers ?? ""
         switch (event.keyCode, command, character) {
+        case (48, _, _): session?.cycle(backward: event.modifierFlags.contains(.shift))
         case (126, _, _): session?.expand()
         case (125, _, _): session?.shrink()
         case (_, false, "1"..."5"): session?.pick(Int(character)! - 1)

@@ -79,15 +79,42 @@ public struct SelectionSession: Sendable {
         expansionPath = []
     }
 
+    /// The smallest proposal that encloses `candidate` and is larger than it.
+    private func enclosing(_ candidate: Candidate) -> Candidate? {
+        candidates.filter {
+            $0.id != candidate.id && $0.bounds.insetBy(dx: -1, dy: -1).contains(candidate.bounds)
+                && $0.bounds.width * $0.bounds.height > candidate.bounds.width * candidate.bounds.height + 1
+        }.min { $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height }
+    }
+
+    /// The selected region's parents, nearest first: what repeated `expand()` would select.
+    public var parents: [Candidate] {
+        var chain: [Candidate] = []
+        var current = selected
+        while let candidate = current, let parent = enclosing(candidate) {
+            chain.append(parent)
+            current = parent
+        }
+        return chain
+    }
+
+    /// Adds late results to the pool. Once the user has picked, the selection, shortlist, and expansion path stay as they are.
+    public mutating func merge(_ added: [Candidate]) {
+        let keep = (selected, shortlist, expansionPath, specialReturn)
+        candidates = Detection.normalized(candidates + added, within: extent)
+        if !isLocked {
+            hover(at: anchor)
+        } else {
+            (selected, shortlist, expansionPath, specialReturn) = keep
+        }
+    }
+
     /// Selects the smallest larger enclosing proposal.
     public mutating func expand() {
         isLocked = true
-        guard let current = selected else { return }
-        let larger = candidates.filter {
-            $0.id != current.id && $0.bounds.insetBy(dx: -1, dy: -1).contains(current.bounds)
-                && $0.bounds.width * $0.bounds.height > current.bounds.width * current.bounds.height + 1
-        }.min { $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height }
-        if let larger { expansionPath.append(current); selected = larger }
+        guard let current = selected, let larger = enclosing(current) else { return }
+        expansionPath.append(current)
+        selected = larger
     }
 
     /// Reverses expansion, or finds a contained region at the anchor.

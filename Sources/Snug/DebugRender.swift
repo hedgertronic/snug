@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import ScreenshotCore
 
 extension DebugRun {
@@ -8,6 +9,12 @@ extension DebugRun {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let defaults = overlay.defaults
 
+        func require(_ condition: Bool, _ message: String) {
+            guard condition else {
+                FileHandle.standardError.write(Data("FAIL: \(message)\n".utf8))
+                exit(EXIT_FAILURE)
+            }
+        }
         func waitFor(_ message: String, _ condition: () -> Bool) async throws {
             for _ in 0..<10000 where !condition() { try await Task.sleep(for: .milliseconds(10)) }
             guard condition() else { throw CocoaError(.userCancelled, userInfo: [NSLocalizedDescriptionKey: "timed out waiting for \(message)"]) }
@@ -119,6 +126,32 @@ extension DebugRun {
         toast.cacheDisplay(in: toast.bounds, to: rep)
         try rep.representation(using: .png, properties: [:])!.write(to: directory.appending(path: "toast.png"))
         print(directory.appending(path: "toast.png").path)
+
+        func render(_ name: String, _ content: some View) throws {
+            let renderer = ImageRenderer(content: content.background(Color(nsColor: .windowBackgroundColor)))
+            renderer.scale = 2
+            let rep = NSBitmapImageRep(cgImage: renderer.cgImage!)
+            try rep.representation(using: .png, properties: [:])!.write(to: directory.appending(path: "\(name).png"))
+            print(directory.appending(path: "\(name).png").path)
+        }
+        let firstRun = NSHostingView(rootView: FirstRunView())
+        try render("first-run", FirstRunView())
+        require(firstRun.fittingSize.width == 500, "the first-run window is 500 pt wide")
+        try render("settings", SettingsView())
+
+        let menu = SnugApp.makeMenu(defaults: defaults)
+        let capture = menu.items[0]
+        require(menu.items.map(\.title) == ["Capture", "Copy Text", "Repeat Last Area", "Open Image...", "", "Settings...", "Quit"], "menu items: \(menu.items.map(\.title))")
+        require(capture.keyEquivalent == " " && capture.keyEquivalentModifierMask == [.control, .shift], "Capture shows the shortcut as a key equivalent")
+        require(menu.items[5].keyEquivalent == "," && menu.items[6].keyEquivalent == "q", "Settings and Quit carry their command keys")
+        require(Shortcut.label(from: defaults) == "\u{2303}\u{21E7}Space", "the default shortcut displays as glyphs: \(Shortcut.label(from: defaults))")
+        defaults.set(40, forKey: Pref.hotKeyCode)
+        defaults.set(Int(NSEvent.ModifierFlags([.control, .option]).rawValue), forKey: Pref.hotKeyModifiers)
+        capture.setShortcut(from: defaults)
+        require(capture.keyEquivalent == "k" && capture.keyEquivalentModifierMask == [.control, .option], "a recorded letter shortcut updates the key equivalent")
+        require(Shortcut.label(from: defaults) == "\u{2303}\u{2325}K", "the recorded shortcut displays from code and modifiers: \(Shortcut.label(from: defaults))")
+        let hintFill = overlay.chrome.hints.layer!.backgroundColor.flatMap(NSColor.init(cgColor:))!
+        require(hintFill.alphaComponent >= 0.9, "the hint strip is nearly opaque: \(hintFill.alphaComponent)")
         exit(EXIT_SUCCESS)
     }
 }

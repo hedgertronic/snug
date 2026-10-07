@@ -81,6 +81,11 @@ final class OverlayController {
     var session: SelectionSession?
     var elementTask: Task<Void, Never>?
     var elementCandidates: [Candidate] = []
+    /// Element mode: the pointer-down pixel until the press turns into a drag (Area) or a click (copy).
+    var elementPress: CGPoint?
+    /// The running accessibility lookup and when the last one started (throttle).
+    var accessibilityTask: Task<Void, Never>?
+    var accessibilityStarted: ContinuousClock.Instant?
     var previousApp: NSRunningApplication?
     /// N hides the Element candidate list; it shows in Element mode otherwise.
     var listHidden = false
@@ -160,7 +165,7 @@ final class OverlayController {
         windows = rects
         windowNames = names
         windowIDs = ids
-        if mode == .element { buildSession() }
+        if mode == .element { merge(windowCandidates) }
         updateHover(pixel: CGPoint(x: (pointer.x - window.frame.minX) * scale, y: (window.frame.maxY - pointer.y) * scale))
     }
 
@@ -219,6 +224,7 @@ final class OverlayController {
     func mouseDown(_ event: NSEvent) {
         guard mode != .text else { return textMouseDown(event) }
         let point = view.pixelPoint(event)
+        guard mode != .element else { elementPress = point; return }
         hadSelection = selection != nil
         if let selection {
             if let handle = selection.handle(at: point, tolerance: 8 * scale) {
@@ -241,6 +247,11 @@ final class OverlayController {
         guard mode != .text else { return textMouseDragged(event) }
         let point = view.pixelPoint(event)
         pointer = point
+        if let press = elementPress, hypot(point.x - press.x, point.y - press.y) >= 4 * scale {
+            elementPress = nil
+            setMode(.area)
+            interaction = .drawing(AreaDrag(extent: extent, origin: press))
+        }
         switch interaction {
         case .none:
             break
@@ -260,6 +271,10 @@ final class OverlayController {
     func mouseUp(_ event: NSEvent) {
         guard mode != .text else { return textMouseUp(event) }
         let point = view.pixelPoint(event)
+        if elementPress != nil {
+            elementPress = nil
+            return copy()
+        }
         let finished = interaction
         interaction = .none
         switch finished {
