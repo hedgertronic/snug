@@ -165,6 +165,51 @@ final class SmartSnapTests: XCTestCase {
         XCTAssertNoNearDuplicates(suggestions)
     }
 
+    func testBandFloorSnapsSloppyDragAroundSmallPill() async throws {
+        let pill = CGRect(x: 80, y: 100, width: 160, height: 22)
+        let image = makeCanvas(width: 360, height: 240) { canvas in
+            canvas.fill(pill, color: 255)
+            canvas.border(pill, color: 150, thickness: 1)
+        }
+        let sloppy = pill.insetBy(dx: -7, dy: -7)
+
+        let suggestions = try await SmartSnap().suggest(in: image, roughBounds: sloppy)
+        XCTAssertTrue(near(try XCTUnwrap(suggestions.first).bounds, pill, tolerance: 2), "got \(suggestions.map(\.bounds))")
+
+        let retina = try await SmartSnap().suggest(in: image, roughBounds: pill.insetBy(dx: -14, dy: -14), scale: 2)
+        XCTAssertTrue(near(try XCTUnwrap(retina.first).bounds, pill, tolerance: 2), "got \(retina.map(\.bounds))")
+        let tooFar = try await SmartSnap().suggest(in: image, roughBounds: pill.insetBy(dx: -14, dy: -14))
+        XCTAssertTrue(tooFar.isEmpty, "a 14 px miss is outside the 8 px band at scale 1")
+    }
+
+    func testImageBorderIsASnapTarget() async throws {
+        let strip = CGRect(x: 0, y: 60, width: 400, height: 40)
+        let image = makeCanvas(width: 400, height: 200) { canvas in canvas.fill(strip, color: 200) }
+
+        let full = try await SmartSnap().suggest(in: image, roughBounds: CGRect(x: 4, y: 3, width: 392, height: 194))
+        XCTAssertEqual(try XCTUnwrap(full.first).bounds, CGRect(x: 0, y: 0, width: 400, height: 200))
+
+        let toolbar = try await SmartSnap().suggest(in: image, roughBounds: CGRect(x: 5, y: 54, width: 390, height: 52))
+        XCTAssertTrue(near(try XCTUnwrap(toolbar.first).bounds, strip, tolerance: 2), "got \(toolbar.map(\.bounds))")
+    }
+
+    func testEdgesFindsOneSideNearThePointer() throws {
+        let card = CGRect(x: 100, y: 40, width: 120, height: 100)
+        let image = makeCanvas(width: 400, height: 200) { canvas in
+            canvas.fill(card, color: 255)
+            canvas.border(card, color: 150, thickness: 2)
+        }
+        let selection = CGRect(x: 60, y: 30, width: 200, height: 120)
+
+        let right = try SmartSnap().edges(in: image, of: selection, vertical: true, near: 226, band: 20)
+        XCTAssertTrue(right.contains { abs($0 - card.maxX) <= 2 }, "got \(right)")
+        let bottom = try SmartSnap().edges(in: image, of: selection, vertical: false, near: 134, band: 20)
+        XCTAssertTrue(bottom.contains { abs($0 - card.maxY) <= 2 }, "got \(bottom)")
+        XCTAssertTrue(try SmartSnap().edges(in: image, of: selection, vertical: true, near: 300, band: 20).isEmpty)
+        let border = try SmartSnap().edges(in: image, of: selection, vertical: true, near: 394, band: 20)
+        XCTAssertTrue(border.contains(400), "the image border is an edge within the band; got \(border)")
+    }
+
     private func near(_ actual: CGRect, _ expected: CGRect, tolerance: CGFloat) -> Bool {
         abs(actual.minX - expected.minX) <= tolerance &&
             abs(actual.minY - expected.minY) <= tolerance &&

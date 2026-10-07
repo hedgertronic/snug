@@ -4,10 +4,10 @@ import CoreGraphics
 public enum Handle: CaseIterable, Sendable {
     case topLeft, top, topRight, right, bottomRight, bottom, bottomLeft, left
 
-    var movesLeft: Bool { self == .topLeft || self == .left || self == .bottomLeft }
-    var movesRight: Bool { self == .topRight || self == .right || self == .bottomRight }
-    var movesTop: Bool { self == .topLeft || self == .top || self == .topRight }
-    var movesBottom: Bool { self == .bottomLeft || self == .bottom || self == .bottomRight }
+    public var movesLeft: Bool { self == .topLeft || self == .left || self == .bottomLeft }
+    public var movesRight: Bool { self == .topRight || self == .right || self == .bottomRight }
+    public var movesTop: Bool { self == .topLeft || self == .top || self == .topRight }
+    public var movesBottom: Bool { self == .bottomLeft || self == .bottom || self == .bottomRight }
 
     /// The handle's position on a rectangle.
     public func position(on rect: CGRect) -> CGPoint {
@@ -83,12 +83,20 @@ public struct AreaSelection: Sendable {
         rect = fits[fitIndex]
     }
 
-    /// The handle within `tolerance` of the point, nearest first.
+    /// The handle within `tolerance` of the point, nearest first. Away from every handle, a point near a side controls that side.
     public func handle(at point: CGPoint, tolerance: CGFloat) -> Handle? {
-        Handle.allCases
+        let corner = Handle.allCases
             .map { (handle: $0, distance: hypot($0.position(on: rect).x - point.x, $0.position(on: rect).y - point.y)) }
             .filter { $0.distance <= tolerance }
             .min { $0.distance < $1.distance }?.handle
+        if let corner { return corner }
+        let alongX = point.x >= rect.minX - tolerance && point.x <= rect.maxX + tolerance
+        let alongY = point.y >= rect.minY - tolerance && point.y <= rect.maxY + tolerance
+        let sides: [(handle: Handle, distance: CGFloat)] = [
+            (.left, alongY ? abs(point.x - rect.minX) : .infinity), (.right, alongY ? abs(point.x - rect.maxX) : .infinity),
+            (.top, alongX ? abs(point.y - rect.minY) : .infinity), (.bottom, alongX ? abs(point.y - rect.maxY) : .infinity)
+        ]
+        return sides.filter { $0.distance <= tolerance }.min { $0.distance < $1.distance }?.handle
     }
 
     /// Moves the edges a handle controls to the point, keeping the minimum size inside the extent.
@@ -118,10 +126,10 @@ public struct AreaSelection: Sendable {
 
     /// Whether a snap preview still lies within the search band of a new drag, so it can stay visible.
     ///
-    /// The band mirrors `SmartSnap`: 12% of the side, between 5 and 56 pixels.
-    public static func preview(_ preview: CGRect, stillFits drag: CGRect) -> Bool {
-        let bandX = max(5, min(56, (drag.width * 0.12).rounded()))
-        let bandY = max(5, min(56, (drag.height * 0.12).rounded()))
+    /// The band is `SmartSnap.band` at the capture's `scale`.
+    public static func preview(_ preview: CGRect, stillFits drag: CGRect, scale: CGFloat) -> Bool {
+        let bandX = CGFloat(SmartSnap.band(side: drag.width, scale: scale))
+        let bandY = CGFloat(SmartSnap.band(side: drag.height, scale: scale))
         return abs(preview.minX - drag.minX) <= bandX && abs(preview.maxX - drag.maxX) <= bandX
             && abs(preview.minY - drag.minY) <= bandY && abs(preview.maxY - drag.maxY) <= bandY
     }
