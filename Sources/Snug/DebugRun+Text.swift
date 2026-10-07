@@ -88,7 +88,7 @@ extension DebugRun {
         try await select(cart)
         require(overlay.snapPreview == nil && overlay.text.rect == cart, "a Text drag selects exactly the dragged region without snapping")
         let chrome = overlay.chrome
-        require(texts(in: chrome.hints) == ["Return: copy text", "Shift-Return: copy as table", "Tab: links", "A: back to area"], "Text mode shows its hint strip")
+        require(texts(in: chrome.hints) == ["\u{21A9}: copy text", "\u{21E7}\u{21A9}: copy as table", "Tab: links", "A: back to area"], "Text mode shows its hint strip")
         require(chrome.styleBar.isHidden && !chrome.bottomBar.isHidden && chrome.bottomBar.modeButtons[.text]!.layer!.backgroundColor != nil, "Text mode keeps the bottom bar with Text filled")
         let counts = texts(in: chrome.count)
         require(!chrome.count.isHidden && counts.count == 1 && counts[0].hasPrefix("9 lines, 2 columns"), "the region badge counts lines and columns: \(counts)")

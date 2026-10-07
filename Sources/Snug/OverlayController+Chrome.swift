@@ -5,10 +5,10 @@ import ScreenshotCore
 extension OverlayController {
     private var hints: [String] {
         switch mode {
-        case .text: ["Return: copy text", "Shift-Return: copy as table", "Tab: links", "A: back to area"]
+        case .text: ["\u{21A9}: copy text", "\u{21E7}\u{21A9}: copy as table", "Tab: links", "A: back to area"]
         case .element: ["Click: copy", "Up / Down: bigger / smaller", "1-5: pick", "A: back to area", "?: keys"]
-        case .area where selection != nil: ["Handles: resize", "Arrows: nudge", "Tab: other fits", "Esc: cancel"]
-        case .area: [snapEnabled ? "Pause to snap" : "S: snap back on", "Return: copy", "Option: exact", "Click: window", "Option-click: no shadow", "F: full screen", "?: keys"]
+        case .area where selection != nil: ["Handles: resize", "Arrows: nudge", "Tab: other fits", "\u{238B}: cancel"]
+        case .area: [snapEnabled ? "Pause to snap" : "S: snap back on", "\u{21A9}: copy", "\u{2325}: exact", "Click: window", "\u{2325}-click: no shadow", "F: full screen", "?: keys"]
         }
     }
 
