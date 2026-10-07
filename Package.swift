@@ -15,6 +15,6 @@ let package = Package(
         .executableTarget(name: "ScreenshotLab", dependencies: ["ScreenshotCore"]),
         .executableTarget(name: "ScreenshotBench", dependencies: ["ScreenshotCore"]),
         .executableTarget(name: "Snug", dependencies: ["ScreenshotCore"]),
-        .testTarget(name: "ScreenshotCoreTests", dependencies: ["ScreenshotCore"], resources: [.copy("Fixtures")])
+        .testTarget(name: "ScreenshotCoreTests", dependencies: ["ScreenshotCore", "ScreenshotBench"], resources: [.copy("Fixtures")])
     ]
 )
