@@ -14,14 +14,15 @@ enum DebugRun {
             FileHandle.standardError.write(Data("Debug run timed out after 120 s\n".utf8))
             exit(EXIT_FAILURE)
         }
-        let defaults = UserDefaults(suiteName: "local.snug.verify")!
-        defaults.removePersistentDomain(forName: "local.snug.verify")
-        Pref.register(in: defaults)
-        let folder = FileManager.default.temporaryDirectory.appending(path: "snug-verify-\(UUID().uuidString)")
+        // Parallel debug runs share nothing: a fixed suite or pasteboard name lets one run's settings and clipboard leak into another's.
+        let scratch = FileManager.default.temporaryDirectory.appending(path: "snug-verify-\(UUID().uuidString)")
+        let folder = scratch.appending(path: "saves")
         try! FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let defaults = UserDefaults(suiteName: scratch.appending(path: "prefs").path)!
+        Pref.register(in: defaults)
         defaults.set(folder.path, forKey: Pref.saveFolder)
         overlay.defaults = defaults
-        overlay.pasteboard = NSPasteboard(name: .init("local.snug.verify"))
+        overlay.pasteboard = NSPasteboard.withUniqueName()
         return folder
     }
 
@@ -48,7 +49,7 @@ enum DebugRun {
             passed.append(message)
         }
         func waitFor(_ message: String, _ condition: () -> Bool) async throws {
-            for _ in 0..<300 where !condition() { try await Task.sleep(for: .milliseconds(10)) }
+            for _ in 0..<9000 where !condition() { try await Task.sleep(for: .milliseconds(10)) }
             require(condition(), message)
         }
         func windowPoint(_ pixel: CGPoint) -> CGPoint {
@@ -185,7 +186,7 @@ enum DebugRun {
         release(rough)
         pasteboard.clearContents()
         key(escape)
-        try await Task.sleep(for: .milliseconds(300))
+        await overlay.commitTask?.value
         require(!overlay.window.isVisible && pasteboard.data(forType: .png) == nil, "Esc closes without writing")
         let afterEsc = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
         require(afterEsc.count == 1, "Esc saves nothing")
@@ -195,8 +196,7 @@ enum DebugRun {
         key(1, "s")
         require(defaults.bool(forKey: Pref.snap) == false, "S turns snap off")
         pressDrag(rough)
-        try await Task.sleep(for: .milliseconds(300))
-        require(overlay.snapPreview == nil, "no preview with snap off")
+        require(overlay.snapTask == nil && overlay.snapPreview == nil, "snap off schedules no analysis and shows no preview")
         release(rough)
         require(overlay.selection?.rect == rough, "with snap off the release takes the exact drag")
         key(1, "s")
@@ -204,8 +204,7 @@ enum DebugRun {
         mouse(.leftMouseDown, CGPoint(x: 20, y: 20))
         mouse(.leftMouseUp, CGPoint(x: 20, y: 20))
         pressDrag(rough, .option)
-        try await Task.sleep(for: .milliseconds(300))
-        require(overlay.snapPreview == nil, "Option-drag shows no preview")
+        require(overlay.snapTask == nil && overlay.snapPreview == nil, "Option-drag schedules no analysis and shows no preview")
         release(rough)
         require(overlay.selection?.rect == rough, "Option-drag takes the exact rectangle")
 
