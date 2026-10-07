@@ -3,6 +3,12 @@ import ScreenshotCore
 
 extension DebugRun {
     /// `--verify-extras-ui`: modes, view toggles, color, help, and Element mode through synthesized events.
+    /// The text of every visible label under `view`.
+    static func texts(in view: NSView) -> [String] {
+        guard !view.isHidden else { return [] }
+        return ((view as? NSTextField).map { [$0.stringValue] } ?? []) + view.subviews.flatMap(texts)
+    }
+
     static func verifyExtras(image: CGImage, frame: CGRect, overlay: OverlayController) async throws {
         _ = privateSetup(overlay)
         let pasteboard = overlay.pasteboard
@@ -55,6 +61,8 @@ extension DebugRun {
         let rough = CGRect(x: 350, y: 458, width: 580, height: 64)
 
         // Modes: A / E / T, E only with the flag, mode changes clear the selection.
+        require(defaults.bool(forKey: Pref.elementMode), "Element mode is on by default")
+        defaults.set(false, forKey: Pref.elementMode)
         open()
         require(overlay.mode == .area, "the overlay opens in Area")
         key(17, "t")
@@ -63,25 +71,26 @@ extension DebugRun {
         require(overlay.mode == .area, "A switches back to Area")
         key(14, "e")
         require(overlay.mode == .area, "E does nothing while SnugElementMode is off")
-        require(overlay.modeBar.modes == [.area, .text], "the mode bar hides Element while the flag is off")
+        require(overlay.chrome.bottomBar.modes == [.area, .text], "the bottom bar hides Element while the flag is off")
         defaults.set(true, forKey: Pref.elementMode)
         key(1, "s")
         drag(rough)
         require(overlay.selection?.rect == rough, "a drag selects")
         key(17, "t")
         require(overlay.mode == .text && overlay.selection == nil, "changing mode clears the selection")
-        overlay.modeBar.click(.area)
-        require(overlay.mode == .area, "clicking a mode bar segment switches mode")
-        require(overlay.modeBar.modes == [.area, .element, .text], "the mode bar shows Element once the flag is on")
+        overlay.chrome.bottomBar.click(.area)
+        require(overlay.mode == .area, "clicking a bottom bar mode switches mode")
+        require(overlay.chrome.bottomBar.modes == [.area, .element, .text], "the bottom bar shows Element once the flag is on")
         overlay.dismiss()
 
-        // B toggles the mode bar and remembers it.
+        // B toggles the bottom bar and remembers it.
         open()
-        require(!overlay.modeBar.isHidden, "the mode bar starts visible")
+        let bar = overlay.chrome.bottomBar
+        require(!bar.isHidden, "the bottom bar starts visible")
         key(11, "b")
-        require(overlay.modeBar.isHidden && !defaults.bool(forKey: Pref.modeBar), "B hides the mode bar and remembers it")
+        require(bar.isHidden && !defaults.bool(forKey: Pref.modeBar), "B hides the bottom bar and remembers it")
         key(11, "b")
-        require(!overlay.modeBar.isHidden && defaults.bool(forKey: Pref.modeBar), "B shows it again")
+        require(!bar.isHidden && defaults.bool(forKey: Pref.modeBar), "B shows it again")
 
         // L / R / X toggle their layers, remembered.
         let guides = overlay.view.guides
@@ -104,7 +113,7 @@ extension DebugRun {
         let size = Int(Guides.loupeSize)
         let context = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8, bytesPerRow: 0,
                                 space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        guides.loupe.render(in: context)
+        guides.disc.render(in: context)
         let rendered = NSBitmapImageRep(cgImage: context.makeImage()!)
         let cell = Guides.loupeSize / CGFloat(Guides.loupePixels)
         var distinct = Set<[Int]>()
@@ -112,7 +121,7 @@ extension DebugRun {
             for dx in -2...2 {
                 let expected = pixel(Int(text.x) + dx, Int(text.y) + dy)
                 distinct.insert(expected)
-                let shown = bytes(rendered.colorAt(x: Int((CGFloat(8 + dx) + 0.5) * cell), y: Int((CGFloat(8 + dy) + 0.5) * cell))!)
+                let shown = bytes(rendered.colorAt(x: Int((CGFloat(Guides.loupePixels / 2 + dx) + 0.5) * cell), y: Int((CGFloat(Guides.loupePixels / 2 + dy) + 0.5) * cell))!)
                 require(close(shown, expected, 12), "loupe cell (\(dx), \(dy)) shows source pixel \(expected) (shows \(shown))")
             }
         }
@@ -151,16 +160,21 @@ extension DebugRun {
         let mean = sums.map { Int((Double($0) / 2400).rounded()) }
         require(close(parse(pasteboard.string(forType: .string)!), mean, 1), "C with a selection copies the selection average \(mean)")
 
-        // ? shows and hides the help sheet for the current mode.
+        // ? shows and hides the keys sheet; Esc closes it without closing the overlay.
         open()
+        let help = overlay.chrome.help
         key(44, "?", .shift)
-        require(!overlay.helpPanel.isHidden && overlay.helpPanel.text.contains("Option-drag") && !overlay.helpPanel.text.contains("Up / Down"), "? shows the Area keys")
+        var sheet = texts(in: help)
+        require(!help.isHidden && sheet.contains("Keys") && sheet.contains("Option-drag") && sheet.contains("Up / Down") && sheet.contains("Modes and view"),
+                "? shows the keys sheet with every column: \(sheet.count) texts")
+        require(sheet.contains("Esc or ? closes this.") || sheet.contains { $0.hasSuffix("Esc or ? closes this.") }, "the sheet says how to close it")
+        let panel = help.panel.frame
+        require(panel.width == 900 && help.bounds.insetBy(dx: 1, dy: 1).contains(panel), "the sheet panel is 900 pt wide and inside the screen \(panel)")
         key(44, "?", .shift)
-        require(overlay.helpPanel.isHidden, "? hides the help sheet")
-        key(14, "e")
+        require(help.isHidden, "? hides the keys sheet")
         key(44, "?", .shift)
-        require(overlay.helpPanel.text.contains("Up / Down") && !overlay.helpPanel.text.contains("Option-drag"), "the help sheet follows the mode")
-        key(44, "?", .shift)
+        key(53, "")
+        require(help.isHidden && overlay.window.isVisible, "Esc closes the sheet and leaves the overlay open")
         overlay.dismiss()
         require(overlay.mode == .area, "closing the overlay resets the mode to Area")
 
@@ -168,7 +182,9 @@ extension DebugRun {
         open()
         key(14, "e")
         require(overlay.mode == .element && overlay.elementTask != nil, "E enters Element and starts detection")
+        require(overlay.session != nil && overlay.selection != nil && overlay.elementTask != nil, "Element mode has a session and selection while detection is still running")
         await overlay.elementTask?.value
+        require(!overlay.elementCandidates.isEmpty, "the candidates arrive when detection finishes (\(overlay.elementCandidates.count))")
         let detected = overlay.session!.candidates.filter { $0.kind != .display && $0.kind != .window }
         require(!detected.isEmpty, "detection supplied \(detected.count) candidates")
         overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], pointer: CGPoint(x: frame.minX, y: frame.maxY))
@@ -187,14 +203,88 @@ extension DebugRun {
         require(overlay.selection?.rect == first && first != grown, "1 picks the first shortlist candidate \(first)")
         mouse(.mouseMoved, CGPoint(x: 1500, y: 1400))
         require(overlay.selection?.rect == first, "a picked candidate stays while the pointer moves")
+        let list = overlay.chrome.list
+        require(!list.isHidden, "the candidate list shows in Element mode")
+        sheet = texts(in: list)
+        require(sheet.contains("1") && sheet.contains("1-5 or Up / Down, Return copies") && sheet.contains { $0.contains(" x ") }, "the list shows numbered rows and the footer: \(sheet)")
+        require(list.frame.width == 240 && overlay.view.bounds.contains(list.frame), "the list is 240 pt wide and on screen")
         key(45, "n")
-        require(!overlay.listPanel.isHidden && overlay.listPanel.text.contains("1  "), "N shows the numbered list")
+        require(list.isHidden, "N hides the list")
         key(45, "n")
-        require(overlay.listPanel.isHidden, "N hides the list")
+        require(!list.isHidden, "N shows the list again")
         pasteboard.clearContents()
         key(returnKey, "\r")
         await overlay.commitTask?.value
         require(pngSize(pasteboard.data(forType: .png)) == first.size, "Return copies the element's pixels")
+
+        // Chrome: bottom bar, hints, badges, style bar, hover title, and the safe area.
+        let chrome = overlay.chrome
+        let guides2 = overlay.view.guides
+        open()
+        mouse(.mouseMoved, flat)
+        require(["Area", "Element", "Text", "Loupe", "Rulers", "Snap", "Tight", "M"].allSatisfy(texts(in: chrome.bottomBar).contains), "the bottom bar shows modes, toggles, and style with key caps: \(texts(in: chrome.bottomBar))")
+        require(chrome.bottomBar.modeButtons[.area]!.layer!.backgroundColor != nil && chrome.bottomBar.modeButtons[.text]!.layer!.backgroundColor == nil, "only the current mode is filled")
+        require(abs(chrome.bottomBar.frame.midX - overlay.view.bounds.midX) <= 1 && chrome.bottomBar.frame.minY == 32, "the bottom bar is centered, 32 pt above the bottom edge")
+        require(chrome.styleBar.isHidden && chrome.size.isHidden && chrome.hover.isHidden, "idle Area shows no style bar, badges, or hover title")
+        require(texts(in: chrome.hints) == ["Pause to snap", "Return: copy", "Option: exact", "Click: window", "F: full screen", "?: keys"], "idle Area hints: \(texts(in: chrome.hints))")
+        require(chrome.hints.frame.minY >= chrome.bottomBar.frame.maxY, "the hint strip sits above the bar")
+        key(1, "s")
+        require(texts(in: chrome.hints).first == "S: snap back on" && chrome.bottomBar.toggles[2].1.layer!.backgroundColor == nil, "snap off changes the first hint and the Snap toggle")
+        key(1, "s")
+        chrome.bottomBar.toggles[0].1.onClick()
+        require(defaults.bool(forKey: Pref.loupe) && !overlay.view.guides.loupe.isHidden && chrome.bottomBar.toggles[0].1.layer!.backgroundColor != nil, "clicking Loupe turns it on")
+        chrome.bottomBar.toggles[0].1.onClick()
+        chrome.bottomBar.toggles[2].1.onClick()
+        require(!defaults.bool(forKey: Pref.snap), "clicking Snap turns snap off")
+        chrome.bottomBar.toggles[2].1.onClick()
+        chrome.bottomBar.styleButton.onClick()
+        require(overlay.style == .margin && texts(in: chrome.bottomBar).contains("Margin"), "clicking the style button cycles the style")
+        defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
+        overlay.setWindows([CGRect(x: 300, y: 300, width: 400, height: 200)], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, CGPoint(x: 400, y: 400))
+        require(texts(in: chrome.hover) == ["Browser", "400 x 200", "Click to capture this window"], "hovering a window shows its title and size: \(texts(in: chrome.hover))")
+        mouse(.mouseMoved, CGPoint(x: 40, y: 40))
+        require(chrome.hover.isHidden, "the hover title goes away off the window")
+        mouse(.leftMouseDown, rough.origin)
+        mouse(.leftMouseDragged, CGPoint(x: rough.midX, y: rough.midY))
+        mouse(.leftMouseDragged, CGPoint(x: rough.maxX, y: rough.maxY))
+        require(texts(in: chrome.status).isEmpty && !chrome.size.isHidden, "a quick drag shows only the size badge")
+        for _ in 0..<300 where overlay.snapPreview == nil { try await Task.sleep(for: .milliseconds(10)) }
+        let fit = overlay.snapPreview!
+        require(texts(in: chrome.size) == ["\(Int(fit.width)) x \(Int(fit.height))"] && texts(in: chrome.status) == ["Snap ready: release to take it, Tab for others"], "a snap preview shows its size and Snap ready")
+        mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
+        require(texts(in: chrome.status) == ["Snapped - Tab: other fits"], "after release on a fit: Snapped")
+        require(chrome.bottomBar.isHidden && !chrome.styleBar.isHidden && texts(in: chrome.hints) == ["Handles: resize", "Arrows: nudge", "Tab: other fits", "Esc: cancel"], "the style bar replaces the bottom bar, with the released hints")
+        require(["Tight", "Margin", "Backdrop", "Cmd-1", "Cmd-2", "Cmd-3", "cycles", "Save", "Cmd-S", "Copy", "Return"].allSatisfy(texts(in: chrome.styleBar).contains), "the style bar shows segments, Save, and Copy with key caps")
+        require(chrome.hints.frame.maxY < chrome.styleBar.frame.minY, "the released hints sit below the style bar")
+        chrome.styleBar.segments[2].onClick()
+        require(overlay.style == .backdrop, "clicking a style segment sets the style")
+        defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
+        for _ in 0..<overlay.selection!.fits.count where texts(in: chrome.status) != ["Exact - Tab: fits"] { key(48, "") }
+        require(texts(in: chrome.status) == ["Exact - Tab: fits"], "Tab to the exact drag shows Exact")
+        key(53, "")
+        require(chrome.styleBar.isHidden && chrome.size.isHidden && chrome.status.isHidden, "Esc takes the style bar and badges away")
+
+        // Safe area: with a simulated 38 pt inset, nothing sits under the camera housing.
+        open()
+        let width = overlay.view.bounds.width
+        overlay.topInset = 38
+        key(15, "r")
+        key(37, "l")
+        mouse(.mouseMoved, CGPoint(x: 1200, y: 20))
+        let limit = overlay.view.bounds.height - 38
+        require(guides2.bands.path!.boundingBox.maxY <= limit + 0.5 && guides2.bands.path!.boundingBox.maxY > limit - 1, "the top ruler sits just below the 38 pt inset")
+        require(guides2.loupe.frame.maxY <= limit, "the loupe stays below the inset near the top edge")
+        key(3, "f")
+        for item in chrome.all where !item.isHidden && item !== chrome.help {
+            require(item.frame.maxY <= limit + 0.5 && item.frame.minY >= 0 && item.frame.minX >= 0 && item.frame.maxX <= width, "\(type(of: item)) \(item.frame) lies inside the safe area")
+        }
+        require(!chrome.size.isHidden && !chrome.hints.isHidden && !chrome.styleBar.isHidden, "the full-screen state shows the size badge, hints, and style bar")
+        overlay.topInset = 0
+        overlay.refresh()
+        require(guides2.bands.path!.boundingBox.maxY == overlay.view.bounds.height, "without an inset the top ruler sits at the top edge")
+        overlay.dismiss()
+        for key in [Pref.rulers, Pref.loupe] { defaults.set(false, forKey: key) }
 
         print("Extras UI verification passed (\(passed.count) checks)")
         passed.forEach { print("  ok: \($0)") }

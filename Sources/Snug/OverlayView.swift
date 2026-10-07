@@ -94,7 +94,8 @@ final class OverlayView: NSView {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             let accent = NSColor.controlAccentColor
             hoverLayer.strokeColor = accent.cgColor
-            hoverLayer.fillColor = accent.withAlphaComponent(0.15).cgColor
+            hoverLayer.fillColor = accent.withAlphaComponent(0.08).cgColor
+            hoverLayer.lineWidth = 2
             previewLayer.strokeColor = accent.cgColor
             previewLayer.lineWidth = 2
             handlesLayer.strokeColor = accent.cgColor

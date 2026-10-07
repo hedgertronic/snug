@@ -14,10 +14,10 @@ final class Toast: NSPanel, NSDraggingSource {
     private var dragStart: NSPoint?
 
     /// A color toast passes `color` instead of a PNG and shows a swatch in place of the thumbnail.
-    static func show(png: Data? = nil, message: String, file: URL? = nil, color: NSColor? = nil) {
+    static func show(png: Data? = nil, message: String, detail: String = "", file: URL? = nil, color: NSColor? = nil) {
         guard !isSuppressed else { return }
         current?.orderOut(nil)
-        let toast = Toast(png: png, message: message, file: file, color: color)
+        let toast = Toast(png: png, message: message, detail: detail, file: file, color: color)
         current = toast
         toast.orderFrontRegardless()
         toast.dismissal = Task {
@@ -27,7 +27,7 @@ final class Toast: NSPanel, NSDraggingSource {
         }
     }
 
-    private init(png: Data?, message: String, file: URL?, color: NSColor?) {
+    init(png: Data?, message: String, detail: String, file: URL?, color: NSColor?) {
         self.png = png
         self.file = file
         reveals = file != nil
@@ -39,32 +39,39 @@ final class Toast: NSPanel, NSDraggingSource {
         isReleasedWhenClosed = false
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 
-        let thumbnail: NSView
+        let mark: NSView
         if let color {
-            thumbnail = NSView(frame: NSRect(x: 10, y: 8, width: 40, height: 40))
-            thumbnail.wantsLayer = true
-            thumbnail.layer!.backgroundColor = color.cgColor
-            thumbnail.layer!.cornerRadius = 8
-            thumbnail.layer!.borderWidth = 1
-            thumbnail.layer!.borderColor = NSColor.white.withAlphaComponent(0.4).cgColor
+            mark = NSView()
+            mark.widthAnchor.constraint(equalToConstant: 18).isActive = true
+            mark.heightAnchor.constraint(equalToConstant: 18).isActive = true
+            mark.wantsLayer = true
+            mark.layer!.backgroundColor = color.cgColor
+            mark.layer!.cornerRadius = 5
+            mark.layer!.borderWidth = 1
+            mark.layer!.borderColor = NSColor.white.withAlphaComponent(0.4).cgColor
         } else {
-            let image = NSImageView(image: NSImage(data: png!)!)
-            image.imageScaling = .scaleProportionallyUpOrDown
-            image.frame = NSRect(x: 10, y: 8, width: 56, height: 40)
-            thumbnail = image
+            let check = NSImageView(image: NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)!)
+            check.symbolConfiguration = .init(pointSize: 17, weight: .semibold)
+            check.contentTintColor = .controlAccentColor
+            check.frame = NSRect(x: 0, y: 0, width: 20, height: 20)
+            mark = check
         }
-        let label = NSTextField(labelWithString: message)
-        label.sizeToFit()
-        label.frame.origin = NSPoint(x: thumbnail.frame.maxX + 10, y: (56 - label.frame.height) / 2)
-        let content = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: thumbnail.frame.maxX + 10 + label.frame.width + 14, height: 56))
+        let texts = [NSTextField(message, size: 13, weight: .semibold)]
+            + (detail.isEmpty ? [] : [NSTextField(detail, size: 12, mono: true, color: .secondaryLabelColor)])
+        let row = NSStackView(views: [mark] + texts)
+        row.spacing = 10
+        row.edgeInsets = NSEdgeInsets(top: 10, left: 16, bottom: 10, right: 18)
+        row.frame.size = row.fittingSize
+        let content = NSVisualEffectView(frame: row.frame)
         content.material = .hudWindow
         content.state = .active
         content.wantsLayer = true
-        content.layer?.cornerRadius = 12
-        content.addSubview(thumbnail)
-        content.addSubview(label)
+        content.layer!.cornerRadius = 20
+        content.layer!.masksToBounds = true
+        content.addSubview(row)
+        let size = content.frame.size
         contentView = content
-        setContentSize(content.frame.size)
+        setContentSize(size)
         let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main!
         setFrameOrigin(NSPoint(x: screen.visibleFrame.midX - frame.width / 2, y: screen.visibleFrame.minY + 48))
     }

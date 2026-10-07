@@ -53,26 +53,28 @@ final class OverlayController {
     var textTask: Task<Void, Never>?
     var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
 
-    private let bar = StyleBar()
+    let chrome = Chrome()
+    /// Points at the top of the screen the camera housing covers; chrome stays below it.
+    var topInset: CGFloat = 0
     var extent = CGRect.zero
     var windows: [CGRect] = []
     var hoverWindow: CGRect?
+    var windowNames: [String] = []
     /// The last pointer position in image pixels.
     var pointer = CGPoint.zero
     var session: SelectionSession?
     var elementTask: Task<Void, Never>?
     var elementCandidates: [Candidate] = []
     var previousApp: NSRunningApplication?
-    let modeBar = ModeBar()
-    let helpPanel = InfoPanel()
-    let listPanel = InfoPanel()
+    /// N hides the Element candidate list; it shows in Element mode otherwise.
+    var listHidden = false
     private var interaction = Interaction.none
     private var snapSuggestions: [CGRect] = []
-    private var bypassSnap = false
+    var bypassSnap = false
     private var hadSelection = false
     private var spaceHeld = false
 
-    private var snapEnabled: Bool { defaults.bool(forKey: Pref.snap) }
+    var snapEnabled: Bool { defaults.bool(forKey: Pref.snap) }
     var style: OutputStyle {
         get { defaults.string(forKey: Pref.style).flatMap(OutputStyle.init(rawValue:)) ?? .tight }
         set {
@@ -84,13 +86,16 @@ final class OverlayController {
     init() {
         view.controller = self
         window.contentView = view
-        bar.isHidden = true
-        view.addSubview(bar)
-        for panel in [modeBar, helpPanel, listPanel] { view.addSubview(panel) }
-        modeBar.onMode = { [unowned self] in setMode($0) }
-        bar.onStyle = { [unowned self] in style = $0 }
-        bar.onSave = { [unowned self] in save() }
-        bar.onCopy = { [unowned self] in copy() }
+        chrome.all.forEach(view.addSubview)
+        chrome.bottomBar.onMode = { [unowned self] in setMode($0) }
+        chrome.bottomBar.onToggle = { [unowned self] in
+            defaults.set(!defaults.bool(forKey: $0), forKey: $0)
+            refresh()
+        }
+        chrome.bottomBar.onStyle = { [unowned self] in style = style.next }
+        chrome.styleBar.onStyle = { [unowned self] in style = $0 }
+        chrome.styleBar.onSave = { [unowned self] in save() }
+        chrome.styleBar.onCopy = { [unowned self] in copy() }
     }
 
     /// Shows the frozen image in the reused window. `frame` is in screen points.
@@ -103,6 +108,8 @@ final class OverlayController {
         scale = CGFloat(image.width) / frame.width
         extent = CGRect(x: 0, y: 0, width: image.width, height: image.height)
         windows = []
+        windowNames = []
+        topInset = NSScreen.screens.first { $0.frame == frame }?.safeAreaInsets.top ?? 0
         previousApp = displayID == nil || isHeadless ? nil : NSWorkspace.shared.frontmostApplication
         pointer = CGPoint(x: (NSEvent.mouseLocation.x - frame.minX) * scale, y: (frame.maxY - NSEvent.mouseLocation.y) * scale)
         view.scale = scale
@@ -130,8 +137,9 @@ final class OverlayController {
     }
 
     /// Supplies window rectangles (image pixels, front to back) once they are built.
-    func setWindows(_ rects: [CGRect], pointer: CGPoint) {
+    func setWindows(_ rects: [CGRect], names: [String] = [], pointer: CGPoint) {
         windows = rects
+        windowNames = names
         if mode == .element { buildSession() }
         updateHover(pixel: CGPoint(x: (pointer.x - window.frame.minX) * scale, y: (window.frame.maxY - pointer.y) * scale))
     }
@@ -143,6 +151,7 @@ final class OverlayController {
         view.image = nil
         image = nil
         windows = []
+        windowNames = []
         hoverWindow = nil
         selection = nil
         interaction = .none
@@ -385,10 +394,7 @@ final class OverlayController {
     // MARK: Drawing
 
     func refresh() {
-        guard mode != .text else {
-            bar.isHidden = true
-            return refreshText()
-        }
+        guard mode != .text else { return refreshText() }
         view.textOverlay.layer.isHidden = true
         var overlays = OverlayView.Overlays()
         if case .drawing(let drag) = interaction, drag.rect.width > 0 || drag.rect.height > 0 { overlays.ghost = drag.rect }
@@ -399,14 +405,6 @@ final class OverlayController {
         if let rect = selection?.rect, style != .tight { overlays.styleFrame = style.frame(around: rect, in: extent, scale: scale) }
         view.overlays = overlays
         refreshExtras()
-
-        bar.isHidden = selection == nil
-        guard let rect = selection?.rect else { return }
-        bar.style = style
-        let box = view.viewRect(rect)
-        let x = min(max(box.midX - bar.frame.width / 2, 8), view.bounds.width - bar.frame.width - 8)
-        let below = box.minY - bar.frame.height - 10
-        bar.frame.origin = CGPoint(x: x, y: below >= 8 ? below : min(box.maxY + 10, view.bounds.height - bar.frame.height - 8))
     }
 }
 
