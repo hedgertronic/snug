@@ -1,4 +1,5 @@
 import CoreGraphics
+import CoreML
 import Foundation
 import Vision
 
@@ -7,7 +8,7 @@ import Vision
 /// `barcode` (DetectBarcodesRequest) or `document` (RecognizeDocumentsRequest). `@WIDTH` shrinks the image first.
 enum OCRProbe {
     static func run(image: CGImage, steps: [String], fast: Bool, correction: Bool, detectLanguage: Bool,
-                    languages: [String], width: Int?) async throws {
+                    languages: [String], width: Int?, device: String?) async throws {
         for step in steps {
             let parts = step.split(separator: "@")
             let name = String(parts[0])
@@ -31,6 +32,11 @@ enum OCRProbe {
                 request.automaticallyDetectsLanguage = detectLanguage
                 if !languages.isEmpty { request.recognitionLanguages = languages.map { Locale.Language(identifier: $0) } }
                 request.minimumTextHeightFraction = 0.004
+                if let device {
+                    let supported = request.supportedComputeStageDevices[.main] ?? []
+                    print("main-stage devices: \(supported)")
+                    request.setComputeDevice(supported.first { "\($0)".lowercased().contains(device) }, for: .main)
+                }
                 count = try await ImageRequestHandler(source).perform(request).count
             case "barcode":
                 count = try await ImageRequestHandler(source).perform(DetectBarcodesRequest()).count
