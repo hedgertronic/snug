@@ -54,9 +54,18 @@ final class OverlayController {
     var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
 
     private let bar = StyleBar()
-    private(set) var extent = CGRect.zero
-    private var windows: [CGRect] = []
-    private var hoverWindow: CGRect?
+    var extent = CGRect.zero
+    var windows: [CGRect] = []
+    var hoverWindow: CGRect?
+    /// The last pointer position in image pixels.
+    var pointer = CGPoint.zero
+    var session: SelectionSession?
+    var elementTask: Task<Void, Never>?
+    var elementCandidates: [Candidate] = []
+    var previousApp: NSRunningApplication?
+    let modeBar = ModeBar()
+    let helpPanel = InfoPanel()
+    let listPanel = InfoPanel()
     private var interaction = Interaction.none
     private var snapSuggestions: [CGRect] = []
     private var bypassSnap = false
@@ -77,6 +86,8 @@ final class OverlayController {
         window.contentView = view
         bar.isHidden = true
         view.addSubview(bar)
+        for panel in [modeBar, helpPanel, listPanel] { view.addSubview(panel) }
+        modeBar.onMode = { [unowned self] in setMode($0) }
         bar.onStyle = { [unowned self] in style = $0 }
         bar.onSave = { [unowned self] in save() }
         bar.onCopy = { [unowned self] in copy() }
@@ -85,7 +96,6 @@ final class OverlayController {
     /// Shows the frozen image in the reused window. `frame` is in screen points.
     func present(image: CGImage, frame: CGRect, displayID: CGDirectDisplayID?) {
         cancelWork()
-        mode = .area
         let start = ContinuousClock.now
         let shown = signposter.beginInterval("overlay shown")
         self.image = image
@@ -93,6 +103,8 @@ final class OverlayController {
         scale = CGFloat(image.width) / frame.width
         extent = CGRect(x: 0, y: 0, width: image.width, height: image.height)
         windows = []
+        previousApp = displayID == nil || isHeadless ? nil : NSWorkspace.shared.frontmostApplication
+        pointer = CGPoint(x: (NSEvent.mouseLocation.x - frame.minX) * scale, y: (frame.maxY - NSEvent.mouseLocation.y) * scale)
         view.scale = scale
         view.image = image
         window.setFrame(frame, display: false)
@@ -120,6 +132,7 @@ final class OverlayController {
     /// Supplies window rectangles (image pixels, front to back) once they are built.
     func setWindows(_ rects: [CGRect], pointer: CGPoint) {
         windows = rects
+        if mode == .element { buildSession() }
         updateHover(pixel: CGPoint(x: (pointer.x - window.frame.minX) * scale, y: (window.frame.maxY - pointer.y) * scale))
     }
 
@@ -134,13 +147,14 @@ final class OverlayController {
         selection = nil
         interaction = .none
         spaceHeld = false
-        text = TextSession()
+        resetExtras()
         refresh()
     }
 
     func cancelWork() {
         textTask?.cancel()
         textTask = nil
+        text = TextSession()
         snapTask?.cancel()
         snapTask = nil
         snapPreview = nil
@@ -149,9 +163,14 @@ final class OverlayController {
 
     // MARK: Pointer
 
-    func mouseMoved(_ event: NSEvent) { updateHover(pixel: view.pixelPoint(event)) }
+    func mouseMoved(_ event: NSEvent) {
+        pointer = view.pixelPoint(event)
+        updateHover(pixel: pointer)
+        updateGuides()
+    }
 
     private func updateHover(pixel: CGPoint) {
+        if mode == .element { return elementHover(pixel: pixel) }
         guard selection == nil, case .none = interaction else { return }
         hoverWindow = windows.first { $0.contains(pixel) }
         refresh()
@@ -181,6 +200,7 @@ final class OverlayController {
     func mouseDragged(_ event: NSEvent) {
         guard mode != .text else { return textMouseDragged(event) }
         let point = view.pixelPoint(event)
+        pointer = point
         switch interaction {
         case .none:
             break
@@ -278,17 +298,19 @@ final class OverlayController {
 
     /// The single key dispatch point; each mode routes its own keys.
     func handleKey(_ event: NSEvent) -> Bool {
-        let handled: Bool
-        switch mode {
-        case .area: handled = handleAreaKey(event)
-        case .text: handled = handleTextKey(event)
-        case .element: handled = false
+        var handled = handleExtrasKey(event)
+        if !handled {
+            switch mode {
+            case .area: handled = handleAreaKey(event)
+            case .text: handled = handleTextKey(event)
+            case .element: handled = handleElementKey(event)
+            }
         }
         refresh()
         return handled
     }
 
-    private func handleAreaKey(_ event: NSEvent) -> Bool {
+    func handleAreaKey(_ event: NSEvent) -> Bool {
         let command = event.modifierFlags.contains(.command)
         let step: CGFloat = event.modifierFlags.contains(.shift) ? 10 : 1
         switch (event.keyCode, command, event.charactersIgnoringModifiers ?? "") {
@@ -304,7 +326,6 @@ final class OverlayController {
         case (_, true, "1"): style = .tight
         case (_, true, "2"): style = .margin
         case (_, true, "3"): style = .backdrop
-        case (_, false, "t"): enterText()
         case (_, false, "m"): style = style.next
         case (_, false, "s"): defaults.set(!snapEnabled, forKey: Pref.snap)
         case (_, false, "f"):
@@ -319,12 +340,12 @@ final class OverlayController {
 
     private var afterCaptureSaves: Bool { defaults.string(forKey: Pref.afterCapture) == "copyAndSave" }
 
-    private func copy() {
+    func copy() {
         guard let rect = selection?.rect else { return }
         finish(crop: rect, copy: true, save: afterCaptureSaves)
     }
 
-    private func save() {
+    func save() {
         guard let rect = selection?.rect else { return }
         finish(crop: rect, copy: false, save: true)
     }
@@ -364,6 +385,7 @@ final class OverlayController {
         if selection == nil, case .none = interaction { overlays.hover = hoverWindow }
         if let rect = selection?.rect, style != .tight { overlays.styleFrame = style.frame(around: rect, in: extent, scale: scale) }
         view.overlays = overlays
+        refreshExtras()
 
         bar.isHidden = selection == nil
         guard let rect = selection?.rect else { return }

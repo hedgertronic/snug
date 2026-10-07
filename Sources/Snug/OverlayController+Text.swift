@@ -42,15 +42,6 @@ final class TextOverlay {
 }
 
 extension OverlayController {
-    /// Switches to Text mode with no region.
-    func enterText() {
-        cancelWork()
-        selection = nil
-        text = TextSession()
-        mode = .text
-        refresh()
-    }
-
     func textMouseDown(_ event: NSEvent) {
         cancelWork()
         text = TextSession(drag: AreaDrag(extent: extent, origin: view.pixelPoint(event)))
@@ -71,15 +62,12 @@ extension OverlayController {
             text.rect = rect
             textTask = Task {
                 do {
-                    FileHandle.standardError.write(Data("DBG start \(rect)\n".utf8))
                     let result = try await Self.recognize(image, crop: rect)
-                    FileHandle.standardError.write(Data("DBG done\n".utf8))
                     try Task.checkCancellation()
                     text.result = result
                     refresh()
                 } catch is CancellationError {
                 } catch {
-                    FileHandle.standardError.write(Data("DBG \(error)\n".utf8))
                     NSApp.presentError(error)
                 }
             }
@@ -104,7 +92,6 @@ extension OverlayController {
         let lines = try await handler.perform(request).map {
             TextLine(text: $0.topCandidates(1)[0].string, bounds: inImage($0.boundingBox))
         }
-        FileHandle.standardError.write(Data("DBG text ok \(lines.count)\n".utf8))
         let barcodes = try await handler.perform(DetectBarcodesRequest()).compactMap { observation in
             observation.payloadString.map {
                 FoundItem(kind: .barcode, text: $0, bounds: inImage(observation.boundingBox), url: TextLayout.openable(URL(string: $0)))
@@ -171,5 +158,6 @@ extension OverlayController {
         view.overlays = overlays
         view.textOverlay.show(lines: text.result?.lines.map { view.viewRect($0.bounds) } ?? [],
                               pick: text.picked.map { view.viewRect(text.result!.items[$0].bounds) })
+        refreshExtras()
     }
 }

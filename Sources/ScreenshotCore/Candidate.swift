@@ -1,5 +1,8 @@
 import Foundation
 import CoreGraphics
+import os
+
+private let detectionSignposter = OSSignposter(subsystem: "local.smartscreenshot.lab", category: "pipeline")
 
 /// The source or visual role of a proposed screenshot region.
 public enum CandidateKind: String, Codable, Sendable {
@@ -43,15 +46,25 @@ public struct DetectionReport: Codable, Sendable {
 public enum Detection {
     /// Analyze a source image. Call from a background task to avoid blocking UI work.
     public static func run(_ detector: DetectorKind, image: CGImage) async throws -> DetectionReport {
+        try Task.checkCancellation()
         let start = ContinuousClock.now
         let raw: [Candidate]
         switch detector {
         case .geometry:
+            let geometryInterval = detectionSignposter.beginInterval("Geometry")
             let regions = try await GeometryDetector().detect(in: image)
+            detectionSignposter.endInterval("Geometry", geometryInterval)
+            try Task.checkCancellation()
+            let ocrInterval = detectionSignposter.beginInterval("OCR")
             let text = try await VisionDetector().detectText(in: image)
+            detectionSignposter.endInterval("OCR", ocrInterval)
             raw = regions + text
         case .vision:
+            let ocrInterval = detectionSignposter.beginInterval("OCR")
             let documents = try await VisionDetector().detect(in: image)
+            detectionSignposter.endInterval("OCR", ocrInterval)
+            try Task.checkCancellation()
+            let geometryInterval = detectionSignposter.beginInterval("Geometry")
             let panels = try await GeometryDetector().detect(in: image).filter { candidate in
                 let rect = candidate.bounds
                 let touchedEdges = [rect.minX <= 1, rect.minY <= 1,
@@ -59,8 +72,10 @@ public enum Detection {
                                     rect.maxY >= CGFloat(image.height) - 1].count { $0 }
                 return candidate.kind == .cell || (candidate.kind == .region && touchedEdges >= 2)
             }
+            detectionSignposter.endInterval("Geometry", geometryInterval)
             raw = documents + panels
         }
+        try Task.checkCancellation()
         let extent = CGRect(x: 0, y: 0, width: image.width, height: image.height)
         let candidates = normalized(raw, within: extent)
         let duration = start.duration(to: .now).components

@@ -7,7 +7,8 @@ public struct SelectionSession: Sendable {
     public private(set) var isLocked = false
     public private(set) var anchor: CGPoint
     public let extent: CGRect
-    private var shortlist: [Candidate] = []
+    /// Stable alternatives at the anchor, best first.
+    public private(set) var shortlist: [Candidate] = []
     private var expansionPath: [Candidate] = []
     private var specialReturn: Candidate?
 
@@ -67,6 +68,14 @@ public struct SelectionSession: Sendable {
         guard !shortlist.isEmpty else { return }
         let current = shortlist.firstIndex(where: { $0.id == selected?.id }) ?? (backward ? 0 : -1)
         selected = shortlist[(current + (backward ? -1 : 1) + shortlist.count) % shortlist.count]
+        expansionPath = []
+    }
+
+    /// Selects the shortlist entry at `index`, if there is one.
+    public mutating func pick(_ index: Int) {
+        guard shortlist.indices.contains(index) else { return }
+        isLocked = true
+        selected = shortlist[index]
         expansionPath = []
     }
 

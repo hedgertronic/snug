@@ -16,6 +16,12 @@ enum Pref {
     static let hotKeyModifiers = "SnugHotKeyModifiers"
     static let hotKeyLabel = "SnugHotKeyLabel"
     static let lastArea = "SnugLastArea"
+    static let modeBar = "SnugModeBar"
+    static let loupe = "SnugLoupe"
+    static let rulers = "SnugRulers"
+    static let crosshair = "SnugCrosshair"
+    static let colorFormat = "SnugColorFormat"
+    static let elementMode = "SnugElementMode"
 
     static func register(in defaults: UserDefaults) {
         defaults.register(defaults: [
@@ -25,7 +31,9 @@ enum Pref {
             saveFolder: NSHomeDirectory() + "/Desktop",
             hotKeyCode: 49,
             hotKeyModifiers: Int(NSEvent.ModifierFlags([.control, .shift]).rawValue),
-            hotKeyLabel: "Ctrl-Shift-Space"
+            hotKeyLabel: "Ctrl-Shift-Space",
+            modeBar: true,
+            colorFormat: ColorFormat.hex.rawValue
         ])
     }
 }

@@ -25,7 +25,7 @@ enum DebugRun {
         return folder
     }
 
-    private static func pngSize(_ data: Data?) -> CGSize? {
+    static func pngSize(_ data: Data?) -> CGSize? {
         guard let data else { return nil }
         let source = CGImageSourceCreateWithData(data as CFData, nil)!
         let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as! [CFString: Any]

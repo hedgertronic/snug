@@ -4,7 +4,10 @@ import Darwin
 import ImageIO
 import ScreenCaptureKit
 import UniformTypeIdentifiers
+import os
 import ScreenshotCore
+
+private let pipelineSignposter = OSSignposter(subsystem: "local.smartscreenshot.lab", category: "pipeline")
 
 @main
 @MainActor
@@ -83,6 +86,7 @@ final class LabWindowController: NSWindowController {
     private var activeAnalysis = UUID()
     private var activeSnapAnalysis = UUID()
     private var snapTask: Task<Void, Never>?
+    private var detectionTask: Task<Void, Never>?
     private var manualRoughBounds: CGRect?
     private var snapAnalyzedBounds: CGRect?
     private var snapSuggestions: [SnapSuggestion] = []
@@ -247,6 +251,8 @@ final class LabWindowController: NSWindowController {
     }
 
     private func installImage(_ image: CGImage, candidates: [Candidate] = [], anchor: CGPoint? = nil) {
+        detectionTask?.cancel()
+        detectionTask = nil
         invalidateSnap(clearAlternatives: true)
         sourceImage = image
         baseCandidates = candidates
@@ -264,6 +270,8 @@ final class LabWindowController: NSWindowController {
     }
 
     @objc private func detectorChanged() {
+        detectionTask?.cancel()
+        detectionTask = nil
         invalidateSnap(clearAlternatives: true)
         currentDetector = detectorPicker.indexOfSelectedItem == 1 ? .vision : .geometry
         if sourceImage != nil { runDetection() }
@@ -278,11 +286,16 @@ final class LabWindowController: NSWindowController {
         activeAnalysis = token
         let detector = currentDetector
         status.stringValue = "Analyzing with \(detector == .geometry ? "Geometry" : "Apple Vision")…"
-        Task { [weak self] in
+        detectionTask = Task { [weak self] in
             do {
-                let result = try await Task.detached(priority: .userInitiated) {
+                let analysis = Task.detached(priority: .userInitiated) {
                     try await Detection.run(detector, image: image)
-                }.value
+                }
+                let result = try await withTaskCancellationHandler {
+                    try await analysis.value
+                } onCancel: {
+                    analysis.cancel()
+                }
                 guard let self, self.activeAnalysis == token, self.sourceImage === image else { return }
                 self.report = result
                 if self.session?.isLocked == true {
@@ -297,6 +310,8 @@ final class LabWindowController: NSWindowController {
                     self.status.stringValue = "\(result.candidates.count) regions · \(result.elapsedMilliseconds.formatted(.number.precision(.fractionLength(1)))) ms"
                 }
                 self.refreshDimensions()
+            } catch is CancellationError {
+                return
             } catch {
                 guard let self, self.activeAnalysis == token else { return }
                 self.report = nil
@@ -365,6 +380,31 @@ final class LabWindowController: NSWindowController {
         refreshSnapStatus(isDragging: !ended && !bypassSnap)
     }
 
+    private func analyzeManualBounds(_ bounds: CGRect, keyEvent: NSEvent) async {
+        guard let image = sourceImage else { return }
+        snapTask?.cancel()
+        let analysis = Task.detached(priority: .userInitiated) {
+            try await SmartSnap().suggest(in: image, roughBounds: bounds)
+        }
+        do {
+            let suggestions = try await withTaskCancellationHandler {
+                try await analysis.value
+            } onCancel: {
+                analysis.cancel()
+            }
+            guard sourceImage === image, session?.selected?.kind == .manual,
+                  manualRoughBounds == bounds else { return }
+            snapSuggestions = suggestions
+            snapAnalyzedBounds = bounds
+            snapChoiceIndex = 0
+            if !suggestions.isEmpty { _ = handleKey(keyEvent) }
+        } catch is CancellationError {
+            return
+        } catch {
+            showError("Snap analysis failed: \(error.localizedDescription)")
+        }
+    }
+
     private func scheduleSnapAnalysis(for rectangle: CGRect) {
         snapTask?.cancel()
         let token = UUID()
@@ -377,6 +417,7 @@ final class LabWindowController: NSWindowController {
         snapTask = Task { [weak self] in
             do {
                 try await Task.sleep(for: .milliseconds(80))
+                let snapInterval = pipelineSignposter.beginInterval("Snap")
                 let analysis = Task.detached(priority: .userInitiated) {
                     try await SmartSnap().suggest(in: image, roughBounds: rectangle)
                 }
@@ -385,6 +426,7 @@ final class LabWindowController: NSWindowController {
                 } onCancel: {
                     analysis.cancel()
                 }
+                pipelineSignposter.endInterval("Snap", snapInterval)
                 guard !Task.isCancelled, let self,
                       self.activeSnapAnalysis == token,
                       self.sourceImage === image,
@@ -505,7 +547,24 @@ final class LabWindowController: NSWindowController {
             failSnapUIVerification("A preview for different drag bounds was accepted on release.")
         }
 
-        print("Snap UI verification passed: preview, release, Shift-Tab, Option bypass, cancellation, changed release")
+        let quickDrag = rough.offsetBy(dx: 11, dy: -7)
+        setManual(quickDrag, ended: false, bypassSnap: false)
+        setManual(quickDrag, ended: true, bypassSnap: false)
+        guard let tab = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                                         timestamp: ProcessInfo.processInfo.systemUptime,
+                                         windowNumber: window?.windowNumber ?? 0, context: nil,
+                                         characters: "\t", charactersIgnoringModifiers: "\t",
+                                         isARepeat: false, keyCode: 48), handleKey(tab) else {
+            failSnapUIVerification("Tab did not run for a quick manual drag.")
+        }
+        for _ in 0..<400 where snapAnalyzedBounds != quickDrag { try? await Task.sleep(for: .milliseconds(20)) }
+        guard self.session?.selected?.kind == .manual,
+              self.session?.selected?.bounds == quickDrag || snapSuggestions.contains(where: { $0.bounds == self.session?.selected?.bounds }),
+              !(baseCandidates + (report?.candidates ?? [])).contains(where: { $0.bounds == self.session?.selected?.bounds }) else {
+            failSnapUIVerification("Tab replaced a quick manual drag with a hover candidate.")
+        }
+
+        print("Snap UI verification passed: preview, release, Shift-Tab, Option bypass, cancellation, changed release, quick-drag Tab")
         Darwin.exit(EXIT_SUCCESS)
     }
 
@@ -537,11 +596,9 @@ final class LabWindowController: NSWindowController {
                 session.setManual(bounds)
                 refreshSnapStatus(isDragging: false)
             } else if session.selected?.kind == .manual {
-                invalidateSnap(clearAlternatives: true)
-                let candidates = baseCandidates + (pendingReport?.candidates ?? report?.candidates ?? [])
-                session = SelectionSession(candidates: candidates, extent: session.extent, anchor: session.anchor)
-                pendingReport = nil
-                refreshAnalysisStatus()
+                guard let roughBounds = manualRoughBounds else { return true }
+                Task { await analyzeManualBounds(roughBounds, keyEvent: event) }
+                return true
             } else {
                 session.cycle(backward: modifiers.contains(.shift))
             }
@@ -596,17 +653,31 @@ final class LabWindowController: NSWindowController {
 
     private func copySelection() {
         guard let image = selectedCrop() else { return }
+        let encodeInterval = pipelineSignposter.beginInterval("Encode")
+        let data: Data
         do {
-            let data = try pngData(for: image)
+            data = try pngData(for: image)
+        } catch {
+            pipelineSignposter.endInterval("Encode", encodeInterval)
+            showError("Could not copy selection: \(error.localizedDescription)")
+            return
+        }
+        pipelineSignposter.endInterval("Encode", encodeInterval)
+        do {
             let pasteboardItem = NSPasteboardItem()
             pasteboardItem.setData(data, forType: .png)
             NSPasteboard.general.clearContents()
+            let pasteboardInterval = pipelineSignposter.beginInterval("Pasteboard")
             guard NSPasteboard.general.writeObjects([pasteboardItem]) else {
+                pipelineSignposter.endInterval("Pasteboard", pasteboardInterval)
                 throw CocoaError(.fileWriteUnknown)
             }
+            pipelineSignposter.endInterval("Pasteboard", pasteboardInterval)
             status.stringValue = "Copied \(image.width) × \(image.height) px to clipboard"
             if overlayWindow != nil { finishCaptureOverlay(message: "Capture copied · lab image restored") }
-        } catch { showError("Could not copy selection: \(error.localizedDescription)") }
+        } catch {
+            showError("Could not copy selection: \(error.localizedDescription)")
+        }
     }
 
     private func saveSelection() {
@@ -674,6 +745,7 @@ final class LabWindowController: NSWindowController {
     }
 
     @objc func captureScreen() {
+        let captureInterval = pipelineSignposter.beginInterval("Capture")
         status.stringValue = "Capturing active display…"
         let pointer = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) }),
@@ -686,12 +758,14 @@ final class LabWindowController: NSWindowController {
         Task {
             do {
                 let capture = try await Self.captureDisplay(displayID: displayID, pointer: pointer, screenFrame: screenFrame)
+                pipelineSignposter.endInterval("Capture", captureInterval)
                 labSnapshot = LabSnapshot(sourceImage: sourceImage, session: session, report: report, pendingReport: pendingReport, currentURL: currentURL, baseCandidates: baseCandidates)
                 installImage(capture.image, candidates: capture.candidates, anchor: capture.anchor)
                 currentURL = nil
                 showCaptureOverlay(on: screen, image: capture.image)
                 status.stringValue = "Display captured · analyzing…"
             } catch {
+                pipelineSignposter.endInterval("Capture", captureInterval)
                 status.stringValue = "Screen capture unavailable"
                 showError("Screen capture could not start. Allow Screen Recording for Smart Screenshot Lab in System Settings → Privacy & Security, then try again. \(error.localizedDescription)")
             }
@@ -708,10 +782,13 @@ final class LabWindowController: NSWindowController {
         }
         let filter = SCContentFilter(display: display, excludingWindows: labWindows)
         let configuration = SCStreamConfiguration()
-        configuration.width = Int(CGDisplayPixelsWide(displayID))
-        configuration.height = Int(CGDisplayPixelsHigh(displayID))
+        let info = SCShareableContent.info(for: filter)
+        configuration.width = Int(display.frame.width * CGFloat(info.pointPixelScale))
+        configuration.height = Int(display.frame.height * CGFloat(info.pointPixelScale))
         configuration.showsCursor = false
+        let captureInterval = pipelineSignposter.beginInterval("Capture Image")
         let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+        pipelineSignposter.endInterval("Capture Image", captureInterval)
         let xScale = CGFloat(image.width) / display.frame.width
         let yScale = CGFloat(image.height) / display.frame.height
         let frontToBack = (CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]]) ?? []
@@ -748,6 +825,7 @@ final class LabWindowController: NSWindowController {
     }
 
     private func showCaptureOverlay(on screen: NSScreen, image: CGImage) {
+        let overlayInterval = pipelineSignposter.beginInterval("Overlay Shown")
         let overlay = CaptureOverlayWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false, screen: screen)
         overlay.level = .screenSaver
         overlay.acceptsMouseMovedEvents = true
@@ -769,9 +847,12 @@ final class LabWindowController: NSWindowController {
         overlay.makeKeyAndOrderFront(nil)
         overlay.makeFirstResponder(overlayCanvas)
         overlayCanvas.needsDisplay = true
+        pipelineSignposter.endInterval("Overlay Shown", overlayInterval)
     }
 
     private func finishCaptureOverlay(message: String) {
+        detectionTask?.cancel()
+        detectionTask = nil
         invalidateSnap(clearAlternatives: true)
         overlayWindow?.orderOut(nil)
         overlayWindow?.close()
@@ -797,6 +878,8 @@ final class LabWindowController: NSWindowController {
     }
 
     private func clearSelection() {
+        detectionTask?.cancel()
+        detectionTask = nil
         if overlayWindow != nil {
             finishCaptureOverlay(message: "Capture cancelled · clipboard unchanged")
             return
@@ -844,6 +927,7 @@ final class SelectionCanvas: NSView {
     private var bypassSnapForDrag = false
     private var didStartManualDrag = false
     private var tracking: NSTrackingArea?
+    private var didSignpostFirstDraw = false
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -912,6 +996,11 @@ final class SelectionCanvas: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+        let drawInterval = didSignpostFirstDraw ? nil : pipelineSignposter.beginInterval("First Draw")
+        if !didSignpostFirstDraw {
+            didSignpostFirstDraw = true
+        }
+        defer { if let drawInterval { pipelineSignposter.endInterval("First Draw", drawInterval) } }
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         guard let image else {
             let message = "Open an image to compare region detection"

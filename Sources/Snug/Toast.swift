@@ -7,16 +7,17 @@ final class Toast: NSPanel, NSDraggingSource {
     private static var current: Toast?
     /// Debug runs set this so scripted copies never put a toast on screen.
     static var isSuppressed = false
-    private let png: Data
+    private let png: Data?
     private var file: URL?
     private var reveals: Bool
     private var dismissal: Task<Void, any Error>?
     private var dragStart: NSPoint?
 
-    static func show(png: Data, message: String, file: URL?) {
+    /// A color toast passes `color` instead of a PNG and shows a swatch in place of the thumbnail.
+    static func show(png: Data? = nil, message: String, file: URL? = nil, color: NSColor? = nil) {
         guard !isSuppressed else { return }
         current?.orderOut(nil)
-        let toast = Toast(png: png, message: message, file: file)
+        let toast = Toast(png: png, message: message, file: file, color: color)
         current = toast
         toast.orderFrontRegardless()
         toast.dismissal = Task {
@@ -26,25 +27,36 @@ final class Toast: NSPanel, NSDraggingSource {
         }
     }
 
-    private init(png: Data, message: String, file: URL?) {
+    private init(png: Data?, message: String, file: URL?, color: NSColor?) {
         self.png = png
         self.file = file
         reveals = file != nil
         super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        level = .statusBar
+        level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1)
         isOpaque = false
         backgroundColor = .clear
         hasShadow = true
         isReleasedWhenClosed = false
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 
-        let thumbnail = NSImageView(image: NSImage(data: png)!)
-        thumbnail.imageScaling = .scaleProportionallyUpOrDown
-        thumbnail.frame = NSRect(x: 10, y: 8, width: 56, height: 40)
+        let thumbnail: NSView
+        if let color {
+            thumbnail = NSView(frame: NSRect(x: 10, y: 8, width: 40, height: 40))
+            thumbnail.wantsLayer = true
+            thumbnail.layer!.backgroundColor = color.cgColor
+            thumbnail.layer!.cornerRadius = 8
+            thumbnail.layer!.borderWidth = 1
+            thumbnail.layer!.borderColor = NSColor.white.withAlphaComponent(0.4).cgColor
+        } else {
+            let image = NSImageView(image: NSImage(data: png!)!)
+            image.imageScaling = .scaleProportionallyUpOrDown
+            image.frame = NSRect(x: 10, y: 8, width: 56, height: 40)
+            thumbnail = image
+        }
         let label = NSTextField(labelWithString: message)
         label.sizeToFit()
-        label.frame.origin = NSPoint(x: 76, y: (56 - label.frame.height) / 2)
-        let content = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: 76 + label.frame.width + 14, height: 56))
+        label.frame.origin = NSPoint(x: thumbnail.frame.maxX + 10, y: (56 - label.frame.height) / 2)
+        let content = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: thumbnail.frame.maxX + 10 + label.frame.width + 14, height: 56))
         content.material = .hudWindow
         content.state = .active
         content.wantsLayer = true
@@ -67,7 +79,7 @@ final class Toast: NSPanel, NSDraggingSource {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let start = dragStart, hypot(event.locationInWindow.x - start.x, event.locationInWindow.y - start.y) > 4 else { return }
+        guard let png, let start = dragStart, hypot(event.locationInWindow.x - start.x, event.locationInWindow.y - start.y) > 4 else { return }
         dragStart = nil
         reveals = false
         dismissal?.cancel()
