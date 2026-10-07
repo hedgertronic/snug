@@ -266,6 +266,30 @@ enum DebugRun {
         let windowSize = try await copiedSize()
         require(windowSize == windowRect.size, "click with no selection copies the window under the pointer")
 
+        // A click with no window under the pointer selects the full display.
+        overlay.dismiss()
+        open()
+        overlay.setWindows([windowRect], pointer: CGPoint(x: frame.minX + 10, y: frame.maxY - 10))
+        mouse(.mouseMoved, CGPoint(x: 900, y: 900))
+        mouse(.leftMouseDown, CGPoint(x: 900, y: 900))
+        mouse(.leftMouseUp, CGPoint(x: 900, y: 900))
+        require(overlay.selection?.rect == CGRect(x: 0, y: 0, width: image.width, height: image.height), "a click with no window under the pointer selects the full display")
+
+        // A higher-layer target (menu, Dock, menu bar) listed in front wins hit-testing and is cropped from the frozen image.
+        overlay.dismiss()
+        open()
+        let menuRect = CGRect(x: 330, y: 280, width: 150, height: 120)
+        overlay.setWindows([menuRect, windowRect], ids: [2, 1], frozen: [true, false], pointer: CGPoint(x: frame.minX + 10, y: frame.maxY - 10))
+        mouse(.mouseMoved, CGPoint(x: 350, y: 350))
+        require(overlay.view.overlays.hover == menuRect, "the frontmost window wins hit-testing where a menu overlaps a window")
+        mouse(.mouseMoved, CGPoint(x: 600, y: 350))
+        require(overlay.view.overlays.hover == windowRect, "outside the menu the window underneath is hovered")
+        mouse(.mouseMoved, CGPoint(x: 350, y: 350))
+        pasteboard.clearContents()
+        mouse(.leftMouseDown, CGPoint(x: 350, y: 350))
+        mouse(.leftMouseUp, CGPoint(x: 350, y: 350))
+        require(try await copiedSize() == menuRect.size, "clicking a menu copies its rectangle from the frozen image")
+
         print("Area UI verification passed (\(passed.count) checks)")
         passed.forEach { print("  ok: \($0)") }
         exit(EXIT_SUCCESS)

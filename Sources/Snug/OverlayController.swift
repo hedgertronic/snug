@@ -74,6 +74,8 @@ final class OverlayController {
     var hoverWindow: CGRect?
     var windowNames: [String] = []
     var windowIDs: [CGWindowID] = []
+    /// Per window: a Dock, menu bar, or menu target, cropped from the frozen image instead of captured as a window.
+    var windowFrozen: [Bool] = []
     /// Option is held: a window click drops the shadow.
     var optionHeld = false
     /// Corner radius in pixels of each snap fit, Tab fit, Element candidate, and hovered window, measured once per rectangle.
@@ -138,6 +140,7 @@ final class OverlayController {
         windows = []
         windowNames = []
         windowIDs = []
+        windowFrozen = []
         topInset = NSScreen.screens.first { $0.frame == frame }?.safeAreaInsets.top ?? 0
         previousApp = displayID == nil || isHeadless ? nil : NSWorkspace.shared.frontmostApplication
         pointer = CGPoint(x: (NSEvent.mouseLocation.x - frame.minX) * scale, y: (frame.maxY - NSEvent.mouseLocation.y) * scale)
@@ -166,10 +169,11 @@ final class OverlayController {
     }
 
     /// Supplies window rectangles (image pixels, front to back) once they are built.
-    func setWindows(_ rects: [CGRect], names: [String] = [], ids: [CGWindowID] = [], pointer: CGPoint) {
+    func setWindows(_ rects: [CGRect], names: [String] = [], ids: [CGWindowID] = [], frozen: [Bool] = [], pointer: CGPoint) {
         windows = rects
         windowNames = names
         windowIDs = ids
+        windowFrozen = frozen
         if mode == .element { merge(windowCandidates) }
         updateHover(pixel: CGPoint(x: (pointer.x - window.frame.minX) * scale, y: (window.frame.maxY - pointer.y) * scale))
     }
@@ -186,6 +190,7 @@ final class OverlayController {
         windows = []
         windowNames = []
         windowIDs = []
+        windowFrozen = []
         radii = [:]
         radiusTasks = [:]
         hoverWindow = nil
@@ -293,7 +298,10 @@ final class OverlayController {
             let rect = drag.rect
             if rect.width < AreaSelection.minimumSize || rect.height < AreaSelection.minimumSize {
                 cancelWork()
-                if !hadSelection, let hoverWindow { clickWindow(hoverWindow, shadow: !event.modifierFlags.contains(.option)) }
+                if !hadSelection {
+                    if let hoverWindow { clickWindow(hoverWindow, shadow: !event.modifierFlags.contains(.option)) }
+                    else { selection = AreaSelection(extent: extent, exact: extent) }
+                }
             } else {
                 release(rect)
             }
@@ -412,10 +420,11 @@ final class OverlayController {
     }
 
     /// A click on a hovered window. A live capture takes the window itself like macOS does (rounded corners, shadow,
-    /// transparent background); a frozen-image run has no window to capture and crops the window's rectangle.
+    /// transparent background); a frozen-image run, the Dock, the menu bar, and menus have no window to capture and crop the rectangle.
     private func clickWindow(_ rect: CGRect, shadow: Bool) {
-        guard displayID != nil else { return finish(crop: rect, copy: true, save: afterCaptureSaves) }
-        let id = windowIDs[windows.firstIndex(of: rect)!]
+        let index = windows.firstIndex(of: rect)!
+        guard displayID != nil, !windowFrozen.indices.contains(index) || !windowFrozen[index] else { return finish(crop: rect, copy: true, save: afterCaptureSaves) }
+        let id = windowIDs[index]
         dismiss()
         commitTask = Task { [pasteboard, defaults, afterCaptureSaves] in
             do {
