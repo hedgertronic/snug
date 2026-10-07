@@ -27,11 +27,24 @@ public enum OutputStyle: String, CaseIterable, Sendable {
     }
 
     /// Renders the output image for a crop given in source-image pixels.
-    public func render(_ image: CGImage, crop: CGRect, scale: CGFloat) throws -> CGImage {
+    public func render(_ image: CGImage, crop: CGRect, scale: CGFloat, cornerRadius: CGFloat = 0) throws -> CGImage {
         let extent = CGRect(x: 0, y: 0, width: image.width, height: image.height)
         let crop = crop.integral.intersection(extent)
         let frame = frame(around: crop, in: extent, scale: scale).integral
         guard let source = image.cropping(to: self == .backdrop ? crop : frame) else { throw CocoaError(.fileReadCorruptFile) }
+        if self == .tight, cornerRadius > 0 {
+            guard let context = CGContext(data: nil, width: source.width, height: source.height, bitsPerComponent: 8,
+                                          bytesPerRow: 0, space: image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)
+            else { throw CocoaError(.fileWriteUnknown) }
+            context.setShouldAntialias(true)
+            context.addPath(CGPath(roundedRect: CGRect(x: 0, y: 0, width: source.width, height: source.height),
+                                   cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil))
+            context.clip()
+            context.draw(source, in: CGRect(x: 0, y: 0, width: source.width, height: source.height))
+            guard let output = context.makeImage() else { throw CocoaError(.fileWriteUnknown) }
+            return output
+        }
         guard self == .backdrop else { return source }
 
         let width = Int(frame.width), height = Int(frame.height)
@@ -43,7 +56,7 @@ public enum OutputStyle: String, CaseIterable, Sendable {
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
         // CGContext has a bottom-left origin; the padding is symmetric so the image rect needs no flip.
         let target = CGRect(x: crop.minX - frame.minX, y: crop.minY - frame.minY, width: crop.width, height: crop.height)
-        let radius = 10 * scale
+        let radius = cornerRadius > 0 ? cornerRadius : 10 * scale
         context.setShadow(offset: CGSize(width: 0, height: -6 * scale), blur: 18 * scale,
                           color: CGColor(gray: 0, alpha: 0.28))
         context.addPath(CGPath(roundedRect: target, cornerWidth: radius, cornerHeight: radius, transform: nil))
