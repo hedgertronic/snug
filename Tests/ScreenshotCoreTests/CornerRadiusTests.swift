@@ -19,6 +19,10 @@ struct CornerRadiusTests {
                 bytes[index + 1] = UInt8(40 + (state >> 24) % 176)
                 state = state &* 1664525 &+ 1013904223
                 bytes[index + 2] = UInt8(40 + (state >> 24) % 176)
+            } else if background == 3 {
+                bytes[index] = UInt8(60 + (pixel % width) * 120 / width)
+                bytes[index + 1] = UInt8(90 + (pixel / width) * 100 / height)
+                bytes[index + 2] = 140
             } else if background == 2 {
                 bytes[index] = 245
                 bytes[index + 1] = 244
@@ -49,7 +53,7 @@ struct CornerRadiusTests {
     }
 
     @Test func estimatesSyntheticCornerRadiiAcrossBackgrounds() {
-        let backgrounds = [("flat", 0), ("close", 2)]
+        let backgrounds = [("flat", 0), ("close", 2), ("gradient", 3)]
         for (name, background) in backgrounds {
             for radius: CGFloat in [0, 8, 20, 40, 60] {
                 let estimate = cornerRadius(in: image(radius: radius, background: background), rect: shapeRect)
