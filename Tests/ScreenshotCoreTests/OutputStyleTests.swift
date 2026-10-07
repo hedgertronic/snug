@@ -36,4 +36,26 @@ struct OutputStyleTests {
         #expect((margin.width, margin.height) == (264, 164))
         #expect((backdrop.width, backdrop.height) == (296, 196))
     }
+
+    @Test func tightRadiusMasksCornersAndMarginIgnoresRadius() throws {
+        let source = image()
+        let tight = try OutputStyle.tight.render(source, crop: crop, scale: 2, cornerRadius: 24)
+        var tightBytes = [UInt8](repeating: 0, count: tight.width * tight.height * 4)
+        tightBytes.withUnsafeMutableBytes { storage in
+            let context = CGContext(data: storage.baseAddress, width: tight.width, height: tight.height,
+                                    bitsPerComponent: 8, bytesPerRow: tight.width * 4,
+                                    space: CGColorSpaceCreateDeviceRGB(),
+                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)!
+            context.draw(tight, in: CGRect(x: 0, y: 0, width: tight.width, height: tight.height))
+        }
+        #expect(tightBytes[3] == 0)
+        #expect(tightBytes[((tight.height / 2) * tight.width + tight.width / 2) * 4 + 3] == 255)
+
+        let margin = try OutputStyle.margin.render(source, crop: crop, scale: 2)
+        let marginWithRadius = try OutputStyle.margin.render(source, crop: crop, scale: 2, cornerRadius: 24)
+        #expect(margin.width == marginWithRadius.width)
+        #expect(margin.height == marginWithRadius.height)
+        #expect(ColorFormat.average(of: margin, in: CGRect(x: 0, y: 0, width: margin.width, height: margin.height)) ==
+                ColorFormat.average(of: marginWithRadius, in: CGRect(x: 0, y: 0, width: marginWithRadius.width, height: marginWithRadius.height)))
+    }
 }
