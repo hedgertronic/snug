@@ -104,6 +104,12 @@ struct ScreenshotBench {
                          outputURL: URL(fileURLWithPath: output))
             return
         }
+        if args.first == "suite", let manifest = option("--manifest"), let output = option("--output") {
+            try await ScreenshotBenchSuite.run(manifestURL: URL(fileURLWithPath: manifest),
+                               baselineURL: option("--baseline").map { URL(fileURLWithPath: $0) },
+                               outputURL: URL(fileURLWithPath: output, isDirectory: true))
+            return
+        }
         if args.first == "fixtures", args.count == 2 {
             try Fixtures.write(to: URL(fileURLWithPath: args[1], isDirectory: true))
             print("Wrote six synthetic fixtures and manifest to \(args[1])")
@@ -111,7 +117,7 @@ struct ScreenshotBench {
         }
         guard args.first == "analyze", let input = option("--image"), let output = option("--output"),
               let detector = DetectorKind(rawValue: option("--detector") ?? "geometry") else {
-            throw BenchError.message("Usage: ScreenshotBench fixtures DIR | analyze --image FILE --output DIR --detector geometry|vision [--repeat N] [--manifest FILE] | snap --image FILE --rect x,y,width,height --output DIR | evaluate --labels FILE --results DIR --output FILE")
+            throw BenchError.message("Usage: ScreenshotBench fixtures DIR | analyze --image FILE --output DIR --detector geometry|vision [--repeat N] [--manifest FILE] | snap --image FILE --rect x,y,width,height --output DIR | evaluate --labels FILE --results DIR --output FILE | suite --manifest FILE [--baseline FILE] --output DIR")
         }
         let repetitions = max(1, min(100, Int(option("--repeat") ?? "1") ?? 1))
         let inputURL = URL(fileURLWithPath: input)
