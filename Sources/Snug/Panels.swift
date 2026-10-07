@@ -6,7 +6,9 @@ import ScreenshotCore
 final class CandidateList: NSVisualEffectView {
     static let width: CGFloat = 240
     private static let rowHeight: CGFloat = 30
+    private static let parentRowHeight: CGFloat = 20
     private var key = ""
+    private static let parentRows = 3
 
     init() {
         super.init(frame: .zero)
@@ -21,19 +23,53 @@ final class CandidateList: NSVisualEffectView {
 
     override func mouseDown(with event: NSEvent) {}
 
-    /// Rows for the first five shortlist candidates; `current` is the selected candidate's id.
-    func update(_ candidates: [Candidate], current: String?) {
+    /// Rows for the first five shortlist candidates (`current` is the selected candidate's id), then the selection's nearest parents.
+    /// A button for the Accessibility prompt appears above the footer when `onAllowAccessibility` is set.
+    func update(_ candidates: [Candidate], parents: [Candidate], current: String?, onAllowAccessibility: (() -> Void)?) {
         let rows = Array(candidates.prefix(5))
-        let key = rows.map(\.id).joined(separator: ",") + "|" + (current ?? "")
+        let parentRows = Array(parents.prefix(Self.parentRows))
+        let key = (rows + parentRows).map(\.id).joined(separator: ",") + "|" + (current ?? "") + (onAllowAccessibility == nil ? "" : "|ax")
         guard key != self.key else { return }
         self.key = key
         subviews.forEach { $0.removeFromSuperview() }
         let footer = NSTextField("1-5 or Up / Down, Return copies", size: 11, color: .secondaryLabelColor)
         footer.sizeToFit()
-        let height = CGFloat(rows.count) * Self.rowHeight + 16 + footer.frame.height + 12
+        var bottom: CGFloat = 10
+        let allow = onAllowAccessibility.map { action in
+            let button = ActionButton(title: "Allow Accessibility for app elements", action: action)
+            button.font = .systemFont(ofSize: 11)
+            button.bezelStyle = .inline
+            button.sizeToFit()
+            return button
+        }
+        let parentsHeight = parentRows.isEmpty ? 0 : CGFloat(parentRows.count + 1) * Self.parentRowHeight
+        let height = CGFloat(rows.count) * Self.rowHeight + parentsHeight + 16 + footer.frame.height + 12 + (allow.map { $0.frame.height + 4 } ?? 0)
         frame.size = CGSize(width: Self.width, height: height)
-        footer.frame.origin = CGPoint(x: 14, y: 10)
+        footer.frame.origin = CGPoint(x: 14, y: bottom)
         addSubview(footer)
+        bottom += footer.frame.height + 2
+        if let allow {
+            allow.frame.origin = CGPoint(x: 10, y: bottom)
+            addSubview(allow)
+            bottom += allow.frame.height + 2
+        }
+        if !parentRows.isEmpty {
+            let heading = NSTextField("Parents", size: 11, weight: .semibold, color: .secondaryLabelColor)
+            heading.sizeToFit()
+            heading.frame.origin = CGPoint(x: 14, y: bottom + CGFloat(parentRows.count) * Self.parentRowHeight + (Self.parentRowHeight - heading.frame.height) / 2)
+            addSubview(heading)
+            for (index, parent) in parentRows.enumerated() {
+                let y = bottom + CGFloat(parentRows.count - 1 - index) * Self.parentRowHeight
+                let name = NSTextField(Self.name(of: parent), size: 12, color: .labelColor)
+                name.sizeToFit()
+                name.frame.origin = CGPoint(x: 36, y: y + (Self.parentRowHeight - name.frame.height) / 2)
+                let size = NSTextField("\(Int(parent.bounds.width)) x \(Int(parent.bounds.height))", size: 11, mono: true, color: .secondaryLabelColor)
+                size.sizeToFit()
+                size.frame.origin = CGPoint(x: Self.width - 14 - size.frame.width, y: y + (Self.parentRowHeight - size.frame.height) / 2)
+                addSubview(name)
+                addSubview(size)
+            }
+        }
         for (index, candidate) in rows.enumerated() {
             let selected = candidate.id == current
             let row = NSView(frame: CGRect(x: 6, y: height - 8 - CGFloat(index + 1) * Self.rowHeight, width: Self.width - 12, height: Self.rowHeight))
@@ -43,7 +79,7 @@ final class CandidateList: NSVisualEffectView {
             let text: NSColor = selected ? .white : .labelColor
             let cap = KeyCap(String(index + 1), color: selected ? .white : .secondaryLabelColor)
             cap.frame.origin = CGPoint(x: 8, y: (Self.rowHeight - cap.frame.height) / 2)
-            let name = NSTextField(candidate.kind.rawValue.capitalized, size: 13, weight: selected ? .semibold : .regular, color: text)
+            let name = NSTextField(Self.name(of: candidate), size: 13, weight: selected ? .semibold : .regular, color: text)
             name.sizeToFit()
             name.frame.origin = CGPoint(x: 36, y: (Self.rowHeight - name.frame.height) / 2)
             let size = NSTextField("\(Int(candidate.bounds.width)) x \(Int(candidate.bounds.height))", size: 11, mono: true, color: selected ? NSColor.white.withAlphaComponent(0.85) : .secondaryLabelColor)
@@ -53,6 +89,29 @@ final class CandidateList: NSVisualEffectView {
             addSubview(row)
         }
     }
+
+    /// Accessibility candidates are named by their role description; the rest by kind.
+    private static func name(of candidate: Candidate) -> String {
+        candidate.id.hasPrefix("ax-") ? candidate.label.capitalized : candidate.kind.rawValue.capitalized
+    }
+}
+
+/// A push button that runs a closure.
+@MainActor
+final class ActionButton: NSButton {
+    private let handler: () -> Void
+
+    init(title: String, action: @escaping () -> Void) {
+        handler = action
+        super.init(frame: .zero)
+        self.title = title
+        target = self
+        self.action = #selector(run)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    @objc private func run() { handler() }
 }
 
 /// The keys sheet: a scrim over the overlay and a centered material panel in three columns.
@@ -61,7 +120,7 @@ final class HelpSheet: NSView {
     static let columns: [(title: String, rows: [(keys: String, action: String)])] = [
         ("Capture", [("drag", "Select a region"), ("click", "Copy window under pointer"), ("Option-drag", "Exact, no snap"),
                      ("F", "Full screen"), ("Return", "Copy"), ("Cmd-S", "Save"), ("C", "Copy color"), ("Esc", "Cancel")]),
-        ("Adjust", [("Tab", "Other fits, found items"), ("Arrows", "Nudge (Shift: 10 pt)"), ("Up / Down", "Bigger / smaller element"),
+        ("Adjust", [("Tab", "Other fits, candidates, items"), ("Arrows", "Nudge (Shift: 10 pt)"), ("Up / Down", "Bigger / smaller element"),
                     ("1-5", "Pick a candidate"), ("Cmd-1/2/3", "Tight / Margin / Backdrop"), ("M", "Cycle output style"),
                     ("Shift-Return", "Copy text as table"), ("Cmd-Return", "Open picked link"), ("Shift-C", "Cycle color format")]),
         ("Modes and view", [("A", "Area"), ("E", "Element"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),

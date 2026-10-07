@@ -30,6 +30,40 @@ struct SelectionSessionTests {
         #expect(session.selected?.id == session.shortlist[1].id)
     }
 
+    @Test func parentsListTheExpansionPathNearestFirst() {
+        var session = SelectionSession(candidates: regions, extent: extent, anchor: CGPoint(x: 150, y: 150))
+        #expect(session.parents.map(\.id) == ["table", "window", "display"])
+        session.expand()
+        #expect(session.parents.map(\.id) == ["window", "display"])
+    }
+
+    @Test func lateResultsJoinThePoolWithoutChangingAPick() {
+        let late = Candidate(id: "late", label: "Late", bounds: CGRect(x: 120, y: 120, width: 60, height: 40), score: 99, kind: .text)
+        var hovering = SelectionSession(candidates: regions, extent: extent, anchor: CGPoint(x: 150, y: 150))
+        hovering.merge([late])
+        #expect(hovering.selected?.id == "late")
+        var picked = SelectionSession(candidates: regions, extent: extent, anchor: CGPoint(x: 150, y: 150))
+        picked.pick(1)
+        let (selected, shortlist) = (picked.selected, picked.shortlist)
+        picked.merge([late])
+        #expect(picked.selected == selected && picked.shortlist == shortlist)
+        #expect(picked.candidates.contains { $0.id == "late" })
+        picked.hover(at: CGPoint(x: 150, y: 150))
+        #expect(picked.selected == selected)
+        picked.toggleLock()
+        picked.hover(at: CGPoint(x: 150, y: 150))
+        #expect(picked.selected?.id == "late")
+    }
+
+    @Test func cyclingStepsThroughCandidatesAtThePointBothWays() {
+        var session = SelectionSession(candidates: regions, extent: extent, anchor: CGPoint(x: 150, y: 150))
+        let first = session.selected?.id
+        session.cycle()
+        #expect(session.selected?.id != first)
+        session.cycle(backward: true)
+        #expect(session.selected?.id == first)
+    }
+
     @Test func expandingAndShrinkingRestoresExactRegion() {
         var session = SelectionSession(candidates: regions, extent: extent, anchor: CGPoint(x: 150, y: 150))
         session.expand(); #expect(session.selected?.id == "table")

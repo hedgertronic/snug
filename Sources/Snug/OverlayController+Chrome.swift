@@ -6,7 +6,7 @@ extension OverlayController {
     private var hints: [String] {
         switch mode {
         case .text: ["Return: copy text", "Shift-Return: copy as table", "Tab: links", "A: back to area"]
-        case .element: ["Click: copy", "Up / Down: bigger / smaller", "1-5: pick", "A: back to area", "?: keys"]
+        case .element: ["Click: copy", "Drag: area", "Tab: next candidate", "Up / Down: bigger / smaller", "1-5: pick", "?: keys"]
         case .area where selection != nil: ["Handles: resize", "Arrows: nudge", "Tab: other fits", "Esc: cancel"]
         case .area: [snapEnabled ? "Pause to snap" : "S: snap back on", "Return: copy", "Option: exact", "Click: window", "Option-click: no shadow", "F: full screen", "?: keys"]
         }
@@ -118,7 +118,8 @@ extension OverlayController {
 
         c.list.isHidden = !(mode == .element && !listHidden && session != nil)
         if !c.list.isHidden, let session {
-            c.list.update(session.shortlist, current: session.selected?.id)
+            let allow = displayID != nil && !isHeadless && !AXIsProcessTrusted()
+            c.list.update(session.shortlist, parents: session.parents, current: session.selected?.id, onAllowAccessibility: allow ? { Accessibility.requestTrust() } : nil)
             let box = selection.map { view.viewRect($0.rect) } ?? CGRect(x: 0, y: top, width: 0, height: 0)
             let width = c.list.frame.width, height = c.list.frame.height
             let x = box.maxX + 12 + width <= bounds.width - 8 ? box.maxX + 12 : (box.minX - 12 - width >= 8 ? box.minX - 12 - width : 12)

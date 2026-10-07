@@ -217,6 +217,68 @@ extension DebugRun {
         await overlay.commitTask?.value
         require(pngSize(pasteboard.data(forType: .png)) == first.size, "Return copies the element's pixels")
 
+        // Element parity: Tab, parents, late results, click, drag, and accessibility without permission.
+        open()
+        key(14, "e")
+        await overlay.elementTask?.value
+        overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, CGPoint(x: 422, y: 585))
+        let start = overlay.selection!.rect
+        let startShortlist = overlay.session!.shortlist.map(\.id)
+        key(48, "\t")
+        let tabbed = overlay.selection!.rect
+        require(tabbed != start && overlay.session!.shortlist.map(\.id) == startShortlist, "Tab selects the next candidate at this point without reordering the list")
+        key(48, "\t", .shift)
+        require(overlay.selection!.rect == start, "Shift-Tab goes back")
+        sheet = texts(in: overlay.chrome.list)
+        let parents = overlay.session!.parents
+        require(!parents.isEmpty && sheet.contains("Parents") && sheet.contains("\(Int(parents[0].bounds.width)) x \(Int(parents[0].bounds.height))"), "the list shows the hovered region's parents: \(sheet)")
+        require(parents.allSatisfy { $0.bounds.insetBy(dx: -1, dy: -1).contains(start) }, "every listed parent encloses the hovered region")
+        key(18, "1")
+        let pick = overlay.selection!.rect
+        let pickList = overlay.session!.shortlist.map(\.id)
+        let late = Candidate(id: "late", label: "Late", bounds: CGRect(x: 400, y: 570, width: 50, height: 30), score: 99, kind: .text)
+        overlay.merge([late])
+        require(overlay.session!.candidates.contains { $0.id == "late" }, "late results join the pool")
+        require(overlay.selection?.rect == pick && overlay.session!.shortlist.map(\.id) == pickList, "late results do not change a picked region or the list order")
+        pasteboard.clearContents()
+        key(returnKey, "\r")
+        await overlay.commitTask?.value
+        require(pngSize(pasteboard.data(forType: .png)) == pick.size, "Return after late results still copies the picked region")
+
+        open()
+        key(14, "e")
+        await overlay.elementTask?.value
+        mouse(.mouseMoved, CGPoint(x: 422, y: 585))
+        let hoverRect = overlay.selection!.rect
+        pasteboard.clearContents()
+        mouse(.leftMouseDown, CGPoint(x: 422, y: 585))
+        mouse(.leftMouseUp, CGPoint(x: 422, y: 585))
+        await overlay.commitTask?.value
+        require(pngSize(pasteboard.data(forType: .png)) == hoverRect.size && !overlay.window.isVisible, "a click copies the highlighted region \(hoverRect)")
+
+        open()
+        key(14, "e")
+        await overlay.elementTask?.value
+        mouse(.mouseMoved, CGPoint(x: 422, y: 585))
+        key(1, "s")
+        drag(rough)
+        require(overlay.mode == .area && overlay.selection?.rect == rough, "a drag in Element mode becomes an Area drag (\(overlay.mode), \(String(describing: overlay.selection?.rect)))")
+        key(1, "s")
+        overlay.dismiss()
+
+        open()
+        key(14, "e")
+        await overlay.elementTask?.value
+        overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], names: [], ids: [1], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, CGPoint(x: 422, y: 585))
+        require(overlay.accessibilityTask == nil && overlay.accessibilityStarted == nil, "a headless run never starts an accessibility lookup")
+        require(!overlay.session!.candidates.contains { $0.id.hasPrefix("ax-") }, "no accessibility candidates in a headless run")
+        require(!texts(in: overlay.chrome.list).contains("Allow Accessibility for app elements"), "the Allow Accessibility button never shows in a headless run")
+        let axFrames = await Accessibility.frames(at: .zero, pid: getpid())
+        require(AXIsProcessTrusted() || axFrames.isEmpty, "without Accessibility permission the lookup is empty and silent (trusted: \(AXIsProcessTrusted()))")
+        overlay.dismiss()
+
         // Chrome: bottom bar, hints, badges, style bar, hover title, and the safe area.
         let chrome = overlay.chrome
         let guides2 = overlay.view.guides
