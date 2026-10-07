@@ -91,6 +91,11 @@ extension DebugRun {
         try snapshot("text-reading")
         try await waitFor("OCR") { overlay.text.result != nil }
         try snapshot("text")
+        overlay.targetLanguage = Locale.Language(identifier: "de")
+        overlay.translationStatus = { _, _ in .supported }
+        key(36, "\r", .option)
+        try await waitFor("the not-installed pill") { overlay.text.notice != nil }
+        try snapshot("text-translate-missing")
         overlay.dismiss()
 
         open()
