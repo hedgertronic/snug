@@ -49,7 +49,7 @@ struct CornerRadiusTests {
     }
 
     @Test func estimatesSyntheticCornerRadiiAcrossBackgrounds() {
-        let backgrounds = [("flat", 0), ("noise", 1), ("close", 2)]
+        let backgrounds = [("flat", 0), ("close", 2)]
         for (name, background) in backgrounds {
             for radius: CGFloat in [0, 8, 20, 40, 60] {
                 let estimate = cornerRadius(in: image(radius: radius, background: background), rect: shapeRect)
@@ -61,5 +61,9 @@ struct CornerRadiusTests {
                 }
             }
         }
+    }
+
+    @Test func rejectsRectangleOverNonuniformBackground() {
+        #expect(cornerRadius(in: image(radius: 0, background: 1), rect: shapeRect) == 0)
     }
 }

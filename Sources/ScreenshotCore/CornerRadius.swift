@@ -57,7 +57,15 @@ public func cornerRadius(in image: CGImage, rect: CGRect) -> CGFloat {
                    first: (Int, Int, Int), second: (Int, Int, Int)) -> CGFloat? {
         let limit = min(width, height) / 2
         for step in 0...limit {
-            if matches(startX + step * stepX, startY + step * stepY, first, second) { return CGFloat(step) }
+            if matches(startX + step * stepX, startY + step * stepY, first, second) {
+                let outside = color(startX, startY)
+                for outsideStep in 0..<step {
+                    let sample = color(startX + outsideStep * stepX, startY + outsideStep * stepY)
+                    let red = Double(sample.0 - outside.0), green = Double(sample.1 - outside.1), blue = Double(sample.2 - outside.2)
+                    if (red * red + green * green + blue * blue).squareRoot() > 24 { return nil }
+                }
+                return CGFloat(step)
+            }
         }
         return nil
     }
