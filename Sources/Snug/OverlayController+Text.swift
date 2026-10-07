@@ -19,8 +19,9 @@ final class TextOverlay {
 
     init() {
         let accent = NSColor.controlAccentColor
-        lines.fillColor = accent.withAlphaComponent(0.12).cgColor
-        lines.strokeColor = accent.withAlphaComponent(0.6).cgColor
+        lines.fillColor = accent.withAlphaComponent(0.18).cgColor
+        lines.strokeColor = accent.cgColor
+        lines.lineWidth = 1
         pick.fillColor = accent.withAlphaComponent(0.3).cgColor
         pick.strokeColor = accent.cgColor
         pick.lineWidth = 2
@@ -35,7 +36,7 @@ final class TextOverlay {
         defer { CATransaction.commit() }
         layer.isHidden = false
         let path = CGMutablePath()
-        path.addRects(rects)
+        for rect in rects { path.addRoundedRect(in: rect, cornerWidth: 4, cornerHeight: 4) }
         lines.path = path
         pick.path = rect.map { CGPath(rect: $0, transform: nil) }
     }

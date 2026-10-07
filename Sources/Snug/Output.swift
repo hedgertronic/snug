@@ -33,7 +33,8 @@ enum Pref {
             hotKeyModifiers: Int(NSEvent.ModifierFlags([.control, .shift]).rawValue),
             hotKeyLabel: "Ctrl-Shift-Space",
             modeBar: true,
-            colorFormat: ColorFormat.hex.rawValue
+            colorFormat: ColorFormat.hex.rawValue,
+            elementMode: true
         ])
     }
 }
@@ -73,12 +74,13 @@ enum Output {
             file = folder.appending(path: "Snug \(format.string(from: .now)).png")
             try output.png.write(to: file!)
         }
-        let size = "\(output.width) x \(output.height) px"
-        let message = switch (copy, save) {
-        case (true, true): "Copied and saved \(size)"
-        case (true, false): "Copied \(size), \(style.rawValue)"
-        default: "Saved \(size)"
+        let size = "\(output.width) x \(output.height)  \(style.rawValue)"
+        let folder = URL(fileURLWithPath: defaults.string(forKey: Pref.saveFolder)!).lastPathComponent
+        let (message, detail) = switch (copy, save) {
+        case (true, true): ("Copied, saved to \(folder)", file!.lastPathComponent)
+        case (true, false): ("Copied", size)
+        default: ("Saved to \(folder)", file!.lastPathComponent)
         }
-        Toast.show(png: output.png, message: message, file: file)
+        Toast.show(png: output.png, message: message, detail: detail, file: file)
     }
 }

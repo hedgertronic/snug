@@ -68,7 +68,9 @@ extension DebugRun {
             mouse(.leftMouseDragged, CGPoint(x: rect.maxX, y: rect.maxY))
             require(overlay.text.result == nil && overlay.textTask == nil, "no OCR while dragging")
             mouse(.leftMouseUp, CGPoint(x: rect.maxX, y: rect.maxY))
+            require(!overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."], "a Reading text... pill shows while OCR runs")
             try await waitFor("OCR finishes after release") { overlay.text.result != nil }
+            require(overlay.chrome.reading.isHidden, "the Reading text... pill goes away when OCR finishes")
         }
         func copied() async -> String? {
             await overlay.commitTask?.value
@@ -85,6 +87,14 @@ extension DebugRun {
         open()
         try await select(cart)
         require(overlay.snapPreview == nil && overlay.text.rect == cart, "a Text drag selects exactly the dragged region without snapping")
+        let chrome = overlay.chrome
+        require(texts(in: chrome.hints) == ["Return: copy text", "Shift-Return: copy as table", "Tab: links", "A: back to area"], "Text mode shows its hint strip")
+        require(chrome.styleBar.isHidden && !chrome.bottomBar.isHidden && chrome.bottomBar.modeButtons[.text]!.layer!.backgroundColor != nil, "Text mode keeps the bottom bar with Text filled")
+        let counts = texts(in: chrome.count)
+        require(!chrome.count.isHidden && counts.count == 1 && counts[0].hasPrefix("9 lines, 2 columns"), "the region badge counts lines and columns: \(counts)")
+        require(texts(in: chrome.table) == ["Looks like a table"], "a two-column region shows Looks like a table")
+        let regionBox = overlay.view.viewRect(cart)
+        require(chrome.count.frame.minY >= regionBox.maxY && chrome.count.frame.maxY <= overlay.view.bounds.height - overlay.topInset, "the badge sits above the region, inside the screen")
         let lines = overlay.text.result!.lines
         require(lines.contains { $0.text.contains("Product name") } && lines.allSatisfy { cart.insetBy(dx: -4, dy: -4).contains($0.bounds) },
                 "OCR finds the cart text and maps boxes back into full-image pixels")
@@ -105,6 +115,7 @@ extension DebugRun {
         // Found items: a link in the email field.
         open()
         try await select(email)
+        require(overlay.chrome.table.isHidden, "a one-line region shows no table badge")
         let items = overlay.text.result!.items
         require(items.contains { $0.text == "you@example.com" && $0.kind == .link }, "found items include the email link: \(items.map(\.text))")
         pasteboard.clearContents()

@@ -30,11 +30,13 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: arguments[index + 1]) as CFURL, nil)!
             return CGImageSourceCreateImageAtIndex(source, 0, nil)!
         }
-        if let image, arguments.contains("--verify-area-ui") || arguments.contains("--verify-extras-ui") || arguments.contains("--verify-text-ui") || arguments.contains("--measure") {
+        if let image, arguments.contains("--verify-area-ui") || arguments.contains("--verify-extras-ui") || arguments.contains("--verify-text-ui") || arguments.contains("--measure") || arguments.contains("--render-states") {
             let frame = imageFrame(for: image)
             Task {
                 do {
-                    if arguments.contains("--measure") {
+                    if let index = arguments.firstIndex(of: "--render-states") {
+                        try await DebugRun.renderStates(into: URL(fileURLWithPath: arguments[index + 1]), image: image, frame: frame, overlay: overlay)
+                    } else if arguments.contains("--measure") {
                         try await DebugRun.measure(image: image, frame: frame, overlay: overlay)
                     } else if arguments.contains("--verify-text-ui") {
                         try await DebugRun.verifyText(image: image, frame: frame, overlay: overlay)
@@ -123,8 +125,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 try Task.checkCancellation()
                 overlay.present(image: image, frame: screen.frame, displayID: id)
                 if text { overlay.setMode(.text) }
-                let rects = await DisplayCapture.windowRects(on: id, pixelScale: overlay.scale)
-                if overlay.image === image { overlay.setWindows(rects, pointer: NSEvent.mouseLocation) }
+                let windows = await DisplayCapture.windows(on: id, pixelScale: overlay.scale)
+                if overlay.image === image { overlay.setWindows(windows.map(\.rect), names: windows.map(\.name), pointer: NSEvent.mouseLocation) }
             } catch is CancellationError {
             } catch {
                 NSApp.presentError(error)
