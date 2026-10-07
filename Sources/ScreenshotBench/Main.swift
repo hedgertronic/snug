@@ -98,6 +98,13 @@ struct ScreenshotBench {
             print("\(suggestions.count) suggestions; \(String(format: "%.1f", milliseconds)) ms; first=\(String(describing: suggestions.first?.bounds))")
             return
         }
+        if args.first == "ocr-probe", let input = option("--image"), let steps = option("--steps") {
+            try await OCRProbe.run(image: try PNG.read(URL(fileURLWithPath: input)), steps: steps.split(separator: ",").map(String.init),
+                                   fast: option("--level") == "fast", correction: option("--correction") != "off",
+                                   detectLanguage: option("--detect-language") != "off",
+                                   languages: option("--languages")?.split(separator: ",").map(String.init) ?? [], width: option("--width").flatMap { Int($0) })
+            return
+        }
         if args.first == "evaluate", let labels = option("--labels"),
            let results = option("--results"), let output = option("--output") {
             try evaluate(labelsURL: URL(fileURLWithPath: labels), resultsURL: URL(fileURLWithPath: results),
@@ -117,7 +124,7 @@ struct ScreenshotBench {
         }
         guard args.first == "analyze", let input = option("--image"), let output = option("--output"),
               let detector = DetectorKind(rawValue: option("--detector") ?? "geometry") else {
-            throw BenchError.message("Usage: ScreenshotBench fixtures DIR | analyze --image FILE --output DIR --detector geometry|vision [--repeat N] [--manifest FILE] | snap --image FILE --rect x,y,width,height --output DIR | evaluate --labels FILE --results DIR --output FILE | suite --manifest FILE [--baseline FILE] --output DIR")
+            throw BenchError.message("Usage: ScreenshotBench fixtures DIR | analyze --image FILE --output DIR --detector geometry|vision [--repeat N] [--manifest FILE] | snap --image FILE --rect x,y,width,height --output DIR | evaluate --labels FILE --results DIR --output FILE | suite --manifest FILE [--baseline FILE] --output DIR | ocr-probe --image FILE --steps ocr,ocr [--level fast] [--correction off] [--detect-language off] [--languages en-US] [--width N]")
         }
         let repetitions = max(1, min(100, Int(option("--repeat") ?? "1") ?? 1))
         let inputURL = URL(fileURLWithPath: input)

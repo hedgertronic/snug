@@ -277,7 +277,7 @@ enum DebugRun {
     static func measure(image: CGImage, frame: CGRect, overlay: OverlayController) async throws {
         _ = privateSetup(overlay)
         let rough = CGRect(x: 350, y: 458, width: 580, height: 64)
-        var stages: [(name: String, values: [Double])] = ["open overlay", "first draw", "snap", "encode", "pasteboard", "encode + pasteboard"].map { ($0, []) }
+        var stages: [(name: String, values: [Double])] = ["open overlay", "first draw", "snap", "encode", "pasteboard", "encode + pasteboard", "snap, full drag", "element analysis"].map { ($0, []) }
         var snapCount = 0
         for _ in 0..<30 {
             overlay.present(image: image, frame: frame, displayID: nil)
@@ -293,6 +293,14 @@ enum DebugRun {
             overlay.pasteboard.setData(output.png, forType: .png)
             run.append(start.duration(to: .now).milliseconds)
             run.append(run[3] + run[4])
+            start = ContinuousClock.now
+            _ = try await SmartSnap().suggest(in: image, roughBounds: CGRect(x: 10, y: 10, width: image.width - 20, height: image.height - 20))
+            run.append(start.duration(to: .now).milliseconds)
+            start = ContinuousClock.now
+            overlay.setMode(.element)
+            await overlay.elementTask?.value
+            run.append(start.duration(to: .now).milliseconds)
+            overlay.setMode(.area)
             for index in run.indices { stages[index].values.append(run[index]) }
             overlay.dismiss()
         }
