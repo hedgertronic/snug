@@ -165,9 +165,9 @@ extension DebugRun {
         let help = overlay.chrome.help
         key(44, "?", .shift)
         var sheet = texts(in: help)
-        require(!help.isHidden && sheet.contains("Keys") && sheet.contains("\u{2325}-drag") && sheet.contains("Up / Down") && sheet.contains("Modes and view"),
+        require(!help.isHidden && sheet.contains("Keys") && sheet.contains("Option-drag") && sheet.contains("Up / Down") && sheet.contains("Modes and view"),
                 "? shows the keys sheet with every column: \(sheet.count) texts")
-        require(sheet.contains("\u{238B} or ? closes this.") || sheet.contains { $0.hasSuffix("\u{238B} or ? closes this.") }, "the sheet says how to close it")
+        require(sheet.contains("Esc or ? closes this.") || sheet.contains { $0.hasSuffix("Esc or ? closes this.") }, "the sheet says how to close it")
         let panel = help.panel.frame
         require(panel.width == 900 && help.bounds.insetBy(dx: 1, dy: 1).contains(panel), "the sheet panel is 900 pt wide and inside the screen \(panel)")
         key(44, "?", .shift)
@@ -206,7 +206,7 @@ extension DebugRun {
         let list = overlay.chrome.list
         require(!list.isHidden, "the candidate list shows in Element mode")
         sheet = texts(in: list)
-        require(sheet.contains("1") && sheet.contains("1-5 or Up / Down, \u{21A9} copies") && sheet.contains { $0.contains(" x ") }, "the list shows numbered rows and the footer: \(sheet)")
+        require(sheet.contains("1") && sheet.contains("1-5 or Up / Down, Return copies") && sheet.contains { $0.contains(" x ") }, "the list shows numbered rows and the footer: \(sheet)")
         require(list.frame.width == 240 && overlay.view.bounds.contains(list.frame), "the list is 240 pt wide and on screen")
         key(45, "n")
         require(list.isHidden, "N hides the list")
@@ -288,7 +288,7 @@ extension DebugRun {
         require(chrome.bottomBar.modeButtons[.area]!.layer!.backgroundColor != nil && chrome.bottomBar.modeButtons[.text]!.layer!.backgroundColor == nil, "only the current mode is filled")
         require(abs(chrome.bottomBar.frame.midX - overlay.view.bounds.midX) <= 1 && chrome.bottomBar.frame.minY == 32, "the bottom bar is centered, 32 pt above the bottom edge")
         require(chrome.styleBar.isHidden && chrome.size.isHidden && chrome.hover.isHidden, "idle Area shows no style bar, badges, or hover title")
-        require(texts(in: chrome.hints) == ["Pause to snap", "\u{21A9}: copy", "\u{2325}: exact", "Click: window", "\u{2325}-click: no shadow", "F: full screen", "?: keys"], "idle Area hints: \(texts(in: chrome.hints))")
+        require(texts(in: chrome.hints) == ["Pause to snap", "Return: copy", "Option: exact", "Click: window", "Option-click: no shadow", "F: full screen", "?: keys"], "idle Area hints: \(texts(in: chrome.hints))")
         require(chrome.hints.frame.minY >= chrome.bottomBar.frame.maxY, "the hint strip sits above the bar")
         key(1, "s")
         require(texts(in: chrome.hints).first == "S: snap back on" && chrome.bottomBar.toggles[2].1.layer!.backgroundColor == nil, "snap off changes the first hint and the Snap toggle")
@@ -321,8 +321,8 @@ extension DebugRun {
         require(texts(in: chrome.size) == ["\(Int(fit.width)) x \(Int(fit.height))"] && texts(in: chrome.status) == ["Snap ready: release to take it, Tab for others"], "a snap preview shows its size and Snap ready")
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.status) == ["Snapped - Tab: other fits"], "after release on a fit: Snapped")
-        require(chrome.bottomBar.isHidden && !chrome.styleBar.isHidden && texts(in: chrome.hints) == ["Handles: resize", "Arrows: nudge", "Tab: other fits", "\u{238B}: cancel"], "the style bar replaces the bottom bar, with the released hints")
-        require(["Tight", "Margin", "Backdrop", "\u{2318}1", "\u{2318}2", "\u{2318}3", "cycles", "Save", "\u{2318}S", "Copy", "\u{21A9}"].allSatisfy(texts(in: chrome.styleBar).contains), "the style bar shows segments, Save, and Copy with key caps")
+        require(chrome.bottomBar.isHidden && !chrome.styleBar.isHidden && texts(in: chrome.hints) == ["Handles: resize", "Arrows: nudge", "Tab: other fits", "Esc: cancel"], "the style bar replaces the bottom bar, with the released hints")
+        require(["Tight", "Margin", "Backdrop", "\u{2318}1", "\u{2318}2", "\u{2318}3", "cycles", "Save", "\u{2318}S", "Copy", "Return"].allSatisfy(texts(in: chrome.styleBar).contains), "the style bar shows segments, Save, and Copy with key caps")
         require(chrome.hints.frame.maxY < chrome.styleBar.frame.minY, "the released hints sit below the style bar")
         chrome.styleBar.segments[2].onClick()
         require(overlay.style == .backdrop, "clicking a style segment sets the style")

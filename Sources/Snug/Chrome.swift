@@ -261,7 +261,7 @@ final class StyleBar: Capsule {
     var onCopy: () -> Void = {}
     let segments = OutputStyle.allCases.enumerated().map { BarButton($1.rawValue.capitalized, key: "\u{2318}\($0 + 1)", height: 38) }
     let save = BarButton("Save", key: "\u{2318}S")
-    let copy = BarButton("Copy", key: "\u{21A9}")
+    let copy = BarButton("Copy", key: "Return")
 
     var style = OutputStyle.tight {
         didSet {

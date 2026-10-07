@@ -32,7 +32,7 @@ final class CandidateList: NSVisualEffectView {
         guard key != self.key else { return }
         self.key = key
         subviews.forEach { $0.removeFromSuperview() }
-        let footer = NSTextField("1-5 or Up / Down, \u{21A9} copies", size: 11, color: .secondaryLabelColor)
+        let footer = NSTextField("1-5 or Up / Down, Return copies", size: 11, color: .secondaryLabelColor)
         footer.sizeToFit()
         var bottom: CGFloat = 10
         let allow = onAllowAccessibility.map { action in
@@ -118,11 +118,11 @@ final class ActionButton: NSButton {
 @MainActor
 final class HelpSheet: NSView {
     static let columns: [(title: String, rows: [(keys: String, action: String)])] = [
-        ("Capture", [("drag", "Select a region"), ("click", "Copy window under pointer"), ("\u{2325}-drag", "Exact, no snap"),
-                     ("F", "Full screen"), ("\u{21A9}", "Copy"), ("\u{2318}S", "Save"), ("C", "Copy color"), ("\u{238B}", "Cancel")]),
+        ("Capture", [("drag", "Select a region"), ("click", "Copy window under pointer"), ("Option-drag", "Exact, no snap"),
+                     ("F", "Full screen"), ("Return", "Copy"), ("Cmd-S", "Save"), ("C", "Copy color"), ("Esc", "Cancel")]),
         ("Adjust", [("Tab", "Other fits, candidates, items"), ("Arrows", "Nudge (Shift: 10 pt)"), ("Up / Down", "Bigger / smaller element"),
-                    ("1-5", "Pick a candidate"), ("\u{2318}1/2/3", "Tight / Margin / Backdrop"), ("M", "Cycle output style"),
-                    ("\u{21E7}\u{21A9}", "Copy text as table"), ("\u{2318}\u{21A9}", "Open picked link"), ("\u{21E7}C", "Cycle color format")]),
+                    ("1-5", "Pick a candidate"), ("Cmd-1/2/3", "Tight / Margin / Backdrop"), ("M", "Cycle output style"),
+                    ("Shift-Return", "Copy text as table"), ("Cmd-Return", "Open picked link"), ("Shift-C", "Cycle color format")]),
         ("Modes and view", [("A", "Area"), ("E", "Element"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),
                             ("X", "Crosshair"), ("N", "Candidate list"), ("B", "Bottom bar"), ("?", "This sheet")])
     ]
@@ -144,7 +144,7 @@ final class HelpSheet: NSView {
         let title = NSTextField("Keys", size: 20, weight: .bold)
         title.sizeToFit()
         title.frame.origin = CGPoint(x: padX, y: height - padY - title.frame.height)
-        let subtitle = NSTextField("Every toggle stays the way you leave it.  \u{238B} or ? closes this.", size: 12, color: .secondaryLabelColor)
+        let subtitle = NSTextField("Every toggle stays the way you leave it.  Esc or ? closes this.", size: 12, color: .secondaryLabelColor)
         subtitle.sizeToFit()
         subtitle.frame.origin = CGPoint(x: 900 - padX - subtitle.frame.width, y: title.frame.minY + 3)
         panel.addSubview(title)

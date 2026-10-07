@@ -4,7 +4,14 @@ import SwiftUI
 
 /// The hot key's display string and menu key equivalent, derived from the stored key code and modifiers.
 enum Shortcut {
-    /// US-layout key names for the keys the recorder accepts: letters, digits, punctuation, and Space.
+    /// Function keys F1-F12 by key code, with the `NSF1FunctionKey`-based character a menu key equivalent needs.
+    static let functionKeys: [Int: (name: String, character: Int)] = [
+        122: ("F1", NSF1FunctionKey), 120: ("F2", NSF2FunctionKey), 99: ("F3", NSF3FunctionKey), 118: ("F4", NSF4FunctionKey),
+        96: ("F5", NSF5FunctionKey), 97: ("F6", NSF6FunctionKey), 98: ("F7", NSF7FunctionKey), 100: ("F8", NSF8FunctionKey),
+        101: ("F9", NSF9FunctionKey), 109: ("F10", NSF10FunctionKey), 103: ("F11", NSF11FunctionKey), 111: ("F12", NSF12FunctionKey)
+    ]
+
+    /// US-layout key names for the other keys the recorder accepts: letters, digits, punctuation, and Space.
     static let keyNames: [Int: String] = [
         0: "A", 1: "S", 2: "D", 3: "F", 4: "H", 5: "G", 6: "Z", 7: "X", 8: "C", 9: "V", 11: "B", 12: "Q", 13: "W", 14: "E", 15: "R",
         16: "Y", 17: "T", 18: "1", 19: "2", 20: "3", 21: "4", 22: "6", 23: "5", 24: "=", 25: "9", 26: "7", 27: "-", 28: "8", 29: "0",
@@ -15,7 +22,7 @@ enum Shortcut {
     static func label(code: Int, modifiers: Int) -> String {
         let flags = NSEvent.ModifierFlags(rawValue: UInt(modifiers))
         return (flags.contains(.control) ? "\u{2303}" : "") + (flags.contains(.option) ? "\u{2325}" : "")
-            + (flags.contains(.shift) ? "\u{21E7}" : "") + (flags.contains(.command) ? "\u{2318}" : "") + keyNames[code]!
+            + (flags.contains(.shift) ? "\u{21E7}" : "") + (flags.contains(.command) ? "\u{2318}" : "") + (functionKeys[code]?.name ?? keyNames[code]!)
     }
 
     static func label(from defaults: UserDefaults) -> String {
@@ -127,8 +134,9 @@ private struct ShortcutRecorder: NSViewRepresentable {
         override func keyDown(with event: NSEvent) {
             let modifiers = event.modifierFlags.intersection([.control, .option, .command, .shift])
             guard event.keyCode != 53 else { window?.makeFirstResponder(nil); return }
-            guard !modifiers.isDisjoint(with: [.control, .option, .command]) else { NSSound.beep(); return }
-            guard Shortcut.keyNames[Int(event.keyCode)] != nil else { NSSound.beep(); return }
+            let isFunctionKey = Shortcut.functionKeys[Int(event.keyCode)] != nil
+            guard isFunctionKey || !modifiers.isDisjoint(with: [.control, .option, .command]) else { NSSound.beep(); return }
+            guard isFunctionKey || Shortcut.keyNames[Int(event.keyCode)] != nil else { NSSound.beep(); return }
             let defaults = UserDefaults.standard
             defaults.set(Int(event.keyCode), forKey: Pref.hotKeyCode)
             defaults.set(Int(modifiers.rawValue), forKey: Pref.hotKeyModifiers)

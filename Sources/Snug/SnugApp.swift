@@ -203,8 +203,13 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 extension NSMenuItem {
     /// Shows the recorded hot key as this item's right-aligned key equivalent.
     func setShortcut(from defaults: UserDefaults) {
-        let name = Shortcut.keyNames[defaults.integer(forKey: Pref.hotKeyCode)]!
-        keyEquivalent = name == "Space" ? " " : name.lowercased()
+        let code = defaults.integer(forKey: Pref.hotKeyCode)
+        if let function = Shortcut.functionKeys[code] {
+            keyEquivalent = String(Character(UnicodeScalar(function.character)!))
+        } else {
+            let name = Shortcut.keyNames[code]!
+            keyEquivalent = name == "Space" ? " " : name.lowercased()
+        }
         keyEquivalentModifierMask = NSEvent.ModifierFlags(rawValue: UInt(defaults.integer(forKey: Pref.hotKeyModifiers)))
     }
 }
