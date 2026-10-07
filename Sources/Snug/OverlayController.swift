@@ -370,13 +370,15 @@ final class OverlayController {
     }
 
     /// Shows a failure unless its task was cancelled (Vision reports cancellation with its own error, not
-    /// `CancellationError`). Debug runs print it and exit instead of opening an alert.
+    /// `CancellationError`). Closes the overlay first so the alert is not hidden under it.
+    /// Debug runs print it and exit instead of opening an alert.
     func report(_ error: any Error) {
         guard !Task.isCancelled else { return }
         if isHeadless {
             FileHandle.standardError.write(Data("Debug run failed: \(error)\n".utf8))
             exit(EXIT_FAILURE)
         }
+        dismiss()
         NSApp.presentError(error)
     }
 
