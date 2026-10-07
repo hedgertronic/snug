@@ -126,11 +126,11 @@ enum DebugRun {
 
         // Handle resize and move through the view.
         let selection = overlay.selection!.rect
-        mouse(.leftMouseDown, CGPoint(x: selection.maxX, y: selection.midY))
-        mouse(.leftMouseDragged, CGPoint(x: selection.maxX + 40, y: selection.midY))
-        mouse(.leftMouseUp, CGPoint(x: selection.maxX + 40, y: selection.midY))
+        mouse(.leftMouseDown, CGPoint(x: selection.maxX, y: selection.midY), .option)
+        mouse(.leftMouseDragged, CGPoint(x: selection.maxX + 40, y: selection.midY), .option)
+        mouse(.leftMouseUp, CGPoint(x: selection.maxX + 40, y: selection.midY), .option)
         require(overlay.selection?.rect == CGRect(x: selection.minX, y: selection.minY, width: selection.width + 40, height: selection.height),
-                "dragging the right handle resizes")
+                "Option-dragging the right handle resizes exactly")
         let resized = overlay.selection!.rect
         mouse(.leftMouseDown, CGPoint(x: resized.midX, y: resized.midY))
         mouse(.leftMouseDragged, CGPoint(x: resized.midX + 20, y: resized.midY + 6))
@@ -265,6 +265,113 @@ enum DebugRun {
         mouse(.leftMouseUp, CGPoint(x: 350, y: 350))
         let windowSize = try await copiedSize()
         require(windowSize == windowRect.size, "click with no selection copies the window under the pointer")
+
+        // Snap: the band floor, display edges, accessibility fits, draggable edges, per-edge resize snapping, cursors.
+        func openFixture(_ shown: CGImage) {
+            overlay.present(image: shown, frame: CGRect(x: 0, y: 0, width: shown.width, height: shown.height), displayID: nil)
+        }
+        func near(_ a: CGRect, _ b: CGRect, _ tolerance: CGFloat) -> Bool {
+            abs(a.minX - b.minX) <= tolerance && abs(a.minY - b.minY) <= tolerance
+                && abs(a.maxX - b.maxX) <= tolerance && abs(a.maxY - b.maxY) <= tolerance
+        }
+        func snapped(_ drag: CGRect, _ message: String) async throws -> CGRect {
+            pressDrag(drag)
+            try await waitFor("\(message) shows a preview") { overlay.snapPreview != nil }
+            let preview = overlay.snapPreview!
+            release(drag)
+            require(overlay.selection?.rect == preview, "\(message): release takes the preview")
+            return preview
+        }
+        let pillFixture = DebugRun.pillFixture, cardsFixture = DebugRun.cardsFixture
+        defaults.set(true, forKey: Pref.snap)
+        let extent = CGRect(x: 0, y: 0, width: 1280, height: 800)
+        openFixture(pillFixture)
+        require(overlay.scale == 1, "the fixtures open at 1x")
+        let pill = CGRect(x: 300, y: 200, width: 160, height: 22)
+        let pillPreview = try await snapped(pill.insetBy(dx: -7, dy: -7), "a drag 7 px outside a 22 px pill")
+        require(near(pillPreview, pill, 2), "the pill snaps from a sloppy drag: \(pillPreview)")
+        overlay.dismiss()
+        openFixture(pillFixture)
+        let full = try await snapped(CGRect(x: 4, y: 3, width: 1272, height: 794), "a corner-to-corner drag")
+        require(full == extent, "corner to corner snaps to the full display: \(full)")
+        overlay.dismiss()
+        openFixture(pillFixture)
+        let strip = try await snapped(CGRect(x: 5, y: 34, width: 1270, height: 52), "an edge-to-edge drag")
+        require(near(strip, CGRect(x: 0, y: 40, width: 1280, height: 40), 2), "edge to edge snaps to a full-width strip: \(strip)")
+        overlay.dismiss()
+
+        let card = CGRect(x: 580, y: 200, width: 260, height: 230)
+        let axFrame = card.insetBy(dx: -6, dy: -6)
+        openFixture(cardsFixture)
+        overlay.snapFrameSource = { _ in [axFrame] }
+        let axPreview = try await snapped(card.insetBy(dx: -9, dy: -9), "a drag around an accessibility frame")
+        require(axPreview == axFrame, "the accessibility frame ranks ahead of the pixel fit: \(axPreview)")
+        require(overlay.selection!.fits.count == 3 && near(overlay.selection!.fits[1], card, 3), "the pixel fit follows it: \(overlay.selection!.fits)")
+        key(tab)
+        require(near(overlay.selection!.rect, card, 3), "Tab cycles from the accessibility fit to the pixel fit")
+        overlay.snapFrameSource = nil
+        overlay.dismiss()
+
+        openFixture(pillFixture)
+        let area = CGRect(x: 300, y: 500, width: 400, height: 200)
+        pressDrag(area, .option)
+        release(area)
+        mouse(.mouseMoved, CGPoint(x: area.maxX, y: area.minY + 60))
+        require(overlay.view.cursor === OverlayController.resizeCursors[.right], "the pointer on a side shows its resize cursor")
+        mouse(.mouseMoved, CGPoint(x: area.maxX, y: area.maxY))
+        require(overlay.view.cursor === OverlayController.resizeCursors[.bottomRight], "the pointer on a corner handle shows its resize cursor")
+        mouse(.mouseMoved, CGPoint(x: area.midX, y: area.midY + 20))
+        require(overlay.view.cursor === NSCursor.openHand, "the pointer inside the selection shows an open hand")
+        mouse(.mouseMoved, CGPoint(x: area.minX - 60, y: area.midY))
+        require(overlay.view.cursor === NSCursor.crosshair, "the pointer outside the selection shows the crosshair")
+        mouse(.leftMouseDown, CGPoint(x: area.maxX, y: area.minY + 60), .option)
+        require(overlay.view.cursor === OverlayController.resizeCursors[.right], "dragging a side keeps its resize cursor")
+        mouse(.leftMouseDragged, CGPoint(x: area.maxX + 40, y: area.minY + 60), .option)
+        mouse(.leftMouseUp, CGPoint(x: area.maxX + 40, y: area.minY + 60), .option)
+        require(overlay.selection?.rect == CGRect(x: 300, y: 500, width: 440, height: 200), "dragging along a side, away from its handles, resizes that side")
+        mouse(.leftMouseDown, CGPoint(x: 450, y: area.minY), .option)
+        mouse(.leftMouseDragged, CGPoint(x: 450, y: area.minY - 30), .option)
+        mouse(.leftMouseUp, CGPoint(x: 450, y: area.minY - 30), .option)
+        require(overlay.selection?.rect == CGRect(x: 300, y: 470, width: 440, height: 230), "dragging the top side resizes it")
+        mouse(.leftMouseDown, CGPoint(x: 500, y: 600), .option)
+        require(overlay.view.cursor === NSCursor.closedHand, "moving the selection shows a closed hand")
+        mouse(.leftMouseDragged, CGPoint(x: 510, y: 600), .option)
+        mouse(.leftMouseUp, CGPoint(x: 510, y: 600), .option)
+        require(overlay.view.cursor === NSCursor.openHand, "releasing a move returns to the open hand")
+        overlay.dismiss()
+        require(overlay.view.cursor === NSCursor.crosshair, "closing the overlay resets the cursor")
+
+        openFixture(cardsFixture)
+        let row = CGRect(x: 270, y: 190, width: 880, height: 250)
+        pressDrag(row, .option)
+        release(row)
+        require(overlay.selection?.rect == row, "an exact drag around three cards selects the whole row")
+        mouse(.leftMouseDown, CGPoint(x: row.maxX, y: row.midY))
+        mouse(.leftMouseDragged, CGPoint(x: 846, y: row.midY))
+        require(abs(overlay.selection!.rect.maxX - 840) <= 3 && overlay.view.overlays.snappedEdges.count == 1,
+                "dragging the right edge near card two snaps to its right edge: \(overlay.selection!.rect.maxX)")
+        mouse(.leftMouseDragged, CGPoint(x: 546, y: row.midY))
+        require(abs(overlay.selection!.rect.maxX - 540) <= 3, "then to card one's right edge: \(overlay.selection!.rect.maxX)")
+        mouse(.leftMouseDragged, CGPoint(x: 846, y: row.midY), .option)
+        require(overlay.selection!.rect.maxX == 846 && overlay.view.overlays.snappedEdges.isEmpty, "Option keeps the dragged edge exact")
+        mouse(.leftMouseUp, CGPoint(x: 846, y: row.midY), .option)
+        require(overlay.view.overlays.snappedEdges.isEmpty, "the snapped edge is not drawn after release")
+        mouse(.leftMouseDown, CGPoint(x: 846, y: row.midY))
+        mouse(.leftMouseDragged, CGPoint(x: 862, y: row.midY))
+        require(abs(overlay.selection!.rect.maxX - 880) <= 3, "the nearest edge wins: card three's left edge is 18 px away, card two's right edge 22")
+        mouse(.leftMouseUp, CGPoint(x: 862, y: row.midY))
+        mouse(.leftMouseDown, CGPoint(x: 600, y: row.maxY))
+        mouse(.leftMouseDragged, CGPoint(x: 600, y: 436))
+        require(abs(overlay.selection!.rect.maxY - 430) <= 3, "the bottom side snaps to the cards' bottom edge: \(overlay.selection!.rect.maxY)")
+        mouse(.leftMouseUp, CGPoint(x: 600, y: 436))
+        overlay.snapFrameSource = { _ in [CGRect(x: 580, y: 200, width: 263, height: 230)] }
+        mouse(.leftMouseDown, CGPoint(x: overlay.selection!.rect.maxX, y: 300))
+        try await Task.sleep(for: .milliseconds(50))
+        mouse(.leftMouseDragged, CGPoint(x: 846, y: 300))
+        require(overlay.selection!.rect.maxX == 843, "an accessibility edge 3 px away beats the pixel edge 6 px away: \(overlay.selection!.rect.maxX)")
+        mouse(.leftMouseUp, CGPoint(x: 846, y: 300))
+        overlay.snapFrameSource = nil
+        overlay.dismiss()
 
         print("Area UI verification passed (\(passed.count) checks)")
         passed.forEach { print("  ok: \($0)") }
