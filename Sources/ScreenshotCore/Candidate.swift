@@ -30,6 +30,15 @@ public struct Candidate: Codable, Sendable, Identifiable, Equatable {
     }
 }
 
+extension Candidate {
+    /// The same proposal with bounds and hit regions multiplied by `factor`: maps a downsampled analysis back to full resolution.
+    public func scaled(by factor: CGFloat) -> Candidate {
+        let transform = CGAffineTransform(scaleX: factor, y: factor)
+        return Candidate(id: id, label: label, bounds: bounds.applying(transform), score: score, kind: kind,
+                         hitRegions: hitRegions?.map { $0.applying(transform) })
+    }
+}
+
 /// Detector variants available for the same screenshot.
 public enum DetectorKind: String, CaseIterable, Codable, Sendable {
     case geometry, vision
@@ -81,6 +90,17 @@ public enum Detection {
         let duration = start.duration(to: .now).components
         let milliseconds = Double(duration.seconds) * 1000 + Double(duration.attoseconds) / 1e15
         return DetectionReport(detector: detector, elapsedMilliseconds: milliseconds, candidates: candidates)
+    }
+
+    /// `image` shrunk by an integer `factor` for analysis that does not need full resolution; 1 returns it untouched.
+    public static func downsampled(_ image: CGImage, by factor: Int) -> CGImage {
+        guard factor > 1 else { return image }
+        let context = CGContext(data: nil, width: image.width / factor, height: image.height / factor, bitsPerComponent: 8,
+                                bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: context.width, height: context.height))
+        return context.makeImage()!
     }
 
     /// Clips, filters, and deduplicates regions without changing their coordinate convention.

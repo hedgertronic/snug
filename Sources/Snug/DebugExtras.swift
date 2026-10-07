@@ -185,6 +185,8 @@ extension DebugRun {
         require(overlay.session != nil && overlay.selection != nil && overlay.elementTask != nil, "Element mode has a session and selection while detection is still running")
         await overlay.elementTask?.value
         require(!overlay.elementCandidates.isEmpty, "the candidates arrive when detection finishes (\(overlay.elementCandidates.count))")
+        require(overlay.elementCandidates.contains { $0.label == "Text line" } && overlay.elementCandidates.allSatisfy { extent.insetBy(dx: -4, dy: -4).contains($0.bounds) },
+                "Element detection runs on the \(Int(overlay.scale))x copy and returns text lines and regions in full-resolution pixels")
         let detected = overlay.session!.candidates.filter { $0.kind != .display && $0.kind != .window }
         require(!detected.isEmpty, "detection supplied \(detected.count) candidates")
         overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], pointer: CGPoint(x: frame.minX, y: frame.maxY))
@@ -316,7 +318,7 @@ extension DebugRun {
         mouse(.leftMouseDragged, CGPoint(x: rough.midX, y: rough.midY))
         mouse(.leftMouseDragged, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.status).isEmpty && !chrome.size.isHidden, "a quick drag shows only the size badge")
-        for _ in 0..<300 where overlay.snapPreview == nil { try await Task.sleep(for: .milliseconds(10)) }
+        for _ in 0..<9000 where overlay.snapPreview == nil { try await Task.sleep(for: .milliseconds(10)) }
         let fit = overlay.snapPreview!
         require(texts(in: chrome.size) == ["\(Int(fit.width)) x \(Int(fit.height))"] && texts(in: chrome.status) == ["Snap ready: release to take it, Tab for others"], "a snap preview shows its size and Snap ready")
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))

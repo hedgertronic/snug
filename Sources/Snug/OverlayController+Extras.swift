@@ -51,14 +51,16 @@ extension OverlayController {
         elementCandidates = []
         mode = new
         if new == .element {
-            guard let image else { return }
+            guard image != nil else { return }
             buildSession()
+            let (small, factor) = (small(), CGFloat(Int(scale)))
             elementTask = Task {
                 do {
-                    elementCandidates = try await GeometryDetector().detect(in: image)
+                    let shrunk = await small.value
+                    elementCandidates = try await GeometryDetector().detect(in: shrunk).map { $0.scaled(by: factor) }
                     try Task.checkCancellation()
                     merge(elementCandidates)
-                    let text = try await VisionDetector().detectText(in: image)
+                    let text = try await VisionDetector().detectText(in: shrunk, fast: true).map { $0.scaled(by: factor) }
                     try Task.checkCancellation()
                     elementCandidates += text
                     merge(text)

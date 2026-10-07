@@ -71,10 +71,12 @@ public struct VisionDetector {
     }
 
     /// Returns individual OCR lines and larger text blocks without logging recognized text.
-    public func detectText(in image: CGImage) async throws -> [Candidate] {
+    /// `fast` trades recognition quality for speed: boxes are enough for Element mode, Text mode reads the words.
+    public func detectText(in image: CGImage, fast: Bool = false) async throws -> [Candidate] {
         try Task.checkCancellation()
         var request = RecognizeTextRequest()
-        request.recognitionLevel = .accurate
+        request.recognitionLevel = fast ? .fast : .accurate
+        request.usesLanguageCorrection = !fast
         request.minimumTextHeightFraction = 0.004
         request.automaticallyDetectsLanguage = true
         let observations = try await ImageRequestHandler(image).perform(request)

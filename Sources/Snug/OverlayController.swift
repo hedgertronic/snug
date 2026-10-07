@@ -41,6 +41,10 @@ final class OverlayController {
     private(set) var snapPreview: CGRect?
     private(set) var image: CGImage?
     private(set) var scale: CGFloat = 1
+    /// The capture shrunk by its point-to-pixel scale, built once per capture off main. Element detection analyzes this and
+    /// multiplies results by `scale`, which maps them back to full-resolution pixels. Corner radii stay at full resolution:
+    /// measured on the half-size copy they disagreed with the full-size value by more than 2 px for 23 of 85 rects.
+    private var smallImage: Task<CGImage, Never>?
     private(set) var displayID: CGDirectDisplayID?
     /// Milliseconds spent opening the window and committing its first frame, from the last `present`.
     private(set) var lastOpenMilliseconds = 0.0
@@ -124,6 +128,7 @@ final class OverlayController {
         cancelWork()
         textPage?.cancel()
         textPage = nil
+        smallImage = nil
         let start = ContinuousClock.now
         let shown = signposter.beginInterval("overlay shown")
         self.image = image
@@ -174,6 +179,7 @@ final class OverlayController {
         cancelWork()
         textPage?.cancel()
         textPage = nil
+        smallImage = nil
         window.orderOut(nil)
         view.image = nil
         image = nil
@@ -421,6 +427,15 @@ final class OverlayController {
                 report(error)
             }
         }
+    }
+
+    /// The downsampled capture, started on first use.
+    func small() -> Task<CGImage, Never> {
+        if let smallImage { return smallImage }
+        let (image, factor) = (image!, Int(scale))
+        let task = Task.detached { Detection.downsampled(image, by: factor) }
+        smallImage = task
+        return task
     }
 
     /// Measures a fit's corner radius off the main thread, once, and redraws when it arrives.
