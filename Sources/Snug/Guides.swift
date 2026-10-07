@@ -151,9 +151,9 @@ final class Guides {
             center.strokeColor = accent.cgColor
             let color = ColorFormat.hex.string(for: ColorFormat.average(of: image, in: CGRect(x: column, y: row, width: 1, height: 1)))
             readout.string = "\(color)  C"
-            let size = Self.loupeSize, tall = loupe.bounds.height
-            let x = point.x + 20 + size > bounds.width ? point.x - 20 - size : point.x + 20
-            let y = min(point.y - 20 - tall < 0 ? point.y + 20 : point.y - 20 - tall, bounds.height - topInset - 4 - tall)
+            let size = Self.loupeSize, tall = loupe.bounds.height, gap: CGFloat = 10
+            let x = point.x + gap + size > bounds.width ? point.x - gap - size : point.x + gap
+            let y = min(point.y - gap - tall < 0 ? point.y + gap : point.y - gap - tall, bounds.height - topInset - 4 - tall)
             loupe.position = CGPoint(x: x + size / 2, y: y + tall / 2)
         }
     }
