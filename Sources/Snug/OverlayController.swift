@@ -119,6 +119,7 @@ final class OverlayController {
         chrome.all.forEach(view.addSubview)
         chrome.bottomBar.onMode = { [unowned self] in setMode($0) }
         chrome.bottomBar.onToggle = { [unowned self] in
+            if $0 == Pref.snap { return toggleSnap() }
             defaults.set(!defaults.bool(forKey: $0), forKey: $0)
             refresh()
         }
@@ -394,7 +395,11 @@ final class OverlayController {
     /// Waits for a pause, then previews the snap. Keeps the previous preview while the drag stays in its search band.
     private func scheduleSnap(for rough: CGRect) {
         snapTask?.cancel()
-        guard snapEnabled, !bypassSnap, let image else { return }
+        guard snapEnabled, !bypassSnap, let image else {
+            snapPreview = nil
+            snapSuggestions = []
+            return
+        }
         if let snapPreview, !AreaSelection.preview(snapPreview, stillFits: rough, scale: scale) {
             self.snapPreview = nil
             snapSuggestions = []
@@ -418,8 +423,29 @@ final class OverlayController {
         return SnapFits.merge(frames: await frames, pixel: pixel, drag: rough, scale: scale)
     }
 
-    /// Tab: the next fit. After a quick drag with no suggestions, computes them for the current rectangle first.
-    private func cycleFit(backward: Bool) {
+    /// S and the Snap button: flips the preference and applies it to what is on screen. While dragging, off clears the preview and on
+    /// starts the analysis; on a released drag, off takes the exact drag and on the best fit (computed now if the drag had none).
+    func toggleSnap() {
+        defaults.set(!snapEnabled, forKey: Pref.snap)
+        if case .drawing(let drag) = interaction {
+            scheduleSnap(for: drag.rect)
+        } else if var current = selection, !current.isEdited {
+            if !snapEnabled {
+                current.selectExact()
+                selection = current
+            } else if current.fits.count > 1 {
+                current.selectBest()
+                selection = current
+            } else {
+                cycleFit(backward: false, toBest: true)
+            }
+        }
+        refresh()
+    }
+
+    /// Tab: the next fit. After a quick drag with no suggestions, computes them for the current rectangle first;
+    /// `toBest` then takes the best fit instead of stepping.
+    private func cycleFit(backward: Bool, toBest: Bool = false) {
         guard var current = selection, let image else { return }
         guard current.fits.count == 1 else {
             current.cycle(backward: backward)
@@ -433,7 +459,7 @@ final class OverlayController {
             try Task.checkCancellation()
             guard selection?.rect == rough else { return }
             selection?.setSuggestions(suggestions)
-            selection?.cycle(backward: backward)
+            if toBest { selection?.selectBest() } else { selection?.cycle(backward: backward) }
             refresh()
         }
     }
@@ -481,7 +507,7 @@ final class OverlayController {
         case (_, true, "2"): style = .margin
         case (_, true, "3"): style = .backdrop
         case (_, false, "m"): style = style.next
-        case (_, false, "s"): defaults.set(!snapEnabled, forKey: Pref.snap)
+        case (_, false, "s"): toggleSnap()
         case (_, false, "f"):
             cancelWork()
             selection = AreaSelection(extent: extent, exact: extent)

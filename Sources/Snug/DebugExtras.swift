@@ -354,7 +354,7 @@ extension DebugRun {
         let fit = overlay.snapPreview!
         require(texts(in: chrome.size) == ["\(Int(fit.width)) x \(Int(fit.height))"] && texts(in: chrome.status) == ["Snap ready: release to take it, Tab for others"], "a snap preview shows its size and Snap ready")
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
-        require(texts(in: chrome.status) == ["Snapped - Tab: other fits"], "after release on a fit: Snapped")
+        require(texts(in: chrome.status) == ["Snapped - S: exact, Tab: other fits"], "after release on a fit: Snapped")
         require(chrome.bottomBar.isHidden && !chrome.styleBar.isHidden && texts(in: chrome.hints) == ["Handles: resize", "Arrows: nudge", "Tab: other fits", "Esc: cancel"], "the style bar replaces the bottom bar, with the released hints")
         require(["Tight", "Margin", "Backdrop", "\u{2318}1", "\u{2318}2", "\u{2318}3", "cycles", "Save", "\u{2318}S", "Copy", "Return"].allSatisfy(texts(in: chrome.styleBar).contains), "the style bar shows segments, Save, and Copy with key caps")
         require(chrome.hints.frame.maxY < chrome.styleBar.frame.minY, "the released hints sit below the style bar")

@@ -77,7 +77,8 @@ extension OverlayController {
             if mode == .capture {
                 if let selection {
                     status = selection.fits.count > 1 && selection.rect != selection.exact
-                        ? ("Snapped - Tab: other fits", .controlAccentColor) : ("Exact - Tab: fits", .white)
+                        ? ("Snapped - S: exact, Tab: other fits", .controlAccentColor)
+                        : (snapEnabled ? ("Exact - Tab: fits", .white) : ("Exact, snap off - S: best fit", .white))
                 } else if overlays.ghost != nil {
                     if snapPreview != nil {
                         status = ("Snap ready: release to take it, Tab for others", .controlAccentColor)

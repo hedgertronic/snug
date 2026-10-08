@@ -58,6 +58,8 @@ public struct AreaSelection: Sendable {
     /// Snap suggestions followed by the exact drag; Tab cycles through them.
     public private(set) var fits: [CGRect]
     public private(set) var fitIndex: Int
+    /// A resize, move, or nudge replaced the drag and its fits.
+    public private(set) var isEdited = false
 
     /// Creates a selection from the user's drag, optionally taking the first suggestion.
     public init(extent: CGRect, exact: CGRect, suggestions: [CGRect] = [], takingFirst: Bool = false) {
@@ -75,6 +77,18 @@ public struct AreaSelection: Sendable {
         guard fits.count == 1 else { return }
         fits = suggestions + [rect]
         fitIndex = suggestions.count
+    }
+
+    /// Selects the exact drag.
+    public mutating func selectExact() {
+        fitIndex = fits.count - 1
+        rect = fits[fitIndex]
+    }
+
+    /// Selects the best fit: the first suggestion, or the exact drag when there are none.
+    public mutating func selectBest() {
+        fitIndex = 0
+        rect = fits[0]
     }
 
     /// Selects the next or previous fit, wrapping around.
@@ -122,6 +136,7 @@ public struct AreaSelection: Sendable {
         rect = edited
         fits = [edited]
         fitIndex = 0
+        isEdited = true
     }
 
     /// Whether a snap preview still lies within the search band of a new drag, so it can stay visible.

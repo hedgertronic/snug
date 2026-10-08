@@ -401,6 +401,46 @@ enum DebugRun {
         overlay.snapFrameSource = nil
         overlay.dismiss()
 
+        // S acts at once: during a drag, and on a released drag.
+        open()
+        defaults.set(true, forKey: Pref.snap)
+        pressDrag(rough)
+        try await waitFor("a preview before S") { overlay.snapPreview != nil }
+        let live = overlay.snapPreview!
+        key(1, "s")
+        require(!defaults.bool(forKey: Pref.snap) && overlay.snapPreview == nil && overlay.view.overlays.preview == nil, "S during a drag clears the preview at once")
+        require(texts(in: overlay.chrome.status) == ["Snap off: exact drag"], "the status pill says snap is off: \(texts(in: overlay.chrome.status))")
+        key(1, "s")
+        try await waitFor("the analysis restarts when S turns snap on mid-drag") { overlay.snapPreview != nil }
+        require(overlay.snapPreview == live, "S during a drag starts the analysis for the current drag")
+        release(rough)
+        require(overlay.selection?.rect == live, "release takes the preview")
+        key(1, "s")
+        require(overlay.selection?.rect == rough && texts(in: overlay.chrome.status) == ["Exact, snap off - S: best fit"], "S after release switches to the exact drag and says so")
+        key(1, "s")
+        require(overlay.selection?.rect == live && texts(in: overlay.chrome.status) == ["Snapped - S: exact, Tab: other fits"], "S again switches back to the best fit")
+        overlay.chrome.bottomBar.toggles.first { $0.0 == Pref.snap }!.1.onClick()
+        require(!defaults.bool(forKey: Pref.snap) && overlay.selection?.rect == rough, "the Snap button acts the same way")
+        overlay.chrome.bottomBar.toggles.first { $0.0 == Pref.snap }!.1.onClick()
+        require(overlay.selection?.rect == live, "the Snap button switches back to the best fit")
+        overlay.dismiss()
+
+        open()
+        key(1, "s")
+        pressDrag(rough)
+        release(rough)
+        require(overlay.selection?.rect == rough && overlay.selection!.fits.count == 1, "a quick drag with snap off releases the exact drag with no fits")
+        key(1, "s")
+        try await overlay.snapTask?.value
+        require(overlay.selection?.rect == live, "S on computes the best fit on demand: \(String(describing: overlay.selection?.rect))")
+        key(right)
+        let nudged = overlay.selection!.rect
+        key(1, "s")
+        key(1, "s")
+        require(overlay.selection?.rect == nudged, "S leaves a nudged selection alone")
+        overlay.dismiss()
+        defaults.set(true, forKey: Pref.snap)
+
         print("Area UI verification passed (\(passed.count) checks)")
         passed.forEach { print("  ok: \($0)") }
         exit(EXIT_SUCCESS)
