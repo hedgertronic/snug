@@ -34,7 +34,7 @@ extension OverlayController {
         return true
     }
 
-    /// Changing mode cancels in-flight work and clears the selection.
+    /// Changing mode cancels in-flight work, clears the selection, and takes keyboard focus back to the overlay.
     func setMode(_ new: Mode) {
         guard new != mode else { return }
         cancelWork()
@@ -45,7 +45,10 @@ extension OverlayController {
         session = nil
         selection = nil
         mode = new
-        if new == .capture, image != nil { startHover() }
+        view.liveText.resetSelection()
+        // A click in Live Text leaves focus there; hiding it would hand focus to the window, out of reach of the overlay's keys.
+        window.makeFirstResponder(view)
+        if image != nil { if new == .capture { startHover() } else { startLiveText() } }
         refresh()
     }
 
@@ -68,7 +71,7 @@ extension OverlayController {
 
     private var pickedColor: SRGBColor? {
         guard let image else { return nil }
-        return ColorFormat.average(of: image, in: selection?.rect ?? text.rect ?? CGRect(origin: pointerPixel, size: CGSize(width: 1, height: 1)))
+        return ColorFormat.average(of: image, in: selection?.rect ?? CGRect(origin: pointerPixel, size: CGSize(width: 1, height: 1)))
     }
 
     private func swatch(_ color: SRGBColor) -> NSColor { NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1) }
@@ -165,6 +168,6 @@ extension OverlayController {
         guard !(guides.crosshair.isHidden && guides.rulers.isHidden && guides.loupe.isHidden) else { return }
         guides.update(point: CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale), pixel: pointerPixel,
                       image: image, bounds: view.bounds, scale: scale, topInset: topInset,
-                      span: (selection?.rect ?? text.rect).map(view.viewRect))
+                      span: selection.map { view.viewRect($0.rect) })
     }
 }

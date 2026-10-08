@@ -290,13 +290,11 @@ final class Chrome {
     let size = Pill.dark(0.86, radius: 6, insets: NSEdgeInsets(top: 4, left: 9, bottom: 4, right: 9))
     let status = Pill.dark(0.86, radius: 6, insets: NSEdgeInsets(top: 4, left: 9, bottom: 4, right: 9))
     let hover = Pill.dark(0.86, radius: 12, insets: NSEdgeInsets(top: 10, left: 18, bottom: 10, right: 18), spacing: 3, vertical: true)
-    let count = Pill(fill: .controlAccentColor, radius: 6, insets: NSEdgeInsets(top: 4, left: 9, bottom: 4, right: 9), spacing: 8)
-    let table = Pill.dark(0.86, radius: 6, insets: NSEdgeInsets(top: 4, left: 9, bottom: 4, right: 9))
     let reading = Pill.dark(0.86, radius: 6, insets: NSEdgeInsets(top: 4, left: 9, bottom: 4, right: 9))
     let list = CandidateList()
     let help = HelpSheet()
     /// The bars and hint strip sit under the menu bar or notch instead of at the bottom edge.
     var atTop = false
 
-    var all: [NSView] { [hover, size, status, count, table, reading, hints, list, bottomBar, styleBar, help] }
+    var all: [NSView] { [hover, size, status, reading, hints, list, bottomBar, styleBar, help] }
 }

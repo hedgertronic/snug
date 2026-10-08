@@ -104,17 +104,23 @@ extension DebugRun {
 
         open()
         key(17, "t")
-        mouse(.leftMouseDown, CGPoint(x: cart.minX, y: cart.minY))
-        mouse(.leftMouseDragged, CGPoint(x: cart.maxX, y: cart.maxY))
-        mouse(.leftMouseUp, CGPoint(x: cart.maxX, y: cart.maxY))
         try snapshot("text-reading")
-        try await waitFor("OCR") { overlay.text.result != nil }
+        let liveText = overlay.view.liveText
+        try await waitFor("Live Text") { liveText.analysis != nil }
+        let all = liveText.text
+        liveText.selectedRanges = [all.range(of: "Product name")!.lowerBound..<all.range(of: "Second product")!.upperBound]
         try snapshot("text")
         overlay.targetLanguage = Locale.Language(identifier: "de")
         overlay.translationStatus = { _, _ in .supported }
         key(36, "\r", .option)
         try await waitFor("the not-installed pill") { overlay.text.notice != nil }
         try snapshot("text-translate-missing")
+        overlay.dismiss()
+
+        open()
+        drag(cart, release: true)
+        key(36, "\r", .shift)
+        try snapshot("capture-text-reading")
         overlay.dismiss()
 
         open()
