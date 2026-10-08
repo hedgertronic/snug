@@ -522,7 +522,14 @@ final class OverlayController {
 
     func copy() {
         guard let rect = selection?.rect else { return }
+        if style == .tight, let index = window(matching: rect) { return clickWindow(index, crop: rect, shadow: windowShadow(option: false)) }
         finish(crop: rect, copy: true, save: afterCaptureSaves)
+    }
+
+    /// The window whose frame `rect` matches within 3 pt on every side: copying it captures the real window shape, not a crop.
+    private func window(matching rect: CGRect) -> Int? {
+        windows.firstIndex { abs($0.minX - rect.minX) <= 3 * scale && abs($0.minY - rect.minY) <= 3 * scale
+            && abs($0.maxX - rect.maxX) <= 3 * scale && abs($0.maxY - rect.maxY) <= 3 * scale }
     }
 
     func save() {
@@ -530,14 +537,16 @@ final class OverlayController {
         finish(crop: rect, copy: false, save: true)
     }
 
-    /// A click on the hovered rectangle. A window is captured as a window, the desktop selects the full screen, and anything else
-    /// is cropped from the frozen image with its measured corner radius.
+    /// A click on the hovered rectangle. A window, or anything matching a window's frame, is captured as a window; the desktop
+    /// selects the full screen; anything else is cropped from the frozen image with its measured corner radius.
     private func clickHover(shadow: Bool) {
         let hovered = session!.selected!
         switch hovered.kind {
         case .window: clickWindow(Int(hovered.id.dropFirst("window-".count))!, crop: hovered.bounds, shadow: shadow)
         case .display: selection = AreaSelection(extent: extent, exact: extent)
-        default: finish(crop: hovered.bounds, copy: true, save: afterCaptureSaves)
+        default:
+            if style == .tight, let index = window(matching: hovered.bounds) { return clickWindow(index, crop: hovered.bounds, shadow: shadow) }
+            finish(crop: hovered.bounds, copy: true, save: afterCaptureSaves)
         }
     }
 

@@ -2,7 +2,7 @@ import AppKit
 import ApplicationServices
 import ScreenshotCore
 
-/// Live accessibility lookups for Element mode. Nothing here prompts; `requestTrust()` is the only prompt and runs from a click.
+/// Live accessibility lookups for Capture hover and snap. Nothing here prompts; `requestTrust()` is the only prompt and runs from a click.
 enum Accessibility {
     private static let messagingTimeout: Float = 0.1
     private static let maxDepth = 24
