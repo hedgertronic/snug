@@ -64,10 +64,22 @@ struct AreaSelectionTests {
         #expect(selection.rect.minY == 0)
     }
 
+    @Test func sidesAreDraggableAlongTheirLength() {
+        var selection = AreaSelection(extent: extent, exact: exact)
+        #expect(selection.handle(at: CGPoint(x: 103, y: 125), tolerance: 8) == .left)
+        #expect(selection.handle(at: CGPoint(x: 296, y: 170), tolerance: 8) == .right)
+        #expect(selection.handle(at: CGPoint(x: 140, y: 106), tolerance: 8) == .top)
+        #expect(selection.handle(at: CGPoint(x: 250, y: 194), tolerance: 8) == .bottom)
+        #expect(selection.handle(at: CGPoint(x: 90, y: 250), tolerance: 8) == nil)
+        #expect(selection.handle(at: CGPoint(x: 250, y: 150), tolerance: 8) == nil)
+        selection.resize(.right, to: CGPoint(x: 340, y: 999))
+        #expect(selection.rect == CGRect(x: 100, y: 100, width: 240, height: 100))
+    }
+
     @Test func previewSurvivesJitterInsideTheSnapBand() {
         let drag = CGRect(x: 350, y: 458, width: 580, height: 64)
         let preview = CGRect(x: 346, y: 454, width: 590, height: 72)
-        #expect(AreaSelection.preview(preview, stillFits: drag.offsetBy(dx: 2, dy: 1)))
-        #expect(!AreaSelection.preview(preview, stillFits: drag.offsetBy(dx: 80, dy: 0)))
+        #expect(AreaSelection.preview(preview, stillFits: drag.offsetBy(dx: 2, dy: 1), scale: 1))
+        #expect(!AreaSelection.preview(preview, stillFits: drag.offsetBy(dx: 80, dy: 0), scale: 1))
     }
 }

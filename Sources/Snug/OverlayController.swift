@@ -97,6 +97,13 @@ final class OverlayController {
     var listHidden = false
     private var interaction = Interaction.none
     private var snapSuggestions: [CGRect] = []
+    /// Debug runs replace the accessibility lookup behind snap fits and edges with synthetic frames (image pixels).
+    var snapFrameSource: ((CGRect) async -> [CGRect])?
+    /// While a side drags: accessibility frames around the selection, the lookup filling them, and the sides snapped to
+    /// (zero-width or zero-height rectangles, image pixels).
+    private var edgeFrames: [CGRect] = []
+    private var edgeFramesTask: Task<Void, Never>?
+    private var snappedEdges: [CGRect] = []
     var bypassSnap = false
     private var hadSelection = false
     var spaceHeld = false
@@ -124,6 +131,13 @@ final class OverlayController {
         chrome.styleBar.onSave = { [unowned self] in save() }
         chrome.styleBar.onCopy = { [unowned self] in copy() }
     }
+
+    static let resizeCursors: [Handle: NSCursor] = [
+        .topLeft: .frameResize(position: .topLeft, directions: .all), .top: .frameResize(position: .top, directions: .all),
+        .topRight: .frameResize(position: .topRight, directions: .all), .right: .frameResize(position: .right, directions: .all),
+        .bottomRight: .frameResize(position: .bottomRight, directions: .all), .bottom: .frameResize(position: .bottom, directions: .all),
+        .bottomLeft: .frameResize(position: .bottomLeft, directions: .all), .left: .frameResize(position: .left, directions: .all)
+    ]
 
     /// Shows the frozen image in the reused window. `frame` is in screen points.
     func present(image: CGImage, frame: CGRect, displayID: CGDirectDisplayID?) {
@@ -198,6 +212,9 @@ final class OverlayController {
         interaction = .none
         spaceHeld = false
         resetExtras()
+        snappedEdges = []
+        edgeFramesTask?.cancel()
+        view.cursor = .crosshair
         refresh()
     }
 
@@ -223,6 +240,28 @@ final class OverlayController {
         pointer = view.pixelPoint(event)
         updateHover(pixel: pointer)
         updateGuides()
+        updateCursor()
+    }
+
+    /// Resize cursors on handles and edges, an open hand inside the selection, a closed hand while moving, the crosshair elsewhere.
+    /// Headless runs record the choice on the view but leave the system cursor alone.
+    private func updateCursor() {
+        guard window.isVisible else { return }
+        let cursor: NSCursor
+        switch interaction {
+        case .resizing(let handle): cursor = Self.resizeCursors[handle]!
+        case .moving: cursor = .closedHand
+        case .drawing: cursor = .crosshair
+        case .none:
+            if mode == .area, let selection {
+                cursor = selection.handle(at: pointer, tolerance: 8 * scale).map { Self.resizeCursors[$0]! }
+                    ?? (selection.rect.contains(pointer) ? .openHand : .crosshair)
+            } else {
+                cursor = .crosshair
+            }
+        }
+        view.cursor = cursor
+        if !isHeadless { cursor.set() }
     }
 
     private func updateHover(pixel: CGPoint) {
@@ -235,22 +274,27 @@ final class OverlayController {
     func mouseDown(_ event: NSEvent) {
         guard mode != .text else { return textMouseDown(event) }
         let point = view.pixelPoint(event)
+        pointer = point
         guard mode != .element else { elementPress = point; return }
         hadSelection = selection != nil
         if let selection {
             if let handle = selection.handle(at: point, tolerance: 8 * scale) {
                 interaction = .resizing(handle)
-                return
+                edgeFrames = []
+                edgeFramesTask?.cancel()
+                edgeFramesTask = Task { edgeFrames = await snapFrames(around: selection.rect) }
+                return updateCursor()
             }
             if selection.rect.contains(point) {
                 interaction = .moving(last: point, moved: false)
-                return
+                return updateCursor()
             }
         }
         selection = nil
         cancelWork()
         bypassSnap = event.modifierFlags.contains(.option)
         interaction = .drawing(AreaDrag(extent: extent, origin: point))
+        updateCursor()
         refresh()
     }
 
@@ -271,23 +315,54 @@ final class OverlayController {
             interaction = .drawing(drag)
             scheduleSnap(for: drag.rect)
         case .resizing(let handle):
-            selection?.resize(handle, to: point)
+            snapResize(handle, to: point, exact: event.modifierFlags.contains(.option))
         case .moving(let last, _):
             selection?.move(by: CGPoint(x: point.x - last.x, y: point.y - last.y))
             interaction = .moving(last: point, moved: true)
         }
+        updateCursor()
         refresh()
+    }
+
+    /// Moves the sides a handle controls to the pointer. Each snaps to the nearest pixel edge or accessibility edge
+    /// within the band, unless snap is off or Option is held.
+    private func snapResize(_ handle: Handle, to point: CGPoint, exact: Bool) {
+        guard let image, let rect = selection?.rect else { return }
+        var target = point
+        var snapped = (x: false, y: false)
+        if snapEnabled, !exact {
+            for vertical in [true, false] where vertical ? handle.movesLeft || handle.movesRight : handle.movesTop || handle.movesBottom {
+                let value = vertical ? point.x : point.y
+                let band = SmartSnap.band(side: vertical ? rect.width : rect.height, scale: scale)
+                // Cancellation is the only error here and a drag event is never cancelled.
+                let pixel = try! SmartSnap().edges(in: image, of: rect, vertical: vertical, near: value, band: band)
+                guard let edge = SnapFits.edge(near: value, band: CGFloat(band), frames: edgeFrames, pixel: pixel, vertical: vertical) else { continue }
+                if vertical { target.x = edge; snapped.x = true } else { target.y = edge; snapped.y = true }
+            }
+        }
+        selection?.resize(handle, to: target)
+        let resized = selection!.rect
+        snappedEdges = []
+        if snapped.x {
+            snappedEdges.append(CGRect(x: handle.movesLeft ? resized.minX : resized.maxX, y: resized.minY, width: 0, height: resized.height))
+        }
+        if snapped.y {
+            snappedEdges.append(CGRect(x: resized.minX, y: handle.movesTop ? resized.minY : resized.maxY, width: resized.width, height: 0))
+        }
     }
 
     func mouseUp(_ event: NSEvent) {
         guard mode != .text else { return textMouseUp(event) }
         let point = view.pixelPoint(event)
+        pointer = point
         if elementPress != nil {
             elementPress = nil
             return copy()
         }
         let finished = interaction
         interaction = .none
+        snappedEdges = []
+        edgeFramesTask?.cancel()
         switch finished {
         case .none, .resizing:
             break
@@ -306,6 +381,7 @@ final class OverlayController {
                 release(rect)
             }
         }
+        updateCursor()
         refresh()
     }
 
@@ -323,20 +399,27 @@ final class OverlayController {
     private func scheduleSnap(for rough: CGRect) {
         snapTask?.cancel()
         guard snapEnabled, !bypassSnap, let image else { return }
-        if let snapPreview, !AreaSelection.preview(snapPreview, stillFits: rough) {
+        if let snapPreview, !AreaSelection.preview(snapPreview, stillFits: rough, scale: scale) {
             self.snapPreview = nil
             snapSuggestions = []
         }
         snapTask = Task {
             try await Task.sleep(for: .milliseconds(80))
             let id = signposter.beginInterval("snap")
-            let suggestions = try await SmartSnap().suggest(in: image, roughBounds: rough)
+            let suggestions = try await fits(for: rough, in: image)
             signposter.endInterval("snap", id)
             try Task.checkCancellation()
-            snapSuggestions = suggestions.map(\.bounds)
+            snapSuggestions = suggestions
             snapPreview = snapSuggestions.first
             refresh()
         }
+    }
+
+    /// Pixel fits for a rough drag, with accessibility frames that sit on its sides ranked first.
+    private func fits(for rough: CGRect, in image: CGImage) async throws -> [CGRect] {
+        async let frames = snapFrames(around: rough)
+        let pixel = try await SmartSnap().suggest(in: image, roughBounds: rough, scale: scale).map(\.bounds)
+        return SnapFits.merge(frames: await frames, pixel: pixel, drag: rough, scale: scale)
     }
 
     /// Tab: the next fit. After a quick drag with no suggestions, computes them for the current rectangle first.
@@ -350,10 +433,10 @@ final class OverlayController {
         let rough = current.rect
         snapTask?.cancel()
         snapTask = Task {
-            let suggestions = try await SmartSnap().suggest(in: image, roughBounds: rough)
+            let suggestions = try await fits(for: rough, in: image)
             try Task.checkCancellation()
             guard selection?.rect == rough else { return }
-            selection?.setSuggestions(suggestions.map(\.bounds))
+            selection?.setSuggestions(suggestions)
             selection?.cycle(backward: backward)
             refresh()
         }
@@ -503,6 +586,7 @@ final class OverlayController {
         if case .drawing(let drag) = interaction, drag.rect.width > 0 || drag.rect.height > 0 { overlays.ghost = drag.rect }
         overlays.preview = snapPreview
         overlays.selection = selection?.rect
+        overlays.snappedEdges = snappedEdges
         overlays.showsHandles = selection != nil && mode != .element
         if selection == nil, case .none = interaction { overlays.hover = hoverWindow }
         let fit = mode == .element ? session?.selected?.bounds : selection.flatMap { $0.rect == $0.exact ? nil : $0.rect }

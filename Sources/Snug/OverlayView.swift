@@ -7,6 +7,8 @@ final class OverlayView: NSView {
     /// Overlay geometry in image pixels with a top-left origin.
     struct Overlays {
         var selection, ghost, preview, hover, styleFrame: CGRect?
+        /// Sides a resize snapped to, as zero-width or zero-height rectangles.
+        var snappedEdges: [CGRect] = []
         var showsHandles = false
         /// Corner radius in image pixels of the selection (or the snap preview when there is no selection), and of the hovered window.
         var radius: CGFloat = 0
@@ -18,6 +20,10 @@ final class OverlayView: NSView {
     var scale: CGFloat = 1
     var image: CGImage? { didSet { imageLayer.contents = image } }
     var overlays = Overlays() { didSet { layoutOverlays() } }
+    /// The cursor over the whole overlay; the controller picks it from the pointer and the interaction.
+    var cursor = NSCursor.crosshair {
+        didSet { if cursor !== oldValue { window?.invalidateCursorRects(for: self) } }
+    }
 
     let textOverlay = TextOverlay()
     let guides = Guides()
@@ -29,12 +35,13 @@ final class OverlayView: NSView {
     private let outlineLayer = CAShapeLayer()
     private let previewLayer = CAShapeLayer()
     private let handlesLayer = CAShapeLayer()
+    private let snappedLayer = CAShapeLayer()
 
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
         layer!.addSublayer(imageLayer)
-        for shape in [dimLayer, hoverLayer, styleLayer, ghostLayer, outlineLayer, previewLayer, handlesLayer] {
+        for shape in [dimLayer, hoverLayer, styleLayer, ghostLayer, outlineLayer, previewLayer, snappedLayer, handlesLayer] {
             shape.fillColor = nil
             layer!.addSublayer(shape)
         }
@@ -55,7 +62,7 @@ final class OverlayView: NSView {
 
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-    override func resetCursorRects() { addCursorRect(bounds, cursor: .crosshair) }
+    override func resetCursorRects() { addCursorRect(bounds, cursor: cursor) }
 
     override func layout() {
         super.layout()
@@ -102,6 +109,8 @@ final class OverlayView: NSView {
             hoverLayer.lineWidth = 2
             previewLayer.strokeColor = accent.cgColor
             previewLayer.lineWidth = 2
+            snappedLayer.strokeColor = accent.cgColor
+            snappedLayer.lineWidth = 4
             outlineLayer.strokeColor = accent.cgColor
             handlesLayer.strokeColor = accent.cgColor
         }
@@ -129,6 +138,13 @@ final class OverlayView: NSView {
         ghostLayer.path = o.ghost.map { path($0) }
         outlineLayer.path = o.selection.map { path($0, radius: o.radius) }
         previewLayer.path = o.preview.map { path($0, radius: o.radius) }
+        let snapped = CGMutablePath()
+        for edge in o.snappedEdges {
+            let line = viewRect(edge)
+            snapped.move(to: CGPoint(x: line.minX, y: line.minY))
+            snapped.addLine(to: CGPoint(x: line.maxX, y: line.maxY))
+        }
+        snappedLayer.path = snapped
         let handles = CGMutablePath()
         if o.showsHandles, let selection = o.selection {
             for handle in Handle.allCases {
