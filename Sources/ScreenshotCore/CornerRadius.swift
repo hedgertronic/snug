@@ -7,7 +7,7 @@ import Foundation
 public func cornerRadius(in image: CGImage, rect: CGRect) -> CGFloat {
     let bounds = rect.integral.intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
     let width = Int(bounds.width), height = Int(bounds.height)
-    guard min(width, height) >= 14 else { return 0 }
+    guard min(width, height) >= 16 else { return 0 } // the smallest radius tried is 8, half the short side
 
     let bytesPerRow = width * 4
     var bytes = [UInt8](repeating: 0, count: bytesPerRow * height)
