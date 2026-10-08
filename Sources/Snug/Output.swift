@@ -22,6 +22,7 @@ enum Pref {
     static let colorFormat = "SnugColorFormat"
     static let candidates = "SnugCandidateList"
     static let shadow = "SnugShadow"
+    static let accessibilityAsked = "SnugAccessibilityAsked"
 
     static func register(in defaults: UserDefaults) {
         defaults.register(defaults: [

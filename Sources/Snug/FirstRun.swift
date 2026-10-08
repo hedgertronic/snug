@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// The Screen Recording permission screen.
+/// The permissions screen: Screen Recording (required) and Accessibility (recommended), each with its live status.
 struct FirstRunView: View {
     @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
@@ -19,36 +19,54 @@ struct FirstRunView: View {
             Text("snug")
                 .font(.system(size: 34, weight: .heavy, design: .rounded))
                 .tracking(-0.5)
-            Text("To capture your screen, macOS needs you to turn on Screen Recording for Snug. Captures stay on this Mac. Nothing is uploaded.")
+            Text("Snug needs Screen Recording to capture your screen. Accessibility lets it highlight buttons, sidebars, and other parts of apps. Captures stay on this Mac. Nothing is uploaded.")
                 .font(.system(size: 15))
                 .lineSpacing(3)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            // macOS sends no notification when a permission changes, so the rows re-read both every second.
+            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                VStack(spacing: 10) {
+                    permission("Screen Recording", detail: "Required", granted: CGPreflightScreenCaptureAccess()) {
+                        CGRequestScreenCaptureAccess()
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+                    }
+                    permission("Accessibility", detail: "Recommended", granted: AXIsProcessTrusted()) { Accessibility.requestTrust() }
+                }
+            }
             VStack(alignment: .leading, spacing: 8) {
-                step(1, Text("Open System Settings and switch on Snug"))
-                step(2, Text("Press \(Text(Shortcut.label(code: hotKeyCode, modifiers: hotKeyModifiers)).bold()) anywhere to capture"))
-                step(3, Text("Press \(Text("?").bold()) in the overlay any time you forget a key"))
+                step(1, Text("Press \(Text(Shortcut.label(code: hotKeyCode, modifiers: hotKeyModifiers)).bold()) anywhere to capture"))
+                step(2, Text("Press \(Text("?").bold()) in the overlay any time you forget a key"))
             }
             .font(.system(size: 13))
             .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 10) {
-                Button("Later", action: onLater)
-                    .buttonStyle(.bordered)
-                Button("Open System Settings") {
-                    CGRequestScreenCaptureAccess()
-                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
-                }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
-            }
-            .controlSize(.large)
-            .padding(.top, 6)
+            Button("Done", action: onLater)
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .padding(.top, 6)
         }
         .padding(.horizontal, 44)
         .padding(.top, 28)
         .padding(.bottom, 36)
         .frame(width: 500)
+    }
+
+    private func permission(_ name: String, detail: String, granted: Bool, allow: @escaping () -> Void) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name).font(.system(size: 13, weight: .semibold))
+                Text(detail).font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if granted {
+                Label("On", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+            } else {
+                Button("Allow", action: allow).buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
     }
 
     private func step(_ number: Int, _ text: Text) -> some View {

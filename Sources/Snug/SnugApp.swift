@@ -59,7 +59,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             for await _ in NotificationCenter.default.notifications(named: UserDefaults.didChangeNotification) { registerHotKey() }
         }
         if let image { overlay.present(image: image, frame: imageFrame(for: image), displayID: nil) }
-        if !CGPreflightScreenCaptureAccess() { showFirstRun() }
+        // Screen Recording is required, so its absence always shows the window; missing Accessibility shows it once.
+        if !CGPreflightScreenCaptureAccess() || (!AXIsProcessTrusted() && !UserDefaults.standard.bool(forKey: Pref.accessibilityAsked)) {
+            UserDefaults.standard.set(true, forKey: Pref.accessibilityAsked)
+            showFirstRun()
+        }
     }
 
     /// A window for a saved image at an integer point-to-pixel scale that fits the main screen.

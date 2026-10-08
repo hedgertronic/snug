@@ -32,6 +32,19 @@ struct SelectionSessionTests {
         #expect(session.selected?.kind == .display)
     }
 
+    @Test func upReachesAWindowBarelyLargerThanItsContentArea() {
+        // iTerm2: the terminal area below a 36 pt tab bar overlaps its window by more than 96%.
+        let window = Candidate(id: "window-0", label: "Window", bounds: CGRect(x: 0, y: 0, width: 1242, height: 927), score: 0, kind: .window)
+        let content = Candidate(id: "content", label: "Group", bounds: CGRect(x: 0, y: 36, width: 1242, height: 891), score: 2, kind: .element)
+        var session = SelectionSession(candidates: [window, content], extent: CGRect(x: 0, y: 0, width: 1512, height: 982), anchor: CGPoint(x: 600, y: 500))
+        session.merge([])
+        #expect(session.selected?.id == "content")
+        session.expand()
+        #expect(session.selected?.id == "window-0")
+        session.expand()
+        #expect(session.selected?.kind == .display)
+    }
+
     @Test func accessibilityElementsBeatGeometryCellsAndLeadTheShortlist() {
         let element = Candidate(id: "ax", label: "button", bounds: CGRect(x: 120, y: 110, width: 100, height: 50), score: 2, kind: .element)
         let session = SelectionSession(candidates: regions + [element], extent: extent, anchor: CGPoint(x: 150, y: 130))

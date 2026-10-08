@@ -107,13 +107,15 @@ public enum Detection {
 
     /// Clips, filters, and deduplicates regions without changing their coordinate convention.
     public static func normalized(_ candidates: [Candidate], within extent: CGRect) -> [Candidate] {
+        // Windows and the display never absorb content regions nearly their size (or the reverse), so Up still reaches the window.
+        let frames: Set<CandidateKind> = [.window, .display]
         var output: [Candidate] = []
         for candidate in candidates.sorted(by: { $0.score > $1.score }) {
             let rect = candidate.bounds.standardized.intersection(extent).integral
             guard !rect.isNull, rect.width >= 8, rect.height >= 8,
                   rect.minX.isFinite, rect.minY.isFinite, rect.maxX.isFinite, rect.maxY.isFinite else { continue }
             guard !output.contains(where: { existing in
-                if overlap(existing.bounds, rect) > 0.96 { return true }
+                if overlap(existing.bounds, rect) > 0.96, frames.contains(existing.kind) == frames.contains(candidate.kind) { return true }
                 guard existing.kind == .cell, candidate.kind == .cell else { return false }
                 let a = existing.bounds
                 let tolerance = min(6, min(a.width, a.height, rect.width, rect.height) * 0.15)

@@ -30,7 +30,7 @@ enum Shortcut {
     }
 }
 
-/// Exactly four controls: shortcut, after capture, save folder, open at login.
+/// Shortcut, after capture, save folder, Accessibility status, open at login.
 struct SettingsView: View {
     @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
@@ -65,6 +65,16 @@ struct SettingsView: View {
                         panel.canCreateDirectories = true
                         panel.directoryURL = URL(fileURLWithPath: saveFolder)
                         if panel.runModal() == .OK { saveFolder = panel.url!.path }
+                    }
+                }
+                GridRow {
+                    label("Accessibility")
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in
+                        if AXIsProcessTrusted() {
+                            Label("On", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        } else {
+                            Button("Allow, to highlight parts of apps") { Accessibility.requestTrust() }
+                        }
                     }
                 }
                 GridRow {
