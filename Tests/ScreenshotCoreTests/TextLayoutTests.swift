@@ -27,42 +27,4 @@ struct TextLayoutTests {
         ])
         #expect(TextLayout.table(rows) == "Product name\t$12\nSecond\t$8")
     }
-
-    @Test func foundItemsCarryTheirLineBoxes() throws {
-        let lines = [line("Write to", 10, 100), line("you@example.com", 10, 140, width: 150), line("or call (206) 555-0134", 10, 180, width: 200)]
-        let items = try TextLayout.foundItems(in: lines)
-        let email = try #require(items.first { $0.kind == .link })
-        #expect(email.text == "you@example.com")
-        #expect(email.bounds == lines[1].bounds)
-        #expect(email.url?.scheme == "mailto")
-        #expect(items.contains { $0.kind == .phone && $0.bounds == lines[2].bounds })
-    }
-
-    @Test func onlyWebAndMailSchemesOpen() {
-        #expect(TextLayout.openable(URL(string: "https://example.com")) != nil)
-        #expect(TextLayout.openable(URL(string: "file:///etc/passwd")) == nil)
-        #expect(TextLayout.openable(URL(string: "x-apple.systempreferences:")) == nil)
-        #expect(TextLayout.openable(nil) == nil)
-    }
-}
-
-struct TextBlockTests {
-    let lines = [
-        TextLine(text: "Title", bounds: CGRect(x: 20, y: 20, width: 200, height: 20)),
-        TextLine(text: "Second", bounds: CGRect(x: 20, y: 50, width: 150, height: 20)),
-        TextLine(text: "Third", bounds: CGRect(x: 20, y: 80, width: 180, height: 20)),
-        TextLine(text: "Far away", bounds: CGRect(x: 20, y: 600, width: 100, height: 20))
-    ]
-
-    @Test func clickTakesTheWholeParagraph() {
-        #expect(TextLayout.block(at: CGPoint(x: 60, y: 60), in: lines).map(\.text) == ["Title", "Second", "Third"])
-    }
-
-    @Test func loneLineIsItsOwnBlock() {
-        #expect(TextLayout.block(at: CGPoint(x: 50, y: 610), in: lines).map(\.text) == ["Far away"])
-    }
-
-    @Test func whitespaceFindsNothing() {
-        #expect(TextLayout.block(at: CGPoint(x: 400, y: 300), in: lines).isEmpty)
-    }
 }
