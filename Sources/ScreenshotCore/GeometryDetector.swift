@@ -108,7 +108,38 @@ public struct GeometryDetector {
                 }
             }
         }
-        let ordered = Array(cells.prefix(300)) + edgePanels + sorted
+        // One-row strips (board ranks, segmented controls): their column edges are too short to register in the
+        // whole-image profile, so look for dividers inside each short band between two horizontal lines.
+        var strips: [ScoredRectangle] = []
+        for (topIndex, top) in yLines.enumerated() {
+            for bottom in yLines[(topIndex + 1)...] where bottom - top >= 12 && bottom - top <= height / 8 {
+                var dividers: [Int] = []
+                for x in 1..<width where edges.support(at: x, start: top, end: bottom, vertical: true) >= 0.82 {
+                    if let last = dividers.last, x - last <= 3 { continue }
+                    dividers.append(x)
+                }
+                var run: [CGRect] = []
+                func flush() {
+                    let strip = run.reduce(CGRect.null) { $0.union($1) }
+                    if run.count >= 3, !tables.prefix(8).contains(where: { $0.rect.intersects(strip) }) {
+                        strips.append(ScoredRectangle(rect: strip, score: 0.9, kind: .table))
+                        cells += run.map { ScoredRectangle(rect: $0, score: 0.95, kind: .cell) }
+                    }
+                    run = []
+                }
+                for (left, right) in zip(dividers, dividers.dropFirst()) {
+                    if right - left >= 12,
+                       edges.support(at: top, start: left, end: right, vertical: false) >= 0.8,
+                       edges.support(at: bottom, start: left, end: right, vertical: false) >= 0.8 {
+                        run.append(CGRect(x: left, y: top, width: right - left, height: bottom - top))
+                    } else {
+                        flush()
+                    }
+                }
+                flush()
+            }
+        }
+        let ordered = Array(cells.prefix(300)) + strips + edgePanels + sorted
         var output: [Candidate] = []
         for proposal in ordered {
             let bounds = CGRect(

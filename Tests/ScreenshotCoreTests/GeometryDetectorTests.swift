@@ -24,6 +24,23 @@ final class GeometryDetectorTests: XCTestCase {
         XCTAssertEqual(candidates, repeated)
     }
 
+    func testFindsTheCellsOfAOneRowStrip() async throws {
+        // A board rank: 8 alternating green squares in one row on a dark page, too short for the whole-image column profile.
+        let context = CGContext(data: nil, width: 1000, height: 680, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(CGColor(red: 0.12, green: 0.12, blue: 0.13, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 1000, height: 680))
+        for index in 0..<8 {
+            let light = index % 2 == 0
+            context.setFillColor(CGColor(red: light ? 0.47 : 0.33, green: light ? 0.6 : 0.5, blue: light ? 0.4 : 0.34, alpha: 1))
+            context.fill(CGRect(x: 520 + index * 47, y: 680 - 84, width: 47, height: 33))
+        }
+        let candidates = try await GeometryDetector().detect(in: context.makeImage()!)
+        let cells = candidates.filter { $0.kind == .cell && near($0.bounds, CGRect(x: $0.bounds.minX, y: 51, width: 47, height: 33), tolerance: 3) }
+        XCTAssertEqual(cells.count, 8, "\(candidates.map(\.bounds))")
+        XCTAssertTrue(candidates.contains { near($0.bounds, CGRect(x: 520, y: 51, width: 376, height: 33), tolerance: 3) })
+    }
+
     func testMapsDownscaledAnalysisBackToOriginalPixels() async throws {
         let image = makeDashboard(width: 1600, height: 1200, scale: 4)
         let candidates = try await GeometryDetector().detect(in: image)
