@@ -114,7 +114,7 @@ extension OverlayController {
             setTextRegion(rect)
             recognizeRegion()
         } else if !text.hadRegion {
-            copyBlock(at: point)
+            copyBlock(at: point, asImage: event.modifierFlags.contains(.shift))
         }
         refresh()
     }
@@ -154,8 +154,8 @@ extension OverlayController {
         return task
     }
 
-    /// A click with no region: copies the text block under the pointer.
-    private func copyBlock(at point: CGPoint) {
+    /// A click with no region: copies the text block under the pointer, or with `asImage` the block as a screenshot like a Capture crop.
+    private func copyBlock(at point: CGPoint, asImage: Bool) {
         text.reading = point
         textTask = Task {
             defer {
@@ -169,9 +169,10 @@ extension OverlayController {
                 try Task.checkCancellation()
                 let block = TextLayout.block(at: point, in: page.lines)
                 guard !block.isEmpty else { return NSSound.beep() }
+                let rect = block.dropFirst().reduce(block[0].bounds) { $0.union($1.bounds) }
+                if asImage { return finish(crop: rect, copy: true, save: afterCaptureSaves) }
                 let rows = TextLayout.rows(block)
-                deliverText(TextLayout.readingOrder(rows), message: "Copied \(rows.count) \(rows.count == 1 ? "line" : "lines")",
-                            rect: block.dropFirst().reduce(block[0].bounds) { $0.union($1.bounds) })
+                deliverText(TextLayout.readingOrder(rows), message: "Copied \(rows.count) \(rows.count == 1 ? "line" : "lines")", rect: rect)
             } catch {
                 report(error)
             }

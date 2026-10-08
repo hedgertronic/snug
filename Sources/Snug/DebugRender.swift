@@ -57,11 +57,20 @@ extension DebugRun {
         overlay.dismiss()
 
         open()
+        mouse(.mouseMoved, CGPoint(x: 1280, y: 1580))
+        try snapshot("bar-at-top")
+        overlay.dismiss()
+
+        open()
+        drag(CGRect(x: 900, y: 1200, width: 800, height: 380), release: true)
+        try snapshot("style-bar-at-top")
+        overlay.dismiss()
+
+        open()
         defaults.set(OutputStyle.backdrop.rawValue, forKey: Pref.style)
         defaults.set(false, forKey: Pref.shadow)
-        key(14, "e")
         mouse(.mouseMoved, CGPoint(x: 1200, y: 1000))
-        try snapshot("bar-element-backdrop")
+        try snapshot("bar-backdrop")
         defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
         defaults.set(true, forKey: Pref.shadow)
         overlay.dismiss()
@@ -109,10 +118,14 @@ extension DebugRun {
         overlay.dismiss()
 
         open()
-        key(14, "e")
-        try await overlay.elementTask?.value
+        try await overlay.detectionTask?.value
+        overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, CGPoint(x: 422, y: 585))
-        try snapshot("element")
+        try snapshot("capture-hover")
+        defaults.set(true, forKey: Pref.candidates)
+        key(126, "")
+        try snapshot("capture-hover-list")
+        defaults.set(false, forKey: Pref.candidates)
         overlay.dismiss()
 
         open()

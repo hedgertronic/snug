@@ -20,7 +20,7 @@ final class OverlayWindow: NSWindow {
 /// Owns the overlay window and one capture session: selection state, key dispatch, snap, and cancellation.
 @MainActor
 final class OverlayController {
-    enum Mode { case area, text, element }
+    enum Mode { case capture, text }
 
     private enum Interaction {
         case none
@@ -33,7 +33,7 @@ final class OverlayController {
     let view = OverlayView()
     var pasteboard = NSPasteboard.general
     var defaults = UserDefaults.standard
-    var mode = Mode.area
+    var mode = Mode.capture
     /// Debug runs drive the window with synthesized events; it stays transparent, below other apps' windows' level, and never takes focus.
     var isHeadless = false
 
@@ -41,7 +41,7 @@ final class OverlayController {
     private(set) var snapPreview: CGRect?
     private(set) var image: CGImage?
     private(set) var scale: CGFloat = 1
-    /// The capture shrunk by its point-to-pixel scale, built once per capture off main. Element detection analyzes this and
+    /// The capture shrunk by its point-to-pixel scale, built once per capture off main. Hover geometry analysis uses this and
     /// multiplies results by `scale`, which maps them back to full-resolution pixels. Corner radii stay at full resolution:
     /// measured on the half-size copy they disagreed with the full-size value by more than 2 px for 23 of 85 rects.
     private var smallImage: Task<CGImage, Never>?
@@ -71,30 +71,26 @@ final class OverlayController {
     var topInset: CGFloat = 0
     var extent = CGRect.zero
     var windows: [CGRect] = []
-    var hoverWindow: CGRect?
     var windowNames: [String] = []
     var windowIDs: [CGWindowID] = []
     /// Per window: a Dock, menu bar, or menu target, cropped from the frozen image instead of captured as a window.
     var windowFrozen: [Bool] = []
     /// Option is held: a window click inverts the shadow preference.
     var optionHeld = false
-    /// Corner radius in pixels of each snap fit, Tab fit, Element candidate, and hovered window, measured once per rectangle.
+    /// Corner radius in pixels of each snap fit, Tab fit, and hovered rectangle, measured once per rectangle.
     /// A rectangle that is not here (an exact drag, a nudged or resized selection) has square corners.
     var radii: [CGRect: CGFloat] = [:]
     private var radiusTasks: [CGRect: Task<CGFloat, Never>] = [:]
     /// The last pointer position in image pixels.
     var pointer = CGPoint.zero
+    /// Capture mode: what the pointer is over (accessibility elements, pixel geometry, windows, the display), and the running geometry analysis.
     var session: SelectionSession?
-    var elementTask: Task<Void, Never>?
-    var elementCandidates: [Candidate] = []
-    /// Element mode: the pointer-down pixel until the press turns into a drag (Area) or a click (copy).
-    var elementPress: CGPoint?
+    var detectionTask: Task<Void, Never>?
+    var detected: [Candidate] = []
     /// The running accessibility lookup and when the last one started (throttle).
     var accessibilityTask: Task<Void, Never>?
     var accessibilityStarted: ContinuousClock.Instant?
     var previousApp: NSRunningApplication?
-    /// N hides the Element candidate list; it shows in Element mode otherwise.
-    var listHidden = false
     private var interaction = Interaction.none
     private var snapSuggestions: [CGRect] = []
     /// Debug runs replace the accessibility lookup behind snap fits and edges with synthetic frames (image pixels).
@@ -123,6 +119,7 @@ final class OverlayController {
         chrome.all.forEach(view.addSubview)
         chrome.bottomBar.onMode = { [unowned self] in setMode($0) }
         chrome.bottomBar.onToggle = { [unowned self] in
+            if $0 == Pref.snap { return toggleSnap() }
             defaults.set(!defaults.bool(forKey: $0), forKey: $0)
             refresh()
         }
@@ -145,6 +142,9 @@ final class OverlayController {
         textPage?.cancel()
         textPage = nil
         smallImage = nil
+        detectionTask?.cancel()
+        detected = []
+        accessibilityTask?.cancel()
         let start = ContinuousClock.now
         let shown = signposter.beginInterval("overlay shown")
         self.image = image
@@ -180,6 +180,7 @@ final class OverlayController {
         signposter.endInterval("first draw", draw)
         lastOpenMilliseconds = start.duration(to: opened).milliseconds
         lastFirstDrawMilliseconds = opened.duration(to: .now).milliseconds
+        if mode == .capture { startHover() }
     }
 
     /// Supplies window rectangles (image pixels, front to back) once they are built.
@@ -188,7 +189,7 @@ final class OverlayController {
         windowNames = names
         windowIDs = ids
         windowFrozen = frozen
-        if mode == .element { merge(windowCandidates) }
+        if mode == .capture { buildSession() }
         updateHover(pixel: CGPoint(x: (pointer.x - window.frame.minX) * scale, y: (window.frame.maxY - pointer.y) * scale))
     }
 
@@ -207,7 +208,6 @@ final class OverlayController {
         windowFrozen = []
         radii = [:]
         radiusTasks = [:]
-        hoverWindow = nil
         selection = nil
         interaction = .none
         spaceHeld = false
@@ -253,7 +253,7 @@ final class OverlayController {
         case .moving: cursor = .closedHand
         case .drawing: cursor = .crosshair
         case .none:
-            if mode == .area, let selection {
+            if mode == .capture, let selection {
                 cursor = selection.handle(at: pointer, tolerance: 8 * scale).map { Self.resizeCursors[$0]! }
                     ?? (selection.rect.contains(pointer) ? .openHand : .crosshair)
             } else {
@@ -264,18 +264,27 @@ final class OverlayController {
         if !isHeadless { cursor.set() }
     }
 
+    /// Capture mode: the pointer picks the element, window, or display under it. A level picked with a key holds until the pointer leaves it.
     private func updateHover(pixel: CGPoint) {
-        if mode == .element { return elementHover(pixel: pixel) }
         guard selection == nil, case .none = interaction else { return }
-        hoverWindow = windows.first { $0.contains(pixel) }
+        if mode == .capture {
+            requestAccessibility(at: pixel)
+            if session!.isLocked, !session!.selected!.bounds.contains(pixel) { session!.toggleLock() }
+            session!.hover(at: pixel)
+        }
         refresh()
+    }
+
+    /// The rectangle a click would capture. The full display shows only once a key has walked out to it.
+    private var hoverRect: CGRect? {
+        guard mode == .capture, let selected = session?.selected, selected.kind != .display || session!.isLocked else { return nil }
+        return selected.bounds
     }
 
     func mouseDown(_ event: NSEvent) {
         guard mode != .text else { return textMouseDown(event) }
         let point = view.pixelPoint(event)
         pointer = point
-        guard mode != .element else { elementPress = point; return }
         hadSelection = selection != nil
         if let selection {
             if let handle = selection.handle(at: point, tolerance: 8 * scale) {
@@ -302,11 +311,6 @@ final class OverlayController {
         guard mode != .text else { return textMouseDragged(event) }
         let point = view.pixelPoint(event)
         pointer = point
-        if let press = elementPress, hypot(point.x - press.x, point.y - press.y) >= 4 * scale {
-            elementPress = nil
-            setMode(.area)
-            interaction = .drawing(AreaDrag(extent: extent, origin: press))
-        }
         switch interaction {
         case .none:
             break
@@ -355,10 +359,6 @@ final class OverlayController {
         guard mode != .text else { return textMouseUp(event) }
         let point = view.pixelPoint(event)
         pointer = point
-        if elementPress != nil {
-            elementPress = nil
-            return copy()
-        }
         let finished = interaction
         interaction = .none
         snappedEdges = []
@@ -373,10 +373,7 @@ final class OverlayController {
             let rect = drag.rect
             if rect.width < AreaSelection.minimumSize || rect.height < AreaSelection.minimumSize {
                 cancelWork()
-                if !hadSelection {
-                    if let hoverWindow { clickWindow(hoverWindow, shadow: windowShadow(option: event.modifierFlags.contains(.option))) }
-                    else { selection = AreaSelection(extent: extent, exact: extent) }
-                }
+                if !hadSelection { clickHover(shadow: windowShadow(option: event.modifierFlags.contains(.option))) }
             } else {
                 release(rect)
             }
@@ -398,7 +395,11 @@ final class OverlayController {
     /// Waits for a pause, then previews the snap. Keeps the previous preview while the drag stays in its search band.
     private func scheduleSnap(for rough: CGRect) {
         snapTask?.cancel()
-        guard snapEnabled, !bypassSnap, let image else { return }
+        guard snapEnabled, !bypassSnap, let image else {
+            snapPreview = nil
+            snapSuggestions = []
+            return
+        }
         if let snapPreview, !AreaSelection.preview(snapPreview, stillFits: rough, scale: scale) {
             self.snapPreview = nil
             snapSuggestions = []
@@ -422,8 +423,29 @@ final class OverlayController {
         return SnapFits.merge(frames: await frames, pixel: pixel, drag: rough, scale: scale)
     }
 
-    /// Tab: the next fit. After a quick drag with no suggestions, computes them for the current rectangle first.
-    private func cycleFit(backward: Bool) {
+    /// S and the Snap button: flips the preference and applies it to what is on screen. While dragging, off clears the preview and on
+    /// starts the analysis; on a released drag, off takes the exact drag and on the best fit (computed now if the drag had none).
+    func toggleSnap() {
+        defaults.set(!snapEnabled, forKey: Pref.snap)
+        if case .drawing(let drag) = interaction {
+            scheduleSnap(for: drag.rect)
+        } else if var current = selection, !current.isEdited {
+            if !snapEnabled {
+                current.selectExact()
+                selection = current
+            } else if current.fits.count > 1 {
+                current.selectBest()
+                selection = current
+            } else {
+                cycleFit(backward: false, toBest: true)
+            }
+        }
+        refresh()
+    }
+
+    /// Tab: the next fit. After a quick drag with no suggestions, computes them for the current rectangle first;
+    /// `toBest` then takes the best fit instead of stepping.
+    private func cycleFit(backward: Bool, toBest: Bool = false) {
         guard var current = selection, let image else { return }
         guard current.fits.count == 1 else {
             current.cycle(backward: backward)
@@ -437,7 +459,7 @@ final class OverlayController {
             try Task.checkCancellation()
             guard selection?.rect == rough else { return }
             selection?.setSuggestions(suggestions)
-            selection?.cycle(backward: backward)
+            if toBest { selection?.selectBest() } else { selection?.cycle(backward: backward) }
             refresh()
         }
     }
@@ -453,22 +475,28 @@ final class OverlayController {
         var handled = handleExtrasKey(event)
         if !handled {
             switch mode {
-            case .area: handled = handleAreaKey(event)
+            case .capture: handled = handleCaptureKey(event)
             case .text: handled = handleTextKey(event)
-            case .element: handled = handleElementKey(event)
             }
         }
         refresh()
         return handled
     }
 
-    func handleAreaKey(_ event: NSEvent) -> Bool {
+    func handleCaptureKey(_ event: NSEvent) -> Bool {
         let command = event.modifierFlags.contains(.command)
-        let step: CGFloat = event.modifierFlags.contains(.shift) ? 10 : 1
-        switch (event.keyCode, command, event.charactersIgnoringModifiers ?? "") {
+        let shift = event.modifierFlags.contains(.shift)
+        let step: CGFloat = shift ? 10 : 1
+        let character = event.charactersIgnoringModifiers ?? ""
+        let hovering = selection == nil
+        switch (event.keyCode, command, character) {
         case (53, _, _): dismiss()
         case (36, _, _), (76, _, _): copy()
-        case (48, _, _): cycleFit(backward: event.modifierFlags.contains(.shift))
+        case (48, _, _) where hovering: if shift { session?.shrink() } else { session?.expand() }
+        case (126, _, _) where hovering: session?.expand()
+        case (125, _, _) where hovering: session?.shrink()
+        case (_, false, "1"..."5") where hovering && defaults.bool(forKey: Pref.candidates): session?.pick(Int(character)! - 1)
+        case (48, _, _): cycleFit(backward: shift)
         case (49, _, _): spaceHeld = true
         case (123, _, _): selection?.move(by: CGPoint(x: -step * scale, y: 0))
         case (124, _, _): selection?.move(by: CGPoint(x: step * scale, y: 0))
@@ -479,7 +507,7 @@ final class OverlayController {
         case (_, true, "2"): style = .margin
         case (_, true, "3"): style = .backdrop
         case (_, false, "m"): style = style.next
-        case (_, false, "s"): defaults.set(!snapEnabled, forKey: Pref.snap)
+        case (_, false, "s"): toggleSnap()
         case (_, false, "f"):
             cancelWork()
             selection = AreaSelection(extent: extent, exact: extent)
@@ -490,7 +518,7 @@ final class OverlayController {
 
     // MARK: Output
 
-    private var afterCaptureSaves: Bool { defaults.string(forKey: Pref.afterCapture) == "copyAndSave" }
+    var afterCaptureSaves: Bool { defaults.string(forKey: Pref.afterCapture) == "copyAndSave" }
 
     func copy() {
         guard let rect = selection?.rect else { return }
@@ -502,10 +530,20 @@ final class OverlayController {
         finish(crop: rect, copy: false, save: true)
     }
 
-    /// A click on a hovered window. A live capture takes the window itself like macOS does (rounded corners, shadow,
-    /// transparent background); a frozen-image run, the Dock, the menu bar, and menus have no window to capture and crop the rectangle.
-    private func clickWindow(_ rect: CGRect, shadow: Bool) {
-        let index = windows.firstIndex(of: rect)!
+    /// A click on the hovered rectangle. A window is captured as a window, the desktop selects the full screen, and anything else
+    /// is cropped from the frozen image with its measured corner radius.
+    private func clickHover(shadow: Bool) {
+        let hovered = session!.selected!
+        switch hovered.kind {
+        case .window: clickWindow(Int(hovered.id.dropFirst("window-".count))!, crop: hovered.bounds, shadow: shadow)
+        case .display: selection = AreaSelection(extent: extent, exact: extent)
+        default: finish(crop: hovered.bounds, copy: true, save: afterCaptureSaves)
+        }
+    }
+
+    /// A live capture takes the window itself like macOS does (rounded corners, shadow, transparent background); a frozen-image run,
+    /// the Dock, the menu bar, and menus have no window to capture and crop `crop`.
+    private func clickWindow(_ index: Int, crop rect: CGRect, shadow: Bool) {
         guard displayID != nil, !windowFrozen.indices.contains(index) || !windowFrozen[index] else { return finish(crop: rect, copy: true, save: afterCaptureSaves) }
         let id = windowIDs[index]
         dismiss()
@@ -544,7 +582,7 @@ final class OverlayController {
     }
 
     /// Closes the overlay first, then encodes off main and delivers.
-    private func finish(crop: CGRect, copy: Bool, save: Bool) {
+    func finish(crop: CGRect, copy: Bool, save: Bool) {
         guard let image else { return }
         let style = style, scale = scale
         let known = radii[crop], measuring = radiusTasks[crop]
@@ -587,9 +625,9 @@ final class OverlayController {
         overlays.preview = snapPreview
         overlays.selection = selection?.rect
         overlays.snappedEdges = snappedEdges
-        overlays.showsHandles = selection != nil && mode != .element
-        if selection == nil, case .none = interaction { overlays.hover = hoverWindow }
-        let fit = mode == .element ? session?.selected?.bounds : selection.flatMap { $0.rect == $0.exact ? nil : $0.rect }
+        overlays.showsHandles = selection != nil
+        if selection == nil, case .none = interaction { overlays.hover = hoverRect }
+        let fit = selection.flatMap { $0.rect == $0.exact ? nil : $0.rect }
         for rect in [snapPreview, fit, overlays.hover] { measureRadius(rect) }
         overlays.radius = radii[selection?.rect ?? snapPreview ?? .null] ?? 0
         overlays.hoverRadius = radii[overlays.hover ?? .null] ?? 0

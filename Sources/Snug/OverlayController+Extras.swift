@@ -1,7 +1,7 @@
 import AppKit
 import ScreenshotCore
 
-/// Mode switching, view toggles, color picking, the help sheet, and Element mode.
+/// Mode switching, view toggles, color picking, the help sheet, and Capture mode's hover.
 extension OverlayController {
     private var colorFormat: ColorFormat { ColorFormat(rawValue: defaults.string(forKey: Pref.colorFormat)!)! }
 
@@ -17,20 +17,18 @@ extension OverlayController {
             chrome.help.isHidden = true
             return true
         }
-        let toggles = ["b": Pref.modeBar, "l": Pref.loupe, "r": Pref.rulers, "x": Pref.crosshair, "d": Pref.shadow]
+        let toggles = ["b": Pref.modeBar, "l": Pref.loupe, "r": Pref.rulers, "x": Pref.crosshair, "d": Pref.shadow, "n": Pref.candidates]
         let character = event.charactersIgnoringModifiers ?? ""
         if let key = toggles[character] {
             defaults.set(!defaults.bool(forKey: key), forKey: key)
             return true
         }
         switch character {
-        case "a": setMode(.area)
-        case "e" where defaults.bool(forKey: Pref.elementMode): setMode(.element)
+        case "a": setMode(.capture)
         case "t": setMode(.text)
         case "c": copyColor()
         case "C": cycleColorFormat()
         case "?": chrome.help.isHidden.toggle()
-        case "n" where mode == .element: listHidden.toggle()
         default: return false
         }
         return true
@@ -40,52 +38,28 @@ extension OverlayController {
     func setMode(_ new: Mode) {
         guard new != mode else { return }
         cancelWork()
-        elementTask?.cancel()
-        elementTask = nil
+        detectionTask?.cancel()
+        detectionTask = nil
         accessibilityTask?.cancel()
         accessibilityTask = nil
         session = nil
         selection = nil
-        hoverWindow = nil
-        listHidden = false
-        elementCandidates = []
         mode = new
-        if new == .element {
-            guard image != nil else { return }
-            buildSession()
-            let (small, factor) = (small(), CGFloat(Int(scale)))
-            elementTask = Task {
-                do {
-                    let shrunk = await small.value
-                    elementCandidates = try await GeometryDetector().detect(in: shrunk).map { $0.scaled(by: factor) }
-                    try Task.checkCancellation()
-                    merge(elementCandidates)
-                    let text = try await VisionDetector().detectText(in: shrunk, fast: true).map { $0.scaled(by: factor) }
-                    try Task.checkCancellation()
-                    elementCandidates += text
-                    merge(text)
-                } catch {
-                    report(error)
-                }
-            }
-            requestAccessibility(at: pointer)
-        }
+        if new == .capture, image != nil { startHover() }
         refresh()
     }
 
-    /// Back to the state every capture opens in: Area mode, no help, focus returned to the previous app.
+    /// Back to the state every capture opens in: Capture mode, no help, focus returned to the previous app.
     func resetExtras() {
-        elementTask?.cancel()
-        elementTask = nil
+        detectionTask?.cancel()
+        detectionTask = nil
         accessibilityTask?.cancel()
         accessibilityTask = nil
         accessibilityStarted = nil
-        elementPress = nil
         session = nil
-        elementCandidates = []
-        mode = .area
+        detected = []
+        mode = .capture
         chrome.help.isHidden = true
-        listHidden = false
         if !isHeadless { previousApp?.activate() }
         previousApp = nil
     }
@@ -115,7 +89,7 @@ extension OverlayController {
         Toast.show(message: next.label, detail: next.string(for: color), color: swatch(color))
     }
 
-    // MARK: Element mode
+    // MARK: Capture hover
 
     var windowCandidates: [Candidate] {
         windows.enumerated().map {
@@ -123,17 +97,34 @@ extension OverlayController {
         }
     }
 
-    /// Window rectangles join the detected candidates; the session starts at the pointer.
-    func buildSession() {
-        session = SelectionSession(candidates: elementCandidates + windowCandidates, extent: extent, anchor: pointer)
-        syncSelection()
+    /// A new hover session over the windows and the geometry found so far. Pixel geometry runs off main, once per capture, and joins
+    /// the session when it finishes; it never reads text, which belongs to Text mode.
+    func startHover() {
+        buildSession()
+        if detected.isEmpty {
+            let (small, factor) = (small(), CGFloat(Int(scale)))
+            detectionTask = Task {
+                do {
+                    let found = try await GeometryDetector().detect(in: await small.value).map { $0.scaled(by: factor) }
+                    try Task.checkCancellation()
+                    detected = found
+                    merge(found)
+                } catch {
+                    report(error)
+                }
+            }
+        }
+        requestAccessibility(at: pointer)
     }
 
-    /// Late results (windows, OCR, accessibility) join the pool; a picked region and the list order stay as they are.
+    func buildSession() {
+        session = SelectionSession(candidates: detected + windowCandidates, extent: extent, anchor: pointer)
+    }
+
+    /// Late results (geometry, accessibility) join the pool; a level picked with a key and the list order stay as they are.
     func merge(_ added: [Candidate]) {
-        guard session != nil else { return buildSession() }
         session!.merge(added)
-        syncSelection()
+        refresh()
     }
 
     /// While the capture is live and Accessibility is allowed, asks the window under `pixel` for the elements there, off main,
@@ -153,38 +144,10 @@ extension OverlayController {
             let info = CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]]
             guard let pid = info?.first?[kCGWindowOwnerPID as String] as? Int32 else { return }
             let frames = await Accessibility.frames(at: point, pid: pid)
-            guard !Task.isCancelled, mode == .element else { return }
-            let found = AccessibilityBounds.candidates(frames: frames, displayOrigin: origin, scale: scale, extent: extent)
+            guard !Task.isCancelled, mode == .capture else { return }
+            let found = AccessibilityBounds.candidates(frames: AccessibilityBounds.hoverLevel(frames), displayOrigin: origin, scale: scale, extent: extent)
             if !found.isEmpty { merge(found) }
         }
-    }
-
-    /// Hover selects until the user draws, nudges, or locks the session with a key.
-    func elementHover(pixel: CGPoint) {
-        requestAccessibility(at: pixel)
-        guard var session, selection == nil || selection!.rect == session.selected?.bounds else { return }
-        session.hover(at: pixel)
-        self.session = session
-        syncSelection()
-    }
-
-    private func syncSelection() {
-        selection = session?.selected.map { AreaSelection(extent: extent, exact: $0.bounds) }
-        refresh()
-    }
-
-    func handleElementKey(_ event: NSEvent) -> Bool {
-        let command = event.modifierFlags.contains(.command)
-        let character = event.charactersIgnoringModifiers ?? ""
-        switch (event.keyCode, command, character) {
-        case (48, _, _): session?.cycle(backward: event.modifierFlags.contains(.shift))
-        case (126, _, _): session?.expand()
-        case (125, _, _): session?.shrink()
-        case (_, false, "1"..."5"): session?.pick(Int(character)! - 1)
-        default: return handleAreaKey(event)
-        }
-        syncSelection()
-        return true
     }
 
     // MARK: Drawing

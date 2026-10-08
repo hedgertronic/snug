@@ -37,6 +37,15 @@ public enum AccessibilityBounds {
     /// A parent whose every side is within this many points of the kept inner frame is only padding, not a step.
     public static let paddingTolerance: CGFloat = 12
 
+    /// The smallest side, in points, of an element a hover lands on.
+    public static let minimumHoverSide: CGFloat = 16
+
+    /// The frames a hover can land on: not the window (its rectangle comes from the window list, where a click captures it as a window),
+    /// not static text, and nothing under 16 pt on a side. Roles, not role descriptions: those are localized.
+    public static func hoverLevel(_ frames: [AXFrame]) -> [AXFrame] {
+        frames.filter { $0.role != "AXWindow" && $0.role != "AXStaticText" && $0.rect.width >= minimumHoverSide && $0.rect.height >= minimumHoverSide }
+    }
+
     /// Each frame clipped to the visible area of its nearest `AXScrollArea` or `AXWebArea` ancestor (itself clipped the same way);
     /// frames that end up empty are dropped. Order is kept.
     public static func clippedToViewports(_ frames: [AXFrame]) -> [AXFrame] {
@@ -65,7 +74,7 @@ public enum AccessibilityBounds {
             inner = pixels
             let label = frame.roleDescription.isEmpty ? "Element" : frame.roleDescription
             output.append(Candidate(id: "ax-\(Int(pixels.minX))-\(Int(pixels.minY))-\(Int(pixels.width))-\(Int(pixels.height))", label: label,
-                                    bounds: pixels, score: baseScore - Double(index) * 0.01, kind: .region))
+                                    bounds: pixels, score: baseScore - Double(index) * 0.01, kind: .element))
         }
         return output
     }

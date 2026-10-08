@@ -18,7 +18,7 @@ struct AccessibilityBoundsTests {
         #expect(result[0].bounds == CGRect(x: 100, y: 100, width: 120, height: 40))
         #expect(result[2].bounds == CGRect(x: 0, y: 0, width: 1800, height: 1200))
         #expect(result.map(\.score) == result.map(\.score).sorted(by: >))
-        #expect(result.allSatisfy { $0.kind == .region && $0.score > 1 })
+        #expect(result.allSatisfy { $0.kind == .element && $0.score > 1 })
     }
 
     @Test func degenerateOffscreenAndRepeatedFramesAreDropped() {
@@ -78,6 +78,17 @@ struct AccessibilityBoundsTests {
                                                 displayOrigin: origin, scale: 2, extent: extent)
         let session = SelectionSession(candidates: [geometry] + ax, extent: extent, anchor: CGPoint(x: 40, y: 80))
         #expect(session.selected?.label == "button")
+    }
+
+    @Test func hoverLevelSkipsWindowsStaticTextAndTinyFrames() {
+        let frames = [
+            AXFrame(roleDescription: "text", rect: CGRect(x: 150, y: -850, width: 80, height: 20), role: "AXStaticText"),
+            AXFrame(roleDescription: "icon", rect: CGRect(x: 150, y: -850, width: 15, height: 40), role: "AXImage"),
+            AXFrame(roleDescription: "button", rect: CGRect(x: 140, y: -860, width: 100, height: 40), role: "AXButton"),
+            AXFrame(roleDescription: "standard window", rect: CGRect(x: 100, y: -900, width: 900, height: 600), role: "AXWindow")
+        ]
+        #expect(AccessibilityBounds.hoverLevel(frames).map(\.roleDescription) == ["button"])
+        #expect(AccessibilityBounds.hoverLevel([AXFrame(roleDescription: "edge", rect: CGRect(x: 0, y: 0, width: 16, height: 16), role: "AXButton")]).count == 1)
     }
 }
 

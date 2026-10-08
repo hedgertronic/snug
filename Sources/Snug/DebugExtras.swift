@@ -2,7 +2,7 @@ import AppKit
 import ScreenshotCore
 
 extension DebugRun {
-    /// `--verify-extras-ui`: modes, view toggles, color, help, and Element mode through synthesized events.
+    /// `--verify-extras-ui`: modes, view toggles, color, help, and Capture hover through synthesized events.
     /// The text of every visible label under `view`.
     static func texts(in view: NSView) -> [String] {
         guard !view.isHidden else { return [] }
@@ -60,27 +60,23 @@ extension DebugRun {
         let extent = CGRect(x: 0, y: 0, width: image.width, height: image.height)
         let rough = CGRect(x: 350, y: 458, width: 580, height: 64)
 
-        // Modes: A / E / T, E only with the flag, mode changes clear the selection.
-        require(defaults.bool(forKey: Pref.elementMode), "Element mode is on by default")
-        defaults.set(false, forKey: Pref.elementMode)
+        // Modes: A / T, E does nothing, mode changes clear the selection.
         open()
-        require(overlay.mode == .area, "the overlay opens in Area")
+        require(overlay.mode == .capture, "the overlay opens in Capture")
         key(17, "t")
         require(overlay.mode == .text, "T switches to Text")
         key(0, "a")
-        require(overlay.mode == .area, "A switches back to Area")
+        require(overlay.mode == .capture, "A switches back to Capture")
         key(14, "e")
-        require(overlay.mode == .area, "E does nothing while SnugElementMode is off")
-        require(overlay.chrome.bottomBar.modes == [.area, .text], "the bottom bar hides Element while the flag is off")
-        defaults.set(true, forKey: Pref.elementMode)
+        require(overlay.mode == .capture && overlay.session != nil, "E does nothing: there is no Element mode")
         key(1, "s")
         drag(rough)
         require(overlay.selection?.rect == rough, "a drag selects")
         key(17, "t")
         require(overlay.mode == .text && overlay.selection == nil, "changing mode clears the selection")
-        overlay.chrome.bottomBar.click(.area)
-        require(overlay.mode == .area, "clicking a bottom bar mode switches mode")
-        require(overlay.chrome.bottomBar.modes == [.area, .element, .text], "the bottom bar shows Element once the flag is on")
+        overlay.chrome.bottomBar.click(.capture)
+        require(overlay.mode == .capture, "clicking a bottom bar mode switches mode")
+        require(overlay.chrome.bottomBar.modeButtons.count == 2 && !texts(in: overlay.chrome.bottomBar).contains("Element"), "the bottom bar has two modes, Capture and Text")
         overlay.dismiss()
 
         // B toggles the bottom bar and remembers it.
@@ -164,7 +160,7 @@ extension DebugRun {
         open()
         let help = overlay.chrome.help
         key(44, "?", .shift)
-        var sheet = texts(in: help)
+        let sheet = texts(in: help)
         require(!help.isHidden && sheet.contains("Keys") && sheet.contains("Option-drag") && sheet.contains("Up / Down") && sheet.contains("Modes and view"),
                 "? shows the keys sheet with every column: \(sheet.count) texts")
         require(sheet.contains("Esc or ? closes this.") || sheet.contains { $0.hasSuffix("Esc or ? closes this.") }, "the sheet says how to close it")
@@ -176,106 +172,119 @@ extension DebugRun {
         key(53, "")
         require(help.isHidden && overlay.window.isVisible, "Esc closes the sheet and leaves the overlay open")
         overlay.dismiss()
-        require(overlay.mode == .area, "closing the overlay resets the mode to Area")
+        require(overlay.mode == .capture, "closing the overlay resets the mode to Capture")
 
-        // Element mode.
+        // Capture hover: geometry in the background, no text candidates, accessibility elements first.
         open()
-        key(14, "e")
-        require(overlay.mode == .element && overlay.elementTask != nil, "E enters Element and starts detection")
-        require(overlay.session != nil && overlay.selection != nil && overlay.elementTask != nil, "Element mode has a session and selection while detection is still running")
-        await overlay.elementTask?.value
-        require(!overlay.elementCandidates.isEmpty, "the candidates arrive when detection finishes (\(overlay.elementCandidates.count))")
-        require(overlay.elementCandidates.contains { $0.label == "Text line" } && overlay.elementCandidates.allSatisfy { extent.insetBy(dx: -4, dy: -4).contains($0.bounds) },
-                "Element detection runs on the \(Int(overlay.scale))x copy and returns text lines and regions in full-resolution pixels")
-        let detected = overlay.session!.candidates.filter { $0.kind != .display && $0.kind != .window }
-        require(!detected.isEmpty, "detection supplied \(detected.count) candidates")
-        overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        require(overlay.mode == .capture && overlay.detectionTask != nil, "Capture starts geometry analysis in the background")
+        require(overlay.session != nil && overlay.view.overlays.hover == nil, "an idle Capture has a session and no hover rectangle")
+        await overlay.detectionTask?.value
+        require(!overlay.detected.isEmpty, "the geometry candidates arrive when analysis finishes (\(overlay.detected.count))")
+        require(overlay.detected.allSatisfy { extent.insetBy(dx: -4, dy: -4).contains($0.bounds) },
+                "geometry runs on the \(Int(overlay.scale))x copy and returns regions in full-resolution pixels")
+        require(overlay.session!.candidates.allSatisfy { $0.kind != .text }, "Capture never reads text: no text-line or paragraph candidates")
+        let screenWindow = CGRect(x: 10, y: 10, width: extent.width - 20, height: extent.height - 20)
+        overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         require(overlay.session!.candidates.contains { $0.kind == .window }, "window rectangles become window candidates")
-        mouse(.mouseMoved, CGPoint(x: 422, y: 585))
-        let hovered = overlay.selection!.rect
-        require(hovered != extent && overlay.session!.selected?.bounds == hovered, "hover selects an element \(hovered)")
-        key(up, "")
-        let grown = overlay.selection!.rect
-        require(grown != hovered && grown.contains(hovered), "Up grows the selection \(hovered) to \(grown)")
-        key(down, "")
-        require(overlay.selection?.rect == hovered, "Down shrinks back")
-        key(up, "")
-        key(18, "1")
-        let first = overlay.session!.shortlist[0].bounds
-        require(overlay.selection?.rect == first && first != grown, "1 picks the first shortlist candidate \(first)")
-        mouse(.mouseMoved, CGPoint(x: 1500, y: 1400))
-        require(overlay.selection?.rect == first, "a picked candidate stays while the pointer moves")
-        let list = overlay.chrome.list
-        require(!list.isHidden, "the candidate list shows in Element mode")
-        sheet = texts(in: list)
-        require(sheet.contains("1") && sheet.contains("1-5 or Up / Down, Return copies") && sheet.contains { $0.contains(" x ") }, "the list shows numbered rows and the footer: \(sheet)")
-        require(list.frame.width == 240 && overlay.view.bounds.contains(list.frame), "the list is 240 pt wide and on screen")
-        key(45, "n")
-        require(list.isHidden, "N hides the list")
-        key(45, "n")
-        require(!list.isHidden, "N shows the list again")
+        var hoveredKinds = Set<CandidateKind>()
+        for x in stride(from: 100, to: Int(extent.width), by: 260) {
+            for y in stride(from: 100, to: Int(extent.height), by: 220) {
+                mouse(.mouseMoved, CGPoint(x: x, y: y))
+                hoveredKinds.insert(overlay.session!.selected!.kind)
+            }
+        }
+        require(!hoveredKinds.contains(.text) && !hoveredKinds.isDisjoint(with: [.cell, .region, .table]), "hover picks pixel geometry and never text: \(hoveredKinds)")
+        let target = overlay.detected.filter { $0.bounds.width < extent.width / 2 && $0.bounds.height < extent.height / 2 }.min { $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height }!
+        let aim = CGPoint(x: target.bounds.midX, y: target.bounds.midY)
+        mouse(.mouseMoved, aim)
+        let hovered = overlay.view.overlays.hover!
+        require(hovered != screenWindow && ![CandidateKind.window, .display].contains(overlay.session!.selected!.kind), "hover over geometry selects it, not the window \(hovered)")
+        require(texts(in: overlay.chrome.hover).count == 2 && texts(in: overlay.chrome.hover)[1] == "\(Int(hovered.width)) x \(Int(hovered.height))", "the hover label shows the name and size: \(texts(in: overlay.chrome.hover))")
+        let element = Candidate(id: "ax-test", label: "button", bounds: CGRect(x: aim.x - 20, y: aim.y - 12, width: 40, height: 24), score: AccessibilityBounds.baseScore, kind: .element)
+        overlay.merge([element])
+        require(overlay.view.overlays.hover == element.bounds && texts(in: overlay.chrome.hover)[0] == "Button", "an accessibility element outranks geometry and shows its role description")
         pasteboard.clearContents()
-        key(returnKey, "\r")
+        mouse(.leftMouseDown, aim)
+        mouse(.leftMouseUp, aim)
         await overlay.commitTask?.value
-        require(pngSize(pasteboard.data(forType: .png)) == first.size, "Return copies the element's pixels")
+        require(pngSize(pasteboard.data(forType: .png)) == element.bounds.size && !overlay.window.isVisible, "a click on a hovered element crops it \(element.bounds)")
 
-        // Element parity: Tab, parents, late results, click, drag, and accessibility without permission.
         open()
-        key(14, "e")
-        await overlay.elementTask?.value
-        overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], pointer: CGPoint(x: frame.minX, y: frame.maxY))
-        mouse(.mouseMoved, CGPoint(x: 422, y: 585))
-        let start = overlay.selection!.rect
-        let startShortlist = overlay.session!.shortlist.map(\.id)
+        await overlay.detectionTask?.value
+        overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, aim)
+        require(overlay.view.overlays.hover == hovered, "the same spot hovers the same geometry again")
+        pasteboard.clearContents()
+        mouse(.leftMouseDown, aim)
+        mouse(.leftMouseUp, aim)
+        await overlay.commitTask?.value
+        require(pngSize(pasteboard.data(forType: .png)) == hovered.size && !overlay.window.isVisible, "a click on a hovered geometry region crops it \(hovered)")
+
+        // Up walks out through the parents to the window, then the display; Down walks back in.
+        open()
+        await overlay.detectionTask?.value
+        overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, aim)
+        let inner = overlay.view.overlays.hover!
+        var chain = [overlay.session!.selected!]
+        for _ in 0..<20 where chain.last!.kind != .display { key(up, ""); chain.append(overlay.session!.selected!) }
+        require(chain.last!.kind == .display && chain.dropLast().last!.kind == .window && chain.count > 2, "Up walks out to the window, then the display: \(chain.map(\.kind))")
+        require(zip(chain, chain.dropFirst()).allSatisfy { $1.bounds.insetBy(dx: -1, dy: -1).contains($0.bounds) }, "every step out encloses the one before")
+        require(overlay.view.overlays.hover == extent && overlay.chrome.hover.isHidden == false && texts(in: overlay.chrome.hover)[0] == "Full screen", "the display shows its outline once walked out to")
+        for _ in 1..<chain.count { key(down, "") }
+        require(overlay.view.overlays.hover == inner, "Down walks back in to \(inner)")
         key(48, "\t")
-        let tabbed = overlay.selection!.rect
-        require(tabbed != start && overlay.session!.shortlist.map(\.id) == startShortlist, "Tab selects the next candidate at this point without reordering the list")
         key(48, "\t", .shift)
-        require(overlay.selection!.rect == start, "Shift-Tab goes back")
-        sheet = texts(in: overlay.chrome.list)
-        let parents = overlay.session!.parents
-        require(!parents.isEmpty && sheet.contains("Parents") && sheet.contains("\(Int(parents[0].bounds.width)) x \(Int(parents[0].bounds.height))"), "the list shows the hovered region's parents: \(sheet)")
-        require(parents.allSatisfy { $0.bounds.insetBy(dx: -1, dy: -1).contains(start) }, "every listed parent encloses the hovered region")
+        require(overlay.view.overlays.hover == inner, "Tab walks out and Shift-Tab back in")
+        let far = CGPoint(x: extent.width - 40, y: extent.height - 40)
+        mouse(.mouseMoved, far)
+        require(overlay.view.overlays.hover != inner, "moving the pointer out of the level a key picked hovers again")
+        key(up, "")
+        let outer = overlay.view.overlays.hover
+        mouse(.mouseMoved, CGPoint(x: far.x - 1, y: far.y - 1))
+        require(outer != nil && overlay.view.overlays.hover == outer, "a level a key picked holds while the pointer stays inside it")
+        overlay.dismiss()
+
+        // The candidate list: hidden until N, remembered; 1-5 pick from it.
+        open()
+        await overlay.detectionTask?.value
+        overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, aim)
+        let listed = overlay.view.overlays.hover
+        let list = overlay.chrome.list
+        require(list.isHidden && !defaults.bool(forKey: Pref.candidates), "the candidate list is hidden by default")
         key(18, "1")
-        let pick = overlay.selection!.rect
-        let pickList = overlay.session!.shortlist.map(\.id)
-        let late = Candidate(id: "late", label: "Late", bounds: CGRect(x: 400, y: 570, width: 50, height: 30), score: 99, kind: .text)
-        overlay.merge([late])
-        require(overlay.session!.candidates.contains { $0.id == "late" }, "late results join the pool")
-        require(overlay.selection?.rect == pick && overlay.session!.shortlist.map(\.id) == pickList, "late results do not change a picked region or the list order")
-        pasteboard.clearContents()
-        key(returnKey, "\r")
-        await overlay.commitTask?.value
-        require(pngSize(pasteboard.data(forType: .png)) == pick.size, "Return after late results still copies the picked region")
+        key(19, "2")
+        require(overlay.view.overlays.hover == listed, "1-5 do nothing while the list is hidden")
+        key(45, "n")
+        require(!list.isHidden && defaults.bool(forKey: Pref.candidates), "N shows the list and remembers it")
+        let rows = texts(in: list)
+        require(rows.contains("1") && rows.contains("1-5 or Up / Down, click captures") && rows.contains { $0.contains(" x ") }, "the list shows numbered rows and the footer: \(rows)")
+        require(list.frame.width == 240 && overlay.view.bounds.contains(list.frame), "the list is 240 pt wide and on screen")
+        let shortlist = overlay.session!.shortlist
+        key(19, "2")
+        require(overlay.view.overlays.hover == shortlist[1].bounds, "2 picks the second candidate \(shortlist[1].bounds)")
+        mouse(.mouseMoved, CGPoint(x: shortlist[1].bounds.midX, y: shortlist[1].bounds.midY))
+        require(overlay.view.overlays.hover == shortlist[1].bounds, "a picked candidate stays while the pointer is inside it")
+        key(45, "n")
+        require(list.isHidden && !defaults.bool(forKey: Pref.candidates), "N hides the list again")
+        overlay.dismiss()
 
+        // Hover with no accessibility permission, a drag, and the display.
         open()
-        key(14, "e")
-        await overlay.elementTask?.value
-        mouse(.mouseMoved, CGPoint(x: 422, y: 585))
-        let hoverRect = overlay.selection!.rect
-        pasteboard.clearContents()
-        mouse(.leftMouseDown, CGPoint(x: 422, y: 585))
-        mouse(.leftMouseUp, CGPoint(x: 422, y: 585))
-        await overlay.commitTask?.value
-        require(pngSize(pasteboard.data(forType: .png)) == hoverRect.size && !overlay.window.isVisible, "a click copies the highlighted region \(hoverRect)")
-
-        open()
-        key(14, "e")
-        await overlay.elementTask?.value
-        mouse(.mouseMoved, CGPoint(x: 422, y: 585))
+        overlay.detectionTask?.cancel()
+        mouse(.mouseMoved, aim)
         key(1, "s")
         drag(rough)
-        require(overlay.mode == .area && overlay.selection?.rect == rough, "a drag in Element mode becomes an Area drag (\(overlay.mode), \(String(describing: overlay.selection?.rect)))")
+        require(overlay.mode == .capture && overlay.selection?.rect == rough && overlay.view.overlays.hover == nil, "a drag from a hovered spot is the Capture drag, and the hover goes away (\(String(describing: overlay.selection?.rect)))")
         key(1, "s")
         overlay.dismiss()
 
         open()
-        key(14, "e")
-        await overlay.elementTask?.value
         overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], names: [], ids: [1], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, CGPoint(x: 422, y: 585))
         require(overlay.accessibilityTask == nil && overlay.accessibilityStarted == nil, "a headless run never starts an accessibility lookup")
-        require(!overlay.session!.candidates.contains { $0.id.hasPrefix("ax-") }, "no accessibility candidates in a headless run")
+        require(!overlay.session!.candidates.contains { $0.kind == .element }, "no accessibility candidates in a headless run")
         require(!texts(in: overlay.chrome.list).contains("Allow Accessibility for app elements"), "the Allow Accessibility button never shows in a headless run")
         let axFrames = await Accessibility.frames(at: .zero, pid: getpid())
         require(AXIsProcessTrusted() || axFrames.isEmpty, "without Accessibility permission the lookup is empty and silent (trusted: \(AXIsProcessTrusted()))")
@@ -286,16 +295,17 @@ extension DebugRun {
         let width0 = overlay.view.bounds.width
         let guides2 = overlay.view.guides
         open()
+        overlay.detectionTask?.cancel()
         mouse(.mouseMoved, flat)
-        require(["Area", "Element", "Text", "Loupe", "Rulers", "Snap", "Tight", "M", "Shadow", "D"].allSatisfy(texts(in: chrome.bottomBar).contains), "the bottom bar shows modes, toggles, style, and shadow with key caps: \(texts(in: chrome.bottomBar))")
+        require(["Capture", "Text", "Loupe", "Rulers", "Snap", "Tight", "M", "Shadow", "D"].allSatisfy(texts(in: chrome.bottomBar).contains), "the bottom bar shows modes, toggles, style, and shadow with key caps: \(texts(in: chrome.bottomBar))")
         let bottom = chrome.bottomBar
-        let barButtons = [.area, .element, .text].map { bottom.modeButtons[$0]! } + bottom.toggles.map { $0.1 } + [bottom.styleButton, bottom.shadowButton]
+        let barButtons = [.capture, .text].map { bottom.modeButtons[$0]! } + bottom.toggles.map { $0.1 } + [bottom.styleButton, bottom.shadowButton]
         func clipped() -> [String] {
             barButtons.filter { $0.title.cell!.cellSize.width > $0.title.frame.width || $0.title.frame.maxX > $0.frame.width }.map { $0.title.stringValue }
         }
         let barWidth = bottom.frame.width
         for style in OutputStyle.allCases {
-            for mode in [OverlayController.Mode.area, .element, .text] {
+            for mode in [OverlayController.Mode.capture, .text] {
                 defaults.set(style.rawValue, forKey: Pref.style)
                 bottom.click(mode)
                 overlay.refresh()
@@ -303,7 +313,7 @@ extension DebugRun {
             }
         }
         defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
-        bottom.click(.area)
+        bottom.click(.capture)
         overlay.refresh()
         require(barButtons.allSatisfy { $0.cap.frame.maxY <= $0.title.frame.minY }, "every bar button shows its key cap below its title")
         bottom.layoutSubtreeIfNeeded()
@@ -344,7 +354,7 @@ extension DebugRun {
         let fit = overlay.snapPreview!
         require(texts(in: chrome.size) == ["\(Int(fit.width)) x \(Int(fit.height))"] && texts(in: chrome.status) == ["Snap ready: release to take it, Tab for others"], "a snap preview shows its size and Snap ready")
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
-        require(texts(in: chrome.status) == ["Snapped - Tab: other fits"], "after release on a fit: Snapped")
+        require(texts(in: chrome.status) == ["Snapped - S: exact, Tab: other fits"], "after release on a fit: Snapped")
         require(chrome.bottomBar.isHidden && !chrome.styleBar.isHidden && texts(in: chrome.hints) == ["Handles: resize", "Arrows: nudge", "Tab: other fits", "Esc: cancel"], "the style bar replaces the bottom bar, with the released hints")
         require(["Tight", "Margin", "Backdrop", "\u{2318}1", "\u{2318}2", "\u{2318}3", "cycles", "Save", "\u{2318}S", "Copy", "Return"].allSatisfy(texts(in: chrome.styleBar).contains), "the style bar shows segments, Save, and Copy with key caps")
         require(chrome.hints.frame.maxY < chrome.styleBar.frame.minY, "the released hints sit below the style bar")
@@ -364,6 +374,40 @@ extension DebugRun {
         let narrowHints = texts(in: chrome.hints)
         require(chrome.hints.frame.width <= 520 - 16 && narrowHints.count < fullHints.count && narrowHints.first == fullHints.first && narrowHints.last == "?: keys", "a 520 pt screen drops hints from the end and keeps ?: keys last: \(narrowHints)")
         overlay.view.setFrameSize(CGSize(width: width0, height: overlay.view.bounds.height))
+        overlay.dismiss()
+
+        // The bar and hints move to the top when the pointer, a drag, the hover, or the selection nears them, and come back.
+        open()
+        overlay.detectionTask?.cancel()
+        let halfHeight = overlay.view.bounds.height / 2
+        mouse(.mouseMoved, CGPoint(x: extent.midX, y: extent.midY))
+        require(bar.frame.maxY < halfHeight && chrome.hints.frame.maxY < halfHeight && !chrome.atTop, "with the pointer mid-screen the bar and hints sit at the bottom")
+        mouse(.mouseMoved, CGPoint(x: extent.midX, y: extent.height - 20))
+        require(bar.frame.minY > halfHeight && chrome.hints.frame.minY > halfHeight && chrome.atTop && chrome.hints.frame.maxY < bar.frame.minY,
+                "with the pointer near the bottom the bar and hints move to the top, bar nearest the edge")
+        require(bar.frame.maxY <= overlay.view.bounds.height - overlay.topInset, "at the top they stay below the menu bar or notch")
+        mouse(.mouseMoved, CGPoint(x: extent.midX, y: extent.midY))
+        require(bar.frame.maxY < halfHeight && !chrome.atTop, "they return when the pointer leaves the bottom area")
+        mouse(.mouseMoved, CGPoint(x: 40, y: extent.height - 20))
+        require(bar.frame.maxY < halfHeight, "a pointer at the bottom but far to the side of the bar leaves it there")
+        overlay.setWindows([CGRect(x: 600, y: extent.height - 420, width: 1200, height: 410)], names: ["Low window"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, CGPoint(x: 700, y: extent.height - 400))
+        require(!chrome.hover.isHidden && chrome.atTop && bar.frame.minY > halfHeight, "a hovered window that reaches the bar moves it to the top")
+        mouse(.mouseMoved, CGPoint(x: 100, y: 100))
+        require(!chrome.atTop, "and it returns when the hover leaves")
+        let low = CGRect(x: 800, y: extent.height - 300, width: 600, height: 290)
+        mouse(.leftMouseDown, low.origin)
+        mouse(.leftMouseDragged, CGPoint(x: low.maxX, y: low.maxY))
+        require(chrome.atTop, "a drag that reaches the bar moves it to the top")
+        mouse(.leftMouseUp, CGPoint(x: low.maxX, y: low.maxY))
+        require(!chrome.styleBar.isHidden && chrome.styleBar.frame.minY > halfHeight && chrome.hints.frame.minY > chrome.styleBar.frame.maxY,
+                "a released selection that reaches the bottom puts the style bar and hints at the top")
+        mouse(.mouseMoved, CGPoint(x: extent.midX, y: extent.height - 20))
+        require(chrome.atTop, "the pointer at the bottom does not pull the style bar back down")
+        key(53, "")
+        open()
+        drag(rough)
+        require(!chrome.styleBar.isHidden && chrome.styleBar.frame.maxY < halfHeight, "a selection well above the bottom keeps the style bar at the bottom")
         overlay.dismiss()
 
         // Safe area: with a simulated 38 pt inset, nothing sits under the camera housing.
