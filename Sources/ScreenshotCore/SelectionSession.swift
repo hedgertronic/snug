@@ -49,13 +49,14 @@ public struct SelectionSession: Sendable {
             if $0.kind != $1.kind { return $0.kind == .text }
             return $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height
         }
-        let containers = content.filter { $0.kind != .cell && $0.kind != .text }
+        let elements = content.filter { $0.kind == .element }
+        let containers = content.filter { $0.kind != .cell && $0.kind != .text && $0.kind != .element }
         let remainingDetails = content.filter { item in
             (item.kind == .cell || item.kind == .text) && !detail.contains(where: { $0.id == item.id })
         }
-        shortlist = Array(detail.prefix(4)) + Array(containers.prefix(4)) + Array(remainingDetails.prefix(2))
+        shortlist = Array(elements.prefix(4)) + Array(detail.prefix(4)) + Array(containers.prefix(4)) + Array(remainingDetails.prefix(2))
             + local.filter { $0.kind == .window || $0.kind == .display }
-        selected = detail.first ?? containers.first
+        selected = elements.first ?? detail.first ?? containers.first
             ?? local.first(where: { $0.kind == .window || $0.kind == .display })
             ?? candidates.first(where: { $0.kind == .display })
         expansionPath = []

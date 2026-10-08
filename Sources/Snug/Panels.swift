@@ -1,7 +1,7 @@
 import AppKit
 import ScreenshotCore
 
-/// The Element mode candidate list: numbered rows, the current one filled with the accent.
+/// The Capture hover's candidate list: numbered rows, the current one filled with the accent.
 @MainActor
 final class CandidateList: NSVisualEffectView {
     static let width: CGFloat = 240
@@ -32,7 +32,7 @@ final class CandidateList: NSVisualEffectView {
         guard key != self.key else { return }
         self.key = key
         subviews.forEach { $0.removeFromSuperview() }
-        let footer = NSTextField("1-5 or Up / Down, Return copies", size: 11, color: .secondaryLabelColor)
+        let footer = NSTextField("1-5 or Up / Down, click captures", size: 11, color: .secondaryLabelColor)
         footer.sizeToFit()
         var bottom: CGFloat = 10
         let allow = onAllowAccessibility.map { action in
@@ -118,12 +118,12 @@ final class ActionButton: NSButton {
 @MainActor
 final class HelpSheet: NSView {
     static let columns: [(title: String, rows: [(keys: String, action: String)])] = [
-        ("Capture", [("drag", "Select a region"), ("click", "Window, or text block in Text"), ("Option-click", "Flip window shadow"), ("Option-drag", "Exact, no snap"),
+        ("Capture", [("drag", "Select a region"), ("click", "Element, window, or text block"), ("Option-click", "Flip window shadow"), ("Option-drag", "Exact, no snap"),
                      ("F", "Full screen, or all text"), ("Return", "Copy"), ("Cmd-S", "Save"), ("C", "Copy color"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
-        ("Adjust", [("Tab", "Other fits, candidates, items"), ("Arrows", "Nudge (Shift: 10 pt)"), ("Up / Down", "Bigger / smaller element"),
-                    ("1-5", "Pick a candidate"), ("Cmd-1/2/3", "Tight / Margin / Backdrop"), ("M", "Cycle output style"),
+        ("Adjust", [("Tab", "Walk out, other fits, items"), ("Arrows", "Nudge (Shift: 10 pt)"), ("Up / Down", "Bigger / smaller element"),
+                    ("1-5", "Pick from the list (N)"), ("Cmd-1/2/3", "Tight / Margin / Backdrop"), ("M", "Cycle output style"),
                     ("Shift-Return", "Copy text as table"), ("Option-Return", "Translate text"), ("Cmd-Return", "Open picked link"), ("Shift-C", "Cycle color format")]),
-        ("Modes and view", [("A", "Area"), ("E", "Element"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),
+        ("Modes and view", [("A", "Capture"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),
                             ("X", "Crosshair"), ("D", "Window shadow"), ("N", "Candidate list"), ("B", "Bottom bar"), ("?", "This sheet")])
     ]
     let panel = NSVisualEffectView()

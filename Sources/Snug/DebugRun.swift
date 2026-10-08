@@ -68,7 +68,11 @@ enum DebugRun {
                     isARepeat: false, keyCode: code)!)
             }
         }
-        func open() { overlay.present(image: image, frame: frame, displayID: nil) }
+        // This suite is about drags and windows: it stops the background geometry so no late result changes a hover. --verify-extras-ui covers geometry.
+        func open() {
+            overlay.present(image: image, frame: frame, displayID: nil)
+            overlay.detectionTask?.cancel()
+        }
         func pressDrag(_ rect: CGRect, _ flags: NSEvent.ModifierFlags = []) {
             mouse(.leftMouseDown, CGPoint(x: rect.minX, y: rect.minY), flags)
             mouse(.leftMouseDragged, CGPoint(x: rect.midX, y: rect.midY), flags)
@@ -88,7 +92,7 @@ enum DebugRun {
 
         // Pause-to-snap, release takes the preview.
         open()
-        require(overlay.view.dimLayer.path!.isEmpty, "an idle Area has no dim")
+        require(overlay.view.dimLayer.path!.isEmpty, "an idle Capture has no dim")
         pressDrag(rough)
         require(!overlay.view.dimLayer.path!.isEmpty, "dragging dims everything outside the drag")
         require(overlay.snapPreview == nil, "no preview before the debounce")
@@ -292,6 +296,7 @@ enum DebugRun {
         // Snap: the band floor, display edges, accessibility fits, draggable edges, per-edge resize snapping, cursors.
         func openFixture(_ shown: CGImage) {
             overlay.present(image: shown, frame: CGRect(x: 0, y: 0, width: shown.width, height: shown.height), displayID: nil)
+            overlay.detectionTask?.cancel()
         }
         func near(_ a: CGRect, _ b: CGRect, _ tolerance: CGFloat) -> Bool {
             abs(a.minX - b.minX) <= tolerance && abs(a.minY - b.minY) <= tolerance
@@ -406,7 +411,7 @@ enum DebugRun {
     static func measure(image: CGImage, frame: CGRect, overlay: OverlayController) async throws {
         _ = privateSetup(overlay)
         let rough = CGRect(x: 350, y: 458, width: 580, height: 64)
-        var stages: [(name: String, values: [Double])] = ["open overlay", "first draw", "snap", "encode", "pasteboard", "encode + pasteboard", "snap, full drag", "element analysis"].map { ($0, []) }
+        var stages: [(name: String, values: [Double])] = ["open overlay", "first draw", "snap", "encode", "pasteboard", "encode + pasteboard", "snap, full drag", "hover analysis"].map { ($0, []) }
         var snapCount = 0
         for _ in 0..<30 {
             overlay.present(image: image, frame: frame, displayID: nil)
@@ -426,10 +431,11 @@ enum DebugRun {
             _ = try await SmartSnap().suggest(in: image, roughBounds: CGRect(x: 10, y: 10, width: image.width - 20, height: image.height - 20))
             run.append(start.duration(to: .now).milliseconds)
             start = ContinuousClock.now
-            overlay.setMode(.element)
-            await overlay.elementTask?.value
+            overlay.setMode(.text)
+            overlay.detected = []
+            overlay.setMode(.capture)
+            await overlay.detectionTask?.value
             run.append(start.duration(to: .now).milliseconds)
-            overlay.setMode(.area)
             for index in run.indices { stages[index].values.append(run[index]) }
             overlay.dismiss()
         }

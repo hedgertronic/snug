@@ -22,6 +22,13 @@ struct SelectionSessionTests {
         #expect(session.selected?.kind == .display)
     }
 
+    @Test func accessibilityElementsBeatGeometryCellsAndLeadTheShortlist() {
+        let element = Candidate(id: "ax", label: "button", bounds: CGRect(x: 120, y: 110, width: 100, height: 50), score: 2, kind: .element)
+        let session = SelectionSession(candidates: regions + [element], extent: extent, anchor: CGPoint(x: 150, y: 130))
+        #expect(session.selected?.id == "ax")
+        #expect(session.shortlist.first?.id == "ax" && session.shortlist.contains { $0.id == "cell" })
+    }
+
     @Test func pickSelectsTheShortlistEntryAndLocks() {
         var session = SelectionSession(candidates: regions, extent: extent, anchor: CGPoint(x: 150, y: 150))
         session.pick(1)

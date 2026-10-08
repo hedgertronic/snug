@@ -208,8 +208,7 @@ final class BottomBar: Capsule {
     var onMode: (OverlayController.Mode) -> Void = { _ in }
     var onToggle: (String) -> Void = { _ in }
     var onStyle: () -> Void = {}
-    private(set) var modes: [OverlayController.Mode] = []
-    let modeButtons: [OverlayController.Mode: BarButton] = [.area: BarButton("Area", key: "A"), .element: BarButton("Element", key: "E"), .text: BarButton("Text", key: "T")]
+    let modeButtons: [OverlayController.Mode: BarButton] = [.capture: BarButton("Capture", key: "A"), .text: BarButton("Text", key: "T")]
     let toggles = [(Pref.loupe, BarButton("Loupe", key: "L")),
                    (Pref.rulers, BarButton("Rulers", key: "R")),
                    (Pref.snap, BarButton("Snap", key: "S"))]
@@ -223,17 +222,12 @@ final class BottomBar: Capsule {
         for (key, button) in toggles { button.onClick = { [unowned self] in onToggle(key) } }
         styleButton.onClick = { [unowned self] in onStyle() }
         shadowButton.onClick = { [unowned self] in onToggle(Pref.shadow) }
+        setItems([modeButtons[.capture]!, modeButtons[.text]!, dividers[0]] + toggles.map(\.1) + [dividers[1], styleButton, shadowButton])
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
-    /// Element only appears when `elementEnabled`.
-    func update(mode: OverlayController.Mode, elementEnabled: Bool, defaults: UserDefaults, style: OutputStyle) {
-        let wanted: [OverlayController.Mode] = elementEnabled ? [.area, .element, .text] : [.area, .text]
-        if wanted != modes {
-            modes = wanted
-            setItems(wanted.map { modeButtons[$0]! } + [dividers[0]] + toggles.map(\.1) + [dividers[1], styleButton, shadowButton])
-        }
+    func update(mode: OverlayController.Mode, defaults: UserDefaults, style: OutputStyle) {
         for (current, button) in modeButtons {
             let selected = current == mode
             button.style(fill: selected ? .controlAccentColor : nil, text: selected ? .white : .labelColor, bold: selected)

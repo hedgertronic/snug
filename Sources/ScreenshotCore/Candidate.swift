@@ -7,6 +7,8 @@ private let detectionSignposter = OSSignposter(subsystem: "local.smartscreenshot
 /// The source or visual role of a proposed screenshot region.
 public enum CandidateKind: String, Codable, Sendable {
     case region, table, cell, text, window, display, manual
+    /// An accessibility element; it outranks pixel detection under the pointer.
+    case element
 }
 
 /// A crop proposal in source-image pixels, with its origin at the top left.

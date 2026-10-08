@@ -10,10 +10,9 @@ extension OverlayController {
         let shadowHint = windowShadow(option: false) ? "Option-click: no shadow" : "Option-click: with shadow"
         return switch mode {
         case .text where text.rect != nil: ["Handles: resize", "Arrows: nudge", "Return: copy text", "Option-Return: translate", "Tab: links", "F: all text", "C: color"]
-        case .text: ["Drag: select text", "Click: copy text block", "F: all text", "C: color", "A: back to area", "?: keys"]
-        case .element: ["Click: copy", "Drag: area", "Tab: next candidate", "Up / Down: bigger / smaller", "1-5: pick", "?: keys"]
-        case .area where selection != nil: ["Handles: resize", "Arrows: nudge", "Tab: other fits", "Esc: cancel"]
-        case .area: [snapEnabled ? "Pause to snap" : "S: snap back on", "Return: copy", "Option: exact", "Click: window", shadowHint, "F: full screen", "?: keys"]
+        case .text: ["Drag: select text", "Click: copy text block", "F: all text", "C: color", "A: back to capture", "?: keys"]
+        case .capture where selection != nil: ["Handles: resize", "Arrows: nudge", "Tab: other fits", "Esc: cancel"]
+        case .capture: [snapEnabled ? "Pause to snap" : "S: snap back on", "Click: capture", "Up / Down: bigger / smaller", "Option: exact", shadowHint, "F: full screen", "?: keys"]
         }
     }
 
@@ -22,7 +21,7 @@ extension OverlayController {
         let bounds = view.bounds
         let top = bounds.height - topInset
         let overlays = view.overlays
-        let released = mode == .area && selection != nil
+        let released = mode == .capture && selection != nil
         for pill in [c.hover, c.size, c.status, c.count, c.table, c.reading] { pill.isHidden = true }
         c.help.frame = bounds
         c.help.layoutPanel()
@@ -31,7 +30,7 @@ extension OverlayController {
             item.frame.origin = CGPoint(x: ((bounds.width - item.frame.width) / 2).rounded(), y: y)
         }
 
-        c.bottomBar.update(mode: mode, elementEnabled: defaults.bool(forKey: Pref.elementMode), defaults: defaults, style: style)
+        c.bottomBar.update(mode: mode, defaults: defaults, style: style)
         c.bottomBar.isHidden = released || !defaults.bool(forKey: Pref.modeBar)
         c.styleBar.style = style
         c.styleBar.isHidden = !released
@@ -75,7 +74,7 @@ extension OverlayController {
             c.size.show(size) { [NSTextField(size, size: 12, mono: true, color: .white)] }
             var pills = [c.size]
             var status: (text: String, dot: NSColor)?
-            if mode == .area {
+            if mode == .capture {
                 if let selection {
                     status = selection.fits.count > 1 && selection.rect != selection.exact
                         ? ("Snapped - Tab: other fits", .controlAccentColor) : ("Exact - Tab: fits", .white)
@@ -97,14 +96,23 @@ extension OverlayController {
             place(pills, near: view.viewRect(rect), above: false)
         }
 
-        if mode == .area, selection == nil, let rect = overlays.hover {
-            let name = windows.firstIndex(of: rect).flatMap { windowNames.indices.contains($0) ? windowNames[$0] : nil } ?? "Window"
-            let size = "\(Int(rect.width)) x \(Int(rect.height))" + (windowShadow(option: optionHeld) ? "  +  shadow" : "")
-            c.hover.show("\(name)|\(size)") {
-                [NSTextField(name, size: 15, weight: .semibold, color: .white), NSTextField(size, size: 12, mono: true, color: NSColor.white.withAlphaComponent(0.7)),
-                 NSTextField("Click to capture this window", size: 12, color: NSColor.white.withAlphaComponent(0.92))]
+        if mode == .capture, selection == nil, let rect = overlays.hover {
+            let hovered = session!.selected!
+            let isWindow = hovered.kind == .window
+            let index = isWindow ? Int(hovered.id.dropFirst("window-".count))! : 0
+            let name = switch hovered.kind {
+            case .window: windowNames.indices.contains(index) ? windowNames[index] : "Window"
+            case .display: "Full screen"
+            default: hovered.label.capitalized
             }
-            centered(c.hover, in: view.viewRect(rect))
+            let size = "\(Int(rect.width)) x \(Int(rect.height))" + (isWindow && windowShadow(option: optionHeld) ? "  +  shadow" : "")
+            c.hover.show("\(name)|\(size)|\(isWindow)") {
+                [NSTextField(name, size: 15, weight: .semibold, color: .white), NSTextField(size, size: 12, mono: true, color: NSColor.white.withAlphaComponent(0.7))]
+                    + (isWindow ? [NSTextField("Click to capture this window", size: 12, color: NSColor.white.withAlphaComponent(0.92))] : [])
+            }
+            let box = view.viewRect(rect)
+            if box.width >= c.hover.frame.width + 16 && box.height >= c.hover.frame.height + 16 { centered(c.hover, in: box) }
+            else { place([c.hover], near: box, above: false) }
         }
 
         if mode == .text, let rect = text.rect {
@@ -136,11 +144,11 @@ extension OverlayController {
             centered(c.status, y: floor)
         }
 
-        c.list.isHidden = !(mode == .element && !listHidden && session != nil)
+        c.list.isHidden = !(overlays.hover != nil && selection == nil && defaults.bool(forKey: Pref.candidates))
         if !c.list.isHidden, let session {
             let allow = displayID != nil && !isHeadless && !AXIsProcessTrusted()
             c.list.update(session.shortlist, parents: session.parents, current: session.selected?.id, onAllowAccessibility: allow ? { Accessibility.requestTrust() } : nil)
-            let box = selection.map { view.viewRect($0.rect) } ?? CGRect(x: 0, y: top, width: 0, height: 0)
+            let box = view.viewRect(overlays.hover!)
             let width = c.list.frame.width, height = c.list.frame.height
             let x = box.maxX + 12 + width <= bounds.width - 8 ? box.maxX + 12 : (box.minX - 12 - width >= 8 ? box.minX - 12 - width : 12)
             c.list.frame.origin = CGPoint(x: x, y: min(max(box.maxY - height, 8), top - height - 8))

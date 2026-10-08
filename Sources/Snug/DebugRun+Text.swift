@@ -80,10 +80,10 @@ extension DebugRun {
         }
 
         overlay.present(image: image, frame: frame, displayID: nil)
-        require(overlay.mode == .area, "the overlay opens in Area mode")
+        require(overlay.mode == .capture, "the overlay opens in Capture mode")
         key(tKey, "t")
         require(overlay.mode == .text, "T enters Text mode")
-        require(texts(in: overlay.chrome.hints) == ["Drag: select text", "Click: copy text block", "F: all text", "C: color", "A: back to area", "?: keys"], "Text mode with no region shows its hint strip")
+        require(texts(in: overlay.chrome.hints) == ["Drag: select text", "Click: copy text block", "F: all text", "C: color", "A: back to capture", "?: keys"], "Text mode with no region shows its hint strip")
         require(overlay.textPage == nil, "nothing is recognized until Text mode needs it")
         overlay.dismiss()
 
