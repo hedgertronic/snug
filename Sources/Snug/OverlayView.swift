@@ -1,5 +1,6 @@
 import AppKit
 import ScreenshotCore
+import VisionKit
 
 /// Layer-backed view: the frozen image sits in one layer, set once; everything else is a shape layer.
 @MainActor
@@ -25,7 +26,8 @@ final class OverlayView: NSView {
         didSet { if cursor !== oldValue { window?.invalidateCursorRects(for: self) } }
     }
 
-    let textOverlay = TextOverlay()
+    /// Text mode's Live Text: selectable text laid exactly over the frozen image, shown only in Text mode.
+    let liveText = ImageAnalysisOverlayView()
     let guides = Guides()
     private let imageLayer = CALayer()
     let dimLayer = CAShapeLayer()
@@ -45,8 +47,12 @@ final class OverlayView: NSView {
             shape.fillColor = nil
             layer!.addSublayer(shape)
         }
-        layer!.addSublayer(textOverlay.layer)
         layer!.addSublayer(guides.root)
+        liveText.preferredInteractionTypes = .textSelection
+        // No Live Text button in the corner: Text mode is already the text view.
+        liveText.isSupplementaryInterfaceHidden = true
+        liveText.isHidden = true
+        addSubview(liveText)
         dimLayer.fillColor = NSColor.black.withAlphaComponent(0.42).cgColor
         dimLayer.fillRule = .evenOdd
         styleLayer.strokeColor = NSColor.white.cgColor
@@ -70,6 +76,7 @@ final class OverlayView: NSView {
         CATransaction.setDisableActions(true)
         imageLayer.frame = bounds
         CATransaction.commit()
+        liveText.frame = bounds
         layoutOverlays()
     }
 

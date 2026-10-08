@@ -53,12 +53,11 @@ final class OverlayController {
     private(set) var snapTask: Task<Void, any Error>?
     /// The running encode and pasteboard/save work after a commit.
     var commitTask: Task<Void, Never>?
-    /// Text mode: the drag, region, OCR result, and picked item; the running OCR; and how links open.
+    /// The reading pill and notice, and the running text analysis, OCR, or translation.
     var text = TextSession()
     var textTask: Task<Void, Never>?
-    var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
-    /// The whole image's OCR, started the first time Text mode needs it and reused for the capture.
-    var textPage: Task<TextResult, any Error>?
+    /// Milliseconds the last Live Text analysis took, from the start of the analysis to the result.
+    var lastLiveTextMilliseconds = 0.0
     /// Option-Return: the language to translate into, the installed-pair check, and the translation; debug runs replace them.
     var targetLanguage = Locale.current.language
     var translationStatus: (Locale.Language, Locale.Language) async -> LanguageAvailability.Status = { await LanguageAvailability().status(from: $0, to: $1) }
@@ -139,8 +138,7 @@ final class OverlayController {
     /// Shows the frozen image in the reused window. `frame` is in screen points.
     func present(image: CGImage, frame: CGRect, displayID: CGDirectDisplayID?) {
         cancelWork()
-        textPage?.cancel()
-        textPage = nil
+        view.liveText.analysis = nil
         smallImage = nil
         detectionTask?.cancel()
         detected = []
@@ -180,7 +178,7 @@ final class OverlayController {
         signposter.endInterval("first draw", draw)
         lastOpenMilliseconds = start.duration(to: opened).milliseconds
         lastFirstDrawMilliseconds = opened.duration(to: .now).milliseconds
-        if mode == .capture { startHover() }
+        if mode == .capture { startHover() } else { startLiveText() }
     }
 
     /// Supplies window rectangles (image pixels, front to back) once they are built.
@@ -196,8 +194,7 @@ final class OverlayController {
     /// Closes the overlay, cancels pending work, and releases the frozen image.
     func dismiss() {
         cancelWork()
-        textPage?.cancel()
-        textPage = nil
+        view.liveText.analysis = nil
         smallImage = nil
         window.orderOut(nil)
         view.image = nil
@@ -244,7 +241,8 @@ final class OverlayController {
         updateCursor()
     }
 
-    /// Resize cursors on handles and edges, an open hand inside the selection, a closed hand while moving, the crosshair elsewhere.
+    /// Resize cursors on handles and edges, an open hand inside the selection, a closed hand while moving, the crosshair elsewhere;
+    /// in Text mode, the I-beam over text and the arrow elsewhere.
     /// Headless runs record the choice on the view but leave the system cursor alone.
     private func updateCursor() {
         guard window.isVisible else { return }
@@ -253,8 +251,11 @@ final class OverlayController {
         case .resizing(let handle): cursor = Self.resizeCursors[handle]!
         case .moving: cursor = .closedHand
         case .drawing: cursor = .crosshair
+        case .none where mode == .text:
+            // Live Text takes points from the top-left corner (measured), not the view's bottom-left.
+            cursor = view.liveText.hasText(at: CGPoint(x: pointer.x / scale, y: pointer.y / scale)) ? .iBeam : .arrow
         case .none:
-            if mode == .capture, let selection {
+            if let selection {
                 cursor = selection.handle(at: pointer, tolerance: 8 * scale).map { Self.resizeCursors[$0]! }
                     ?? (selection.rect.contains(pointer) ? .openHand : .crosshair)
             } else {
@@ -284,7 +285,7 @@ final class OverlayController {
     }
 
     func mouseDown(_ event: NSEvent) {
-        guard mode != .text else { return textMouseDown(event) }
+        guard mode == .capture else { return }
         let point = view.pixelPoint(event)
         pointer = point
         hadSelection = selection != nil
@@ -310,7 +311,7 @@ final class OverlayController {
     }
 
     func mouseDragged(_ event: NSEvent) {
-        guard mode != .text else { return textMouseDragged(event) }
+        guard mode == .capture else { return }
         let point = view.pixelPoint(event)
         pointer = point
         switch interaction {
@@ -358,7 +359,7 @@ final class OverlayController {
     }
 
     func mouseUp(_ event: NSEvent) {
-        guard mode != .text else { return textMouseUp(event) }
+        guard mode == .capture else { return }
         let point = view.pixelPoint(event)
         pointer = point
         let finished = interaction
@@ -474,6 +475,7 @@ final class OverlayController {
 
     /// The single key dispatch point; each mode routes its own keys.
     func handleKey(_ event: NSEvent) -> Bool {
+        text.notice = nil
         var handled = handleExtrasKey(event)
         if !handled {
             switch mode {
@@ -488,6 +490,7 @@ final class OverlayController {
     func handleCaptureKey(_ event: NSEvent) -> Bool {
         let command = event.modifierFlags.contains(.command)
         let shift = event.modifierFlags.contains(.shift)
+        let option = event.modifierFlags.contains(.option)
         let step: CGFloat = shift ? 10 : 1
         let character = event.charactersIgnoringModifiers ?? ""
         let hovering = selection == nil
@@ -495,6 +498,7 @@ final class OverlayController {
         case (53, _, _): dismiss()
         case (36, _, _) where hovering, (76, _, _) where hovering: clickHover(shadow: windowShadow(option: false), copy: true, save: afterCaptureSaves, takeDisplay: true)
         case (_, true, "s") where hovering: clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true)
+        case (36, _, _) where shift || option, (76, _, _) where shift || option: copySelectionText(translating: option)
         case (36, _, _), (76, _, _): copy()
         case (48, _, _) where hovering: if shift { session?.shrink() } else { session?.expand() }
         case (126, _, _) where hovering: session?.expand()
@@ -638,8 +642,7 @@ final class OverlayController {
     // MARK: Drawing
 
     func refresh() {
-        guard mode != .text else { return refreshText() }
-        view.textOverlay.layer.isHidden = true
+        view.liveText.isHidden = mode != .text
         var overlays = OverlayView.Overlays()
         if case .drawing(let drag) = interaction, drag.rect.width > 0 || drag.rect.height > 0 { overlays.ghost = drag.rect }
         overlays.preview = snapPreview

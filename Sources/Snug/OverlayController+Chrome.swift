@@ -9,9 +9,8 @@ extension OverlayController {
     private var hints: [String] {
         let shadowHint = windowShadow(option: false) ? "Option-click: no shadow" : "Option-click: with shadow"
         return switch mode {
-        case .text where text.rect != nil: ["Handles: resize", "Arrows: nudge", "Return: copy text", "Option-Return: translate", "Tab: links", "F: all text", "C: color"]
-        case .text: ["Drag: select text", "Click: copy text block", "Shift-click: screenshot it", "F: all text", "C: color", "A: back to capture", "?: keys"]
-        case .capture where selection != nil: ["Handles: resize", "Arrows: nudge", "Tab: other fits", "Esc: cancel"]
+        case .text: ["Drag: select text", "Return: copy", "Option-Return: translate", "F: all text", "C: color", "A: back to capture", "?: keys"]
+        case .capture where selection != nil: ["Handles: resize", "Arrows: nudge", "Shift-Return: copy text", "Tab: other fits", "Esc: cancel"]
         case .capture: [snapEnabled ? "Pause to snap, S: off" : "S: snap back on", "Click: capture", "Up / Down: bigger / smaller", "Option: exact", shadowHint, "F: full screen", "?: keys"]
         }
     }
@@ -23,7 +22,7 @@ extension OverlayController {
         var top = topEdge
         let overlays = view.overlays
         let released = mode == .capture && selection != nil
-        for pill in [c.hover, c.size, c.status, c.count, c.table, c.reading] { pill.isHidden = true }
+        for pill in [c.hover, c.size, c.status, c.reading] { pill.isHidden = true }
         c.help.frame = bounds
         c.help.layoutPanel()
 
@@ -134,31 +133,12 @@ extension OverlayController {
             else { place([c.hover], near: box, above: false) }
         }
 
-        if mode == .text, let rect = text.rect {
-            let box = view.viewRect(rect)
-            if let result = text.result {
-                let rows = TextLayout.rows(result.lines)
-                let columns = rows.map(\.count).max() ?? 0
-                let label = "\(rows.count) \(rows.count == 1 ? "line" : "lines")" + (columns > 1 ? ", \(columns) columns" : "")
-                c.count.show(label) { [NSTextField(label, size: 12, weight: .semibold, color: .white)] }
-                var pills = [c.count]
-                if columns > 1 {
-                    c.table.show("table") { [NSTextField("Looks like a table", size: 12, color: .white)] }
-                    pills.append(c.table)
-                }
-                place(pills, near: box, above: true)
-            } else if textTask != nil {
-                c.reading.show("reading") { [NSTextField("Reading text...", size: 12, color: .white)] }
-                centered(c.reading, in: box)
-            }
-        }
-
-        if mode == .text, let point = text.reading {
+        if let rect = text.reading {
             c.reading.show("reading") { [NSTextField("Reading text...", size: 12, color: .white)] }
-            centered(c.reading, in: view.viewRect(CGRect(origin: point, size: .zero)))
+            centered(c.reading, in: view.viewRect(rect))
         }
 
-        if mode == .text, let notice = text.notice {
+        if let notice = text.notice {
             c.status.show(notice) { [NSTextField(notice, size: 12, color: .white)] }
             c.status.frame.origin = CGPoint(x: ((bounds.width - c.status.frame.width) / 2).rounded(), y: floor)
         }
