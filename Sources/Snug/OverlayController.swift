@@ -236,6 +236,7 @@ final class OverlayController {
     }
 
     func mouseMoved(_ event: NSEvent) {
+        guard image != nil else { return }
         optionHeld = event.modifierFlags.contains(.option)
         pointer = view.pixelPoint(event)
         updateHover(pixel: pointer)
@@ -267,7 +268,7 @@ final class OverlayController {
     /// Capture mode: the pointer picks the element, window, or display under it. A level picked with a key holds until the pointer leaves it.
     private func updateHover(pixel: CGPoint) {
         guard selection == nil, case .none = interaction else { return }
-        if mode == .capture {
+        if mode == .capture, session != nil {
             requestAccessibility(at: pixel)
             if session!.isLocked, !session!.selected!.bounds.contains(pixel) { session!.toggleLock() }
             session!.hover(at: pixel)
@@ -275,9 +276,10 @@ final class OverlayController {
         refresh()
     }
 
-    /// The rectangle a click would capture. The full display shows only once a key has walked out to it.
+    /// The rectangle a click would capture. The full display shows once a key has walked out to it or the pointer is at the screen edge.
     private var hoverRect: CGRect? {
-        guard mode == .capture, let selected = session?.selected, selected.kind != .display || session!.isLocked else { return nil }
+        guard mode == .capture, let session, let selected = session.selected,
+              selected.kind != .display || session.isLocked || session.anchorAtEdge else { return nil }
         return selected.bounds
     }
 
@@ -373,7 +375,7 @@ final class OverlayController {
             let rect = drag.rect
             if rect.width < AreaSelection.minimumSize || rect.height < AreaSelection.minimumSize {
                 cancelWork()
-                if !hadSelection { clickHover(shadow: windowShadow(option: event.modifierFlags.contains(.option))) }
+                if !hadSelection { clickHover(shadow: windowShadow(option: event.modifierFlags.contains(.option)), copy: true, save: afterCaptureSaves) }
             } else {
                 release(rect)
             }
@@ -491,6 +493,8 @@ final class OverlayController {
         let hovering = selection == nil
         switch (event.keyCode, command, character) {
         case (53, _, _): dismiss()
+        case (36, _, _) where hovering, (76, _, _) where hovering: clickHover(shadow: windowShadow(option: false), copy: true, save: afterCaptureSaves, takeDisplay: true)
+        case (_, true, "s") where hovering: clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true)
         case (36, _, _), (76, _, _): copy()
         case (48, _, _) where hovering: if shift { session?.shrink() } else { session?.expand() }
         case (126, _, _) where hovering: session?.expand()
@@ -522,7 +526,9 @@ final class OverlayController {
 
     func copy() {
         guard let rect = selection?.rect else { return }
-        if style == .tight, let index = window(matching: rect) { return clickWindow(index, crop: rect, shadow: windowShadow(option: false)) }
+        if style == .tight, let index = window(matching: rect) {
+            return clickWindow(index, crop: rect, shadow: windowShadow(option: false), copy: true, save: afterCaptureSaves)
+        }
         finish(crop: rect, copy: true, save: afterCaptureSaves)
     }
 
@@ -537,30 +543,35 @@ final class OverlayController {
         finish(crop: rect, copy: false, save: true)
     }
 
-    /// A click on the hovered rectangle. A window, or anything matching a window's frame, is captured as a window; the desktop
-    /// selects the full screen; anything else is cropped from the frozen image with its measured corner radius.
-    private func clickHover(shadow: Bool) {
-        let hovered = session!.selected!
+    /// A click (or Return / Cmd-S) on the hovered rectangle. A window, or anything matching a window's frame, is captured as a window;
+    /// the full display becomes a selection on click and is taken directly with `takeDisplay`; anything else is cropped from the
+    /// frozen image with its measured corner radius.
+    private func clickHover(shadow: Bool, copy: Bool, save: Bool, takeDisplay: Bool = false) {
+        guard let hovered = session?.selected else { return }
         switch hovered.kind {
-        case .window: clickWindow(Int(hovered.id.dropFirst("window-".count))!, crop: hovered.bounds, shadow: shadow)
-        case .display: selection = AreaSelection(extent: extent, exact: extent)
+        case .window: clickWindow(Int(hovered.id.dropFirst("window-".count))!, crop: hovered.bounds, shadow: shadow, copy: copy, save: save)
+        case .display where !takeDisplay: selection = AreaSelection(extent: extent, exact: extent)
         default:
-            if style == .tight, let index = window(matching: hovered.bounds) { return clickWindow(index, crop: hovered.bounds, shadow: shadow) }
-            finish(crop: hovered.bounds, copy: true, save: afterCaptureSaves)
+            if style == .tight, let index = window(matching: hovered.bounds) {
+                return clickWindow(index, crop: hovered.bounds, shadow: shadow, copy: copy, save: save)
+            }
+            finish(crop: hovered.bounds, copy: copy, save: save)
         }
     }
 
     /// A live capture takes the window itself like macOS does (rounded corners, shadow, transparent background); a frozen-image run,
     /// the Dock, the menu bar, and menus have no window to capture and crop `crop`.
-    private func clickWindow(_ index: Int, crop rect: CGRect, shadow: Bool) {
-        guard displayID != nil, !windowFrozen.indices.contains(index) || !windowFrozen[index] else { return finish(crop: rect, copy: true, save: afterCaptureSaves) }
+    private func clickWindow(_ index: Int, crop rect: CGRect, shadow: Bool, copy: Bool, save: Bool) {
+        guard displayID != nil, !windowFrozen.indices.contains(index) || !windowFrozen[index] else { return finish(crop: rect, copy: copy, save: save) }
         let id = windowIDs[index]
+        // macOS 26 window captures come back with square corners; the radius is measured on the frozen screen around the window.
+        let radius = radii[windows[index]] ?? image.map { cornerRadius(in: $0, rect: windows[index]) } ?? 0
         dismiss()
-        commitTask = Task { [pasteboard, defaults, afterCaptureSaves] in
+        commitTask = Task { [pasteboard, defaults] in
             do {
-                let image = try await DisplayCapture.image(ofWindow: id, shadow: shadow)
+                let image = roundingWindowCorners(try await DisplayCapture.image(ofWindow: id, shadow: shadow), radius: radius)
                 let png = try await Output.png(image)
-                try Output.publish(png: png, detail: "\(image.width) x \(image.height)  window", copy: true, save: afterCaptureSaves,
+                try Output.publish(png: png, detail: "\(image.width) x \(image.height)  window", copy: copy, save: save,
                                    pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)

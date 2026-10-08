@@ -22,6 +22,16 @@ struct SelectionSessionTests {
         #expect(session.selected?.kind == .display)
     }
 
+    @Test func thePointerAtTheScreenEdgePicksTheDisplay() {
+        let atEdge = Candidate(id: "edge", label: "Sidebar", bounds: CGRect(x: 0, y: 0, width: 200, height: 800), score: 2, kind: .element)
+        var session = SelectionSession(candidates: regions + [atEdge], extent: extent, anchor: CGPoint(x: 0, y: 400))
+        #expect(session.selected?.kind == .display && session.anchorAtEdge)
+        session.hover(at: CGPoint(x: 3, y: 400))
+        #expect(session.selected?.id == "edge" && !session.anchorAtEdge)
+        session.hover(at: CGPoint(x: 999, y: 799))
+        #expect(session.selected?.kind == .display)
+    }
+
     @Test func accessibilityElementsBeatGeometryCellsAndLeadTheShortlist() {
         let element = Candidate(id: "ax", label: "button", bounds: CGRect(x: 120, y: 110, width: 100, height: 50), score: 2, kind: .element)
         let session = SelectionSession(candidates: regions + [element], extent: extent, anchor: CGPoint(x: 150, y: 130))

@@ -56,12 +56,15 @@ public struct SelectionSession: Sendable {
         }
         shortlist = Array(elements.prefix(4)) + Array(detail.prefix(4)) + Array(containers.prefix(4)) + Array(remainingDetails.prefix(2))
             + local.filter { $0.kind == .window || $0.kind == .display }
-        selected = elements.first ?? detail.first ?? containers.first
+        selected = anchorAtEdge ? candidates.first(where: { $0.kind == .display }) : elements.first ?? detail.first ?? containers.first
             ?? local.first(where: { $0.kind == .window || $0.kind == .display })
             ?? candidates.first(where: { $0.kind == .display })
         expansionPath = []
         specialReturn = nil
     }
+
+    /// Whether the anchor is in the outermost 2 units of the extent, where a pointer pinned against the screen edge rests.
+    public var anchorAtEdge: Bool { !extent.insetBy(dx: 2, dy: 2).contains(anchor) }
 
     /// Cycles stable alternative regions at the current anchor.
     public mutating func cycle(backward: Bool = false) {

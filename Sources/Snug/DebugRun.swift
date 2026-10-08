@@ -271,6 +271,32 @@ enum DebugRun {
         let windowSize = try await copiedSize()
         require(windowSize == windowRect.size, "click with no selection copies the window under the pointer")
 
+        // A pointer event that arrives after the overlay closed (Escape, a copy) is ignored, not a crash.
+        overlay.mouseMoved(NSEvent.mouseEvent(with: .mouseMoved, location: windowPoint(CGPoint(x: 350, y: 350)), modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: overlay.window.windowNumber,
+            context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!)
+        require(overlay.session == nil && overlay.view.overlays.hover == nil, "a mouse move after the overlay closed changes nothing")
+
+        // Return with no selection copies what the pointer is over.
+        open()
+        overlay.setWindows([windowRect], pointer: CGPoint(x: frame.minX + 10, y: frame.maxY - 10))
+        mouse(.mouseMoved, CGPoint(x: 350, y: 350))
+        pasteboard.clearContents()
+        key(returnKey, "\r")
+        require(try await copiedSize() == windowRect.size, "Return with no selection copies the hovered window")
+
+        // The pointer pinned against the screen edge highlights the full display; Return takes it.
+        open()
+        overlay.setWindows([windowRect], pointer: CGPoint(x: frame.minX + 10, y: frame.maxY - 10))
+        mouse(.mouseMoved, CGPoint(x: 0, y: 350))
+        require(overlay.view.overlays.hover == CGRect(x: 0, y: 0, width: image.width, height: image.height), "the pointer at the screen edge highlights the full display")
+        mouse(.mouseMoved, CGPoint(x: 350, y: 350))
+        require(overlay.view.overlays.hover == windowRect, "moving in from the edge goes back to the window")
+        mouse(.mouseMoved, CGPoint(x: 0, y: 350))
+        pasteboard.clearContents()
+        key(returnKey, "\r")
+        require(try await copiedSize() == CGSize(width: image.width, height: image.height), "Return at the screen edge copies the full display")
+
         // A click with no window under the pointer selects the full display.
         overlay.dismiss()
         open()

@@ -103,12 +103,16 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Repeat Last Area", action: #selector(repeatLastArea), keyEquivalent: "")
         menu.addItem(withTitle: "Open Image...", action: #selector(openImage), keyEquivalent: "")
         menu.addItem(.separator())
+        menu.addItem(withTitle: "Snap While Dragging", action: #selector(toggleSnap), keyEquivalent: "")
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
         menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         return menu
     }
 
     @objc private func captureFromMenu() { capture() }
+
+    @objc private func toggleSnap() { UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: Pref.snap), forKey: Pref.snap) }
 
     @objc private func copyTextFromMenu() { capture(text: true) }
 
@@ -197,6 +201,14 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         NSApp.activate()
         firstRunWindow!.center()
         firstRunWindow!.makeKeyAndOrderFront(nil)
+    }
+}
+
+extension SnugApp: NSMenuItemValidation {
+    /// Checks Snap While Dragging when snapping is on; the S key in the overlay changes the same preference.
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(toggleSnap) { item.state = UserDefaults.standard.bool(forKey: Pref.snap) ? .on : .off }
+        return true
     }
 }
 

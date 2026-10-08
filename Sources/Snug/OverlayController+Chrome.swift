@@ -12,7 +12,7 @@ extension OverlayController {
         case .text where text.rect != nil: ["Handles: resize", "Arrows: nudge", "Return: copy text", "Option-Return: translate", "Tab: links", "F: all text", "C: color"]
         case .text: ["Drag: select text", "Click: copy text block", "Shift-click: screenshot it", "F: all text", "C: color", "A: back to capture", "?: keys"]
         case .capture where selection != nil: ["Handles: resize", "Arrows: nudge", "Tab: other fits", "Esc: cancel"]
-        case .capture: [snapEnabled ? "Pause to snap" : "S: snap back on", "Click: capture", "Up / Down: bigger / smaller", "Option: exact", shadowHint, "F: full screen", "?: keys"]
+        case .capture: [snapEnabled ? "Pause to snap, S: off" : "S: snap back on", "Click: capture", "Up / Down: bigger / smaller", "Option: exact", shadowHint, "F: full screen", "?: keys"]
         }
     }
 
