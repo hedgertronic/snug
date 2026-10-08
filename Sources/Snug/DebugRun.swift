@@ -101,7 +101,8 @@ enum DebugRun {
         require(preview != rough && Detection.overlap(preview, rough) > 0.5, "preview \(preview) refines the drag and stays related to it")
         release(rough)
         require(overlay.selection?.rect == preview, "release takes the preview")
-        try await waitFor("the snap's corner radius") { overlay.view.overlays.radius > 0 }
+        // The form field rounds by about 6 px, under the detector's 8 px minimum, so its measured radius is 0; the check is that the measurement lands.
+        try await waitFor("the snap's corner radius is measured") { overlay.radii[preview] != nil }
         require(overlay.view.overlays.radius == overlay.radii[preview], "the released snap keeps its measured corner radius \(overlay.view.overlays.radius)")
 
         // Tab cycles to the exact drag and back.
