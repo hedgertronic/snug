@@ -118,7 +118,7 @@ final class ActionButton: NSButton {
 @MainActor
 final class HelpSheet: NSView {
     static let columns: [(title: String, rows: [(keys: String, action: String)])] = [
-        ("Capture", [("drag", "Select a region"), ("click", "Element, window, or text block"), ("Option-click", "Flip window shadow"), ("Option-drag", "Exact, no snap"),
+        ("Capture", [("drag", "Select a region"), ("click", "Element, window, or text block"), ("Option-click", "Flip window shadow"), ("Shift-click", "Text: screenshot the block"), ("Option-drag", "Exact, no snap"),
                      ("F", "Full screen, or all text"), ("Return", "Copy"), ("Cmd-S", "Save"), ("C", "Copy color"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
         ("Adjust", [("Tab", "Walk out, other fits, items"), ("Arrows", "Nudge (Shift: 10 pt)"), ("Up / Down", "Bigger / smaller element"),
                     ("1-5", "Pick from the list (N)"), ("Cmd-1/2/3", "Tight / Margin / Backdrop"), ("M", "Cycle output style"),

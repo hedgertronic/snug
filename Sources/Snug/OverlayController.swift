@@ -492,7 +492,7 @@ final class OverlayController {
 
     // MARK: Output
 
-    private var afterCaptureSaves: Bool { defaults.string(forKey: Pref.afterCapture) == "copyAndSave" }
+    var afterCaptureSaves: Bool { defaults.string(forKey: Pref.afterCapture) == "copyAndSave" }
 
     func copy() {
         guard let rect = selection?.rect else { return }
@@ -556,7 +556,7 @@ final class OverlayController {
     }
 
     /// Closes the overlay first, then encodes off main and delivers.
-    private func finish(crop: CGRect, copy: Bool, save: Bool) {
+    func finish(crop: CGRect, copy: Bool, save: Bool) {
         guard let image else { return }
         let style = style, scale = scale
         let known = radii[crop], measuring = radiusTasks[crop]

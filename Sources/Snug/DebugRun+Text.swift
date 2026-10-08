@@ -26,8 +26,8 @@ extension DebugRun {
         func windowPoint(_ pixel: CGPoint) -> CGPoint {
             CGPoint(x: pixel.x / overlay.scale, y: overlay.view.bounds.height - pixel.y / overlay.scale)
         }
-        func mouse(_ type: NSEvent.EventType, _ pixel: CGPoint) {
-            overlay.window.sendEvent(NSEvent.mouseEvent(with: type, location: windowPoint(pixel), modifierFlags: [],
+        func mouse(_ type: NSEvent.EventType, _ pixel: CGPoint, _ flags: NSEvent.ModifierFlags = []) {
+            overlay.window.sendEvent(NSEvent.mouseEvent(with: type, location: windowPoint(pixel), modifierFlags: flags,
                 timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: overlay.window.windowNumber,
                 context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!)
         }
@@ -83,7 +83,7 @@ extension DebugRun {
         require(overlay.mode == .capture, "the overlay opens in Capture mode")
         key(tKey, "t")
         require(overlay.mode == .text, "T enters Text mode")
-        require(texts(in: overlay.chrome.hints) == ["Drag: select text", "Click: copy text block", "F: all text", "C: color", "A: back to capture", "?: keys"], "Text mode with no region shows its hint strip")
+        require(texts(in: overlay.chrome.hints) == ["Drag: select text", "Click: copy text block", "Shift-click: screenshot it", "F: all text", "C: color", "A: back to capture", "?: keys"], "Text mode with no region shows its hint strip")
         require(overlay.textPage == nil, "nothing is recognized until Text mode needs it")
         overlay.dismiss()
 
@@ -190,6 +190,19 @@ extension DebugRun {
         let block = await copied() ?? ""
         require(!overlay.window.isVisible, "a click on text closes the overlay")
         require(block.contains("Brief description") && block.contains("\n") && !block.contains("Billing"), "a click copies the text block under the pointer: \(block.debugDescription)")
+
+        // Shift-click screenshots the block instead of copying its text.
+        open()
+        pasteboard.clearContents()
+        mouse(.leftMouseDown, spot, .shift)
+        mouse(.leftMouseUp, spot, .shift)
+        await overlay.textTask?.value
+        await overlay.commitTask?.value
+        let blockImage = DebugRun.pngSize(pasteboard.data(forType: .png))
+        require(!overlay.window.isVisible && pasteboard.string(forType: .string) == nil && blockImage != nil, "Shift-click copies the text block as an image, not text: \(String(describing: blockImage))")
+        let blockLines = try await page!.value.lines
+        let blockBox = TextLayout.block(at: spot, in: blockLines).dropFirst().reduce(TextLayout.block(at: spot, in: blockLines)[0].bounds) { $0.union($1.bounds) }
+        require(blockImage == blockBox.integral.size, "the image is the block's bounds \(blockBox.integral.size)")
 
         // F selects all text on screen using the same page OCR.
         open()
