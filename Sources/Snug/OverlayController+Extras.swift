@@ -138,14 +138,14 @@ extension OverlayController {
         let primaryHeight = NSScreen.screens[0].frame.height
         let origin = CGPoint(x: window.frame.minX, y: primaryHeight - window.frame.maxY)
         let point = AccessibilityBounds.point(forPixel: pixel, displayOrigin: origin, scale: scale)
-        let (scale, extent) = (scale, extent)
+        let (scale, extent, image) = (scale, extent, image)
         accessibilityTask = Task {
             defer { accessibilityTask = nil }
             let info = CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]]
             guard let pid = info?.first?[kCGWindowOwnerPID as String] as? Int32 else { return }
             let frames = await Accessibility.frames(at: point, pid: pid)
             guard !Task.isCancelled, mode == .capture else { return }
-            let found = AccessibilityBounds.candidates(frames: AccessibilityBounds.hoverLevel(frames), displayOrigin: origin, scale: scale, extent: extent)
+            let found = AccessibilityBounds.candidates(frames: AccessibilityBounds.hoverLevel(frames), displayOrigin: origin, scale: scale, extent: extent, image: image)
             if !found.isEmpty { merge(found) }
         }
     }

@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Testing
 @testable import ScreenshotCore
@@ -101,6 +102,44 @@ struct DockRectTests {
         #expect(rect == CGRect(x: 1200, y: 1800, width: 760, height: 150))
         let shifted = AccessibilityBounds.dockRect(lists: lists, displayOrigin: CGPoint(x: 100, y: 50), scale: 2, extent: extent)
         #expect(shifted == CGRect(x: 1000, y: 1700, width: 760, height: 150))
+    }
+
+    @Test func dockPanelMovesEachSideToTheRimFromInsideOrOutside() {
+        // A vertical Dock: a dark panel with a large corner radius and a 2 px light rim, on a dark gradient, with light icons inside.
+        let panel = CGRect(x: 10, y: 140, width: 134, height: 1750)
+        let context = CGContext(data: nil, width: 400, height: 1964, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.drawLinearGradient(CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [CGColor(red: 0.1, green: 0.08, blue: 0.2, alpha: 1),
+                                   CGColor(red: 0.2, green: 0.2, blue: 0.3, alpha: 1)] as CFArray, locations: nil)!,
+                                   start: .zero, end: CGPoint(x: 400, y: 1964), options: [])
+        // CGContext is bottom-up: flip so rects are top-left like image pixels.
+        context.translateBy(x: 0, y: 1964)
+        context.scaleBy(x: 1, y: -1)
+        context.addPath(CGPath(roundedRect: panel.insetBy(dx: 1, dy: 1), cornerWidth: 50, cornerHeight: 50, transform: nil))
+        context.setStrokeColor(CGColor(gray: 0.55, alpha: 1))
+        context.setLineWidth(2)
+        context.setFillColor(CGColor(gray: 0.22, alpha: 1))
+        context.drawPath(using: .fillStroke)
+        context.setFillColor(CGColor(gray: 0.9, alpha: 1))
+        for y in stride(from: 170, to: 1800, by: 102) { context.fill(CGRect(x: 39, y: y, width: 76, height: 76)) }
+        let union = CGRect(x: 20, y: 140, width: 134, height: 1824)
+        let found = AccessibilityBounds.dockPanel(in: context.makeImage()!, around: union, scale: 2)
+        for (a, b) in [(found.minX, panel.minX), (found.maxX, panel.maxX), (found.minY, panel.minY), (found.maxY, panel.maxY)] {
+            #expect(abs(a - b) <= 2, "found \(found), panel \(panel)")
+        }
+    }
+
+    @Test func trimmingADockSlotKeepsTheIconAndIgnoresTheRunningDot() {
+        let context = CGContext(data: nil, width: 200, height: 200, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(CGColor(gray: 0.22, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 200, height: 200))
+        context.setFillColor(CGColor(gray: 0.9, alpha: 1))
+        context.fill(CGRect(x: 60, y: 50, width: 76, height: 76))
+        context.fillEllipse(in: CGRect(x: 44, y: 86, width: 4, height: 4))
+        // Bottom-up drawing: the icon is at y 200 - 126 = 74 in top-left image pixels.
+        let slot = CGRect(x: 40, y: 60, width: 116, height: 102)
+        #expect(AccessibilityBounds.trimmedToContent(in: context.makeImage()!, rect: slot) == CGRect(x: 60, y: 74, width: 76, height: 76))
     }
 
     @Test func unusableListsGiveNoDock() {

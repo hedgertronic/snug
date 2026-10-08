@@ -140,7 +140,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 try Task.checkCancellation()
                 overlay.present(image: image, frame: screen.frame, displayID: id)
                 if text { overlay.setMode(.text) }
-                let windows = await DisplayCapture.windows(on: id, pixelScale: overlay.scale)
+                let scale = overlay.scale
+                let windows = await DisplayCapture.windows(on: id, pixelScale: scale).map { window in
+                    window.name == "Dock" && window.frozen
+                        ? (rect: AccessibilityBounds.dockPanel(in: image, around: window.rect, scale: scale), name: window.name, id: window.id, frozen: window.frozen) : window
+                }
                 if overlay.image === image { overlay.setWindows(windows.map(\.rect), names: windows.map(\.name), ids: windows.map(\.id), frozen: windows.map(\.frozen), pointer: NSEvent.mouseLocation) }
             } catch is CancellationError {
             } catch {

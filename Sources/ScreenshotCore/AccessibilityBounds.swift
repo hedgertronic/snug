@@ -34,6 +34,65 @@ public enum AccessibilityBounds {
         return union.isNull ? nil : union.integral
     }
 
+    /// The Dock's visible panel in `image`: each side of the AXList union moves to the panel's rim, within 48 pt either way.
+    /// The union is off by several points (measured on a vertical Dock: 5 pt inside on the left, 37 pt past the bottom), and the
+    /// rim is a bright 1-2 px line. Along 9 lines across the middle of a side, the side's hit is the boundary between neighbors
+    /// differing by at least 30 (summed RGB) nearest the union's side, moved out over the rim's other boundary when that is
+    /// within 3 px. The side takes the hit nearest the union that 3 lines share within 2 px, so a rounded end counts from its
+    /// middle. A side with no such hit stays where it is.
+    public static func dockPanel(in image: CGImage, around union: CGRect, scale: CGFloat) -> CGRect {
+        let union = union.integral.intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        let width = image.width, height = image.height, bytesPerRow = width * 4
+        let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: bytesPerRow,
+                                space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)!
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        let bytes = context.data!.bindMemory(to: UInt8.self, capacity: bytesPerRow * height)
+        func sum(_ x: Int, _ y: Int) -> Int { (0..<3).reduce(0) { $0 + Int(bytes[y * bytesPerRow + x * 4 + $1]) } }
+        let reach = Int(48 * scale)
+
+        // Boundaries are pixel edges: boundary b lies between pixels b - 1 and b. `outward` is -1 for left and top, +1 for right and bottom.
+        func side(_ start: Int, outward: Int, vertical: Bool, lines: [Int]) -> Int {
+            let limit = vertical ? width : height
+            func jump(_ b: Int, _ line: Int) -> Bool {
+                guard b >= 1, b < limit else { return false }
+                return vertical ? abs(sum(b - 1, line) - sum(b, line)) >= 30 : abs(sum(line, b - 1) - sum(line, b)) >= 30
+            }
+            let hits = lines.compactMap { line -> Int? in
+                guard let near = (0...reach).flatMap({ [start - $0, start + $0] }).first(where: { jump($0, line) }) else { return nil }
+                return (1...3).map { near + outward * $0 }.last { jump($0, line) } ?? near
+            }.sorted { abs($0 - start) < abs($1 - start) }
+            return hits.first { hit in hits.filter { abs($0 - hit) <= 2 }.count >= 3 } ?? start
+        }
+        let rows = (0..<9).map { Int(union.minY) + Int(union.height) * (3 + $0) / 15 }
+        let columns = (0..<9).map { Int(union.minX) + Int(union.width) * (3 + $0) / 15 }
+        let left = side(Int(union.minX), outward: -1, vertical: true, lines: rows)
+        let right = side(Int(union.maxX), outward: 1, vertical: true, lines: rows)
+        let top = side(Int(union.minY), outward: -1, vertical: false, lines: columns)
+        let bottom = side(Int(union.maxY), outward: 1, vertical: false, lines: columns)
+        return CGRect(x: left, y: top, width: right - left, height: bottom - top)
+    }
+
+    /// `rect` with its plain margins removed: each side moves in while at least 95% of its line is within 40 (summed RGB) of the
+    /// color at the rect's top-left corner, so a small mark in the margin (a Dock running dot) does not stop it.
+    public static func trimmedToContent(in image: CGImage, rect: CGRect) -> CGRect {
+        let crop = image.cropping(to: rect.integral)!
+        let width = crop.width, height = crop.height, bytesPerRow = width * 4
+        let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: bytesPerRow,
+                                space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)!
+        context.draw(crop, in: CGRect(x: 0, y: 0, width: width, height: height))
+        let bytes = context.data!.bindMemory(to: UInt8.self, capacity: bytesPerRow * height)
+        func plain(_ x: Int, _ y: Int) -> Bool { (0..<3).reduce(0) { $0 + abs(Int(bytes[y * bytesPerRow + x * 4 + $1]) - Int(bytes[$1])) } <= 40 }
+        func plainLine(_ points: [(Int, Int)]) -> Bool { points.filter { plain($0.0, $0.1) }.count * 100 >= points.count * 95 }
+        var (left, top, right, bottom) = (0, 0, width - 1, height - 1)
+        while left < right, plainLine((top...bottom).map { (left, $0) }) { left += 1 }
+        while right > left, plainLine((top...bottom).map { (right, $0) }) { right -= 1 }
+        while top < bottom, plainLine((left...right).map { ($0, top) }) { top += 1 }
+        while bottom > top, plainLine((left...right).map { ($0, bottom) }) { bottom -= 1 }
+        return CGRect(x: rect.integral.minX + CGFloat(left), y: rect.integral.minY + CGFloat(top), width: CGFloat(right - left + 1), height: CGFloat(bottom - top + 1))
+    }
+
     /// A parent whose every side is within this many points of the kept inner frame is only padding, not a step.
     public static let paddingTolerance: CGFloat = 12
 
@@ -60,14 +119,16 @@ public enum AccessibilityBounds {
 
     /// Candidates from `frames` (innermost element first, window last), in image pixels clipped to `extent` and to scroll viewports.
     /// The innermost element scores highest; repeated rectangles and padding-only parents keep only the innermost.
-    public static func candidates(frames: [AXFrame], displayOrigin: CGPoint, scale: CGFloat, extent: CGRect) -> [Candidate] {
+    public static func candidates(frames: [AXFrame], displayOrigin: CGPoint, scale: CGFloat, extent: CGRect, image: CGImage? = nil) -> [Candidate] {
         var output: [Candidate] = []
         var inner: CGRect?
         for (index, frame) in clippedToViewports(frames.filter { [$0.rect.minX, $0.rect.minY, $0.rect.width, $0.rect.height].allSatisfy(\.isFinite) }).enumerated() {
             let r = frame.rect
-            let pixels = CGRect(x: (r.minX - displayOrigin.x) * scale, y: (r.minY - displayOrigin.y) * scale,
+            var pixels = CGRect(x: (r.minX - displayOrigin.x) * scale, y: (r.minY - displayOrigin.y) * scale,
                                 width: r.width * scale, height: r.height * scale).intersection(extent).integral
             guard !pixels.isNull, pixels.width >= 8, pixels.height >= 8 else { continue }
+            // A Dock item's frame is its whole slot; the icon sits inside it.
+            if frame.role == "AXDockItem", let image { pixels = trimmedToContent(in: image, rect: pixels) }
             let tolerance = paddingTolerance * scale
             if let inner, abs(pixels.minX - inner.minX) <= tolerance, abs(pixels.minY - inner.minY) <= tolerance,
                abs(pixels.maxX - inner.maxX) <= tolerance, abs(pixels.maxY - inner.maxY) <= tolerance { continue }
