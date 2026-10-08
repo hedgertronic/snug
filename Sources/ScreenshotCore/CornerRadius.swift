@@ -1,10 +1,13 @@
 import CoreGraphics
+import Foundation
 
 /// Estimates the corner radius of a shape in image pixels, using top-left image coordinates.
+/// From each corner it casts rays at several angles and takes the first edge along each. A rounded corner puts those edges on a circle
+/// of one radius tangent to both sides; anything else (square corners, busy content) leaves no consistent radius. At least 3 corners must agree.
 public func cornerRadius(in image: CGImage, rect: CGRect) -> CGFloat {
     let bounds = rect.integral.intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
     let width = Int(bounds.width), height = Int(bounds.height)
-    guard width >= 3, height >= 3 else { return 0 }
+    guard min(width, height) >= 14 else { return 0 }
 
     let bytesPerRow = width * 4
     var bytes = [UInt8](repeating: 0, count: bytesPerRow * height)
@@ -17,71 +20,38 @@ public func cornerRadius(in image: CGImage, rect: CGRect) -> CGFloat {
         context.draw(cropped, in: CGRect(x: 0, y: 0, width: width, height: height))
     }
 
-    func color(_ x: Int, _ y: Int) -> (Int, Int, Int) {
-        let index = y * bytesPerRow + x * 4
-        return (Int(bytes[index]), Int(bytes[index + 1]), Int(bytes[index + 2]))
-    }
+    let limit = Double(min(width, height) / 2)
+    let angles = [15.0, 30, 45, 60, 75].map { $0 * .pi / 180 }
 
-    func sideColor(_ points: [(Int, Int)], inward: (Int, Int)) -> (Int, Int, Int) {
-        var counts: [Int: Int] = [:]
-        let depth = min(width, height) / 2
-        for (x, y) in points {
-            for step in 0...depth {
-                let sample = color(x + step * inward.0, y + step * inward.1)
-                let key = sample.0 << 16 | sample.1 << 8 | sample.2
-                counts[key, default: 0] += 1
-            }
+    // Distance from the corner to the first edge along the ray: the colors 2 px apart differ by at least 14 (summed over RGB).
+    func edge(corner: (x: Int, y: Int), step: (x: Int, y: Int), angle: Double) -> Double? {
+        func offset(_ distance: Double) -> Int {
+            (corner.y + step.y * Int(distance * sin(angle))) * bytesPerRow + (corner.x + step.x * Int(distance * cos(angle))) * 4
         }
-        let key = counts.max { $0.value < $1.value }!.key
-        return ((key >> 16) & 0xff, (key >> 8) & 0xff, key & 0xff)
-    }
-
-    let third = max(1, width / 3), verticalThird = max(1, height / 3)
-    let horizontalPositions = [max(0, width / 2 - third / 2), width / 2, min(width - 1, width / 2 + third / 2)]
-    let verticalPositions = [max(0, height / 2 - verticalThird / 2), height / 2, min(height - 1, height / 2 + verticalThird / 2)]
-    let top = sideColor(horizontalPositions.map { ($0, 0) }, inward: (0, 1))
-    let bottom = sideColor(horizontalPositions.map { ($0, height - 1) }, inward: (0, -1))
-    let left = sideColor(verticalPositions.map { (0, $0) }, inward: (1, 0))
-    let right = sideColor(verticalPositions.map { (width - 1, $0) }, inward: (-1, 0))
-
-    func matches(_ x: Int, _ y: Int, _ first: (Int, Int, Int), _ second: (Int, Int, Int)) -> Bool {
-        let sample = color(x, y)
-        func distance(_ edge: (Int, Int, Int)) -> Double {
-            let red = Double(sample.0 - edge.0), green = Double(sample.1 - edge.1), blue = Double(sample.2 - edge.2)
-            return (red * red + green * green + blue * blue).squareRoot()
-        }
-        return distance(first) <= 24 || distance(second) <= 24
-    }
-
-    func cornerGap(startX: Int, startY: Int, stepX: Int, stepY: Int,
-                   first: (Int, Int, Int), second: (Int, Int, Int)) -> CGFloat? {
-        let limit = min(width, height) / 2
-        for step in 0...limit {
-            if matches(startX + step * stepX, startY + step * stepY, first, second) {
-                // Outside the arc the background changes smoothly (flat, gradient, blur); busy content is not a corner. The last 3 steps are the anti-aliased edge.
-                for outsideStep in 1..<max(1, step - 3) {
-                    let previous = color(startX + (outsideStep - 1) * stepX, startY + (outsideStep - 1) * stepY)
-                    let sample = color(startX + outsideStep * stepX, startY + outsideStep * stepY)
-                    let red = Double(sample.0 - previous.0), green = Double(sample.1 - previous.1), blue = Double(sample.2 - previous.2)
-                    if (red * red + green * green + blue * blue).squareRoot() > 24 { return nil }
-                }
-                return CGFloat(step)
-            }
+        for distance in stride(from: 0.0, to: limit, by: 0.5) {
+            let near = offset(distance), far = offset(distance + 2)
+            if (0..<3).reduce(0, { $0 + abs(Int(bytes[near + $1]) - Int(bytes[far + $1])) }) >= 14 { return distance + 2 }
         }
         return nil
     }
 
-    let gaps = [
-        cornerGap(startX: 0, startY: 0, stepX: 1, stepY: 1, first: top, second: left),
-        cornerGap(startX: width - 1, startY: 0, stepX: -1, stepY: 1, first: top, second: right),
-        cornerGap(startX: 0, startY: height - 1, stepX: 1, stepY: -1, first: bottom, second: left),
-        cornerGap(startX: width - 1, startY: height - 1, stepX: -1, stepY: -1, first: bottom, second: right)
-    ].compactMap { $0 }.map { $0 / (1 - 1 / CGFloat(2).squareRoot()) }
-    guard gaps.count >= 3 else { return 0 }
-    let sorted = gaps.sorted()
-    let middle = sorted.count / 2
-    let estimate = sorted.count.isMultiple(of: 2) ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
-    let agreeing = gaps.filter { abs($0 - estimate) <= estimate * 0.25 }
-    guard agreeing.count >= 3 else { return 0 }
-    return min(estimate.rounded(), CGFloat(min(width, height)) / 2)
+    func fit(corner: (x: Int, y: Int), step: (x: Int, y: Int)) -> Int? {
+        let distances = angles.map { edge(corner: corner, step: step, angle: $0) }
+        guard !distances.contains(where: { $0 == nil }) else { return nil }
+        // A circle of radius r tangent to both sides is first reached at r * (k - sqrt(k^2 - 1)) along the ray at an angle with k = cos + sin.
+        let best = (8...Int(limit)).map { radius in
+            (radius, zip(angles, distances).map { angle, distance in
+                let k = cos(angle) + sin(angle)
+                return abs(distance! - Double(radius) * (k - (k * k - 1).squareRoot()))
+            }.max()!)
+        }.min { $0.1 < $1.1 }!
+        return best.1 <= max(1.25, Double(best.0) * 0.1) ? best.0 : nil
+    }
+
+    let radii = [fit(corner: (0, 0), step: (1, 1)), fit(corner: (width - 1, 0), step: (-1, 1)),
+                 fit(corner: (0, height - 1), step: (1, -1)), fit(corner: (width - 1, height - 1), step: (-1, -1))].compactMap { $0 }
+    guard radii.count >= 3 else { return 0 }
+    let estimate = radii.sorted()[radii.count / 2]
+    guard radii.filter({ abs($0 - estimate) <= max(2, estimate / 5) }).count >= 3 else { return 0 }
+    return CGFloat(min(estimate, min(width, height) / 2))
 }
