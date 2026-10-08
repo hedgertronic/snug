@@ -182,6 +182,21 @@ final class SmartSnapTests: XCTestCase {
         XCTAssertTrue(tooFar.isEmpty, "a 14 px miss is outside the 8 px band at scale 1")
     }
 
+    func testSnapsFullyRoundedPill() async throws {
+        let pill = CGRect(x: 60, y: 86, width: 300, height: 48) // vertically centered, so the bottom-left context and top-left image agree
+        let context = CGContext(data: nil, width: 420, height: 220, bitsPerComponent: 8, bytesPerRow: 0,
+                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(CGColor(red: 0.23, green: 0.24, blue: 0.25, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 420, height: 220))
+        context.setFillColor(CGColor(red: 0.16, green: 0.17, blue: 0.18, alpha: 1))
+        context.addPath(CGPath(roundedRect: pill, cornerWidth: 24, cornerHeight: 24, transform: nil))
+        context.fillPath()
+        let image = context.makeImage()!
+
+        let suggestions = try await SmartSnap().suggest(in: image, roughBounds: pill.insetBy(dx: -6, dy: -5))
+        XCTAssertTrue(near(try XCTUnwrap(suggestions.first).bounds, pill, tolerance: 2), "got \(suggestions.map(\.bounds))")
+    }
+
     func testImageBorderIsASnapTarget() async throws {
         let strip = CGRect(x: 0, y: 60, width: 400, height: 40)
         let image = makeCanvas(width: 400, height: 200) { canvas in canvas.fill(strip, color: 200) }
