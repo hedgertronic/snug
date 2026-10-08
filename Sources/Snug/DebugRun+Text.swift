@@ -107,6 +107,13 @@ extension DebugRun {
         let line = await copied() ?? ""
         require(line.contains("Product name") && !line.contains("Billing"), "Return copies the selected text: \(line.debugDescription)")
 
+        // Esc with focus in Live Text closes.
+        try await open()
+        textDrag(from: CGPoint(x: productName.minX + 10, y: productName.midY), to: CGPoint(x: productName.maxX - 10, y: productName.midY))
+        require(overlay.window.firstResponder !== overlay.view, "focus is in Live Text before Esc")
+        key(escape)
+        require(!overlay.window.isVisible, "Esc after a drag in the text closes")
+
         // A drag down across lines selects them all, in order.
         try await open()
         textDrag(from: CGPoint(x: productName.minX + 10, y: productName.midY), to: CGPoint(x: 1900, y: 600))
