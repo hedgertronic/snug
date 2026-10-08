@@ -57,6 +57,16 @@ extension DebugRun {
         overlay.dismiss()
 
         open()
+        mouse(.mouseMoved, CGPoint(x: 1280, y: 1580))
+        try snapshot("bar-at-top")
+        overlay.dismiss()
+
+        open()
+        drag(CGRect(x: 900, y: 1200, width: 800, height: 380), release: true)
+        try snapshot("style-bar-at-top")
+        overlay.dismiss()
+
+        open()
         defaults.set(OutputStyle.backdrop.rawValue, forKey: Pref.style)
         defaults.set(false, forKey: Pref.shadow)
         mouse(.mouseMoved, CGPoint(x: 1200, y: 1000))

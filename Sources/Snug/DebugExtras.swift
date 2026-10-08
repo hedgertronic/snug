@@ -376,6 +376,40 @@ extension DebugRun {
         overlay.view.setFrameSize(CGSize(width: width0, height: overlay.view.bounds.height))
         overlay.dismiss()
 
+        // The bar and hints move to the top when the pointer, a drag, the hover, or the selection nears them, and come back.
+        open()
+        overlay.detectionTask?.cancel()
+        let halfHeight = overlay.view.bounds.height / 2
+        mouse(.mouseMoved, CGPoint(x: extent.midX, y: extent.midY))
+        require(bar.frame.maxY < halfHeight && chrome.hints.frame.maxY < halfHeight && !chrome.atTop, "with the pointer mid-screen the bar and hints sit at the bottom")
+        mouse(.mouseMoved, CGPoint(x: extent.midX, y: extent.height - 20))
+        require(bar.frame.minY > halfHeight && chrome.hints.frame.minY > halfHeight && chrome.atTop && chrome.hints.frame.maxY < bar.frame.minY,
+                "with the pointer near the bottom the bar and hints move to the top, bar nearest the edge")
+        require(bar.frame.maxY <= overlay.view.bounds.height - overlay.topInset, "at the top they stay below the menu bar or notch")
+        mouse(.mouseMoved, CGPoint(x: extent.midX, y: extent.midY))
+        require(bar.frame.maxY < halfHeight && !chrome.atTop, "they return when the pointer leaves the bottom area")
+        mouse(.mouseMoved, CGPoint(x: 40, y: extent.height - 20))
+        require(bar.frame.maxY < halfHeight, "a pointer at the bottom but far to the side of the bar leaves it there")
+        overlay.setWindows([CGRect(x: 600, y: extent.height - 420, width: 1200, height: 410)], names: ["Low window"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, CGPoint(x: 700, y: extent.height - 400))
+        require(!chrome.hover.isHidden && chrome.atTop && bar.frame.minY > halfHeight, "a hovered window that reaches the bar moves it to the top")
+        mouse(.mouseMoved, CGPoint(x: 100, y: 100))
+        require(!chrome.atTop, "and it returns when the hover leaves")
+        let low = CGRect(x: 800, y: extent.height - 300, width: 600, height: 290)
+        mouse(.leftMouseDown, low.origin)
+        mouse(.leftMouseDragged, CGPoint(x: low.maxX, y: low.maxY))
+        require(chrome.atTop, "a drag that reaches the bar moves it to the top")
+        mouse(.leftMouseUp, CGPoint(x: low.maxX, y: low.maxY))
+        require(!chrome.styleBar.isHidden && chrome.styleBar.frame.minY > halfHeight && chrome.hints.frame.minY > chrome.styleBar.frame.maxY,
+                "a released selection that reaches the bottom puts the style bar and hints at the top")
+        mouse(.mouseMoved, CGPoint(x: extent.midX, y: extent.height - 20))
+        require(chrome.atTop, "the pointer at the bottom does not pull the style bar back down")
+        key(53, "")
+        open()
+        drag(rough)
+        require(!chrome.styleBar.isHidden && chrome.styleBar.frame.maxY < halfHeight, "a selection well above the bottom keeps the style bar at the bottom")
+        overlay.dismiss()
+
         // Safe area: with a simulated 38 pt inset, nothing sits under the camera housing.
         open()
         let width = overlay.view.bounds.width

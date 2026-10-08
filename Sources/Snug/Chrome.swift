@@ -295,6 +295,8 @@ final class Chrome {
     let reading = Pill.dark(0.86, radius: 6, insets: NSEdgeInsets(top: 4, left: 9, bottom: 4, right: 9))
     let list = CandidateList()
     let help = HelpSheet()
+    /// The bars and hint strip sit under the menu bar or notch instead of at the bottom edge.
+    var atTop = false
 
     var all: [NSView] { [hover, size, status, count, table, reading, hints, list, bottomBar, styleBar, help] }
 }

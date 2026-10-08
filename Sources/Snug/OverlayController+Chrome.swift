@@ -19,16 +19,13 @@ extension OverlayController {
     func refreshChrome() {
         let c = chrome
         let bounds = view.bounds
-        let top = bounds.height - topInset
+        let topEdge = bounds.height - topInset
+        var top = topEdge
         let overlays = view.overlays
         let released = mode == .capture && selection != nil
         for pill in [c.hover, c.size, c.status, c.count, c.table, c.reading] { pill.isHidden = true }
         c.help.frame = bounds
         c.help.layoutPanel()
-
-        func centered(_ item: NSView, y: CGFloat) {
-            item.frame.origin = CGPoint(x: ((bounds.width - item.frame.width) / 2).rounded(), y: y)
-        }
 
         c.bottomBar.update(mode: mode, defaults: defaults, style: style)
         c.bottomBar.isHidden = released || !defaults.bool(forKey: Pref.modeBar)
@@ -41,14 +38,35 @@ extension OverlayController {
             guard c.hints.frame.width > bounds.width - 16, items.count > kept + 1 else { break }
             items.remove(at: items.count - 1 - kept)
         }
-        if released {
-            centered(c.hints, y: 32)
-            centered(c.styleBar, y: c.hints.frame.maxY + 6)
-        } else {
-            centered(c.bottomBar, y: 32)
-            centered(c.hints, y: c.bottomBar.isHidden ? 32 : c.bottomBar.frame.maxY + 8)
+        // The bars and the hint strip stack inward from the bottom edge, or from just under the menu bar or notch.
+        let stack: [NSView] = released ? [c.hints, c.styleBar] : c.bottomBar.isHidden ? [c.hints] : [c.bottomBar, c.hints]
+        func layout(atTop: Bool) -> [CGRect] {
+            var edge = atTop ? topEdge - 8 : 32
+            return stack.map {
+                let frame = CGRect(x: ((bounds.width - $0.frame.width) / 2).rounded(), y: atTop ? edge - $0.frame.height : edge, width: $0.frame.width, height: $0.frame.height)
+                edge = atTop ? frame.minY - (released ? 6 : 8) : frame.maxY + (released ? 6 : 8)
+                return frame
+            }
         }
-        let floor = c.hints.frame.maxY + 8
+        /// Within 24 pt of the bottom stack: the pointer (not once released, when the style bar must stay clickable), or a drag, preview,
+        /// hover, or selection rectangle, unless that rectangle also reaches the top stack.
+        let zones = [false, true].map { layout(atTop: $0).reduce(CGRect.null) { $0.union($1) }.insetBy(dx: -24, dy: -24) }
+        let pointerView = CGPoint(x: pointer.x / scale, y: bounds.height - pointer.y / scale)
+        let atTop = (!released && zones[0].contains(pointerView))
+            || [overlays.ghost, overlays.preview, overlays.selection, overlays.hover].compactMap { $0 }.map(view.viewRect).contains { $0.intersects(zones[0]) && !$0.intersects(zones[1]) }
+        let frames = layout(atTop: atTop)
+        let animate = !isHeadless && atTop != c.atTop
+        c.atTop = atTop
+        if animate {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.15
+                for (item, frame) in zip(stack, frames) { item.animator().frame = frame }
+            }
+        } else {
+            for (item, frame) in zip(stack, frames) { item.frame = frame }
+        }
+        let floor = atTop ? 8 : frames[stack.firstIndex(of: c.hints)!].maxY + 8
+        if atTop { top = frames.map(\.minY).min()! }
 
         /// Left-aligns `pills` next to `box` with an 8 pt gap: below it (or above, when `above`) if there is room, else the other side, else inside.
         func place(_ pills: [Pill], near box: CGRect, above: Bool) {
@@ -142,7 +160,7 @@ extension OverlayController {
 
         if mode == .text, let notice = text.notice {
             c.status.show(notice) { [NSTextField(notice, size: 12, color: .white)] }
-            centered(c.status, y: floor)
+            c.status.frame.origin = CGPoint(x: ((bounds.width - c.status.frame.width) / 2).rounded(), y: floor)
         }
 
         c.list.isHidden = !(overlays.hover != nil && selection == nil && defaults.bool(forKey: Pref.candidates))
