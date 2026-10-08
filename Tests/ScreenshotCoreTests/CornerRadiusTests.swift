@@ -109,4 +109,19 @@ struct CornerRadiusTests {
         #expect(cornerRadius(in: image(radius: 0, background: 4, rim: 2), rect: shapeRect) == 0)
         #expect(cornerRadius(in: image(radius: 0, background: 0, rim: 2), rect: shapeRect) == 0)
     }
+    @Test func estimatesRadiusOfShapeWithSoftShadow() {
+        let shapeRect = CGRect(x: 40, y: 40, width: 200, height: 160)
+        for radius: CGFloat in [12, 20, 30] {
+            let context = CGContext(data: nil, width: 280, height: 240, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            context.setFillColor(CGColor(red: 0.25, green: 0.25, blue: 0.26, alpha: 1))
+            context.fill(CGRect(x: 0, y: 0, width: 280, height: 240))
+            context.setShadow(offset: .zero, blur: 16, color: CGColor(red: 0, green: 0, blue: 0, alpha: 0.9))
+            context.addPath(CGPath(roundedRect: shapeRect, cornerWidth: radius, cornerHeight: radius, transform: nil))
+            context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+            context.fillPath()
+            let estimate = cornerRadius(in: context.makeImage()!, rect: shapeRect)
+            #expect(abs(estimate - radius) <= max(2, radius * 0.1), "radius \(radius) estimated \(estimate)")
+        }
+    }
 }
