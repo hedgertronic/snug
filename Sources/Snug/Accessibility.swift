@@ -34,6 +34,27 @@ enum Accessibility {
         return frames
     }
 
+    /// The frames (global points, top-left origin) of the top-level `AXList` elements of `pid`'s app; for the Dock, its icon strips.
+    /// Empty without permission or on a timeout.
+    @concurrent
+    static func listFrames(pid: pid_t) async -> [CGRect] {
+        guard AXIsProcessTrusted() else { return [] }
+        let application = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(application, messagingTimeout)
+        var children: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(application, kAXChildrenAttribute as CFString, &children) == .success,
+              let children = children as? [AXUIElement] else { return [] }
+        return children.compactMap { child in
+            AXUIElementSetMessagingTimeout(child, messagingTimeout)
+            var role: CFTypeRef?
+            AXUIElementCopyAttributeValue(child, kAXRoleAttribute as CFString, &role)
+            guard role as? String == kAXListRole,
+                  let position = value(kAXPositionAttribute, of: child, type: .cgPoint, as: CGPoint.zero),
+                  let size = value(kAXSizeAttribute, of: child, type: .cgSize, as: CGSize.zero) else { return nil }
+            return CGRect(origin: position, size: size)
+        }
+    }
+
     private static func value<T>(_ attribute: String, of element: AXUIElement, type: AXValueType, as seed: T) -> T? {
         var raw: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &raw) == .success, let raw else { return nil }

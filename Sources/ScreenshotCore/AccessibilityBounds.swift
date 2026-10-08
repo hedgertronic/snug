@@ -24,6 +24,16 @@ public enum AccessibilityBounds {
         CGPoint(x: displayOrigin.x + pixel.x / scale, y: displayOrigin.y + pixel.y / scale)
     }
 
+    /// The whole dock in image pixels: the union of the Dock's `AXList` frames (global points), each clipped to `extent`.
+    /// Nil when no list has a finite frame at least 8 pixels square on the display.
+    public static func dockRect(lists: [CGRect], displayOrigin: CGPoint, scale: CGFloat, extent: CGRect) -> CGRect? {
+        let union = lists.filter { [$0.minX, $0.minY, $0.width, $0.height].allSatisfy(\.isFinite) }.map {
+            CGRect(x: ($0.minX - displayOrigin.x) * scale, y: ($0.minY - displayOrigin.y) * scale, width: $0.width * scale, height: $0.height * scale)
+                .intersection(extent)
+        }.filter { !$0.isNull && $0.width >= 8 && $0.height >= 8 }.reduce(CGRect.null) { $0.union($1) }
+        return union.isNull ? nil : union.integral
+    }
+
     /// A parent whose every side is within this many points of the kept inner frame is only padding, not a step.
     public static let paddingTolerance: CGFloat = 12
 

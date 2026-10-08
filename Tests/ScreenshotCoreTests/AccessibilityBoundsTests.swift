@@ -80,3 +80,22 @@ struct AccessibilityBoundsTests {
         #expect(session.selected?.label == "button")
     }
 }
+
+struct DockRectTests {
+    let extent = CGRect(x: 0, y: 0, width: 3024, height: 1964)
+
+    @Test func dockIsTheUnionOfItsListsInImagePixels() {
+        let lists = [CGRect(x: 600, y: 900, width: 300, height: 70), CGRect(x: 920, y: 905, width: 60, height: 70)]
+        let rect = AccessibilityBounds.dockRect(lists: lists, displayOrigin: .zero, scale: 2, extent: extent)
+        #expect(rect == CGRect(x: 1200, y: 1800, width: 760, height: 150))
+        let shifted = AccessibilityBounds.dockRect(lists: lists, displayOrigin: CGPoint(x: 100, y: 50), scale: 2, extent: extent)
+        #expect(shifted == CGRect(x: 1000, y: 1700, width: 760, height: 150))
+    }
+
+    @Test func unusableListsGiveNoDock() {
+        #expect(AccessibilityBounds.dockRect(lists: [], displayOrigin: .zero, scale: 2, extent: extent) == nil)
+        let bad = [CGRect(x: CGFloat.nan, y: 0, width: 100, height: 100), CGRect(x: 5, y: 5, width: 0, height: 50),
+                   CGRect(x: 9000, y: 9000, width: 100, height: 100), CGRect(x: 0, y: 0, width: 2, height: 2)]
+        #expect(AccessibilityBounds.dockRect(lists: bad, displayOrigin: .zero, scale: 2, extent: extent) == nil)
+    }
+}

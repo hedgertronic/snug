@@ -1,5 +1,6 @@
 import AppKit
 import ScreenCaptureKit
+import ScreenshotCore
 
 /// Captures the display under the pointer at full pixel resolution.
 enum DisplayCapture {
@@ -42,24 +43,38 @@ enum DisplayCapture {
 
     /// Visible windows on a display, front to back: rectangles in image pixels with a top-left origin, titles
     /// (the owning app's name when a window has none), window IDs, and whether the window is a Dock, menu bar, or menu
-    /// target that only the frozen capture can crop. Those are skipped when they cover the whole display.
+    /// target that only the frozen capture can crop. Those are skipped when they cover the whole display, except the Dock, which
+    /// (with Accessibility trusted) becomes its AXList union.
     @concurrent
     static func windows(on displayID: CGDirectDisplayID, pixelScale: CGFloat) async -> [(rect: CGRect, name: String, id: CGWindowID, frozen: Bool)] {
         let display = CGDisplayBounds(displayID)
         let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as! [[String: Any]]
-        return info.compactMap { window in
+        var result: [(rect: CGRect, name: String, id: CGWindowID, frozen: Bool)] = []
+        for window in info {
             let layer = window[kCGWindowLayer as String] as! Int
             guard layer == 0 || systemLevels.contains(layer),
                   window[kCGWindowOwnerPID as String] as! Int32 != getpid(),
-                  window[kCGWindowAlpha as String] as! Double > 0 else { return nil }
+                  window[kCGWindowAlpha as String] as! Double > 0 else { continue }
             let bounds = CGRect(dictionaryRepresentation: window[kCGWindowBounds as String] as! CFDictionary)!
                 .intersection(display)
-            guard bounds.width >= 8, bounds.height >= 8, layer == 0 || bounds != display else { return nil }
+            guard bounds.width >= 8, bounds.height >= 8 else { continue }
+            let id = CGWindowID(window[kCGWindowNumber as String] as! Int)
+            if layer != 0, bounds == display {
+                // The Dock's only window can span the display; its real shape is the union of its AXLists.
+                guard layer == Int(CGWindowLevelForKey(.dockWindow)), AXIsProcessTrusted(),
+                      let dock = AccessibilityBounds.dockRect(
+                        lists: await Accessibility.listFrames(pid: window[kCGWindowOwnerPID as String] as! Int32),
+                        displayOrigin: display.origin, scale: pixelScale,
+                        extent: CGRect(x: 0, y: 0, width: display.width * pixelScale, height: display.height * pixelScale)) else { continue }
+                result.append((dock, "Dock", id, true))
+                continue
+            }
             let title = window[kCGWindowName as String] as? String
-            return (CGRect(x: (bounds.minX - display.minX) * pixelScale, y: (bounds.minY - display.minY) * pixelScale,
-                           width: bounds.width * pixelScale, height: bounds.height * pixelScale),
-                    title.flatMap { $0.isEmpty ? nil : $0 } ?? window[kCGWindowOwnerName as String] as? String ?? "Window",
-                    CGWindowID(window[kCGWindowNumber as String] as! Int), layer != 0)
+            result.append((CGRect(x: (bounds.minX - display.minX) * pixelScale, y: (bounds.minY - display.minY) * pixelScale,
+                                  width: bounds.width * pixelScale, height: bounds.height * pixelScale),
+                           title.flatMap { $0.isEmpty ? nil : $0 } ?? window[kCGWindowOwnerName as String] as? String ?? "Window",
+                           id, layer != 0))
         }
+        return result
     }
 }
