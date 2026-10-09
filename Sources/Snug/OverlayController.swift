@@ -48,6 +48,7 @@ final class OverlayController {
         case drawing(AreaDrag)
         case resizing(Handle)
         case moving(last: CGPoint, moved: Bool)
+        case rounding(Handle, start: CGPoint, from: CornerRadii)
     }
 
     let window = OverlayWindow()
@@ -100,12 +101,27 @@ final class OverlayController {
     /// Corner radius in pixels of each snap fit, Tab fit, and hovered rectangle, measured once per rectangle.
     /// A rectangle that is not here (an exact drag, a nudged or resized selection) has square corners.
     var radii: [CGRect: CGFloat] = [:]
-    private var radiusTasks: [CGRect: Task<CGFloat, Never>] = [:]
-    /// Per-corner radii set with `[` and `]`, by rectangle; they replace the measured ones.
-    private var editedRadii: [CGRect: CornerRadii] = [:]
+    var radiusTasks: [CGRect: Task<CGFloat, Never>] = [:]
+    /// Per-corner radii set with `[`, `]`, the corner dots, and E, by rectangle; they replace the measured ones.
+    var editedRadii: [CGRect: CornerRadii] = [:]
     /// The size pill's text while a radius edit is fresh, e.g. "r 12".
     var radiusReadout: String?
-    private var radiusReadoutTask: Task<Void, Error>?
+    /// The corner a dot drag last changed; `=` copies its radius to the other corners.
+    var lastEditedCorner: Handle?
+    /// The chip beside the size badge that applies one radius to all four corners.
+    let applyChip = BarButton("Apply to all", key: "=", height: 23, size: 11)
+    /// Shift is down: with a selection open, the element under the pointer is outlined for a union.
+    var shiftHeld = false
+    /// Save As: the file to write, given the usual name in the save folder; nil cancels. Debug runs answer without a panel.
+    var chooseSaveURL: (URL) -> URL? = { suggested in
+        NSApp.activate()
+        let panel = NSSavePanel()
+        panel.directoryURL = suggested.deletingLastPathComponent()
+        panel.nameFieldStringValue = suggested.lastPathComponent
+        panel.allowedContentTypes = [.png]
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+    var radiusReadoutTask: Task<Void, Error>?
     /// The last pointer position in image pixels.
     var pointer = CGPoint.zero
     /// Capture mode: what the pointer is over (accessibility elements, pixel geometry, windows, the display), and the running geometry analysis.
@@ -151,6 +167,10 @@ final class OverlayController {
         view.controller = self
         window.contentView = view
         chrome.all.forEach(view.addSubview)
+        applyChip.isHidden = true
+        applyChip.style(fill: NSColor(srgbRed: 20 / 255, green: 20 / 255, blue: 22 / 255, alpha: 0.86), text: .white)
+        applyChip.onClick = { [unowned self] in applyRadiusToAll() }
+        view.addSubview(applyChip)
         chrome.bottomBar.onMode = { [unowned self] in setMode($0) }
         chrome.bottomBar.onToggle = { [unowned self] in
             if $0 == Pref.snap { return toggleSnap() }
@@ -253,6 +273,7 @@ final class OverlayController {
         editedRadii = [:]
         radiusReadoutTask?.cancel()
         radiusReadout = nil
+        lastEditedCorner = nil
         selection = nil
         interaction = .none
         spaceHeld = false
@@ -277,12 +298,18 @@ final class OverlayController {
 
     func flagsChanged(_ event: NSEvent) {
         optionHeld = event.modifierFlags.contains(.option)
+        let shift = event.modifierFlags.contains(.shift)
+        if shift != shiftHeld, image != nil {
+            shiftHeld = shift
+            updateHover(pixel: pointer)
+        }
         refresh()
     }
 
     func mouseMoved(_ event: NSEvent) {
         guard image != nil else { return }
         optionHeld = event.modifierFlags.contains(.option)
+        shiftHeld = event.modifierFlags.contains(.shift)
         pointer = view.pixelPoint(event)
         updateHover(pixel: pointer)
         updateGuides()
@@ -298,13 +325,14 @@ final class OverlayController {
         switch interaction {
         case .resizing(let handle): cursor = Self.resizeCursors[handle]!
         case .moving: cursor = .closedHand
+        case .rounding: cursor = .pointingHand
         case .drawing: cursor = .crosshair
         case .none where mode == .text:
             // Live Text takes points from the top-left corner (measured), not the view's bottom-left.
             cursor = view.liveText.hasText(at: CGPoint(x: pointer.x / scale, y: pointer.y / scale)) ? .iBeam : .arrow
         case .none:
             if let selection {
-                cursor = selection.handle(at: pointer, tolerance: 8 * scale).map { Self.resizeCursors[$0]! }
+                cursor = cornerDot(at: pointer) != nil ? .pointingHand : selection.handle(at: pointer, tolerance: 8 * scale).map { Self.resizeCursors[$0]! }
                     ?? (selection.rect.contains(pointer) ? .openHand : .crosshair)
             } else {
                 cursor = .crosshair
@@ -316,7 +344,11 @@ final class OverlayController {
 
     /// Capture mode: the pointer picks the element, window, or display under it. A level picked with a key holds until the pointer leaves it.
     private func updateHover(pixel: CGPoint) {
-        guard selection == nil, case .none = interaction else { return }
+        guard case .none = interaction else { return }
+        guard selection == nil || shiftHeld else {
+            if view.overlays.hover != nil { refresh() }
+            return
+        }
         if mode == .capture, session != nil {
             requestAccessibility(at: pixel)
             if session!.isLocked, !session!.holds(at: pixel) { session!.toggleLock() }
@@ -337,7 +369,12 @@ final class OverlayController {
         let point = view.pixelPoint(event)
         pointer = point
         hadSelection = selection != nil
+        shiftHeld = event.modifierFlags.contains(.shift)
         if let selection {
+            if let corner = cornerDot(at: point) {
+                interaction = .rounding(corner, start: point, from: cornerRadii(of: selection.rect))
+                return updateCursor()
+            }
             if let handle = selection.handle(at: point, tolerance: 8 * scale) {
                 interaction = .resizing(handle)
                 edgeFrames = []
@@ -345,10 +382,17 @@ final class OverlayController {
                 edgeFramesTask = Task { edgeFrames = try await snapFrames(around: selection.rect) }
                 return updateCursor()
             }
+            if shiftHeld {
+                updateHover(pixel: point)
+                if let hovered = hoverRect { return growSelection(toInclude: hovered) }
+            }
             if selection.rect.contains(point) {
                 interaction = .moving(last: point, moved: false)
                 return updateCursor()
             }
+        } else if shiftHeld {
+            updateHover(pixel: point)
+            if let hovered = hoverRect { return openAsSelection(hovered) }
         }
         selection = nil
         cancelWork()
@@ -370,10 +414,21 @@ final class OverlayController {
             interaction = .drawing(drag)
             scheduleSnap(for: drag.rect)
         case .resizing(let handle):
+            let old = selection!.rect
             snapResize(handle, to: point, exact: event.modifierFlags.contains(.option))
+            carryRadii(from: old)
         case .moving(let last, _):
+            let old = selection!.rect
             selection?.move(by: CGPoint(x: point.x - last.x, y: point.y - last.y))
+            carryRadii(from: old)
             interaction = .moving(last: point, moved: true)
+        case .rounding(let corner, let start, let from):
+            let rect = selection!.rect
+            let delta = CornerRadii.inwardDistance(of: CGPoint(x: point.x - start.x, y: point.y - start.y), from: corner)
+            let radii = from.moving(corner, by: delta, alone: event.modifierFlags.contains(.option), in: rect.size)
+            editedRadii[rect] = radii
+            lastEditedCorner = corner
+            showRadiusReadout(radii)
         }
         updateCursor()
         refresh()
@@ -415,7 +470,7 @@ final class OverlayController {
         snappedEdges = []
         edgeFramesTask?.cancel()
         switch finished {
-        case .none, .resizing:
+        case .none, .resizing, .rounding:
             break
         case .moving(_, let moved):
             if !moved { copy() }
@@ -546,6 +601,12 @@ final class OverlayController {
         switch (event.keyCode, command, character) {
         case (53, _, _): dismiss()
         case (36, _, _) where hovering, (76, _, _) where hovering: clickHover(shadow: windowShadow(option: false), copy: true, save: afterCaptureSaves, takeDisplay: true)
+        case (_, true, _) where shift && character.lowercased() == "s":
+            if hovering { clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true, saveAs: true) } else { save(saveAs: true) }
+        case (_, false, "e") where hovering && hoverRect != nil: openAsSelection(hoverRect!)
+        case (_, false, "o"): defaults.set(!defaults.bool(forKey: Pref.roundCorners), forKey: Pref.roundCorners)
+        case (_, false, "="): applyRadiusToAll()
+        case (123...126, _, _) where option && !hovering: nudgeSide(keyCode: event.keyCode, outward: !command, by: step)
         case (_, true, "s") where hovering: clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true)
         case (36, _, _) where shift || option, (76, _, _) where shift || option: copySelectionText(translating: option)
         case (36, _, _), (76, _, _): copy()
@@ -555,10 +616,10 @@ final class OverlayController {
         case (_, false, "1"..."5") where hovering && defaults.bool(forKey: Pref.candidates): session?.pick(Int(character)! - 1)
         case (48, _, _): cycleFit(backward: shift)
         case (49, _, _): spaceHeld = true
-        case (123, _, _): selection?.move(by: CGPoint(x: -step * scale, y: 0))
-        case (124, _, _): selection?.move(by: CGPoint(x: step * scale, y: 0))
-        case (125, _, _): selection?.move(by: CGPoint(x: 0, y: step * scale))
-        case (126, _, _): selection?.move(by: CGPoint(x: 0, y: -step * scale))
+        case (123, _, _): nudge(CGPoint(x: -step * scale, y: 0))
+        case (124, _, _): nudge(CGPoint(x: step * scale, y: 0))
+        case (125, _, _): nudge(CGPoint(x: 0, y: step * scale))
+        case (126, _, _): nudge(CGPoint(x: 0, y: -step * scale))
         case (_, true, "s"): save()
         case (_, true, "1"): style = .tight
         case (_, true, "2"): style = .margin
@@ -594,31 +655,31 @@ final class OverlayController {
             && abs($0.maxX - rect.maxX) <= 3 * scale && abs($0.maxY - rect.maxY) <= 3 * scale }
     }
 
-    func save() {
+    func save(saveAs: Bool = false) {
         guard let rect = selection?.rect else { return }
-        finish(crop: rect, copy: false, save: true)
+        finish(crop: rect, copy: false, save: true, saveAs: saveAs)
     }
 
     /// A click (or Return / Cmd-S) on the hovered rectangle. A window, or anything matching a window's frame, is captured as a window;
     /// the full display becomes a selection on click and is taken directly with `takeDisplay`; anything else is cropped from the
     /// frozen image with its measured corner radius.
-    private func clickHover(shadow: Bool, copy: Bool, save: Bool, takeDisplay: Bool = false) {
+    private func clickHover(shadow: Bool, copy: Bool, save: Bool, takeDisplay: Bool = false, saveAs: Bool = false) {
         guard let hovered = session?.selected else { return }
         switch hovered.kind {
-        case .window: clickWindow(Int(hovered.id.dropFirst("window-".count))!, crop: hovered.bounds, shadow: shadow, copy: copy, save: save)
+        case .window: clickWindow(Int(hovered.id.dropFirst("window-".count))!, crop: hovered.bounds, shadow: shadow, copy: copy, save: save, saveAs: saveAs)
         case .display where !takeDisplay: selection = AreaSelection(extent: extent, exact: extent)
         default:
             if style == .tight, let index = window(matching: hovered.bounds) {
-                return clickWindow(index, crop: hovered.bounds, shadow: shadow, copy: copy, save: save)
+                return clickWindow(index, crop: hovered.bounds, shadow: shadow, copy: copy, save: save, saveAs: saveAs)
             }
-            finish(crop: hovered.bounds, copy: copy, save: save)
+            finish(crop: hovered.bounds, copy: copy, save: save, saveAs: saveAs)
         }
     }
 
     /// A live capture takes the window itself like macOS does (rounded corners, shadow, transparent background); a frozen-image run,
     /// the Dock, the menu bar, and menus have no window to capture and crop `crop`.
-    private func clickWindow(_ index: Int, crop rect: CGRect, shadow: Bool, copy: Bool, save: Bool) {
-        guard displayID != nil, !windowFrozen.indices.contains(index) || !windowFrozen[index] else { return finish(crop: rect, copy: copy, save: save) }
+    private func clickWindow(_ index: Int, crop rect: CGRect, shadow: Bool, copy: Bool, save: Bool, saveAs: Bool = false) {
+        guard displayID != nil, !windowFrozen.indices.contains(index) || !windowFrozen[index] else { return finish(crop: rect, copy: copy, save: save, saveAs: saveAs) }
         let id = windowIDs[index]
         // macOS 26 window captures come back with square corners; the radius is measured on the frozen screen around the window.
         let radius = radii[windows[index]] ?? image.map { windowCornerRadius(in: $0, rect: windows[index]) } ?? 0
@@ -627,7 +688,9 @@ final class OverlayController {
             do {
                 let image = roundingWindowCorners(try await DisplayCapture.image(ofWindow: id, shadow: shadow), radius: radius)
                 let png = try await Output.png(image)
-                try Output.publish(png: png, detail: "\(image.width) x \(image.height)  window", copy: copy, save: save,
+                let destination = saveAs ? chooseSaveURL(Output.defaultFile(defaults: defaults)) : nil
+                guard !saveAs || destination != nil else { return }
+                try Output.publish(png: png, detail: "\(image.width) x \(image.height)  window", copy: copy, save: save, destination: destination,
                                    pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
@@ -660,13 +723,13 @@ final class OverlayController {
     }
 
     /// The frontmost window holding `rect`: its measured radius applies to the corners of `rect` that sit on the window's corners.
-    private func container(of rect: CGRect) -> CGRect? {
+    func container(of rect: CGRect) -> CGRect? {
         windows.first { $0.insetBy(dx: -2, dy: -2).contains(rect) }
     }
 
     /// The corner radii of `rect`: the edited ones, else its measured radius on all four corners, with the corners that sit on its
     /// window's corners taking the window's radius.
-    private func cornerRadii(of rect: CGRect) -> CornerRadii {
+    func cornerRadii(of rect: CGRect) -> CornerRadii {
         if let edited = editedRadii[rect] { return edited }
         guard defaults.bool(forKey: Pref.roundCorners) else { return .zero }
         let measured = CornerRadii(radii[rect] ?? 0)
@@ -679,18 +742,11 @@ final class OverlayController {
         guard let rect = selection?.rect ?? hoverRect else { return }
         let adjusted = cornerRadii(of: rect).offset(by: points * scale, in: rect.size)
         editedRadii[rect] = adjusted
-        let corners = [adjusted.topLeft, adjusted.topRight, adjusted.bottomLeft, adjusted.bottomRight].map { Int(($0 / scale).rounded()) }
-        radiusReadout = "r " + (Set(corners).count == 1 ? "\(corners[0])" : corners.map(String.init).joined(separator: " "))
-        radiusReadoutTask?.cancel()
-        radiusReadoutTask = Task {
-            try await Task.sleep(for: .seconds(1.5))
-            radiusReadout = nil
-            refresh()
-        }
+        showRadiusReadout(adjusted)
     }
 
     /// Closes the overlay first, then encodes off main and delivers.
-    func finish(crop: CGRect, copy: Bool, save: Bool) {
+    func finish(crop: CGRect, copy: Bool, save: Bool, saveAs: Bool = false) {
         guard let image else { return }
         let style = style, scale = scale
         let container = container(of: crop)
@@ -710,8 +766,10 @@ final class OverlayController {
                     let windowRadius = if let windowKnown { windowKnown } else { await windowMeasuring?.value ?? 0 }
                     radii = radii.replacingCorners(sharedWith: container, in: crop, with: windowRadius)
                 }
+                let destination = saveAs ? chooseSaveURL(Output.defaultFile(defaults: defaults)) : nil
+                guard !saveAs || destination != nil else { return }
                 try await Output.deliver(image, crop: crop, style: style, scale: scale, cornerRadii: edited ?? (rounds ? radii : .zero), copy: copy, save: save,
-                                         pasteboard: pasteboard, defaults: defaults)
+                                         destination: destination, pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
             }
@@ -741,9 +799,9 @@ final class OverlayController {
         overlays.selection = selection?.rect
         overlays.snappedEdges = snappedEdges
         overlays.showsHandles = selection != nil
-        if selection == nil, case .none = interaction { overlays.hover = hoverRect }
+        if selection == nil || shiftHeld, case .none = interaction { overlays.hover = hoverRect }
         // While hovering, faint outlines show what Up and Down would select, unless that is nothing, the display, or the hover itself.
-        if mode == .capture, let hover = overlays.hover, let session {
+        if mode == .capture, selection == nil, let hover = overlays.hover, let session {
             let level = { (candidate: Candidate?) in candidate.flatMap { $0.kind == .display || $0.bounds == hover ? nil : $0.bounds } }
             overlays.upHint = level(session.parents.first)
             overlays.downHint = level(session.child)
@@ -755,6 +813,7 @@ final class OverlayController {
         for rect in [shown, overlays.hover] { measureRadius(rect.flatMap(container)) }
         overlays.radii = shown.map(cornerRadii) ?? .zero
         overlays.hoverRadii = overlays.hover.map(cornerRadii) ?? .zero
+        applyChip.isHidden = !showsApplyChip
         if let rect = selection?.rect, style != .tight { overlays.styleFrame = style.frame(around: rect, in: extent, scale: scale) }
         view.overlays = overlays
         refreshExtras()

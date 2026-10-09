@@ -36,7 +36,6 @@ struct SettingsView: View {
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
     @AppStorage(Pref.afterCapture) private var afterCapture = "copy"
     @AppStorage(Pref.saveFolder) private var saveFolder = ""
-    @AppStorage(Pref.roundCorners) private var roundCorners = true
     @State private var opensAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -67,10 +66,6 @@ struct SettingsView: View {
                         panel.directoryURL = URL(fileURLWithPath: saveFolder)
                         if panel.runModal() == .OK { saveFolder = panel.url!.path }
                     }
-                }
-                GridRow {
-                    label("Corners")
-                    Toggle("Round corners automatically", isOn: $roundCorners)
                 }
                 GridRow {
                     label("Accessibility")

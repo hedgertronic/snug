@@ -523,6 +523,8 @@ enum DebugRun {
         overlay.dismiss()
         defaults.set(true, forKey: Pref.snap)
 
+        passed += try await verifyEditing(image: image, frame: frame, overlay: overlay, folder: folder)
+
         print("Area UI verification passed (\(passed.count) checks)")
         passed.forEach { print("  ok: \($0)") }
         exit(EXIT_SUCCESS)
