@@ -30,6 +30,28 @@ public enum TextLayout {
         return rows.map { $0.sorted { $0.bounds.minX < $1.bounds.minX } }
     }
 
+    /// Places each line of `selected` (Live Text, which has no boxes) on the OCR line it came from, in order. A selected line holding
+    /// several OCR lines (Live Text joins columns) gives each of them; one inside an OCR line (a partly selected line) takes that
+    /// line's box. Matching ignores case and whitespace. A selected line found nowhere goes on its own row below the previous one.
+    public static func lines(of selected: String, in ocr: [TextLine]) -> [TextLine] {
+        func key(_ text: String) -> String { text.lowercased().filter { !$0.isWhitespace } }
+        var unused = ocr.filter { !key($0.text).isEmpty }
+        var placed: [TextLine] = []
+        for text in selected.split(whereSeparator: \.isNewline).map(String.init) where !key(text).isEmpty {
+            let inside = unused.filter { key(text).contains(key($0.text)) }
+            if !inside.isEmpty {
+                placed += inside
+                unused.removeAll { line in inside.contains(line) }
+            } else if let index = unused.firstIndex(where: { key($0.text).contains(key(text)) }) {
+                placed.append(TextLine(text: text, bounds: unused.remove(at: index).bounds))
+            } else {
+                let previous = placed.last?.bounds ?? .zero
+                placed.append(TextLine(text: text, bounds: CGRect(x: previous.minX, y: previous.maxY + 1, width: previous.width, height: previous.height)))
+            }
+        }
+        return placed
+    }
+
     /// Lines of one row joined by a space, rows joined by newlines.
     public static func readingOrder(_ rows: [[TextLine]]) -> String {
         rows.map { $0.map(\.text).joined(separator: " ") }.joined(separator: "\n")

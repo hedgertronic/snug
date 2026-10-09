@@ -16,25 +16,14 @@ final class OverlayWindow: NSWindow {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
     }
 
-    private var textPress: CGPoint?
+    /// Text mode: where the current press landed and the word (or, after a double or triple click, the word or line) it anchors.
+    var textPress: (point: CGPoint, anchor: Range<String.Index>?)?
 
-    /// Live Text puts the anchor of a press at the start of its word, so a drag that goes backward leaves out the word it began on.
-    /// After Live Text handles the release, a backward single-click drag extends the selection to the end of that word.
     override func sendEvent(_ event: NSEvent) {
-        let liveText = (contentView as! OverlayView).liveText
-        let single = !liveText.isHidden && (event.type == .leftMouseDown || event.type == .leftMouseUp) && event.clickCount == 1
-        if single, event.type == .leftMouseDown { textPress = event.locationInWindow }
-        super.sendEvent(event)
-        guard single, event.type == .leftMouseUp, let press = textPress, let end = liveText.selectedRanges.map(\.upperBound).max() else { return }
-        textPress = nil
-        let dy = event.locationInWindow.y - press.y
-        guard dy > 8 || (abs(dy) <= 8 && event.locationInWindow.x < press.x) else { return }
-        var anchorEnd: String.Index?
-        liveText.text.enumerateSubstrings(in: end..<liveText.text.endIndex, options: .byWords) { _, range, _, stop in
-            anchorEnd = range.upperBound
-            stop = true
+        guard !(contentView as! OverlayView).liveText.isHidden, [.leftMouseDown, .leftMouseDragged, .leftMouseUp].contains(event.type) else {
+            return super.sendEvent(event)
         }
-        if let anchorEnd { liveText.selectedRanges = liveText.selectedRanges.map { $0.upperBound == end ? $0.lowerBound..<anchorEnd : $0 } }
+        sendTextMouse(event)
     }
 }
 
@@ -86,6 +75,8 @@ final class OverlayController {
     var translate: (String, Locale.Language, Locale.Language) async throws -> String = {
         try await TranslationSession(installedSource: $1, target: $2).translate($0).targetText
     }
+    /// Text mode's Cmd-Return on a picked item; debug runs record the URL instead.
+    var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
 
     let chrome = Chrome()
     /// Points at the top of the screen the camera housing covers; chrome stays below it.
@@ -166,6 +157,7 @@ final class OverlayController {
 
     init() {
         view.controller = self
+        view.liveText.delegate = self
         window.contentView = view
         chrome.all.forEach(view.addSubview)
         applyChip.isHidden = true
@@ -802,6 +794,7 @@ final class OverlayController {
         overlays.snappedEdges = snappedEdges
         overlays.showsHandles = selection != nil
         if selection == nil || shiftHeld, case .none = interaction { overlays.hover = hoverRect }
+        if mode == .text, let picked = text.picked { overlays.hover = text.items![picked].bounds }
         // While hovering, faint outlines show what Up and Down would select, unless that is nothing, the display, or within 4 pt of the hover.
         if mode == .capture, selection == nil, let hover = overlays.hover, let session {
             let level = { (candidate: Candidate?) in candidate.flatMap { $0.kind == .display || $0.bounds.isNear(hover, within: 4 * self.scale) ? nil : $0.bounds } }

@@ -37,12 +37,15 @@ enum Pref {
     /// Off unless set with `defaults write local.snug SnugLogHover -bool true`: each hover lookup and the Dock's window rect append to
     /// ~/Library/Logs/Snug/hover.log, so live accessibility frames can be read back without Accessibility in a terminal.
     static let logHover = "SnugLogHover"
+    /// Off unless set with `defaults write local.snug SnugLogText -bool true`: each Text mode press, drag event and release appends
+    /// Live Text's selection before and after Snug's fix to ~/Library/Logs/Snug/text.log.
+    static let logText = "SnugLogText"
 
-    static func logHoverLine(_ line: String) {
-        guard UserDefaults.standard.bool(forKey: logHover) else { return }
+    static func logHoverLine(_ line: String, key: String = logHover, file name: String = "hover.log") {
+        guard UserDefaults.standard.bool(forKey: key) else { return }
         let folder = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Logs/Snug")
         try! FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let file = folder.appending(path: "hover.log")
+        let file = folder.appending(path: name)
         if !FileManager.default.fileExists(atPath: file.path) { FileManager.default.createFile(atPath: file.path, contents: nil) }
         let handle = try! FileHandle(forWritingTo: file)
         defer { try! handle.close() }

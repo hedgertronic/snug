@@ -1,10 +1,13 @@
 import AppKit
 import ScreenshotCore
+import CoreImage.CIFilterBuiltins
 import Translation
+import Vision
 
 extension DebugRun {
     /// `--verify-text-ui`: drives Live Text in Text mode and Capture's Shift-Return through synthesized events on form-test.png.
     static func verifyText(image: CGImage, frame: CGRect, overlay: OverlayController) async throws {
+        try await warmVision(image)
         _ = privateSetup(overlay)
         let pasteboard = overlay.pasteboard
         let liveText = overlay.view.liveText
@@ -69,7 +72,7 @@ extension DebugRun {
         require(overlay.mode == .capture && liveText.isHidden && liveText.analysis == nil, "the overlay opens in Capture with Live Text hidden and nothing analyzed")
         key(tKey, "t")
         require(overlay.mode == .text && !liveText.isHidden, "T enters Text mode and shows Live Text")
-        require(texts(in: overlay.chrome.hints) == ["Drag", "select text", "\u{21A9}", "copy", "\u{2325}", "\u{21A9}", "translate", "F", "all text", "C", "color", "?", "all keys"],
+        require(texts(in: overlay.chrome.hints) == ["Drag", "select text", "\u{21A9}", "copy", "\u{21E7}", "\u{21A9}", "rows", "Tab", "links, codes", "\u{2325}", "\u{21A9}", "translate", "F", "all text", "C", "color", "?", "all keys"],
                 "Text mode shows its hint row: \(texts(in: overlay.chrome.hints))")
         require(!overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."], "a Reading text... pill shows while the analysis runs")
         try await waitFor("the Live Text analysis attaches") { liveText.analysis != nil }
@@ -150,6 +153,49 @@ extension DebugRun {
         try await open()
         textDrag(from: CGPoint(x: productName.minX + 3, y: productName.midY), to: below)
         require(liveText.selectedText == "Product name\nBrief description", "a forward drag across two close lines selects both: \(liveText.selectedText.debugDescription)")
+        overlay.dismiss()
+
+        // Live Text anchors a press at the start of its word; the highlight covers the pressed word while a backward drag is still going.
+        let addressEnd = CGPoint(x: billing.maxX - 5, y: billing.midY), addressStart = CGPoint(x: billing.maxX - 60, y: billing.midY)
+        let billingStart = CGPoint(x: billing.minX + 3, y: billing.midY)
+        try await open()
+        mouse(.leftMouseDown, addressEnd)
+        for step in 1...10 {
+            mouse(.leftMouseDragged, CGPoint(x: addressEnd.x + (billingStart.x - addressEnd.x) * CGFloat(step) / 10, y: billing.midY))
+        }
+        require(liveText.selectedText == "Billing address", "while a backward drag goes on, the highlight covers the word it started on: \(liveText.selectedText.debugDescription)")
+        mouse(.leftMouseUp, billingStart)
+        overlay.dismiss()
+        // A drag inside the last word selects that word, either way.
+        for (from, to) in [(addressStart, addressEnd), (addressEnd, addressStart)] {
+            try await open()
+            textDrag(from: from, to: to)
+            require(liveText.selectedText == "address", "a drag inside one word selects it: \(liveText.selectedText.debugDescription)")
+            overlay.dismiss()
+        }
+        // A press on the line's last pixels or just past its last glyph, then a drag back, selects the whole line.
+        for x in [billing.maxX - 2, billing.maxX + 8] {
+            try await open()
+            textDrag(from: CGPoint(x: x, y: billing.midY), to: billingStart)
+            require(liveText.selectedText == "Billing address", "a backward drag from \(Int(x - billing.maxX)) px past the line's end selects the line: \(liveText.selectedText.debugDescription)")
+            overlay.dismiss()
+        }
+        // A double click on the last word, then a drag back, keeps that word.
+        try await open()
+        mouse(.leftMouseDown, addressEnd)
+        mouse(.leftMouseUp, addressEnd)
+        mouse(.leftMouseDown, addressEnd, clicks: 2)
+        for step in 1...10 {
+            mouse(.leftMouseDragged, CGPoint(x: addressEnd.x + (billingStart.x - addressEnd.x) * CGFloat(step) / 10, y: billing.midY), clicks: 2)
+        }
+        mouse(.leftMouseUp, billingStart, clicks: 2)
+        require(liveText.selectedText == "Billing address", "a double click on the last word and a drag back select the line: \(liveText.selectedText.debugDescription)")
+        overlay.dismiss()
+        // A click without a drag selects nothing.
+        try await open()
+        mouse(.leftMouseDown, addressEnd)
+        mouse(.leftMouseUp, addressEnd)
+        require(liveText.selectedText.isEmpty, "a click on a word selects nothing: \(liveText.selectedText.debugDescription)")
         overlay.dismiss()
 
         // Esc with focus in Live Text closes.
@@ -315,8 +361,116 @@ extension DebugRun {
         }
         overlay.dismiss()
 
+        // Shift-Return in Text mode copies the selection as rows: columns tab-separated, one visual row per line.
+        try await open()
+        let transcript = liveText.text
+        liveText.selectedRanges = [transcript.range(of: "Product name")!.lowerBound..<transcript.range(of: "Second product")!.upperBound]
+        let liveOrder = liveText.selectedText
+        pasteboard.clearContents()
+        key(returnKey, "\r", .shift)
+        require(overlay.text.reading != nil, "Shift-Return in Text mode reads the boxes first")
+        await overlay.textTask?.value
+        let rows = await copied() ?? ""
+        require(rows.hasPrefix("Product name\t$12\nBrief description\nSecond product") && !overlay.window.isVisible,
+                "Shift-Return in Text mode copies rows, columns tab-separated: \(rows.debugDescription) (Live Text order: \(liveOrder.debugDescription))")
+        try await open()
+        liveText.selectedRanges = [transcript.range(of: "Product name")!.lowerBound..<transcript.range(of: "Second product")!.upperBound]
+        pasteboard.clearContents()
+        key(returnKey, "\r")
+        require(await copied() == liveOrder, "Return still copies in Live Text's order")
+
+        // Found items on a generated page: a link, an email address, a phone number, and a QR code.
+        let fixture = itemsFixture(width: image.width, height: image.height)
+        let qrBounds = CGRect(x: image.width - 700, y: image.height - 700, width: 500, height: 500)
+        var opened: [URL] = []
+        overlay.openURL = { opened.append($0) }
+        func openFixture() async throws {
+            overlay.present(image: fixture, frame: frame, displayID: nil)
+            key(tKey, "t")
+            try await waitFor("the fixture's Live Text analysis attaches") { liveText.analysis != nil }
+        }
+        try await openFixture()
+        textDrag(from: CGPoint(x: 203, y: 280), to: CGPoint(x: 330, y: 280))
+        require(overlay.window.firstResponder !== overlay.view, "focus is in Live Text before Tab")
+        key(48, "\t")
+        try await waitFor("Tab finds the items") { overlay.text.picked != nil }
+        let items = overlay.text.items!
+        require(items.map(\.text) == ["https://example.com/snug", "you@example.com", "+1 (555) 010-4477", "https://example.org/qr"],
+                "Tab finds the link, email, phone number and QR payload in reading order: \(items.map(\.text))")
+        require(items.map { $0.url?.absoluteString } == ["https://example.com/snug", "mailto:you@example.com", "tel:+15550104477", "https://example.org/qr"],
+                "each item opens its URL: \(items.map { $0.url?.absoluteString })")
+        require(items[0].bounds.minX > 330 && items[0].bounds.minY > 200 && items[0].bounds.maxY < 340,
+                "the link's box covers the link, not the whole line: \(items[0].bounds)")
+        require(abs(items[3].bounds.minX - qrBounds.minX) < 20 && abs(items[3].bounds.maxY - qrBounds.maxY) < 20, "the QR code's box is the code: \(items[3].bounds)")
+        require(overlay.text.picked == 0 && overlay.view.overlays.hover == items[0].bounds, "the first Tab picks the first item and outlines it")
+        require(liveText.selectableItemsHighlighted && liveText.preferredInteractionTypes == .dataDetectors,
+                "while an item is picked Live Text highlights its data detectors")
+        require(overlay.text.notice?.hasPrefix("https://example.com/snug") == true, "a pill names the picked item: \(overlay.text.notice.debugDescription)")
+        key(48, "\t")
+        require(overlay.text.picked == 1, "Tab steps to the next item")
+        key(48, "\t", .shift)
+        key(48, "\t", .shift)
+        require(overlay.text.picked == 3 && overlay.view.overlays.hover == items[3].bounds, "Shift-Tab steps back and wraps to the last item")
+        pasteboard.clearContents()
+        key(returnKey, "\r")
+        require(await copied() == "https://example.org/qr" && !overlay.window.isVisible, "Return copies the picked item and closes")
+        try await openFixture()
+        key(48, "\t")
+        try await waitFor("Tab finds the items") { overlay.text.picked != nil }
+        key(returnKey, "\r", .command)
+        try await openFixture()
+        require(liveText.preferredInteractionTypes == .textSelection && !liveText.selectableItemsHighlighted, "the next Text mode starts with text selection")
+        overlay.dismiss()
+        require(opened == [URL(string: "https://example.com/snug")!] && !overlay.window.isVisible, "Cmd-Return closes and opens the picked item: \(opened)")
+        try await openFixture()
+        key(48, "\t")
+        try await waitFor("Tab finds the items") { overlay.text.picked != nil }
+        key(escape)
+        require(overlay.window.isVisible && overlay.text.picked == nil && overlay.view.overlays.hover == nil && !liveText.selectableItemsHighlighted
+                && liveText.preferredInteractionTypes == .textSelection, "Esc with an item picked unpicks it and keeps the overlay")
+        textDrag(from: CGPoint(x: 203, y: 440), to: CGPoint(x: 330, y: 440))
+        require(liveText.selectedText.hasPrefix("Mail"), "after unpicking, a drag selects text again: \(liveText.selectedText.debugDescription)")
+        key(escape)
+        require(!overlay.window.isVisible, "Esc again closes")
+
         print("Text UI verification passed (\(passed.count) checks):")
         passed.forEach { print("- \($0)") }
         exit(EXIT_SUCCESS)
+    }
+
+    /// The first accurate OCR or barcode request of a newly built binary compiles Vision's models into ~/Library/Caches/Snug (35 s idle,
+    /// over a minute under load). Runs both before the 120 s watchdog starts, so a slow compile is not killed halfway; fails after 600 s.
+    static func warmVision(_ image: CGImage) async throws {
+        FileHandle.standardError.write(Data("Warming Vision's accurate OCR and barcode models...\n".utf8))
+        let watchdog = Task {
+            try await Task.sleep(for: .seconds(600))
+            FileHandle.standardError.write(Data("Vision warm-up timed out after 600 s\n".utf8))
+            exit(EXIT_FAILURE)
+        }
+        defer { watchdog.cancel() }
+        let start = ContinuousClock.now
+        _ = try await OverlayController.recognize(image, crop: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        _ = try await ImageRequestHandler(image).perform(DetectBarcodesRequest())
+        print("Vision warm-up: \(String(format: "%.1f", start.duration(to: .now).milliseconds)) ms")
+    }
+
+    /// A white page of `width` x `height` pixels with a link, an email address and a phone number in large text from the top left, and a
+    /// 500 px QR code of a URL 200 px from the bottom-right corner.
+    static func itemsFixture(width: Int, height: Int) -> CGImage {
+        let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(.white)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        for (index, text) in ["Docs: https://example.com/snug", "Mail you@example.com", "Call +1 (555) 010-4477"].enumerated() {
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 56), .foregroundColor: NSColor.black]))
+            context.textPosition = CGPoint(x: 200, y: CGFloat(height - 300 - index * 160))
+            CTLineDraw(line, context)
+        }
+        let qr = CIFilter.qrCodeGenerator()
+        qr.message = Data("https://example.org/qr".utf8)
+        let code = CIContext().createCGImage(qr.outputImage!, from: qr.outputImage!.extent)!
+        context.interpolationQuality = .none
+        context.draw(code, in: CGRect(x: width - 700, y: 200, width: 500, height: 500))
+        return context.makeImage()!
     }
 }
