@@ -26,6 +26,10 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         Pref.register(in: .standard)
         let arguments = CommandLine.arguments
+        if let index = arguments.firstIndex(of: "--render-settings") {
+            try! DebugRun.renderSettings(into: URL(fileURLWithPath: arguments[index + 1]))
+            exit(EXIT_SUCCESS)
+        }
         let image = arguments.firstIndex(of: "--image").map { index in
             let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: arguments[index + 1]) as CFURL, nil)!
             return CGImageSourceCreateImageAtIndex(source, 0, nil)!
@@ -139,20 +143,21 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         let capture = menu.addItem(withTitle: "Capture", action: #selector(captureFromMenu), keyEquivalent: "")
         capture.setShortcut(from: defaults)
-        menu.addItem(withTitle: "Copy Text", action: #selector(copyTextFromMenu), keyEquivalent: "")
-        menu.addItem(withTitle: "Repeat Last Area", action: #selector(repeatLastArea), keyEquivalent: "")
-        menu.addItem(withTitle: "Open Image...", action: #selector(openImage), keyEquivalent: "")
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "Snap While Dragging", action: #selector(toggleSnap), keyEquivalent: "")
+        menu.addItem(withTitle: "Capture Text", action: #selector(copyTextFromMenu), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
-        menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(withTitle: "About Snug", action: #selector(showAbout), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit Snug", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         return menu
     }
 
     @objc private func captureFromMenu() { capture() }
 
-    @objc private func toggleSnap() { UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: Pref.snap), forKey: Pref.snap) }
+    @objc private func showAbout() {
+        NSApp.activate()
+        NSApp.orderFrontStandardAboutPanel(nil)
+    }
 
     @objc private func copyTextFromMenu() { capture(text: true) }
 
@@ -209,43 +214,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func repeatLastArea() {
-        guard CGPreflightScreenCaptureAccess() else { return showFirstRun() }
-        guard let area = UserDefaults.standard.array(forKey: Pref.lastArea) as? [Double] else { return NSSound.beep() }
-        let id = CGDirectDisplayID(area[0])
-        let screen = NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value == id }
-        guard let screen else { return NSSound.beep() }
-        Task {
-            do {
-                let image = try await DisplayCapture.image(of: id)
-                let scale = CGFloat(image.width) / screen.frame.width
-                let crop = CGRect(x: area[1], y: area[2], width: area[3], height: area[4]).applying(CGAffineTransform(scaleX: scale, y: scale))
-                let defaults = UserDefaults.standard
-                try await Output.deliver(image, crop: crop, style: overlay.style, scale: scale, copy: true,
-                                         save: defaults.string(forKey: Pref.afterCapture) == "copyAndSave",
-                                         pasteboard: .general, defaults: defaults)
-            } catch {
-                NSApp.presentError(error)
-            }
-        }
-    }
-
-    @objc private func openImage() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        NSApp.activate()
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        let source = CGImageSourceCreateWithURL(url as CFURL, nil)!
-        let image = CGImageSourceCreateImageAtIndex(source, 0, nil)!
-        overlay.present(image: image, frame: imageFrame(for: image), displayID: nil)
-    }
-
     // MARK: Windows
 
     @objc private func showSettings() {
         if settingsWindow == nil {
-            let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
-            window.title = "Snug Settings"
+            let window = NSWindow(contentViewController: SettingsTabs.makeController())
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
             settingsWindow = window
@@ -265,14 +238,6 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         NSApp.activate()
         firstRunWindow!.center()
         firstRunWindow!.makeKeyAndOrderFront(nil)
-    }
-}
-
-extension SnugApp: NSMenuItemValidation {
-    /// Checks Snap While Dragging when snapping is on; the S key in the overlay changes the same preference.
-    func validateMenuItem(_ item: NSMenuItem) -> Bool {
-        if item.action == #selector(toggleSnap) { item.state = UserDefaults.standard.bool(forKey: Pref.snap) ? .on : .off }
-        return true
     }
 }
 

@@ -26,7 +26,7 @@ enum Pref {
     /// Whether crops take the corner radius measured on screen (and their window's at shared corners); off, they are square unless
     /// edited with [ and ].
     static let roundCorners = "SnugRoundCorners"
-    /// The highlight: a hex color ("" is the system accent), fill and background fade as opacities, and whether the hover glows.
+    /// The highlight: a hex color ("" is the system accent), fill and background fade as opacities, and the hover glow as an intensity from 0 to 1.
     static let highlightColor = "SnugHighlightColor"
     static let highlightFill = "SnugHighlightFill"
     static let highlightFade = "SnugHighlightFade"
@@ -67,7 +67,7 @@ enum Pref {
             highlightColor: "",
             highlightFill: 0.0,
             highlightFade: 0.42,
-            highlightGlow: true,
+            highlightGlow: 0.5,
             toastPreview: true,
             toastPosition: "bottomCenter",
             roundCorners: true
