@@ -99,35 +99,34 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         statusItem = item
     }
 
-    /// The logo as a template image: the app tile as a rounded outline, the dashed arch inside it, and the band across its lower part.
-    /// Drawn in an 18 pt space and scaled to whatever rectangle it is asked for, so it is sharp at 1x and 2x.
+    /// The logo as a template image: the app tile as a solid rounded square with the dashed arch and the band cut out of it.
+    /// Drawn in an 18 pt space with the tile edges and arch strokes on whole points and scaled to whatever rectangle it is asked for,
+    /// so it is sharp at 1x and 2x.
     static func menuBarIcon() -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
             let transform = NSAffineTransform()
             transform.scale(by: rect.width / 18)
             transform.concat()
-            let tile = NSBezierPath(roundedRect: CGRect(x: 1.25, y: 1.25, width: 15.5, height: 15.5), xRadius: 3.5, yRadius: 3.5)
-            NSGraphicsContext.saveGraphicsState()
-            tile.addClip()
-            let band = NSBezierPath()
-            band.move(to: CGPoint(x: 0, y: 5.4))
-            band.curve(to: CGPoint(x: 18, y: 5.4), controlPoint1: CGPoint(x: 6, y: 7.2), controlPoint2: CGPoint(x: 12, y: 7.2))
-            band.line(to: CGPoint(x: 18, y: 0))
-            band.line(to: CGPoint(x: 0, y: 0))
-            band.fill()
-            NSGraphicsContext.restoreGraphicsState()
-            tile.lineWidth = 1.3
-            tile.stroke()
+            NSBezierPath(roundedRect: CGRect(x: 1, y: 1, width: 16, height: 16), xRadius: 4, yRadius: 4).fill()
+            NSGraphicsContext.current!.compositingOperation = .clear
             let arch = NSBezierPath()
-            arch.move(to: CGPoint(x: 4.66, y: 9))
-            arch.line(to: CGPoint(x: 4.66, y: 11.79))
-            arch.appendArc(withCenter: CGPoint(x: 6.83, y: 11.79), radius: 2.17, startAngle: 180, endAngle: 90, clockwise: true)
-            arch.line(to: CGPoint(x: 11.17, y: 13.96))
-            arch.appendArc(withCenter: CGPoint(x: 11.17, y: 11.79), radius: 2.17, startAngle: 90, endAngle: 0, clockwise: true)
-            arch.line(to: CGPoint(x: 13.34, y: 9))
-            arch.lineWidth = 1.3
-            arch.setLineDash([1.3, 1.5], count: 2, phase: 0)
+            arch.move(to: CGPoint(x: 5, y: 9))
+            arch.line(to: CGPoint(x: 5, y: 11))
+            arch.appendArc(withCenter: CGPoint(x: 8, y: 11), radius: 3, startAngle: 180, endAngle: 90, clockwise: true)
+            arch.line(to: CGPoint(x: 10, y: 14))
+            arch.appendArc(withCenter: CGPoint(x: 10, y: 11), radius: 3, startAngle: 90, endAngle: 0, clockwise: true)
+            arch.line(to: CGPoint(x: 13, y: 9))
+            arch.lineWidth = 2
+            arch.lineCapStyle = .round
+            // Five round dots, one at each end and three between, spaced evenly along the path's 6 + 3 pi pt.
+            let spacing = (6 + 3 * CGFloat.pi) / 4
+            arch.setLineDash([0.01, spacing - 0.01], count: 2, phase: 0)
             arch.stroke()
+            let band = NSBezierPath()
+            band.move(to: CGPoint(x: 0, y: 6))
+            band.curve(to: CGPoint(x: 18, y: 6), controlPoint1: CGPoint(x: 5.4, y: 8.25), controlPoint2: CGPoint(x: 12.6, y: 8.25))
+            band.lineWidth = 1.5
+            band.stroke()
             return true
         }
         image.isTemplate = true
@@ -221,7 +220,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 let scale = CGFloat(image.width) / screen.frame.width
                 let crop = CGRect(x: area[1], y: area[2], width: area[3], height: area[4]).applying(CGAffineTransform(scaleX: scale, y: scale))
                 let defaults = UserDefaults.standard
-                try await Output.deliver(image, crop: crop, style: overlay.style, scale: scale, copy: true,
+                try await Output.deliver(image, crop: crop, framed: overlay.framed, scale: scale, copy: true,
                                          save: defaults.string(forKey: Pref.afterCapture) == "copyAndSave",
                                          pasteboard: .general, defaults: defaults)
             } catch {

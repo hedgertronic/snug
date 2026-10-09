@@ -149,14 +149,7 @@ final class OverlayController {
     var scrollFrames: ((CGRect) async throws -> CGImage)?
 
     var snapEnabled: Bool { defaults.bool(forKey: Pref.snap) }
-    /// A stored "margin" (removed in wave 5) is not a style, so it reads as tight.
-    var style: OutputStyle {
-        get { defaults.string(forKey: Pref.style).flatMap(OutputStyle.init(rawValue:)) ?? .tight }
-        set {
-            defaults.set(newValue.rawValue, forKey: Pref.style)
-            refresh()
-        }
-    }
+    var framed: Bool { defaults.bool(forKey: Pref.frame) }
 
     init() {
         view.controller = self
@@ -173,8 +166,7 @@ final class OverlayController {
             defaults.set(!defaults.bool(forKey: $0), forKey: $0)
             refresh()
         }
-        chrome.bottomBar.onStyle = { [unowned self] in style = style.next }
-        chrome.actionBar.onStyle = { [unowned self] in style = $0 }
+        chrome.actionBar.onFrame = { [unowned self] in toggleFrame() }
         chrome.actionBar.onText = { [unowned self] in copySelectionText(translating: false) }
         chrome.actionBar.onSave = { [unowned self] in save() }
         chrome.actionBar.onCopy = { [unowned self] in copy() }
@@ -631,11 +623,9 @@ final class OverlayController {
         case (125, _, _): nudge(CGPoint(x: 0, y: step * scale))
         case (126, _, _): nudge(CGPoint(x: 0, y: -step * scale))
         case (_, true, "s"): save()
-        case (_, true, "1"): style = .tight
-        case (_, true, "2"): style = .backdrop
         case (_, false, "]"), (_, false, "}"): adjustRadii(by: shift ? 4 : 1)
         case (_, false, "["), (_, false, "{"): adjustRadii(by: shift ? -4 : -1)
-        case (_, false, "m"): style = style.next
+        case (_, false, "m"): toggleFrame()
         case (_, false, "s"): toggleSnap()
         case (_, false, "g"): startScroll()
         case (_, false, "f"):
@@ -648,11 +638,16 @@ final class OverlayController {
 
     // MARK: Output
 
+    func toggleFrame() {
+        defaults.set(!framed, forKey: Pref.frame)
+        refresh()
+    }
+
     var afterCaptureSaves: Bool { defaults.string(forKey: Pref.afterCapture) == "copyAndSave" }
 
     func copy() {
         guard let rect = selection?.rect else { return }
-        if style == .tight, let index = window(matching: rect) {
+        if !framed, let index = window(matching: rect) {
             return clickWindow(index, crop: rect, shadow: windowShadow(option: false), copy: true, save: afterCaptureSaves)
         }
         finish(crop: rect, copy: true, save: afterCaptureSaves)
@@ -678,7 +673,7 @@ final class OverlayController {
         case .window: clickWindow(Int(hovered.id.dropFirst("window-".count))!, crop: hovered.bounds, shadow: shadow, copy: copy, save: save, saveAs: saveAs)
         case .display where !takeDisplay: selection = AreaSelection(extent: extent, exact: extent)
         default:
-            if style == .tight, let index = window(matching: hovered.bounds) {
+            if !framed, let index = window(matching: hovered.bounds) {
                 return clickWindow(index, crop: hovered.bounds, shadow: shadow, copy: copy, save: save, saveAs: saveAs)
             }
             finish(crop: hovered.bounds, copy: copy, save: save, saveAs: saveAs)
@@ -758,7 +753,7 @@ final class OverlayController {
     /// Closes the overlay first, then encodes off main and delivers.
     func finish(crop: CGRect, copy: Bool, save: Bool, saveAs: Bool = false) {
         guard let image else { return }
-        let style = style, scale = scale
+        let framed = framed, scale = scale
         let container = container(of: crop)
         let edited = editedRadii[crop], rounds = defaults.bool(forKey: Pref.roundCorners)
         let (known, measuring) = (radii[crop], radiusTasks[crop])
@@ -778,7 +773,7 @@ final class OverlayController {
                 }
                 let destination = saveAs ? chooseSaveURL(Output.defaultFile(defaults: defaults)) : nil
                 guard !saveAs || destination != nil else { return }
-                try await Output.deliver(image, crop: crop, style: style, scale: scale, cornerRadii: edited ?? (rounds ? radii : .zero), copy: copy, save: save,
+                try await Output.deliver(image, crop: crop, framed: framed, scale: scale, cornerRadii: edited ?? (rounds ? radii : .zero), copy: copy, save: save,
                                          destination: destination, pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
@@ -827,7 +822,7 @@ final class OverlayController {
         layoutCornerChip()
         overlays.upHintRadii = overlays.upHint.map(cornerRadii) ?? .zero
         overlays.downHintRadii = overlays.downHint.map(cornerRadii) ?? .zero
-        if let rect = selection?.rect, style != .tight { overlays.styleFrame = style.frame(around: rect, in: extent, scale: scale) }
+        if let rect = selection?.rect, framed { overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, framed: true) }
         view.overlays = overlays
         refreshExtras()
     }

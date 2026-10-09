@@ -6,6 +6,9 @@ extension OverlayController {
     /// Whether a window click captures the shadow: the remembered preference, inverted while Option is down.
     func windowShadow(option: Bool) -> Bool { defaults.bool(forKey: Pref.shadow) != option }
 
+    /// The aspect ratio lock for the hint row. Order A's `ratioLock?.label ?? "free"` replaces this stub.
+    private var ratioLabel: String { "free" }
+
     /// The hint row: each hint is its key caps and a label.
     private var hints: [(keys: [String], label: String)] {
         if scrollArea != nil {
@@ -15,9 +18,8 @@ extension OverlayController {
         return switch mode {
         case .text: [(["Drag"], "select text"), (["\u{21A9}"], "copy"), (["\u{21E7}", "\u{21A9}"], "rows"), (["Tab"], "links, codes"), (["\u{2325}", "\u{21A9}"], "translate"), (["F"], "all text"), (["C"], "color"), (["?"], "all keys")]
         case .capture where selection != nil:
-            [(["\u{2318}1", "\u{2318}2"], "style"), (["Tab"], "other fits"), (["S"], selection!.rect == selection!.exact ? "best fit" : "exact"),
-             (["\u{2190}", "\u{2192}", "\u{2191}", "\u{2193}"], "nudge"), (["\u{2325}\u{2190}"], "edge"),
-             (["Dots"], "corners"), (["G"], "scroll capture"), (["esc"], "cancel")]
+            [(["M"], "frame"), (["Tab"], "next snap"), (["S"], snapEnabled ? "snap off" : "snap on"), (["\u{2325}", "arrows"], "grow"),
+             (["\u{2325}\u{2318}"], "shrink"), (["P"], "ratio \(ratioLabel)"), (["G"], "scroll"), (["esc"], "cancel")]
         case .capture: [(["Click"], "capture"), (["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["\u{2325}"], "drag exact"), (["F"], "full screen"), (["?"], "all keys")]
         }
     }
@@ -33,9 +35,9 @@ extension OverlayController {
         c.help.frame = bounds
         c.help.layoutPanel()
 
-        c.bottomBar.update(mode: mode, defaults: defaults, style: style)
+        c.bottomBar.update(mode: mode, defaults: defaults)
         c.bottomBar.isHidden = released || scrollArea != nil || !defaults.bool(forKey: Pref.modeBar)
-        c.actionBar.style = style
+        c.actionBar.framed = framed
         c.actionBar.isHidden = !released
         // Hints that do not fit drop from the end, keeping the first and "all keys".
         var items = hints

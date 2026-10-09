@@ -123,14 +123,15 @@ final class HelpSheet: NSView {
                      ("E / Shift-click", "Edit as a selection"),
                      ("G", "Scrolling capture of the selection"),
                      ("C", "Copy color"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
-        ("Adjust and text", [("Tab", "Walk out, other fits"), ("Arrows", "Nudge (Shift: 10 pt)"), ("Option-arrow", "Grow one side (Cmd: shrink)"), ("Up / Down", "Bigger / smaller element"),
-                             ("Shift-click", "Add an element"), ("[ ]", "Corner radius"), ("Corner dot", "Drag: all corners (Option: one)"), ("=", "Same radius on all corners"),
-                             ("1-5", "Pick from the list (N)"), ("Cmd-1/2", "Tight / Backdrop"), ("M", "Cycle output style"),
+        ("Adjust and text", [("Tab", "Walk out, other fits"), ("Arrows", "Nudge (Shift: 10 pt)"), ("Option-arrow", "Grow one side"), ("Option-Cmd-arrow", "Shrink one side"), ("Up / Down", "Bigger / smaller element"),
+                             ("Shift-click", "Add an element"), ("[ ]", "Corner radius"), ("=", "Same radius on all corners"),
+                             ("Shift-drag handle", "Keep the aspect ratio"), ("Shift-move", "Lock to one axis"),
+                             ("1-5", "Pick from the list (N)"),
                              ("Text: drag", "Select text"), ("Text: Return", "Copy selected text"), ("Text: Shift-Return", "Copy as rows"),
                              ("Text: Tab", "Next link, email, phone, code"), ("Text: Cmd-Return", "Open the picked item"), ("Option-Return", "Translate text"),
                              ("Shift-C", "Cycle color format")]),
         ("Modes and view", [("A", "Capture"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),
-                            ("X", "Crosshair"), ("D", "Window shadow"), ("O", "Round corners"), ("N", "Candidate list"), ("B", "Bottom bar"), ("?", "This sheet")])
+                            ("X", "Crosshair"), ("D", "Window shadow"), ("O", "Rounded corners"), ("M", "Frame on / off"), ("P", "Aspect ratio lock"), ("N", "Candidate list"), ("B", "Bottom bar"), ("?", "This sheet")])
     ]
     let panel = NSVisualEffectView()
 

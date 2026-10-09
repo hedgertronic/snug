@@ -125,7 +125,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         dismiss()
         commitTask = Task {
             do {
-                let png = try await Output.encode(image, crop: rect, style: .tight, scale: scale).png
+                let png = try await Output.encode(image, crop: rect, framed: false, scale: scale).png
                 Toast.show(png: png, message: message, detail: detail, file: nil)
             } catch {
                 report(error)

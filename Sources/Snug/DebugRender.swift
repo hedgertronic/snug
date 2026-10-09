@@ -68,11 +68,11 @@ extension DebugRun {
         overlay.dismiss()
 
         open()
-        defaults.set(OutputStyle.backdrop.rawValue, forKey: Pref.style)
+        defaults.set(true, forKey: Pref.frame)
         defaults.set(false, forKey: Pref.shadow)
         mouse(.mouseMoved, CGPoint(x: 1200, y: 1000))
-        try snapshot("bar-backdrop")
-        defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
+        try snapshot("bar-frame")
+        defaults.set(false, forKey: Pref.frame)
         defaults.set(true, forKey: Pref.shadow)
         overlay.dismiss()
 
@@ -82,10 +82,10 @@ extension DebugRun {
         try snapshot("area-drag-snap")
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         try snapshot("area-released")
-        key(0, "2", .command)
-        try snapshot("area-backdrop")
+        key(0, "m")
+        try snapshot("area-frame")
         overlay.dismiss()
-        defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
+        defaults.set(false, forKey: Pref.frame)
 
         open()
         overlay.setWindows([CGRect(x: 300, y: 300, width: 1300, height: 1000)], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
@@ -278,13 +278,13 @@ extension DebugRun {
             try backed.representation(using: .png, properties: [:])!.write(to: directory.appending(path: "\(name).png"))
             print(directory.appending(path: "\(name).png").path)
         }
-        try renderToast("toast", Toast(png: nil, message: "Copied", detail: "1824 x 768  backdrop", file: nil, color: nil, defaults: defaults))
+        try renderToast("toast", Toast(png: nil, message: "Copied", detail: "1824 x 768  frame", file: nil, color: nil, defaults: defaults))
         let roundedCapture = CGContext(data: nil, width: 960, height: 520, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         roundedCapture.addPath(CGPath(roundedRect: CGRect(x: 0, y: 0, width: 960, height: 520), cornerWidth: 40, cornerHeight: 40, transform: nil))
         roundedCapture.clip()
         roundedCapture.draw(image.cropping(to: CGRect(x: 300, y: 380, width: 960, height: 520))!, in: CGRect(x: 0, y: 0, width: 960, height: 520))
-        try renderToast("toast-preview", Toast(png: try await Output.png(roundedCapture.makeImage()!), message: "Copied", detail: "960 x 520  tight", file: nil, color: nil, defaults: defaults))
+        try renderToast("toast-preview", Toast(png: try await Output.png(roundedCapture.makeImage()!), message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: defaults))
 
         func render(_ name: String, _ content: some View) throws {
             let renderer = ImageRenderer(content: content.background(Color(nsColor: .windowBackgroundColor)))

@@ -2,8 +2,7 @@ import CoreGraphics
 import Testing
 @testable import ScreenshotCore
 
-struct OutputStyleTests {
-    let extent = CGRect(x: 0, y: 0, width: 1000, height: 800)
+struct OutputFrameTests {
     let crop = CGRect(x: 100, y: 100, width: 200, height: 100)
 
     func image() -> CGImage {
@@ -15,29 +14,22 @@ struct OutputStyleTests {
         return context.makeImage()!
     }
 
-    @Test func cyclesBetweenTightAndBackdrop() {
-        #expect(OutputStyle.allCases == [.tight, .backdrop])
-        #expect(OutputStyle.tight.next == .backdrop)
-        #expect(OutputStyle.backdrop.next == .tight)
-        #expect(OutputStyle(rawValue: "margin") == nil)
-    }
-
-    @Test func backdropAddsTwentyFourPointsPerSide() {
-        #expect(OutputStyle.tight.frame(around: crop, in: extent, scale: 2) == crop)
-        #expect(OutputStyle.backdrop.frame(around: crop, in: extent, scale: 2) == CGRect(x: 52, y: 52, width: 296, height: 196))
+    @Test func aFrameAddsTwentyFourPointsPerSide() {
+        #expect(OutputFrame.rect(around: crop, scale: 2, framed: false) == crop)
+        #expect(OutputFrame.rect(around: crop, scale: 2, framed: true) == CGRect(x: 52, y: 52, width: 296, height: 196))
     }
 
     @Test func renderedSizesMatchTheFrame() throws {
         let source = image()
-        let tight = try OutputStyle.tight.render(source, crop: crop, scale: 2)
-        let backdrop = try OutputStyle.backdrop.render(source, crop: crop, scale: 2)
+        let tight = try OutputFrame.render(source, crop: crop, scale: 2, framed: false)
+        let backdrop = try OutputFrame.render(source, crop: crop, scale: 2, framed: true)
         #expect((tight.width, tight.height) == (200, 100))
         #expect((backdrop.width, backdrop.height) == (296, 196))
     }
 
-    @Test func tightRadiusMasksCorners() throws {
+    @Test func unframedRadiusMasksCorners() throws {
         let source = image()
-        let tight = try OutputStyle.tight.render(source, crop: crop, scale: 2, cornerRadii: CornerRadii(24))
+        let tight = try OutputFrame.render(source, crop: crop, scale: 2, framed: false, cornerRadii: CornerRadii(24))
         var tightBytes = [UInt8](repeating: 0, count: tight.width * tight.height * 4)
         tightBytes.withUnsafeMutableBytes { storage in
             let context = CGContext(data: storage.baseAddress, width: tight.width, height: tight.height,
@@ -50,8 +42,8 @@ struct OutputStyleTests {
         #expect(tightBytes[((tight.height / 2) * tight.width + tight.width / 2) * 4 + 3] == 255)
     }
 
-    @Test func backdropIsTransparentPaddingWithASoftShadowBelow() throws {
-        let backdrop = try OutputStyle.backdrop.render(image(), crop: crop, scale: 2)
+    @Test func aFrameIsTransparentPaddingWithASoftShadowBelow() throws {
+        let backdrop = try OutputFrame.render(image(), crop: crop, scale: 2, framed: true)
         var bytes = [UInt8](repeating: 0, count: backdrop.width * backdrop.height * 4)
         bytes.withUnsafeMutableBytes { storage in
             let context = CGContext(data: storage.baseAddress, width: backdrop.width, height: backdrop.height,
