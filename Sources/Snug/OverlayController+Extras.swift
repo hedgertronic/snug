@@ -136,7 +136,8 @@ extension OverlayController {
     func requestAccessibility(at pixel: CGPoint) {
         guard displayID != nil, !isHeadless, AXIsProcessTrusted(), accessibilityTask == nil,
               accessibilityStarted.map({ $0.duration(to: .now) >= .milliseconds(150) }) ?? true,
-              let index = windows.firstIndex(where: { $0.contains(pixel) }), windowIDs.indices.contains(index) else { return }
+              let index = windows.firstIndex(where: { $0.contains(pixel) }), windowIDs.indices.contains(index),
+              AccessibilityBounds.looksUp(inWindowNamed: windowNames[index], frozen: windowFrozen[index]) else { return }
         accessibilityStarted = .now
         let id = windowIDs[index]
         let primaryHeight = NSScreen.screens[0].frame.height
@@ -149,9 +150,7 @@ extension OverlayController {
             guard let pid = info?.first?[kCGWindowOwnerPID as String] as? Int32 else { return }
             let frames = await Accessibility.frames(at: point, pid: pid)
             guard !Task.isCancelled, mode == .capture else { return }
-            // Live Dock item frames are magnified; the frozen image shows the unmagnified Dock, whose tiles are in `dockTiles`.
-            let found = try await AccessibilityBounds.candidates(frames: AccessibilityBounds.hoverLevel(frames).filter { $0.role != "AXDockItem" },
-                                                                 displayOrigin: origin, scale: scale, extent: extent)
+            let found = try await AccessibilityBounds.candidates(frames: AccessibilityBounds.hoverLevel(frames), displayOrigin: origin, scale: scale, extent: extent)
             Pref.logHoverLine("hover \(point) scale \(scale) frames " + frames.map { "\($0.role) '\($0.roleDescription)' '\($0.title)' \($0.rect)" }.joined(separator: " | ")
                 + " -> " + found.map { "\($0.label) \($0.bounds)" }.joined(separator: " | "))
             if !found.isEmpty { merge(found) }
