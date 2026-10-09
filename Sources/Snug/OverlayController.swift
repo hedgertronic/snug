@@ -135,9 +135,10 @@ final class OverlayController {
             refresh()
         }
         chrome.bottomBar.onStyle = { [unowned self] in style = style.next }
-        chrome.styleBar.onStyle = { [unowned self] in style = $0 }
-        chrome.styleBar.onSave = { [unowned self] in save() }
-        chrome.styleBar.onCopy = { [unowned self] in copy() }
+        chrome.actionBar.onStyle = { [unowned self] in style = $0 }
+        chrome.actionBar.onText = { [unowned self] in copySelectionText(translating: false) }
+        chrome.actionBar.onSave = { [unowned self] in save() }
+        chrome.actionBar.onCopy = { [unowned self] in copy() }
     }
 
     static let resizeCursors: [Handle: NSCursor] = [
@@ -714,6 +715,12 @@ final class OverlayController {
         overlays.snappedEdges = snappedEdges
         overlays.showsHandles = selection != nil
         if selection == nil, case .none = interaction { overlays.hover = hoverRect }
+        // While hovering, faint outlines show what Up and Down would select, unless that is nothing, the display, or the hover itself.
+        if mode == .capture, let hover = overlays.hover, let session {
+            let level = { (candidate: Candidate?) in candidate.flatMap { $0.kind == .display || $0.bounds == hover ? nil : $0.bounds } }
+            overlays.upHint = level(session.parents.first)
+            overlays.downHint = level(session.child)
+        }
         if let scrollArea { overlays.selection = scrollArea; overlays.showsHandles = false; overlays.hover = nil }
         let fit = selection.flatMap { $0.rect == $0.exact ? nil : $0.rect }
         let shown = selection?.rect ?? snapPreview

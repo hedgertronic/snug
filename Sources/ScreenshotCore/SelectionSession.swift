@@ -125,15 +125,22 @@ public struct SelectionSession: Sendable {
         selected = larger
     }
 
+    /// What `shrink()` would select: the region expansion came from, else the largest smaller region inside the selection at the anchor.
+    public var child: Candidate? {
+        if let previous = expansionPath.last { return previous }
+        guard let current = selected else { return nil }
+        return candidates.filter {
+            $0.id != current.id && current.bounds.contains($0.bounds) && $0.bounds.contains(anchor)
+                && $0.bounds.width * $0.bounds.height < current.bounds.width * current.bounds.height - 1
+        }.max { $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height }
+    }
+
     /// Reverses expansion, or finds a contained region at the anchor.
     public mutating func shrink() {
         isLocked = true
-        if let previous = expansionPath.popLast() { selected = previous; return }
-        guard let current = selected else { return }
-        selected = candidates.filter {
-            $0.id != current.id && current.bounds.contains($0.bounds) && $0.bounds.contains(anchor)
-                && $0.bounds.width * $0.bounds.height < current.bounds.width * current.bounds.height - 1
-        }.max { $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height } ?? current
+        guard let next = child else { return }
+        if expansionPath.last?.id == next.id { expansionPath.removeLast() }
+        selected = next
     }
 
     /// Whether a level picked with a key still holds with the pointer at `point`: while the pointer stays inside it, or for the

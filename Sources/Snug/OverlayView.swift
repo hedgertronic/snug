@@ -8,6 +8,8 @@ final class OverlayView: NSView {
     /// Overlay geometry in image pixels with a top-left origin.
     struct Overlays {
         var selection, ghost, preview, hover, styleFrame: CGRect?
+        /// What Up and Down would select from the hovered element, drawn as faint outlines.
+        var upHint, downHint: CGRect?
         /// Sides a resize snapped to, as zero-width or zero-height rectangles.
         var snappedEdges: [CGRect] = []
         var showsHandles = false
@@ -32,6 +34,8 @@ final class OverlayView: NSView {
     private let imageLayer = CALayer()
     let dimLayer = CAShapeLayer()
     private let hoverLayer = CAShapeLayer()
+    private let hoverRingLayer = CAShapeLayer()
+    private let levelHintLayer = CAShapeLayer()
     private let styleLayer = CAShapeLayer()
     private let ghostLayer = CAShapeLayer()
     private let outlineLayer = CAShapeLayer()
@@ -43,7 +47,7 @@ final class OverlayView: NSView {
         super.init(frame: frame)
         wantsLayer = true
         layer!.addSublayer(imageLayer)
-        for shape in [dimLayer, hoverLayer, styleLayer, ghostLayer, outlineLayer, previewLayer, snappedLayer, handlesLayer] {
+        for shape in [dimLayer, levelHintLayer, hoverRingLayer, hoverLayer, styleLayer, ghostLayer, outlineLayer, previewLayer, snappedLayer, handlesLayer] {
             shape.fillColor = nil
             layer!.addSublayer(shape)
         }
@@ -58,7 +62,14 @@ final class OverlayView: NSView {
         styleLayer.strokeColor = NSColor.white.cgColor
         styleLayer.lineDashPattern = [5, 4]
         ghostLayer.strokeColor = NSColor.white.withAlphaComponent(0.9).cgColor
-        outlineLayer.lineWidth = 2
+        outlineLayer.lineWidth = 1.5
+        levelHintLayer.strokeColor = NSColor.white.withAlphaComponent(0.38).cgColor
+        levelHintLayer.lineWidth = 1
+        levelHintLayer.lineDashPattern = [4, 3]
+        hoverRingLayer.lineWidth = 3
+        hoverLayer.shadowOffset = .zero
+        hoverLayer.shadowRadius = 9
+        hoverLayer.shadowOpacity = 0.45
         handlesLayer.fillColor = NSColor.white.cgColor
         handlesLayer.lineWidth = 1.5
         applyAccent()
@@ -111,11 +122,13 @@ final class OverlayView: NSView {
     private func applyAccent() {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             let accent = NSColor.controlAccentColor
+            // The hover: a hairline with a 3 pt ring just outside it and a soft glow, no fill.
             hoverLayer.strokeColor = accent.cgColor
-            hoverLayer.fillColor = accent.withAlphaComponent(0.08).cgColor
-            hoverLayer.lineWidth = 2
+            hoverLayer.lineWidth = 1.5
+            hoverLayer.shadowColor = accent.cgColor
+            hoverRingLayer.strokeColor = accent.withAlphaComponent(0.28).cgColor
             previewLayer.strokeColor = accent.cgColor
-            previewLayer.lineWidth = 2
+            previewLayer.lineWidth = 1.5
             snappedLayer.strokeColor = accent.cgColor
             snappedLayer.lineWidth = 4
             outlineLayer.strokeColor = accent.cgColor
@@ -128,8 +141,19 @@ final class OverlayView: NSView {
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         let o = overlays
-        func path(_ rect: CGRect, radii: CornerRadii = .zero) -> CGPath {
-            radii.scaled(by: 1 / scale).path(in: viewRect(rect))
+        /// The outline of `rect`, moved in by `inset` on any side at the view's edge so a stroke there shows its full width
+        /// (a full-screen outline), and grown by `outset` elsewhere with its radii.
+        func path(_ rect: CGRect, radii: CornerRadii = .zero, inset: CGFloat = 0, outset: CGFloat = 0) -> CGPath {
+            var box = viewRect(rect)
+            let left = box.minX <= bounds.minX + 0.5, right = box.maxX >= bounds.maxX - 0.5
+            let bottom = box.minY <= bounds.minY + 0.5, top = box.maxY >= bounds.maxY - 0.5
+            box = CGRect(x: box.minX + (left ? inset : -outset), y: box.minY + (bottom ? inset : -outset),
+                         width: box.width - (left ? inset : -outset) - (right ? inset : -outset),
+                         height: box.height - (bottom ? inset : -outset) - (top ? inset : -outset))
+            var corners = radii.scaled(by: 1 / scale)
+            if outset > 0 { corners = CornerRadii(topLeft: corners.topLeft > 0 ? corners.topLeft + outset : 0, topRight: corners.topRight > 0 ? corners.topRight + outset : 0,
+                                                  bottomLeft: corners.bottomLeft > 0 ? corners.bottomLeft + outset : 0, bottomRight: corners.bottomRight > 0 ? corners.bottomRight + outset : 0) }
+            return corners.path(in: box)
         }
         let dim = CGMutablePath()
         if let cutout = o.selection ?? o.preview ?? o.ghost {
@@ -140,11 +164,15 @@ final class OverlayView: NSView {
             dim.addPath(path(hover, radii: o.hoverRadii))
         }
         dimLayer.path = dim
-        hoverLayer.path = o.hover.map { path($0, radii: o.hoverRadii) }
+        hoverLayer.path = o.hover.map { path($0, radii: o.hoverRadii, inset: 0.75) }
+        hoverRingLayer.path = o.hover.map { path($0, radii: o.hoverRadii, inset: 3, outset: 2.25) }
+        let hints = CGMutablePath()
+        for rect in [o.upHint, o.downHint].compactMap({ $0 }) { hints.addPath(path(rect, inset: 0.5)) }
+        levelHintLayer.path = hints
         styleLayer.path = o.styleFrame.map { path($0) }
         ghostLayer.path = o.ghost.map { path($0) }
-        outlineLayer.path = o.selection.map { path($0, radii: o.radii) }
-        previewLayer.path = o.preview.map { path($0, radii: o.radii) }
+        outlineLayer.path = o.selection.map { path($0, radii: o.radii, inset: 0.75) }
+        previewLayer.path = o.preview.map { path($0, radii: o.radii, inset: 0.75) }
         let snapped = CGMutablePath()
         for edge in o.snappedEdges {
             let line = viewRect(edge)
