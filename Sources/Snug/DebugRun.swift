@@ -595,9 +595,11 @@ enum DebugRun {
             overlay.startHover()
             await overlay.detectionTask?.value
             run.append(start.duration(to: .now).milliseconds)
-            // 60 pointer moves on a diagonal across the image, each timed from the event through committing its layer changes.
+            // 60 pointer moves on a diagonal across the image, 8 ms apart like a 120 Hz pointer, each timed from the event through
+            // committing its layer changes. Back-to-back events would measure the render server's backpressure instead.
             var runMoves: [Double] = []
             for step in 0..<60 {
+                try await Task.sleep(for: .milliseconds(8))
                 let point = CGPoint(x: frame.width * (0.05 + 0.9 * CGFloat(step) / 59), y: frame.height * (0.95 - 0.9 * CGFloat(step) / 59))
                 let event = NSEvent.mouseEvent(with: .mouseMoved, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
                                                windowNumber: overlay.window.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0)!
