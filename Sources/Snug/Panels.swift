@@ -120,11 +120,11 @@ final class HelpSheet: NSView {
     static let columns: [(title: String, rows: [(keys: String, action: String)])] = [
         ("Capture", [("drag", "Select a region"), ("click", "Element or window"), ("Option-click", "Flip window shadow"), ("Option-drag", "Exact, no snap"),
                      ("F", "Full screen, or all text"), ("Return", "Copy"), ("Shift-Return", "Copy text in the selection"), ("Cmd-S", "Save"), ("Cmd-Shift-S", "Save As"),
-                     ("E / Shift-click", "Edit the element as a selection"),
+                     ("E / Shift-click", "Edit as a selection"),
                      ("G", "Scrolling capture of the selection"),
                      ("C", "Copy color"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
         ("Adjust and text", [("Tab", "Walk out, other fits"), ("Arrows", "Nudge (Shift: 10 pt)"), ("Option-arrow", "Grow one side (Cmd: shrink)"), ("Up / Down", "Bigger / smaller element"),
-                             ("Shift-click", "Add the element under the pointer"), ("[ ]", "Corner radius"), ("Corner dot", "Drag: all corners (Option: one)"), ("=", "Same radius on all corners"),
+                             ("Shift-click", "Add an element"), ("[ ]", "Corner radius"), ("Corner dot", "Drag: all corners (Option: one)"), ("=", "Same radius on all corners"),
                              ("1-5", "Pick from the list (N)"), ("Cmd-1/2", "Tight / Backdrop"), ("M", "Cycle output style"),
                              ("Text: drag", "Select text"), ("Text: Return", "Copy selected text"), ("Text: Shift-Return", "Copy as rows"),
                              ("Text: Tab", "Next link, email, phone, code"), ("Text: Cmd-Return", "Open the picked item"), ("Option-Return", "Translate text"),
