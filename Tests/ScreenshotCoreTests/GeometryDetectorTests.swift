@@ -41,6 +41,34 @@ final class GeometryDetectorTests: XCTestCase {
         XCTAssertTrue(candidates.contains { near($0.bounds, CGRect(x: 520, y: 51, width: 376, height: 33), tolerance: 3) })
     }
 
+    func testARegularGridKeepsOnlyItsCellsRowsAndWhole() async throws {
+        // An 8x8 board of 60 px squares on a dark page: no subrectangle of squares survives, and Up walks square, rank, board.
+        let context = CGContext(data: nil, width: 1000, height: 680, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(CGColor(red: 0.12, green: 0.12, blue: 0.13, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 1000, height: 680))
+        for row in 0..<8 {
+            for column in 0..<8 {
+                let light = (row + column) % 2 == 0
+                context.setFillColor(CGColor(red: light ? 0.47 : 0.33, green: light ? 0.6 : 0.5, blue: light ? 0.4 : 0.34, alpha: 1))
+                context.fill(CGRect(x: 480 + column * 60, y: 100 + row * 60, width: 60, height: 60))
+            }
+        }
+        let board = CGRect(x: 480, y: 100, width: 480, height: 480)
+        let candidates = try await GeometryDetector().detect(in: context.makeImage()!)
+        XCTAssertTrue(candidates.contains { near($0.bounds, board, tolerance: 3) }, "\(candidates.map(\.bounds))")
+        let inside = candidates.filter { $0.kind != .cell && board.insetBy(dx: -3, dy: -3).contains($0.bounds) && !near($0.bounds, board, tolerance: 3) }
+        XCTAssertTrue(inside.allSatisfy { abs($0.bounds.width - 480) <= 3 && abs($0.bounds.height - 60) <= 3 }, "\(inside.map(\.bounds))")
+
+        let page = Candidate(id: "ax-page", label: "Group", bounds: CGRect(x: 0, y: 0, width: 1000, height: 680), score: 2, kind: .element)
+        var session = SelectionSession(candidates: candidates + [page], extent: CGRect(x: 0, y: 0, width: 1000, height: 680), anchor: CGPoint(x: 630, y: 250))
+        XCTAssertTrue(near(session.selected!.bounds, CGRect(x: 600, y: 220, width: 60, height: 60), tolerance: 3), "\(session.selected!)")
+        session.expand()
+        XCTAssertTrue(near(session.selected!.bounds, CGRect(x: 480, y: 220, width: 480, height: 60), tolerance: 3), "\(session.selected!)")
+        session.expand()
+        XCTAssertTrue(near(session.selected!.bounds, board, tolerance: 3), "\(session.selected!)")
+    }
+
     func testMapsDownscaledAnalysisBackToOriginalPixels() async throws {
         let image = makeDashboard(width: 1600, height: 1200, scale: 4)
         let candidates = try await GeometryDetector().detect(in: image)

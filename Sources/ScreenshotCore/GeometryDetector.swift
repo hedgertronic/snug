@@ -139,7 +139,41 @@ public struct GeometryDetector {
                 flush()
             }
         }
-        let ordered = Array(cells.prefix(300)) + strips + edgePanels + sorted
+        // Regular grids (boards, calendars, galleries): 9+ touching cells, at least two thirds within 10% of the median cell size. Any
+        // other panel or table holding some but not all of a regular grid's cells, or lying inside it, cuts through it (a
+        // chessboard yields hundreds of such subrectangles) and is dropped. Each regular grid joins whole, with each band of 3+
+        // median-height cells as a row across it. Irregular grids (page layouts) keep their subrectangles.
+        cells = Array(cells.prefix(300))
+        var group = Array(cells.indices)
+        func root(_ index: Int) -> Int { group[index] == index ? index : root(group[index]) }
+        for a in cells.indices {
+            for b in cells.indices where b > a && cells[a].rect.insetBy(dx: -2, dy: -2).intersects(cells[b].rect) {
+                group[root(b)] = root(a)
+            }
+        }
+        let grids = Dictionary(grouping: cells.indices, by: root).values.map { $0.map { cells[$0].rect } }.compactMap { grid -> (cells: [CGRect], whole: CGRect, rowHeight: CGFloat)? in
+            guard grid.count >= 9 else { return nil }
+            let width = grid.map(\.width).sorted()[grid.count / 2], height = grid.map(\.height).sorted()[grid.count / 2]
+            let typical = grid.filter { abs($0.width - width) <= width * 0.1 && abs($0.height - height) <= height * 0.1 }
+            guard typical.count * 3 >= grid.count * 2 else { return nil }
+            return (grid, grid.reduce(CGRect.null) { $0.union($1) }, height)
+        }
+        func cutsThrough(_ rect: CGRect) -> Bool {
+            grids.contains { grid in
+                let held = grid.cells.filter { rect.insetBy(dx: -2, dy: -2).contains($0) }.count
+                return held > 0 && held < grid.cells.count
+                    || grid.whole.insetBy(dx: -2, dy: -2).contains(rect) && !rect.insetBy(dx: -4, dy: -4).contains(grid.whole)
+            }
+        }
+        var gridLevels: [ScoredRectangle] = []
+        for grid in grids {
+            gridLevels.append(ScoredRectangle(rect: grid.whole, score: 0.92, kind: .table))
+            let rows = grid.cells.filter { abs($0.height - grid.rowHeight) <= grid.rowHeight * 0.1 }
+            for band in Dictionary(grouping: rows, by: { "\(Int($0.minY))-\(Int($0.maxY))" }).values where band.count >= 3 {
+                gridLevels.append(ScoredRectangle(rect: CGRect(x: grid.whole.minX, y: band[0].minY, width: grid.whole.width, height: band[0].height), score: 0.9, kind: .table))
+            }
+        }
+        let ordered = cells + gridLevels + (strips + edgePanels + sorted).filter { !cutsThrough($0.rect) }
         var output: [Candidate] = []
         for proposal in ordered {
             let bounds = CGRect(
