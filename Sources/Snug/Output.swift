@@ -26,6 +26,14 @@ enum Pref {
     /// Whether crops take the corner radius measured on screen (and their window's at shared corners); off, they are square unless
     /// edited with [ and ].
     static let roundCorners = "SnugRoundCorners"
+    /// The highlight: a hex color ("" is the system accent), fill and background fade as opacities, and whether the hover glows.
+    static let highlightColor = "SnugHighlightColor"
+    static let highlightFill = "SnugHighlightFill"
+    static let highlightFade = "SnugHighlightFade"
+    static let highlightGlow = "SnugHighlightGlow"
+    /// Whether the toast shows a thumbnail of the capture, and where the toast sits: bottomCenter, bottomRight, or topRight.
+    static let toastPreview = "SnugToastPreview"
+    static let toastPosition = "SnugToastPosition"
     /// Off unless set with `defaults write local.snug SnugLogHover -bool true`: each hover lookup and the Dock's window rect append to
     /// ~/Library/Logs/Snug/hover.log, so live accessibility frames can be read back without Accessibility in a terminal.
     static let logHover = "SnugLogHover"
@@ -53,6 +61,12 @@ enum Pref {
             modeBar: true,
             colorFormat: ColorFormat.hex.rawValue,
             shadow: true,
+            highlightColor: "",
+            highlightFill: 0.0,
+            highlightFade: 0.42,
+            highlightGlow: true,
+            toastPreview: true,
+            toastPosition: "bottomCenter",
             roundCorners: true
         ])
     }
@@ -116,6 +130,6 @@ enum Output {
         case (true, false): ("Copied", detail)
         default: ("Saved to \(folder)", file!.lastPathComponent)
         }
-        Toast.show(png: png, message: message, detail: detail, file: file)
+        Toast.show(png: png, message: message, detail: detail, file: file, defaults: defaults)
     }
 }

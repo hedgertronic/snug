@@ -2,6 +2,30 @@ import AppKit
 import ScreenshotCore
 import VisionKit
 
+/// The configurable look of the hover highlight and everything drawn in the accent, read from the defaults on each `present`.
+struct Highlight {
+    var color: NSColor
+    /// Opacity of the fill inside the hovered rectangle, 0...0.3.
+    var fill: CGFloat
+    /// Opacity of the dim outside the highlight, 0...0.6.
+    var fade: CGFloat
+    var glow: Bool
+
+    init(defaults: UserDefaults) {
+        color = Self.color(hex: defaults.string(forKey: Pref.highlightColor)!)
+        fill = defaults.double(forKey: Pref.highlightFill)
+        fade = defaults.double(forKey: Pref.highlightFade)
+        glow = defaults.bool(forKey: Pref.highlightGlow)
+    }
+
+    /// The color for a stored "#RRGGBB"; the system accent for "".
+    static func color(hex: String) -> NSColor {
+        guard !hex.isEmpty else { return .controlAccentColor }
+        let value = Int(hex.dropFirst(), radix: 16)!
+        return NSColor(srgbRed: CGFloat(value >> 16 & 255) / 255, green: CGFloat(value >> 8 & 255) / 255, blue: CGFloat(value & 255) / 255, alpha: 1)
+    }
+}
+
 /// Layer-backed view: the frozen image sits in one layer, set once; everything else is a shape layer.
 @MainActor
 final class OverlayView: NSView {
@@ -16,6 +40,8 @@ final class OverlayView: NSView {
         /// Corner radii in image pixels of the selection (or the snap preview when there is no selection), and of the hovered rectangle.
         var radii = CornerRadii.zero
         var hoverRadii = CornerRadii.zero
+        var upHintRadii = CornerRadii.zero
+        var downHintRadii = CornerRadii.zero
     }
 
     weak var controller: OverlayController?
@@ -23,6 +49,7 @@ final class OverlayView: NSView {
     var scale: CGFloat = 1
     var image: CGImage? { didSet { imageLayer.contents = image } }
     var overlays = Overlays() { didSet { layoutOverlays() } }
+    var highlight: Highlight? { didSet { applyAccent() } }
     /// The cursor over the whole overlay; the controller picks it from the pointer and the interaction.
     var cursor = NSCursor.crosshair {
         didSet { if cursor !== oldValue { window?.invalidateCursorRects(for: self) } }
@@ -33,7 +60,7 @@ final class OverlayView: NSView {
     let guides = Guides()
     private let imageLayer = CALayer()
     let dimLayer = CAShapeLayer()
-    private let hoverLayer = CAShapeLayer()
+    let hoverLayer = CAShapeLayer()
     private let hoverRingLayer = CAShapeLayer()
     private let levelHintLayer = CAShapeLayer()
     private let styleLayer = CAShapeLayer()
@@ -59,7 +86,6 @@ final class OverlayView: NSView {
         liveText.isSupplementaryInterfaceHidden = true
         liveText.isHidden = true
         addSubview(liveText)
-        dimLayer.fillColor = NSColor.black.withAlphaComponent(0.42).cgColor
         dimLayer.fillRule = .evenOdd
         styleLayer.strokeColor = NSColor.white.cgColor
         styleLayer.lineDashPattern = [5, 4]
@@ -71,7 +97,6 @@ final class OverlayView: NSView {
         hoverRingLayer.lineWidth = 3
         hoverLayer.shadowOffset = .zero
         hoverLayer.shadowRadius = 9
-        hoverLayer.shadowOpacity = 0.45
         handlesLayer.fillColor = NSColor.white.cgColor
         handlesLayer.lineWidth = 1.5
         cornerDotsLayer.strokeColor = NSColor.white.cgColor
@@ -126,11 +151,14 @@ final class OverlayView: NSView {
 
     private func applyAccent() {
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            let accent = NSColor.controlAccentColor
-            // The hover: a hairline with a 3 pt ring just outside it and a soft glow, no fill.
+            let accent = highlight?.color ?? .controlAccentColor
+            // The hover: a hairline with a 3 pt ring just outside it, an optional soft glow, and an optional fill.
             hoverLayer.strokeColor = accent.cgColor
             hoverLayer.lineWidth = 1.5
             hoverLayer.shadowColor = accent.cgColor
+            hoverLayer.shadowOpacity = highlight?.glow == false ? 0 : 0.45
+            hoverLayer.fillColor = (highlight?.fill ?? 0) > 0 ? accent.withAlphaComponent(highlight!.fill).cgColor : nil
+            dimLayer.fillColor = NSColor.black.withAlphaComponent(highlight?.fade ?? 0.42).cgColor
             hoverRingLayer.strokeColor = accent.withAlphaComponent(0.28).cgColor
             previewLayer.strokeColor = accent.cgColor
             previewLayer.lineWidth = 1.5
@@ -173,7 +201,8 @@ final class OverlayView: NSView {
         hoverLayer.path = o.hover.map { path($0, radii: o.hoverRadii, inset: 0.75) }
         hoverRingLayer.path = o.hover.map { path($0, radii: o.hoverRadii, inset: 3, outset: 2.25) }
         let hints = CGMutablePath()
-        for rect in [o.upHint, o.downHint].compactMap({ $0 }) { hints.addPath(path(rect, inset: 0.5)) }
+        if let rect = o.upHint { hints.addPath(path(rect, radii: o.upHintRadii, inset: 0.5)) }
+        if let rect = o.downHint { hints.addPath(path(rect, radii: o.downHintRadii, inset: 0.5)) }
         levelHintLayer.path = hints
         styleLayer.path = o.styleFrame.map { path($0) }
         ghostLayer.path = o.ghost.map { path($0) }

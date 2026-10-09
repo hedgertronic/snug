@@ -137,3 +137,11 @@ public enum Detection {
         return union > 0 ? area / union : 0
     }
 }
+
+extension CGRect {
+    /// Whether every side of this rectangle is within `tolerance` of the same side of `other`.
+    public func isNear(_ other: CGRect, within tolerance: CGFloat) -> Bool {
+        abs(minX - other.minX) <= tolerance && abs(minY - other.minY) <= tolerance
+            && abs(maxX - other.maxX) <= tolerance && abs(maxY - other.maxY) <= tolerance
+    }
+}
