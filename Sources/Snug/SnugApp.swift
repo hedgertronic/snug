@@ -26,6 +26,17 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         Pref.register(in: .standard)
         let arguments = CommandLine.arguments
+        if let index = arguments.firstIndex(of: "--cutout") {
+            Task {
+                do {
+                    try await DebugRun.cutout(URL(fileURLWithPath: arguments[index + 1]), into: URL(fileURLWithPath: arguments[index + 2]), visionKit: arguments.contains("--visionkit"))
+                } catch {
+                    FileHandle.standardError.write(Data("Cutout failed: \(error)\n".utf8))
+                    exit(EXIT_FAILURE)
+                }
+            }
+            return
+        }
         let image = arguments.firstIndex(of: "--image").map { index in
             let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: arguments[index + 1]) as CFURL, nil)!
             return CGImageSourceCreateImageAtIndex(source, 0, nil)!
