@@ -6,9 +6,6 @@ extension OverlayController {
     /// Whether a window click captures the shadow: the remembered preference, inverted while Option is down.
     func windowShadow(option: Bool) -> Bool { defaults.bool(forKey: Pref.shadow) != option }
 
-    /// The aspect ratio lock for the hint row. Order A's `ratioLock?.label ?? "free"` replaces this stub.
-    private var ratioLabel: String { "free" }
-
     /// The hint row: each hint is its key caps and a label.
     private var hints: [(keys: [String], label: String)] {
         if scrollArea != nil {
@@ -19,7 +16,7 @@ extension OverlayController {
         case .text: [(["Drag"], "select text"), (["\u{21A9}"], "copy"), (["\u{21E7}", "\u{21A9}"], "rows"), (["Tab"], "links, codes"), (["\u{2325}", "\u{21A9}"], "translate"), (["F"], "all text"), (["C"], "color"), (["?"], "all keys")]
         case .capture where selection != nil:
             [(["M"], "frame"), (["Tab"], "next snap"), (["S"], snapEnabled ? "snap off" : "snap on"), (["\u{2325}", "arrows"], "grow"),
-             (["\u{2325}\u{2318}"], "shrink"), (["P"], "ratio \(ratioLabel)"), (["G"], "scroll"), (["esc"], "cancel")]
+             (["\u{2325}\u{2318}"], "shrink"), (["P"], "ratio \(ratioLock?.label ?? "free")"), (["G"], "scroll"), (["esc"], "cancel")]
         case .capture: [(["Click"], "capture"), (["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["\u{2325}"], "drag exact"), (["F"], "full screen"), (["?"], "all keys")]
         }
     }
