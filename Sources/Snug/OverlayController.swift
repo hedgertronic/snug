@@ -647,6 +647,7 @@ final class OverlayController {
     /// window's corners taking the window's radius.
     private func cornerRadii(of rect: CGRect) -> CornerRadii {
         if let edited = editedRadii[rect] { return edited }
+        guard defaults.bool(forKey: Pref.roundCorners) else { return .zero }
         let measured = CornerRadii(radii[rect] ?? 0)
         guard let window = container(of: rect) else { return measured }
         return measured.replacingCorners(sharedWith: window, in: rect, with: radii[window] ?? 0)
@@ -672,7 +673,7 @@ final class OverlayController {
         guard let image else { return }
         let style = style, scale = scale
         let container = container(of: crop)
-        let edited = editedRadii[crop]
+        let edited = editedRadii[crop], rounds = defaults.bool(forKey: Pref.roundCorners)
         let (known, measuring) = (radii[crop], radiusTasks[crop])
         let (windowKnown, windowMeasuring) = (container.flatMap { radii[$0] }, container.flatMap { radiusTasks[$0] })
         if let displayID {
@@ -688,7 +689,7 @@ final class OverlayController {
                     let windowRadius = if let windowKnown { windowKnown } else { await windowMeasuring?.value ?? 0 }
                     radii = radii.replacingCorners(sharedWith: container, in: crop, with: windowRadius)
                 }
-                try await Output.deliver(image, crop: crop, style: style, scale: scale, cornerRadii: edited ?? radii, copy: copy, save: save,
+                try await Output.deliver(image, crop: crop, style: style, scale: scale, cornerRadii: edited ?? (rounds ? radii : .zero), copy: copy, save: save,
                                          pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)

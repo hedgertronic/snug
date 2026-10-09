@@ -300,6 +300,22 @@ enum DebugRun {
             && clipped.colorAt(x: 0, y: 0)!.alphaComponent == 1 && clipped.colorAt(x: clipped.pixelsWide - 1, y: 0)!.alphaComponent == 1,
             "a tight crop sharing a window's bottom corners clears them and keeps the top corners")
 
+        // With automatic rounding off in Settings, the same crop is square and the outline too.
+        defaults.set(false, forKey: Pref.roundCorners)
+        open()
+        overlay.setWindows([windowRect], pointer: CGPoint(x: frame.minX + 10, y: frame.maxY - 10))
+        overlay.radii[windowRect] = 20
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: bottomHalf)
+        overlay.refresh()
+        require(overlay.view.overlays.radii == .zero, "with rounding off the outline is square")
+        pasteboard.clearContents()
+        overlay.copy()
+        await overlay.commitTask?.value
+        let square = NSBitmapImageRep(data: pasteboard.data(forType: .png)!)!
+        require(square.colorAt(x: 0, y: square.pixelsHigh - 1)!.alphaComponent == 1 && square.colorAt(x: square.pixelsWide - 1, y: square.pixelsHigh - 1)!.alphaComponent == 1,
+                "with rounding off the copy keeps square corners")
+        defaults.set(true, forKey: Pref.roundCorners)
+
         // The outline draws the same per-corner shape; ] and [ change every corner by 1 pt (Shift: 4 pt) and the copy follows.
         open()
         overlay.setWindows([windowRect], pointer: CGPoint(x: frame.minX + 10, y: frame.maxY - 10))

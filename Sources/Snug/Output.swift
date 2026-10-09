@@ -23,6 +23,9 @@ enum Pref {
     static let candidates = "SnugCandidateList"
     static let shadow = "SnugShadow"
     static let accessibilityAsked = "SnugAccessibilityAsked"
+    /// Whether crops take the corner radius measured on screen (and their window's at shared corners); off, they are square unless
+    /// edited with [ and ].
+    static let roundCorners = "SnugRoundCorners"
     /// Off unless set with `defaults write local.snug SnugLogHover -bool true`: each hover lookup and the Dock's window rect append to
     /// ~/Library/Logs/Snug/hover.log, so live accessibility frames can be read back without Accessibility in a terminal.
     static let logHover = "SnugLogHover"
@@ -49,7 +52,8 @@ enum Pref {
             hotKeyModifiers: Int(NSEvent.ModifierFlags([.control, .shift]).rawValue),
             modeBar: true,
             colorFormat: ColorFormat.hex.rawValue,
-            shadow: true
+            shadow: true,
+            roundCorners: true
         ])
     }
 }
