@@ -560,17 +560,31 @@ enum DebugRun {
             precondition(result == KERN_SUCCESS)
             return String(format: "%.1f MiB", Double(info.phys_footprint) / 1_048_576)
         }
-        func decodedCopy() -> CGImage {
+        // A 2x horizontal Dock along the bottom (top-left origin): a rimmed panel with 14 icon tiles, and the magnified union of its lists.
+        let dockPanel = CGRect(x: CGFloat(image.width) / 2 - 750, y: CGFloat(image.height) - 150, width: 1500, height: 136)
+        let dockUnion = dockPanel.insetBy(dx: -74, dy: -6)
+        func decodedCopy(dock: Bool = false) -> CGImage {
             let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0, space: NSScreen.main!.colorSpace!.cgColorSpace!,
                                     bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)!
             context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            if dock {
+                context.translateBy(x: 0, y: CGFloat(image.height))
+                context.scaleBy(x: 1, y: -1)
+                context.addPath(CGPath(roundedRect: dockPanel.insetBy(dx: 1, dy: 1), cornerWidth: 30, cornerHeight: 30, transform: nil))
+                context.setStrokeColor(gray: 0.55, alpha: 1)
+                context.setLineWidth(2)
+                context.setFillColor(gray: 0.22, alpha: 1)
+                context.drawPath(using: .fillStroke)
+                context.setFillColor(gray: 0.9, alpha: 1)
+                for offset in stride(from: 30, to: 1450, by: 102) { context.fill(CGRect(x: dockPanel.minX + CGFloat(offset), y: dockPanel.minY + 20, width: 96, height: 96)) }
+            }
             return context.makeImage()!
         }
         let launched = footprint()
         let rough = CGRect(x: 350, y: 458, width: 580, height: 64)
-        var stages: [(name: String, values: [Double])] = ["open overlay", "first draw", "snap", "encode", "pasteboard", "encode + pasteboard", "snap, full drag", "hover analysis", "hover move, mean"].map { ($0, []) }
+        var stages: [(name: String, values: [Double])] = ["open overlay", "first draw", "snap", "encode", "pasteboard", "encode + pasteboard", "snap, full drag", "hover analysis", "hover move, mean", "dock tiles"].map { ($0, []) }
         var moves: [Double] = []
-        var snapCount = 0
+        var snapCount = 0, dockTileCount = 0
         for _ in 0..<30 {
             let image = decodedCopy()
             overlay.present(image: image, frame: frame, displayID: nil)
@@ -609,6 +623,11 @@ enum DebugRun {
                 runMoves.append(start.duration(to: .now).milliseconds)
             }
             run.append(runMoves.reduce(0, +) / Double(runMoves.count))
+            let docked = decodedCopy(dock: true)
+            start = ContinuousClock.now
+            let panel = DockTiles.panel(in: docked, near: dockUnion, scale: 2)!
+            dockTileCount = DockTiles.tiles(in: docked, panel: panel, scale: 2).count
+            run.append(start.duration(to: .now).milliseconds)
             if !stages[0].values.isEmpty { moves += runMoves }
             for index in run.indices { stages[index].values.append(run[index]) }
             overlay.dismiss()
@@ -624,7 +643,7 @@ enum DebugRun {
         }
         print("hover move, per event (runs 2-30, \(moves.count) events): p50 \(String(format: "%.2f", percentile(moves, 0.5))) ms, "
               + "p95 \(String(format: "%.2f", percentile(moves, 0.95))) ms, max \(String(format: "%.2f", moves.max()!)) ms")
-        print("snap suggestions per run: \(snapCount)")
+        print("snap suggestions per run: \(snapCount), dock tiles: \(dockTileCount)")
         print("footprint: before the first capture \(launched), after the last dismiss \(footprint())")
         try await Task.sleep(for: .seconds(1))
         print("footprint: 1 s after the last dismiss \(footprint())")
