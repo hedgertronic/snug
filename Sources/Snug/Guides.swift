@@ -32,7 +32,7 @@ final class Guides {
     let bands = CAShapeLayer()
     private let hairline = CAShapeLayer()
     private let ticks = CAShapeLayer()
-    private let numbers = CALayer()
+    let numbers = CALayer()
     private let marks = CAShapeLayer()
     private let carets = CAShapeLayer()
     let widthLabel = Guides.text(Guides.flagFont, .center)
@@ -217,7 +217,7 @@ final class Guides {
                 for pixels in stride(from: 0, through: Int(bounds.width * scale), by: 10) {
                     let x = CGFloat(pixels) / scale, major = pixels % 100 == 0
                     path.move(to: CGPoint(x: x, y: bandBottom)); path.addLine(to: CGPoint(x: x, y: bandBottom + (major ? 8 : 4)))
-                    if major, pixels > 0 { number(pixels).frame = CGRect(x: x + 3, y: bandTop - 13, width: 40, height: 12) }
+                    if major, pixels > 0 { number(pixels).frame = CGRect(x: x + 3, y: bandTop - 13, width: CGFloat("\(pixels)".count) * digit + 2, height: 12) }
                 }
                 // The left ruler's numbers read bottom to top, so four digits still fit in its 18 pt.
                 for pixels in stride(from: 0, through: Int(bounds.height * scale), by: 10) {
@@ -255,19 +255,22 @@ final class Guides {
                 let across = CGFloat("\(values[1] - values[0])".count) * digit + 8
                 if span.width > across {
                     widthLabel.string = "\(values[1] - values[0])"
-                    widthLabel.frame = CGRect(x: span.midX - 20, y: bandTop - 14, width: 40, height: 12)
+                    widthLabel.frame = CGRect(x: span.midX - across / 2, y: bandTop - 14, width: across, height: 12)
                     widthLabel.isHidden = false
                 }
                 let along = CGFloat("\(values[3] - values[2])".count) * digit + 8
                 if span.height > along {
                     heightLabel.string = "\(values[3] - values[2])"
-                    heightLabel.bounds = CGRect(x: 0, y: 0, width: 40, height: 12)
+                    heightLabel.bounds = CGRect(x: 0, y: 0, width: along, height: 12)
                     heightLabel.alignmentMode = .center
                     heightLabel.position = CGPoint(x: 9, y: span.midY)
                     heightLabel.transform = CATransform3DMakeRotation(.pi / 2, 0, 0, 1)
                     heightLabel.isHidden = false
                 }
             }
+            // Tick numbers under the width or height label hide.
+            let labels = [widthLabel, heightLabel].filter { !$0.isHidden }.map { $0.frame.insetBy(dx: -3, dy: -3) }
+            for label in numbers.sublayers ?? [] { label.isHidden = labels.contains { $0.intersects(label.frame) } }
             spans.path = band
             let line = CGMutablePath()
             line.move(to: CGPoint(x: point.x, y: bandTop)); line.addLine(to: CGPoint(x: point.x, y: bandBottom))

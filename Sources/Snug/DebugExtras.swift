@@ -129,6 +129,8 @@ extension DebugRun {
         require(abs(edgeBox.maxX - middle) < 0.01 && abs(edgeBox.minY - (Guides.loupeSize - middle)) < 0.01, "mid-drag the selection's right and bottom edges run through the loupe's center cell: \(edgeBox)")
         require(guides.flags.map { $0.string as! String } == ["\(Int(rough.minX))", "\(Int(rough.maxX))", "\(Int(rough.minY))", "\(Int(rough.maxY))"], "the rulers flag the span's start and end")
         require(guides.widthLabel.string as? String == "\(Int(rough.width))" && !guides.widthLabel.isHidden, "the ruler shows the span's width")
+        require(!(guides.numbers.sublayers!.contains { !$0.isHidden && $0.frame.intersects(guides.widthLabel.frame) }) && guides.numbers.sublayers!.contains { $0.isHidden },
+                "no tick number shows under the span's width")
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(guides.edges.path == nil, "the loupe draws no selection edges once the drag ends")
 
