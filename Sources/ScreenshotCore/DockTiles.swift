@@ -40,8 +40,9 @@ public enum DockTiles {
         /// The strongest position in `window` (ordered outermost first), moved outward to the outermost one within a rim's width (2 pt)
         /// of it that is at least half as strong. Nil when the peak is not an edge.
         func outermost(in window: [Int], strength: (Int) -> Int) -> Int? {
-            guard let peak = window.max(by: { strength($0) < strength($1) }), strength(peak) > edgeThreshold else { return nil }
-            return window.first { abs($0 - peak) <= Int(2 * scale) && strength($0) * 2 >= strength(peak) }
+            let strengths = window.map(strength)
+            guard let peak = strengths.indices.max(by: { strengths[$0] < strengths[$1] }), strengths[peak] > edgeThreshold else { return nil }
+            return window.indices.first { abs(window[$0] - window[peak]) <= Int(2 * scale) && strengths[$0] * 2 >= strengths[peak] }.map { window[$0] }
         }
 
         let center = roughAlong.lowerBound + roughAlong.count / 2
