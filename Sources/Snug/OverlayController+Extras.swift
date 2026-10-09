@@ -148,7 +148,7 @@ extension OverlayController {
             guard let pid = info?.first?[kCGWindowOwnerPID as String] as? Int32 else { return }
             let frames = await Accessibility.frames(at: point, pid: pid)
             guard !Task.isCancelled, mode == .capture else { return }
-            let found = AccessibilityBounds.candidates(frames: AccessibilityBounds.hoverLevel(frames), displayOrigin: origin, scale: scale, extent: extent, image: image)
+            let found = try await AccessibilityBounds.candidates(frames: AccessibilityBounds.hoverLevel(frames), displayOrigin: origin, scale: scale, extent: extent, image: image)
             if !found.isEmpty { merge(found) }
         }
     }

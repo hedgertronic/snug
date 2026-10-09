@@ -141,9 +141,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 overlay.present(image: image, frame: screen.frame, displayID: id)
                 if text { overlay.setMode(.text) }
                 let scale = overlay.scale
-                let windows = await DisplayCapture.windows(on: id, pixelScale: scale).map { window in
-                    window.name == "Dock" && window.frozen
-                        ? (rect: AccessibilityBounds.dockPanel(in: image, around: window.rect, scale: scale), name: window.name, id: window.id, frozen: window.frozen) : window
+                var windows = await DisplayCapture.windows(on: id, pixelScale: scale)
+                // The Dock's AXList union is a rough drag: the panel is the snap's best fit. The union was measured 74 px past the
+                // panel's bottom, beyond the default band.
+                for index in windows.indices where windows[index].name == "Dock" && windows[index].frozen {
+                    windows[index].rect = try await SmartSnap().suggest(in: image, roughBounds: windows[index].rect, scale: scale, cap: 96).first?.bounds ?? windows[index].rect
                 }
                 if overlay.image === image { overlay.setWindows(windows.map(\.rect), names: windows.map(\.name), ids: windows.map(\.id), frozen: windows.map(\.frozen), pointer: NSEvent.mouseLocation) }
             } catch is CancellationError {

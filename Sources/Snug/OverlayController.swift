@@ -87,7 +87,7 @@ final class OverlayController {
     var detectionTask: Task<Void, Never>?
     var detected: [Candidate] = []
     /// The running accessibility lookup and when the last one started (throttle).
-    var accessibilityTask: Task<Void, Never>?
+    var accessibilityTask: Task<Void, Error>?
     var accessibilityStarted: ContinuousClock.Instant?
     var previousApp: NSRunningApplication?
     private var interaction = Interaction.none
@@ -97,7 +97,7 @@ final class OverlayController {
     /// While a side drags: accessibility frames around the selection, the lookup filling them, and the sides snapped to
     /// (zero-width or zero-height rectangles, image pixels).
     private var edgeFrames: [CGRect] = []
-    private var edgeFramesTask: Task<Void, Never>?
+    private var edgeFramesTask: Task<Void, Error>?
     private var snappedEdges: [CGRect] = []
     var bypassSnap = false
     private var hadSelection = false
@@ -294,7 +294,7 @@ final class OverlayController {
                 interaction = .resizing(handle)
                 edgeFrames = []
                 edgeFramesTask?.cancel()
-                edgeFramesTask = Task { edgeFrames = await snapFrames(around: selection.rect) }
+                edgeFramesTask = Task { edgeFrames = try await snapFrames(around: selection.rect) }
                 return updateCursor()
             }
             if selection.rect.contains(point) {
@@ -423,7 +423,7 @@ final class OverlayController {
     private func fits(for rough: CGRect, in image: CGImage) async throws -> [CGRect] {
         async let frames = snapFrames(around: rough)
         let pixel = try await SmartSnap().suggest(in: image, roughBounds: rough, scale: scale).map(\.bounds)
-        return SnapFits.merge(frames: await frames, pixel: pixel, drag: rough, scale: scale)
+        return SnapFits.merge(frames: try await frames, pixel: pixel, drag: rough, scale: scale)
     }
 
     /// S and the Snap button: flips the preference and applies it to what is on screen. While dragging, off clears the preview and on

@@ -81,7 +81,7 @@ struct ScreenshotBench {
             let rough = CGRect(x: values[0], y: values[1], width: values[2], height: values[3])
             let start = ContinuousClock.now
             let suggestions = try await Task.detached {
-                try await SmartSnap().suggest(in: image, roughBounds: rough)
+                try await SmartSnap().suggest(in: image, roughBounds: rough, scale: CGFloat(option("--scale").flatMap { Double($0) } ?? 1))
             }.value
             let duration = start.duration(to: .now).components
             let milliseconds = Double(duration.seconds) * 1_000 + Double(duration.attoseconds) / 1e15
