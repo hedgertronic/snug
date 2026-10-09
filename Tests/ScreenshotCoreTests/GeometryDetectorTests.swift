@@ -57,6 +57,7 @@ final class GeometryDetectorTests: XCTestCase {
         let board = CGRect(x: 480, y: 100, width: 480, height: 480)
         let candidates = try await GeometryDetector().detect(in: context.makeImage()!)
         XCTAssertTrue(candidates.contains { near($0.bounds, board, tolerance: 3) }, "\(candidates.map(\.bounds))")
+        XCTAssertEqual(candidates.filter { $0.label == GeometryDetector.gridCellLabel }.count, 64)
         let inside = candidates.filter { $0.kind != .cell && board.insetBy(dx: -3, dy: -3).contains($0.bounds) && !near($0.bounds, board, tolerance: 3) }
         XCTAssertTrue(inside.allSatisfy { abs($0.bounds.width - 480) <= 3 && abs($0.bounds.height - 60) <= 3 }, "\(inside.map(\.bounds))")
 

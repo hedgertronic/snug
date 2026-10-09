@@ -154,12 +154,23 @@ public struct GeometryDetector {
                 group[root(b)] = root(a)
             }
         }
-        let grids = Dictionary(grouping: cells.indices, by: root).values.sorted { $0[0] < $1[0] }.map { $0.map { cells[$0].rect } }.compactMap { grid -> (cells: [CGRect], whole: CGRect, rowHeight: CGFloat)? in
+        let grids = Dictionary(grouping: cells.indices, by: root).values.sorted { $0[0] < $1[0] }.map { $0.map { cells[$0].rect } }.compactMap { grid -> (cells: [CGRect], whole: CGRect, rowHeight: CGFloat, found: [CGRect])? in
             guard grid.count >= 9 else { return nil }
             let width = grid.map(\.width).sorted()[grid.count / 2], height = grid.map(\.height).sorted()[grid.count / 2]
             let typical = grid.filter { abs($0.width - width) <= width * 0.1 && abs($0.height - height) <= height * 0.1 }
             guard typical.count * 3 >= grid.count * 2 else { return nil }
-            return (grid, grid.reduce(CGRect.null) { $0.union($1) }, height)
+            let whole = grid.reduce(CGRect.null) { $0.union($1) }
+            // A grid that divides evenly into typical cells gets every lattice cell, found or not (squares under pieces);
+            // otherwise only its typical cells stay, without merged ones.
+            let columns = (whole.width / width).rounded(), rows = (whole.height / height).rounded()
+            guard abs(whole.width - columns * width) <= columns * 2, abs(whole.height - rows * height) <= rows * 2 else {
+                return (typical, whole, height, grid)
+            }
+            let lattice = (0..<Int(rows)).flatMap { row in (0..<Int(columns)).map { column in
+                CGRect(x: whole.minX + whole.width * CGFloat(column) / columns, y: whole.minY + whole.height * CGFloat(row) / rows,
+                       width: whole.width / columns, height: whole.height / rows)
+            } }
+            return (lattice, whole, whole.height / rows, grid)
         }
         func cutsThrough(_ rect: CGRect) -> Bool {
             grids.contains { grid in
@@ -176,7 +187,9 @@ public struct GeometryDetector {
                 gridLevels.append(ScoredRectangle(rect: CGRect(x: grid.whole.minX, y: band[0].minY, width: grid.whole.width, height: band[0].height), score: 0.9, kind: .table))
             }
         }
-        let ordered = cells + gridLevels + (strips + edgePanels + sorted).filter { !cutsThrough($0.rect) }
+        let gridCells = grids.flatMap { grid in grid.cells.map { ScoredRectangle(rect: $0, score: 0.95, kind: .cell) } }
+        let ordered = cells.filter { cell in !grids.contains { $0.found.contains(cell.rect) } } + gridCells + gridLevels
+            + (strips + edgePanels + sorted).filter { !cutsThrough($0.rect) }
         var output: [Candidate] = []
         for proposal in ordered {
             let bounds = CGRect(
