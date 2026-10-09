@@ -7,7 +7,9 @@ enum DisplayCapture {
     /// The display's current contents, sized from the stream's point-to-pixel scale.
     @concurrent
     static func image(of displayID: CGDirectDisplayID) async throws -> CGImage {
+        let listing = signposter.beginInterval("shareable content")
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        signposter.endInterval("shareable content", listing)
         let display = content.displays.first { $0.displayID == displayID }!
         let ownWindows = content.windows.filter { $0.owningApplication?.processID == getpid() }
         let filter = SCContentFilter(display: display, excludingWindows: ownWindows)
@@ -16,6 +18,8 @@ enum DisplayCapture {
         configuration.width = Int((info.contentRect.width * CGFloat(info.pointPixelScale)).rounded())
         configuration.height = Int((info.contentRect.height * CGFloat(info.pointPixelScale)).rounded())
         configuration.showsCursor = false
+        let shot = signposter.beginInterval("screenshot")
+        defer { signposter.endInterval("screenshot", shot) }
         return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
     }
 

@@ -545,12 +545,50 @@ enum DebugRun {
 
     // MARK: --measure
 
+    /// The process's physical memory footprint, as Activity Monitor's Memory column shows it.
+    static func footprint() -> String {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count) }
+        }
+        precondition(result == KERN_SUCCESS)
+        return String(format: "%.1f MiB", Double(info.phys_footprint) / 1_048_576)
+    }
+
+    /// Each run presents a fresh, already decoded copy of the image in the display's color space, as ScreenCaptureKit returns a capture,
+    /// and moves the pointer over it once the hover geometry has joined, with the loupe on. Prints the process's memory footprint before
+    /// the first capture and after the last.
     static func measure(image: CGImage, frame: CGRect, overlay: OverlayController) async throws {
         _ = privateSetup(overlay)
+        overlay.defaults.set(true, forKey: Pref.loupe)
+        // A 2x horizontal Dock along the bottom (top-left origin): a rimmed panel with 14 icon tiles, and the magnified union of its lists.
+        let dockPanel = CGRect(x: CGFloat(image.width) / 2 - 750, y: CGFloat(image.height) - 150, width: 1500, height: 136)
+        let dockUnion = dockPanel.insetBy(dx: -74, dy: -6)
+        func decodedCopy(dock: Bool = false) -> CGImage {
+            let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0, space: NSScreen.main!.colorSpace!.cgColorSpace!,
+                                    bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)!
+            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            if dock {
+                context.translateBy(x: 0, y: CGFloat(image.height))
+                context.scaleBy(x: 1, y: -1)
+                context.addPath(CGPath(roundedRect: dockPanel.insetBy(dx: 1, dy: 1), cornerWidth: 30, cornerHeight: 30, transform: nil))
+                context.setStrokeColor(gray: 0.55, alpha: 1)
+                context.setLineWidth(2)
+                context.setFillColor(gray: 0.22, alpha: 1)
+                context.drawPath(using: .fillStroke)
+                context.setFillColor(gray: 0.9, alpha: 1)
+                for offset in stride(from: 30, to: 1450, by: 102) { context.fill(CGRect(x: dockPanel.minX + CGFloat(offset), y: dockPanel.minY + 20, width: 96, height: 96)) }
+            }
+            return context.makeImage()!
+        }
+        let launched = footprint()
         let rough = CGRect(x: 350, y: 458, width: 580, height: 64)
-        var stages: [(name: String, values: [Double])] = ["open overlay", "first draw", "snap", "encode", "pasteboard", "encode + pasteboard", "snap, full drag", "hover analysis"].map { ($0, []) }
-        var snapCount = 0
+        var stages: [(name: String, values: [Double])] = ["open overlay", "first draw", "snap", "encode", "pasteboard", "encode + pasteboard", "snap, full drag", "hover analysis", "hover move, mean", "dock tiles"].map { ($0, []) }
+        var moves: [Double] = []
+        var snapCount = 0, dockTileCount = 0
         for _ in 0..<30 {
+            let image = decodedCopy()
             overlay.present(image: image, frame: frame, displayID: nil)
             var run = [overlay.lastOpenMilliseconds, overlay.lastFirstDrawMilliseconds]
             var start = ContinuousClock.now
@@ -567,12 +605,32 @@ enum DebugRun {
             start = ContinuousClock.now
             _ = try await SmartSnap().suggest(in: image, roughBounds: CGRect(x: 10, y: 10, width: image.width - 20, height: image.height - 20))
             run.append(start.duration(to: .now).milliseconds)
+            await overlay.detectionTask?.value
             start = ContinuousClock.now
-            overlay.setMode(.text)
             overlay.detected = []
-            overlay.setMode(.capture)
+            overlay.startHover()
             await overlay.detectionTask?.value
             run.append(start.duration(to: .now).milliseconds)
+            // 60 pointer moves on a diagonal across the image, 8 ms apart like a 120 Hz pointer, each timed from the event through
+            // committing its layer changes. Back-to-back events would measure the render server's backpressure instead.
+            var runMoves: [Double] = []
+            for step in 0..<60 {
+                try await Task.sleep(for: .milliseconds(8))
+                let point = CGPoint(x: frame.width * (0.05 + 0.9 * CGFloat(step) / 59), y: frame.height * (0.95 - 0.9 * CGFloat(step) / 59))
+                let event = NSEvent.mouseEvent(with: .mouseMoved, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                               windowNumber: overlay.window.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0)!
+                start = ContinuousClock.now
+                overlay.window.sendEvent(event)
+                CATransaction.flush()
+                runMoves.append(start.duration(to: .now).milliseconds)
+            }
+            run.append(runMoves.reduce(0, +) / Double(runMoves.count))
+            let docked = decodedCopy(dock: true)
+            start = ContinuousClock.now
+            let panel = DockTiles.panel(in: docked, near: dockUnion, scale: 2)!
+            dockTileCount = DockTiles.tiles(in: docked, panel: panel, scale: 2).count
+            run.append(start.duration(to: .now).milliseconds)
+            if !stages[0].values.isEmpty { moves += runMoves }
             for index in run.indices { stages[index].values.append(run[index]) }
             overlay.dismiss()
         }
@@ -585,7 +643,12 @@ enum DebugRun {
             print(stage.name.padding(toLength: 21, withPad: " ", startingAt: 0),
                   String(format: "%8.2f  %9.2f  %9.2f", stage.values[0], percentile(warm, 0.5), percentile(warm, 0.95)))
         }
-        print("snap suggestions per run: \(snapCount)")
+        print("hover move, per event (runs 2-30, \(moves.count) events): p50 \(String(format: "%.2f", percentile(moves, 0.5))) ms, "
+              + "p95 \(String(format: "%.2f", percentile(moves, 0.95))) ms, max \(String(format: "%.2f", moves.max()!)) ms")
+        print("snap suggestions per run: \(snapCount), dock tiles: \(dockTileCount)")
+        print("footprint: before the first capture \(launched), after the last dismiss \(footprint())")
+        try await Task.sleep(for: .seconds(1))
+        print("footprint: 1 s after the last dismiss \(footprint())")
         if CGPreflightScreenCaptureAccess() {
             let id = CGMainDisplayID()
             let start = ContinuousClock.now

@@ -33,15 +33,16 @@ public enum DockTiles {
 
         func difference(_ a: Int, _ c: Int, _ a2: Int, _ c2: Int) -> Int {
             let (first, second) = (vertical ? (a * width + c) * 4 : (c * width + a) * 4, vertical ? (a2 * width + c2) * 4 : (c2 * width + a2) * 4)
-            return (0..<3).map { abs(Int(pixels[first + $0]) - Int(pixels[second + $0])) }.max()!
+            return max(abs(Int(pixels[first]) - Int(pixels[second])), abs(Int(pixels[first + 1]) - Int(pixels[second + 1])), abs(Int(pixels[first + 2]) - Int(pixels[second + 2])))
         }
         /// The 20th percentile of the edge across (or along) the Dock at each of `lines`: what is there on 80% of them.
         func persistent(_ lines: [Int], _ edge: (Int) -> Int) -> Int { lines.map(edge).sorted()[lines.count / 5] }
         /// The strongest position in `window` (ordered outermost first), moved outward to the outermost one within a rim's width (2 pt)
         /// of it that is at least half as strong. Nil when the peak is not an edge.
         func outermost(in window: [Int], strength: (Int) -> Int) -> Int? {
-            guard let peak = window.max(by: { strength($0) < strength($1) }), strength(peak) > edgeThreshold else { return nil }
-            return window.first { abs($0 - peak) <= Int(2 * scale) && strength($0) * 2 >= strength(peak) }
+            let strengths = window.map(strength)
+            guard let peak = strengths.indices.max(by: { strengths[$0] < strengths[$1] }), strengths[peak] > edgeThreshold else { return nil }
+            return window.indices.first { abs(window[$0] - window[peak]) <= Int(2 * scale) && strengths[$0] * 2 >= strengths[peak] }.map { window[$0] }
         }
 
         let center = roughAlong.lowerBound + roughAlong.count / 2
@@ -96,7 +97,7 @@ public enum DockTiles {
 
         func channelDifference(_ a: Int, _ c: Int, _ a2: Int, _ c2: Int) -> Int {
             let (first, second) = (vertical ? (a * width + c) * 4 : (c * width + a) * 4, vertical ? (a2 * width + c2) * 4 : (c2 * width + a2) * 4)
-            return (0..<3).map { abs(Int(pixels[first + $0]) - Int(pixels[second + $0])) }.max()!
+            return max(abs(Int(pixels[first]) - Int(pixels[second])), abs(Int(pixels[first + 1]) - Int(pixels[second + 1])), abs(Int(pixels[first + 2]) - Int(pixels[second + 2])))
         }
         func isEdge(_ a: Int, _ c: Int) -> Bool {
             channelDifference(a, c - 1, a, c + 1) > edgeThreshold || channelDifference(a - 1, c, a + 1, c) > edgeThreshold

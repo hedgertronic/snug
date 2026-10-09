@@ -177,22 +177,30 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 overlay.present(image: image, frame: screen.frame, displayID: id)
                 if text { overlay.setMode(.text) }
                 let scale = overlay.scale
+                let listing = signposter.beginInterval("windows")
                 var windows = await DisplayCapture.windows(on: id, pixelScale: scale)
                 // The Dock's AXList union is the magnified Dock, tens of points past the panel; the panel's rim in the frozen image gives its edges.
                 for index in windows.indices where windows[index].name == "Dock" && windows[index].frozen {
-                    Pref.logHoverLine("dock union \(windows[index].rect) scale \(scale) image \(image.width)x\(image.height)")
-                    windows[index].rect = DockTiles.panel(in: image, near: windows[index].rect, scale: scale) ?? windows[index].rect
-                    Pref.logHoverLine("dock panel \(windows[index].rect)")
-                    // Live item frames are magnified, so the tiles come from the frozen pixels; titles label them when the counts match.
-                    let tiles = DockTiles.tiles(in: image, panel: windows[index].rect, scale: scale)
+                    let union = windows[index].rect
+                    Pref.logHoverLine("dock union \(union) scale \(scale) image \(image.width)x\(image.height)")
+                    // Live item frames are magnified, so the tiles come from the frozen pixels, off main while the Dock's titles are read;
+                    // titles label them when the counts match.
                     let pid = (CGWindowListCopyWindowInfo([.optionIncludingWindow], windows[index].id) as! [[String: Any]])[0][kCGWindowOwnerPID as String] as! Int32
-                    let titles = await Accessibility.dockItemTitles(pid: pid)
+                    async let reading = Accessibility.dockItemTitles(pid: pid)
+                    let (panel, tiles) = await Task.detached {
+                        let panel = DockTiles.panel(in: image, near: union, scale: scale) ?? union
+                        return (panel, DockTiles.tiles(in: image, panel: panel, scale: scale))
+                    }.value
+                    windows[index].rect = panel
+                    Pref.logHoverLine("dock panel \(panel)")
+                    let titles = await reading
                     Pref.logHoverLine("dock tiles \(tiles.count) titles \(titles)")
                     overlay.dockTiles = tiles.enumerated().map { offset, rect in
                         Candidate(id: "dock-\(offset)", label: titles.count == tiles.count && !titles[offset].isEmpty ? titles[offset] : "Dock Item",
                                   bounds: rect, score: AccessibilityBounds.baseScore, kind: .element)
                     }
                 }
+                signposter.endInterval("windows", listing)
                 if overlay.image === image { overlay.setWindows(windows.map(\.rect), names: windows.map(\.name), ids: windows.map(\.id), frozen: windows.map(\.frozen), pointer: NSEvent.mouseLocation) }
             } catch is CancellationError {
             } catch {
