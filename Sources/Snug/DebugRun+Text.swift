@@ -12,13 +12,14 @@ extension DebugRun {
         let pasteboard = overlay.pasteboard
         let liveText = overlay.view.liveText
         var passed: [String] = []
+        var suffix = ""
 
         func require(_ condition: Bool, _ message: String) {
             guard condition else {
-                FileHandle.standardError.write(Data("Text UI verification failed: \(message)\n".utf8))
+                FileHandle.standardError.write(Data("Text UI verification failed: \(message)\(suffix)\n".utf8))
                 exit(EXIT_FAILURE)
             }
-            passed.append(message)
+            passed.append(message + suffix)
         }
         func waitFor(_ message: String, _ condition: () -> Bool) async throws {
             for _ in 0..<10000 where !condition() { try await Task.sleep(for: .milliseconds(10)) }
@@ -57,10 +58,16 @@ extension DebugRun {
         let cart = CGRect(x: 1645, y: 384, width: 582, height: 557)
         let email = CGRect(x: 326, y: 800, width: 660, height: 70)
 
+        func textView(in view: NSView) -> NSView? {
+            view.gestureRecognizers.contains { "\(type(of: $0))" == "NSImmediateActionGestureRecognizer" } ? view : view.subviews.lazy.compactMap(textView).first
+        }
+        let hold = HeldPress()
         func open() async throws {
             overlay.present(image: image, frame: frame, displayID: nil)
             key(tKey, "t")
             try await waitFor("the Live Text analysis attaches") { liveText.analysis != nil }
+            let selectionView = textView(in: liveText)!
+            if !selectionView.gestureRecognizers.contains(hold) { selectionView.addGestureRecognizer(hold) }
         }
         func copied() async -> String? {
             await overlay.commitTask?.value
@@ -99,104 +106,137 @@ extension DebugRun {
         overlay.dismiss()
         require(liveText.analysis == nil, "closing drops the analysis")
 
-        // A drag across a line selects its text; Return copies it and closes.
-        try await open()
-        textDrag(from: CGPoint(x: productName.minX + 10, y: productName.midY), to: CGPoint(x: productName.maxX - 10, y: productName.midY))
-        require(overlay.window.firstResponder !== overlay.view, "the press moved focus into Live Text, so the next keys test the routing back to the overlay")
-        require(liveText.selectedText.contains("Product name"), "a drag across a line selects its text: \(liveText.selectedText.debugDescription)")
-        require(!liveText.selectedText.contains("Billing"), "the drag selects only what it covers")
-        pasteboard.clearContents()
-        key(returnKey, "\r")
-        require(!overlay.window.isVisible, "Return after a drag reaches the overlay and closes it")
-        let line = await copied() ?? ""
-        require(line.contains("Product name") && !line.contains("Billing"), "Return copies the selected text: \(line.debugDescription)")
+        // Every drag and click case runs twice: with the press reaching Live Text at once, and held back as real pointer input is.
+        for held in [false, true] {
+            hold.isEnabled = held
+            suffix = held ? " (held press)" : ""
+            // A drag across a line selects its text; Return copies it and closes.
+            try await open()
+            textDrag(from: CGPoint(x: productName.minX + 10, y: productName.midY), to: CGPoint(x: productName.maxX - 10, y: productName.midY))
+            require(overlay.window.firstResponder !== overlay.view, "the press moved focus into Live Text, so the next keys test the routing back to the overlay")
+            require(liveText.selectedText.contains("Product name"), "a drag across a line selects its text: \(liveText.selectedText.debugDescription)")
+            require(!liveText.selectedText.contains("Billing"), "the drag selects only what it covers")
+            pasteboard.clearContents()
+            key(returnKey, "\r")
+            require(!overlay.window.isVisible, "Return after a drag reaches the overlay and closes it")
+            let line = await copied() ?? ""
+            require(line.contains("Product name") && !line.contains("Billing"), "Return copies the selected text: \(line.debugDescription)")
 
-        // A drag across a whole line reaches its last word, and a double click on the last word selects exactly that word.
-        for (box, whole, last) in [(productName, "Product name", "name"), (billing, "Billing address", "address")] {
-            try await open()
-            textDrag(from: CGPoint(x: box.minX + 3, y: box.midY), to: CGPoint(x: box.maxX - 3, y: box.midY))
-            require(liveText.selectedText == whole, "a drag across \"\(whole)\" selects the whole line: \(liveText.selectedText.debugDescription)")
-            overlay.dismiss()
-            try await open()
-            let lastWord = CGPoint(x: box.maxX - 15, y: box.midY)
-            for clicks in 1...2 {
-                mouse(.leftMouseDown, lastWord, clicks: clicks)
-                mouse(.leftMouseUp, lastWord, clicks: clicks)
+            // A drag across a whole line reaches its last word, and a double click on the last word selects exactly that word.
+            for (box, whole, last) in [(productName, "Product name", "name"), (billing, "Billing address", "address")] {
+                try await open()
+                textDrag(from: CGPoint(x: box.minX + 3, y: box.midY), to: CGPoint(x: box.maxX - 3, y: box.midY))
+                require(liveText.selectedText == whole, "a drag across \"\(whole)\" selects the whole line: \(liveText.selectedText.debugDescription)")
+                overlay.dismiss()
+                try await open()
+                let lastWord = CGPoint(x: box.maxX - 15, y: box.midY)
+                for clicks in 1...2 {
+                    mouse(.leftMouseDown, lastWord, clicks: clicks)
+                    mouse(.leftMouseUp, lastWord, clicks: clicks)
+                }
+                require(liveText.selectedText == last, "a double click on the last word of \"\(whole)\" selects exactly it: \(liveText.selectedText.debugDescription)")
+                overlay.dismiss()
             }
-            require(liveText.selectedText == last, "a double click on the last word of \"\(whole)\" selects exactly it: \(liveText.selectedText.debugDescription)")
-            overlay.dismiss()
-        }
 
-        // The word under the press is part of the selection whichever way the drag goes.
-        try await open()
-        textDrag(from: CGPoint(x: billing.maxX - 5, y: billing.midY), to: CGPoint(x: billing.minX + 3, y: billing.midY))
-        require(liveText.selectedText == "Billing address", "a backward drag from the end of the last word selects the whole line: \(liveText.selectedText.debugDescription)")
-        overlay.dismiss()
-        try await open()
-        textDrag(from: CGPoint(x: billing.maxX - 5, y: billing.midY), to: CGPoint(x: billing.minX + 40, y: billing.midY))
-        require(liveText.selectedText == "Billing address", "a backward drag from the last word into the first selects both: \(liveText.selectedText.debugDescription)")
-        overlay.dismiss()
-        try await open()
-        textDrag(from: CGPoint(x: billing.minX + 40, y: billing.midY), to: CGPoint(x: billing.maxX - 5, y: billing.midY))
-        require(liveText.selectedText == "Billing address", "a forward drag from mid-word includes the word it started in: \(liveText.selectedText.debugDescription)")
-        overlay.dismiss()
-        try await open()
-        textDrag(from: CGPoint(x: productName.maxX - 5, y: productName.midY), to: CGPoint(x: productName.minX + 3, y: productName.midY))
-        require(liveText.selectedText == "Product name", "a backward drag across \"Product name\" selects the whole line: \(liveText.selectedText.debugDescription)")
-        overlay.dismiss()
-        // Close lines: a drag from "description" in the line below back up into "Product name", and the same drag forward.
-        let below = CGPoint(x: productName.minX + 150, y: productName.maxY + 20)
-        try await open()
-        textDrag(from: below, to: CGPoint(x: productName.minX + 3, y: productName.midY))
-        require(liveText.selectedText == "Product name\nBrief description", "a backward drag across two close lines includes the word it started on: \(liveText.selectedText.debugDescription)")
-        overlay.dismiss()
-        try await open()
-        textDrag(from: CGPoint(x: productName.minX + 3, y: productName.midY), to: below)
-        require(liveText.selectedText == "Product name\nBrief description", "a forward drag across two close lines selects both: \(liveText.selectedText.debugDescription)")
-        overlay.dismiss()
+            // The word under the press is part of the selection whichever way the drag goes.
+            try await open()
+            textDrag(from: CGPoint(x: billing.maxX - 5, y: billing.midY), to: CGPoint(x: billing.minX + 3, y: billing.midY))
+            require(liveText.selectedText == "Billing address", "a backward drag from the end of the last word selects the whole line: \(liveText.selectedText.debugDescription)")
+            overlay.dismiss()
+            try await open()
+            textDrag(from: CGPoint(x: billing.maxX - 5, y: billing.midY), to: CGPoint(x: billing.minX + 40, y: billing.midY))
+            require(liveText.selectedText == "Billing address", "a backward drag from the last word into the first selects both: \(liveText.selectedText.debugDescription)")
+            overlay.dismiss()
+            try await open()
+            textDrag(from: CGPoint(x: billing.minX + 40, y: billing.midY), to: CGPoint(x: billing.maxX - 5, y: billing.midY))
+            require(liveText.selectedText == "Billing address", "a forward drag from mid-word includes the word it started in: \(liveText.selectedText.debugDescription)")
+            overlay.dismiss()
+            try await open()
+            textDrag(from: CGPoint(x: productName.maxX - 5, y: productName.midY), to: CGPoint(x: productName.minX + 3, y: productName.midY))
+            require(liveText.selectedText == "Product name", "a backward drag across \"Product name\" selects the whole line: \(liveText.selectedText.debugDescription)")
+            overlay.dismiss()
+            // Close lines: a drag from "description" in the line below back up into "Product name", and the same drag forward.
+            let below = CGPoint(x: productName.minX + 150, y: productName.maxY + 20)
+            try await open()
+            textDrag(from: below, to: CGPoint(x: productName.minX + 3, y: productName.midY))
+            require(liveText.selectedText == "Product name\nBrief description", "a backward drag across two close lines includes the word it started on: \(liveText.selectedText.debugDescription)")
+            overlay.dismiss()
+            try await open()
+            textDrag(from: CGPoint(x: productName.minX + 3, y: productName.midY), to: below)
+            require(liveText.selectedText == "Product name\nBrief description", "a forward drag across two close lines selects both: \(liveText.selectedText.debugDescription)")
+            overlay.dismiss()
 
-        // Live Text anchors a press at the start of its word; the highlight covers the pressed word while a backward drag is still going.
-        let addressEnd = CGPoint(x: billing.maxX - 5, y: billing.midY), addressStart = CGPoint(x: billing.maxX - 60, y: billing.midY)
-        let billingStart = CGPoint(x: billing.minX + 3, y: billing.midY)
-        try await open()
-        mouse(.leftMouseDown, addressEnd)
-        for step in 1...10 {
-            mouse(.leftMouseDragged, CGPoint(x: addressEnd.x + (billingStart.x - addressEnd.x) * CGFloat(step) / 10, y: billing.midY))
-        }
-        require(liveText.selectedText == "Billing address", "while a backward drag goes on, the highlight covers the word it started on: \(liveText.selectedText.debugDescription)")
-        mouse(.leftMouseUp, billingStart)
-        overlay.dismiss()
-        // A drag inside the last word selects that word, either way.
-        for (from, to) in [(addressStart, addressEnd), (addressEnd, addressStart)] {
+            // Live Text anchors a press at the start of its word; the highlight covers the pressed word while a backward drag is still going.
+            let addressEnd = CGPoint(x: billing.maxX - 5, y: billing.midY), addressStart = CGPoint(x: billing.maxX - 60, y: billing.midY)
+            let billingStart = CGPoint(x: billing.minX + 3, y: billing.midY)
             try await open()
-            textDrag(from: from, to: to)
-            require(liveText.selectedText == "address", "a drag inside one word selects it: \(liveText.selectedText.debugDescription)")
+            mouse(.leftMouseDown, addressEnd)
+            for step in 1...10 {
+                mouse(.leftMouseDragged, CGPoint(x: addressEnd.x + (billingStart.x - addressEnd.x) * CGFloat(step) / 10, y: billing.midY))
+            }
+            require(liveText.selectedText == "Billing address", "while a backward drag goes on, the highlight covers the word it started on: \(liveText.selectedText.debugDescription)")
+            mouse(.leftMouseUp, billingStart)
+            overlay.dismiss()
+            // A drag inside the last word selects that word, either way.
+            for (from, to) in [(addressStart, addressEnd), (addressEnd, addressStart)] {
+                try await open()
+                textDrag(from: from, to: to)
+                require(liveText.selectedText == "address", "a drag inside one word selects it: \(liveText.selectedText.debugDescription)")
+                overlay.dismiss()
+            }
+            // A press on the line's last pixels or just past its last glyph, then a drag back, selects the whole line.
+            for x in [billing.maxX - 2, billing.maxX + 8] {
+                try await open()
+                textDrag(from: CGPoint(x: x, y: billing.midY), to: billingStart)
+                require(liveText.selectedText == "Billing address", "a backward drag from \(Int(x - billing.maxX)) px past the line's end selects the line: \(liveText.selectedText.debugDescription)")
+                overlay.dismiss()
+            }
+            // A double click on the last word, then a drag back, keeps that word.
+            try await open()
+            mouse(.leftMouseDown, addressEnd)
+            mouse(.leftMouseUp, addressEnd)
+            mouse(.leftMouseDown, addressEnd, clicks: 2)
+            for step in 1...10 {
+                mouse(.leftMouseDragged, CGPoint(x: addressEnd.x + (billingStart.x - addressEnd.x) * CGFloat(step) / 10, y: billing.midY), clicks: 2)
+            }
+            mouse(.leftMouseUp, billingStart, clicks: 2)
+            require(liveText.selectedText == "Billing address", "a double click on the last word and a drag back select the line: \(liveText.selectedText.debugDescription)")
+            overlay.dismiss()
+            // A click without a drag selects nothing.
+            try await open()
+            mouse(.leftMouseDown, addressEnd)
+            mouse(.leftMouseUp, addressEnd)
+            require(liveText.selectedText.isEmpty, "a click on a word selects nothing: \(liveText.selectedText.debugDescription)")
+            overlay.dismiss()
+            // Live Text keeps the previous caret or selection until the pointer moves, so a press elsewhere must not anchor at the old one:
+            // after a click on "Product" or a selection of "Billing address", a press in "name" and a drag back into "Product" select the line.
+            let nameEnd = CGPoint(x: productName.maxX - 5, y: productName.midY), productWord = CGPoint(x: productName.minX + 40, y: productName.midY)
+            for (prior, before): (String, () -> Void) in [("caret", { mouse(.leftMouseDown, productWord); mouse(.leftMouseUp, productWord) }),
+                                                          ("selection", { textDrag(from: billingStart, to: addressEnd) })] {
+                try await open()
+                before()
+                mouse(.leftMouseDown, nameEnd)
+                for step in 1...10 {
+                    mouse(.leftMouseDragged, CGPoint(x: nameEnd.x + (productWord.x - nameEnd.x) * CGFloat(step) / 10, y: productName.midY))
+                }
+                require(liveText.selectedText == "Product name", "with a prior \(prior), a backward drag from the last word keeps it while dragging: \(liveText.selectedText.debugDescription)")
+                mouse(.leftMouseUp, productWord)
+                require(liveText.selectedText == "Product name", "with a prior \(prior), a backward drag from the last word keeps it after release: \(liveText.selectedText.debugDescription)")
+                overlay.dismiss()
+            }
+            // A triple click selects the line.
+            try await open()
+            for clicks in 1...3 {
+                mouse(.leftMouseDown, productWord, clicks: clicks)
+                mouse(.leftMouseUp, productWord, clicks: clicks)
+            }
+            require(liveText.selectedText.hasPrefix("Product name"), "a triple click selects the line: \(liveText.selectedText.debugDescription)")
             overlay.dismiss()
         }
-        // A press on the line's last pixels or just past its last glyph, then a drag back, selects the whole line.
-        for x in [billing.maxX - 2, billing.maxX + 8] {
-            try await open()
-            textDrag(from: CGPoint(x: x, y: billing.midY), to: billingStart)
-            require(liveText.selectedText == "Billing address", "a backward drag from \(Int(x - billing.maxX)) px past the line's end selects the line: \(liveText.selectedText.debugDescription)")
-            overlay.dismiss()
-        }
-        // A double click on the last word, then a drag back, keeps that word.
-        try await open()
-        mouse(.leftMouseDown, addressEnd)
-        mouse(.leftMouseUp, addressEnd)
-        mouse(.leftMouseDown, addressEnd, clicks: 2)
-        for step in 1...10 {
-            mouse(.leftMouseDragged, CGPoint(x: addressEnd.x + (billingStart.x - addressEnd.x) * CGFloat(step) / 10, y: billing.midY), clicks: 2)
-        }
-        mouse(.leftMouseUp, billingStart, clicks: 2)
-        require(liveText.selectedText == "Billing address", "a double click on the last word and a drag back select the line: \(liveText.selectedText.debugDescription)")
-        overlay.dismiss()
-        // A click without a drag selects nothing.
-        try await open()
-        mouse(.leftMouseDown, addressEnd)
-        mouse(.leftMouseUp, addressEnd)
-        require(liveText.selectedText.isEmpty, "a click on a word selects nothing: \(liveText.selectedText.debugDescription)")
-        overlay.dismiss()
+        // The rest runs with presses reaching Live Text at once: a held press in the found-items fixture started a drag session that waits
+        // for a real mouse up.
+        hold.isEnabled = false
+        suffix = ""
 
         // Esc with focus in Live Text closes.
         try await open()
@@ -473,4 +513,26 @@ extension DebugRun {
         context.draw(code, in: CGRect(x: width - 700, y: 200, width: 500, height: 500))
         return context.makeImage()!
     }
+}
+
+/// Holds a press back from Live Text's text view until the pointer moves 2 pt or lifts, as the immediate action recognizer VisionKit puts on
+/// that view does with real pointer input (text.log: the selection moves only on the first drag or the release). That recognizer stays
+/// inert in these unfocused runs, so without this a synthesized press reaches Live Text at once.
+final class HeldPress: NSGestureRecognizer {
+    private var start = CGPoint.zero
+
+    init() {
+        super.init(target: nil, action: nil)
+        delaysPrimaryMouseButtonEvents = true
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func mouseDown(with event: NSEvent) { start = event.locationInWindow }
+
+    override func mouseDragged(with event: NSEvent) {
+        if hypot(event.locationInWindow.x - start.x, event.locationInWindow.y - start.y) >= 2 { state = .failed }
+    }
+
+    override func mouseUp(with event: NSEvent) { state = .failed }
 }
