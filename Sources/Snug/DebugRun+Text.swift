@@ -124,6 +124,34 @@ extension DebugRun {
             overlay.dismiss()
         }
 
+        // The word under the press is part of the selection whichever way the drag goes.
+        try await open()
+        textDrag(from: CGPoint(x: billing.maxX - 5, y: billing.midY), to: CGPoint(x: billing.minX + 3, y: billing.midY))
+        require(liveText.selectedText == "Billing address", "a backward drag from the end of the last word selects the whole line: \(liveText.selectedText.debugDescription)")
+        overlay.dismiss()
+        try await open()
+        textDrag(from: CGPoint(x: billing.maxX - 5, y: billing.midY), to: CGPoint(x: billing.minX + 40, y: billing.midY))
+        require(liveText.selectedText == "Billing address", "a backward drag from the last word into the first selects both: \(liveText.selectedText.debugDescription)")
+        overlay.dismiss()
+        try await open()
+        textDrag(from: CGPoint(x: billing.minX + 40, y: billing.midY), to: CGPoint(x: billing.maxX - 5, y: billing.midY))
+        require(liveText.selectedText == "Billing address", "a forward drag from mid-word includes the word it started in: \(liveText.selectedText.debugDescription)")
+        overlay.dismiss()
+        try await open()
+        textDrag(from: CGPoint(x: productName.maxX - 5, y: productName.midY), to: CGPoint(x: productName.minX + 3, y: productName.midY))
+        require(liveText.selectedText == "Product name", "a backward drag across \"Product name\" selects the whole line: \(liveText.selectedText.debugDescription)")
+        overlay.dismiss()
+        // Close lines: a drag from "description" in the line below back up into "Product name", and the same drag forward.
+        let below = CGPoint(x: productName.minX + 150, y: productName.maxY + 20)
+        try await open()
+        textDrag(from: below, to: CGPoint(x: productName.minX + 3, y: productName.midY))
+        require(liveText.selectedText == "Product name\nBrief description", "a backward drag across two close lines includes the word it started on: \(liveText.selectedText.debugDescription)")
+        overlay.dismiss()
+        try await open()
+        textDrag(from: CGPoint(x: productName.minX + 3, y: productName.midY), to: below)
+        require(liveText.selectedText == "Product name\nBrief description", "a forward drag across two close lines selects both: \(liveText.selectedText.debugDescription)")
+        overlay.dismiss()
+
         // Esc with focus in Live Text closes.
         try await open()
         textDrag(from: CGPoint(x: productName.minX + 10, y: productName.midY), to: CGPoint(x: productName.maxX - 10, y: productName.midY))
