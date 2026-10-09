@@ -177,4 +177,18 @@ struct SelectionSessionTests {
         session.select(kind: .display); #expect(session.selected?.kind == .display)
         session.select(kind: .display); #expect(session.selected?.id == "cell")
     }
+
+    @Test func upReachesAnElementWhosePixelEdgesOverhangItsFrameSlightly() {
+        // A board found in pixels overhangs the accessibility frame of the card around it by 2 px on the right and bottom.
+        let card = Candidate(id: "card", label: "Group", bounds: CGRect(x: 200, y: 450, width: 1590, height: 750), score: 2, kind: .element)
+        let board = Candidate(id: "board", label: "Table", bounds: CGRect(x: 1042, y: 454, width: 750, height: 748), score: 0.92, kind: .table)
+        let page = Candidate(id: "page", label: "Web Area", bounds: CGRect(x: 0, y: 100, width: 2000, height: 1250), score: 1.99, kind: .element)
+        var session = SelectionSession(candidates: [card, board, page], extent: CGRect(x: 0, y: 0, width: 2000, height: 1353), anchor: CGPoint(x: 1400, y: 800))
+        session.pick(session.shortlist.firstIndex { $0.id == "board" }!)
+        session.expand()
+        #expect(session.selected?.id == "card")
+        session.shrink()
+        session.shrink()
+        #expect(session.selected?.id == "board")
+    }
 }

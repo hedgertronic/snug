@@ -90,7 +90,8 @@ public struct SelectionSession: Sendable {
     /// The smallest proposal that encloses `candidate` and is larger than it.
     private func enclosing(_ candidate: Candidate) -> Candidate? {
         candidates.filter {
-            $0.id != candidate.id && $0.bounds.insetBy(dx: -1, dy: -1).contains(candidate.bounds)
+            // Accessibility frames and pixel edges of one element can disagree by a pixel or two.
+            $0.id != candidate.id && $0.bounds.insetBy(dx: -3, dy: -3).contains(candidate.bounds)
                 && $0.bounds.width * $0.bounds.height > candidate.bounds.width * candidate.bounds.height + 1
         }.min { $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height }
     }
@@ -130,7 +131,7 @@ public struct SelectionSession: Sendable {
         if let previous = expansionPath.last { return previous }
         guard let current = selected else { return nil }
         return candidates.filter {
-            $0.id != current.id && current.bounds.contains($0.bounds) && $0.bounds.contains(anchor)
+            $0.id != current.id && current.bounds.insetBy(dx: -3, dy: -3).contains($0.bounds) && $0.bounds.contains(anchor)
                 && $0.bounds.width * $0.bounds.height < current.bounds.width * current.bounds.height - 1
         }.max { $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height }
     }
