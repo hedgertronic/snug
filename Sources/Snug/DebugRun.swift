@@ -285,6 +285,21 @@ enum DebugRun {
         key(returnKey, "\r")
         require(try await copiedSize() == windowRect.size, "Return with no selection copies the hovered window")
 
+        // A tight crop that reaches the window's bottom edge is transparent outside the window's rounded bottom corners; the top stays square.
+        open()
+        overlay.setWindows([windowRect], pointer: CGPoint(x: frame.minX + 10, y: frame.maxY - 10))
+        overlay.radii[windowRect] = 20
+        let bottomHalf = CGRect(x: windowRect.minX, y: windowRect.midY, width: windowRect.width, height: windowRect.height / 2)
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: bottomHalf)
+        pasteboard.clearContents()
+        overlay.copy()
+        await overlay.commitTask?.value
+        let clipped = NSBitmapImageRep(data: pasteboard.data(forType: .png)!)!
+        let last = clipped.pixelsHigh - 1
+        require(clipped.colorAt(x: 0, y: last)!.alphaComponent == 0 && clipped.colorAt(x: clipped.pixelsWide - 1, y: last)!.alphaComponent == 0
+            && clipped.colorAt(x: 0, y: 0)!.alphaComponent == 1 && clipped.colorAt(x: clipped.pixelsWide - 1, y: 0)!.alphaComponent == 1,
+            "a tight crop sharing a window's bottom corners clears them and keeps the top corners")
+
         // The pointer pinned against the screen edge highlights the full display; Return takes it.
         open()
         overlay.setWindows([windowRect], pointer: CGPoint(x: frame.minX + 10, y: frame.maxY - 10))

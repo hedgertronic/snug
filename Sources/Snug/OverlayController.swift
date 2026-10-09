@@ -610,6 +610,9 @@ final class OverlayController {
         guard let image else { return }
         let style = style, scale = scale
         let known = radii[crop], measuring = radiusTasks[crop]
+        // The frontmost window holding the crop: its measured radius clears the crop's corners that sit on the window's corners.
+        let container = windows.first { $0.insetBy(dx: -2, dy: -2).contains(crop) }
+        let containerRadius = container.flatMap { radii[$0] }
         if let displayID {
             let area = [Double(displayID)] + [crop.minX, crop.minY, crop.width, crop.height].map { Double($0 / scale) }
             defaults.set(area, forKey: Pref.lastArea)
@@ -618,7 +621,12 @@ final class OverlayController {
         commitTask = Task { [pasteboard, defaults] in
             do {
                 let radius = if let known { known } else { await measuring?.value ?? 0 }
-                try await Output.deliver(image, crop: crop, style: style, scale: scale, cornerRadius: radius, copy: copy, save: save,
+                var window: (rect: CGRect, radius: CGFloat)?
+                if let container {
+                    let measured = containerRadius == nil ? await Task.detached { cornerRadius(in: image, rect: container) }.value : 0
+                    window = (container, containerRadius ?? measured)
+                }
+                try await Output.deliver(image, crop: crop, style: style, scale: scale, cornerRadius: radius, window: window, copy: copy, save: save,
                                          pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
