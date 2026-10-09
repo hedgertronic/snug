@@ -49,6 +49,14 @@ final class OverlayController {
     var isHeadless = false
 
     var selection: AreaSelection?
+    /// The rectangle a drag is changing right now: the one being drawn, or the selection being resized or moved.
+    var draggedRect: CGRect? {
+        switch interaction {
+        case .drawing(let drag) where drag.rect.width > 0 || drag.rect.height > 0: drag.rect
+        case .resizing, .moving: selection?.rect
+        default: nil
+        }
+    }
     private(set) var snapPreview: CGRect?
     private(set) var image: CGImage?
     private(set) var scale: CGFloat = 1

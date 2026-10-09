@@ -123,6 +123,34 @@ extension DebugRun {
             }
         }
         require(distinct.count > 2, "the loupe test region has several distinct colors")
+
+        // Mid-drag the selection's edges run through the loupe's center cell and the rulers flag the span; after release the edges go.
+        mouse(.leftMouseDown, CGPoint(x: rough.minX, y: rough.minY))
+        mouse(.leftMouseDragged, CGPoint(x: rough.maxX, y: rough.maxY))
+        let loupeCell = Guides.loupeSize / CGFloat(Guides.loupePixels), middle = loupeCell * CGFloat(Guides.loupePixels / 2)
+        let edgeBox = guides.edges.path!.boundingBox
+        require(abs(edgeBox.maxX - middle) < 0.01 && abs(edgeBox.minY - (Guides.loupeSize - middle)) < 0.01, "mid-drag the selection's right and bottom edges run through the loupe's center cell: \(edgeBox)")
+        require(guides.flags.map { $0.string as! String } == ["\(Int(rough.minX))", "\(Int(rough.maxX))", "\(Int(rough.minY))", "\(Int(rough.maxY))"], "the rulers flag the span's start and end")
+        require(guides.widthLabel.string as? String == "\(Int(rough.width))" && !guides.widthLabel.isHidden, "the ruler shows the span's width")
+        mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
+        require(guides.edges.path == nil, "the loupe draws no selection edges once the drag ends")
+
+        // The loupe and rulers use one duration and curve, and each outro is its intro backward.
+        for hidden in [Guides.loupeHiddenTransform, Guides.rulersHiddenTransform] {
+            let intro = Guides.transition(from: hidden, showing: true), outro = Guides.transition(from: hidden, showing: false)
+            func points(_ function: CAMediaTimingFunction?) -> [Float] {
+                (0..<4).flatMap { index -> [Float] in
+                    var point: [Float] = [0, 0]
+                    function!.getControlPoint(at: index, values: &point)
+                    return point
+                }
+            }
+            let forward = points(intro.timingFunction), backward = points(outro.timingFunction)
+            require(intro.duration == outro.duration && intro.duration == Guides.transitionDuration, "the intro and outro share one duration")
+            require([(2, 4), (3, 5), (4, 2), (5, 3)].allSatisfy { abs(backward[$0] - (1 - forward[$1])) < 0.001 }, "the outro's curve mirrors the intro's: \(forward) \(backward)")
+            let forwardValues = intro.animations!.map { ($0 as! CABasicAnimation) }, backwardValues = outro.animations!.map { ($0 as! CABasicAnimation) }
+            require(zip(forwardValues, backwardValues).allSatisfy { ($0.fromValue as! NSObject) == ($1.toValue as! NSObject) && ($0.toValue as! NSObject) == ($1.fromValue as! NSObject) }, "the outro runs the intro's values backward")
+        }
         for (code, character) in [(37, "l"), (15, "r"), (7, "x")] { key(UInt16(code), character) }
         require(guides.loupe.isHidden && guides.rulers.isHidden && guides.crosshair.isHidden, "L, R, X hide the layers again")
         overlay.dismiss()

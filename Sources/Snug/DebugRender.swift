@@ -52,6 +52,19 @@ extension DebugRun {
         let rough = CGRect(x: 350, y: 458, width: 580, height: 64)
         let cart = CGRect(x: 1645, y: 384, width: 582, height: 557)
 
+        // Mid-drag with the loupe and rulers on: the selection's edges pass through the loupe's center cell and the rulers flag the span.
+        // The fixture is a dark page; the light state inverts it.
+        let light = CIContext().createCGImage(CIImage(cgImage: image).applyingFilter("CIColorInvert"), from: CGRect(x: 0, y: 0, width: image.width, height: image.height))!
+        for (name, content) in [("dark", image), ("light", light)] {
+            overlay.present(image: content, frame: frame, displayID: nil)
+            for key in [Pref.loupe, Pref.rulers] { defaults.set(true, forKey: key) }
+            drag(rough, release: false)
+            try snapshot("loupe-drag-\(name)")
+            mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
+            overlay.dismiss()
+        }
+        for key in [Pref.loupe, Pref.rulers] { defaults.set(false, forKey: key) }
+
         open()
         mouse(.mouseMoved, CGPoint(x: 1200, y: 1000))
         try snapshot("area-idle")

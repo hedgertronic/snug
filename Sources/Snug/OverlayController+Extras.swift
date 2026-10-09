@@ -167,11 +167,11 @@ extension OverlayController {
     func updateGuides() {
         let guides = view.guides
         guides.crosshair.isHidden = !defaults.bool(forKey: Pref.crosshair)
-        guides.rulers.isHidden = !defaults.bool(forKey: Pref.rulers)
-        guides.loupe.isHidden = !defaults.bool(forKey: Pref.loupe)
+        guides.setShown(guides.rulers, defaults.bool(forKey: Pref.rulers), from: Guides.rulersHiddenTransform, animated: !isHeadless)
+        guides.setShown(guides.loupe, defaults.bool(forKey: Pref.loupe), from: Guides.loupeHiddenTransform, animated: !isHeadless)
         guard !(guides.crosshair.isHidden && guides.rulers.isHidden && guides.loupe.isHidden) else { return }
         guides.update(point: CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale), pixel: pointerPixel,
                       image: image, bounds: view.bounds, scale: scale, topInset: topInset,
-                      span: selection.map { view.viewRect($0.rect) })
+                      selected: draggedRect ?? selection?.rect, dragging: draggedRect != nil)
     }
 }
