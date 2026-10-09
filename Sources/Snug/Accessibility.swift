@@ -58,6 +58,30 @@ enum Accessibility {
         }
     }
 
+    /// The titles of the Dock's items (separators excluded) in list order, top to bottom or left to right. Empty without permission or on a timeout.
+    @concurrent
+    static func dockItemTitles(pid: pid_t) async -> [String] {
+        guard AXIsProcessTrusted() else { return [] }
+        let application = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(application, messagingTimeout)
+        var lists: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(application, kAXChildrenAttribute as CFString, &lists) == .success,
+              let lists = lists as? [AXUIElement] else { return [] }
+        return lists.flatMap { list -> [String] in
+            AXUIElementSetMessagingTimeout(list, messagingTimeout)
+            var items: CFTypeRef?
+            AXUIElementCopyAttributeValue(list, kAXChildrenAttribute as CFString, &items)
+            return (items as? [AXUIElement] ?? []).compactMap { item in
+                AXUIElementSetMessagingTimeout(item, messagingTimeout)
+                var subrole: CFTypeRef?
+                AXUIElementCopyAttributeValue(item, kAXSubroleAttribute as CFString, &subrole)
+                var title: CFTypeRef?
+                AXUIElementCopyAttributeValue(item, kAXTitleAttribute as CFString, &title)
+                return subrole as? String == "AXSeparatorDockItem" ? nil : title as? String ?? ""
+            }
+        }
+    }
+
     private static func value<T>(_ attribute: String, of element: AXUIElement, type: AXValueType, as seed: T) -> T? {
         var raw: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &raw) == .success, let raw else { return nil }

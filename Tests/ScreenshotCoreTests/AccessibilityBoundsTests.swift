@@ -136,17 +136,36 @@ struct DockRectTests {
         }
     }
 
-    @Test func aDockSlotSnapsToItsIcon() async throws {
-        // The slot is the icon with 10 px of padding on each side (5 pt at 2x).
-        let slot = CGRect(x: 29, y: 190, width: 96, height: 96)
-        let frame = AXFrame(roleDescription: "application dock item", rect: CGRect(x: slot.minX / 2, y: slot.minY / 2, width: slot.width / 2, height: slot.height / 2), role: "AXDockItem", title: "Safari")
-        let result = try await AccessibilityBounds.candidates(frames: [frame], displayOrigin: .zero, scale: 2, extent: CGRect(x: 0, y: 0, width: 400, height: 1964),
-                                                              image: dockImage(panel: CGRect(x: 10, y: 140, width: 134, height: 1750)))
-        let icon = CGRect(x: 39, y: 200, width: 76, height: 76)
-        let found = try #require(result.first).bounds
-        #expect(result.first?.label == "Safari")
-        for (a, b) in [(found.minX, icon.minX), (found.maxX, icon.maxX), (found.minY, icon.minY), (found.maxY, icon.maxY)] {
-            #expect(abs(a - b) <= 3, "found \(found), icon \(icon)")
+    @Test func aVerticalDockGivesOneTightTilePerIcon() {
+        let tiles = DockTiles.tiles(in: dockImage(panel: CGRect(x: 10, y: 140, width: 134, height: 1750)), panel: CGRect(x: 10, y: 140, width: 134, height: 1750), scale: 2)
+        let icons = stride(from: 200, to: 1800, by: 102).map { CGRect(x: 39, y: $0, width: 76, height: 76) }
+        #expect(tiles.count == icons.count)
+        for (found, icon) in zip(tiles, icons) {
+            for (a, b) in [(found.minX, icon.minX), (found.maxX, icon.maxX), (found.minY, icon.minY), (found.maxY, icon.maxY)] {
+                #expect(abs(a - b) <= 3, "found \(found), icon \(icon)")
+            }
+        }
+    }
+
+    @Test func aHorizontalDockSkipsDotsAndSeparators() {
+        let panel = CGRect(x: 100, y: 1800, width: 900, height: 134)
+        let context = CGContext(data: nil, width: 1200, height: 1964, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.translateBy(x: 0, y: 1964)
+        context.scaleBy(x: 1, y: -1)
+        context.setFillColor(CGColor(gray: 0.22, alpha: 1))
+        context.fill(panel)
+        context.setFillColor(CGColor(gray: 0.9, alpha: 1))
+        let icons = [CGRect(x: 130, y: 1829, width: 76, height: 76), CGRect(x: 232, y: 1829, width: 76, height: 76), CGRect(x: 520, y: 1829, width: 76, height: 76)]
+        for icon in icons { context.fill(icon) }
+        context.fill(CGRect(x: 266, y: 1915, width: 8, height: 8))
+        context.fill(CGRect(x: 410, y: 1815, width: 3, height: 104))
+        let tiles = DockTiles.tiles(in: context.makeImage()!, panel: panel, scale: 2)
+        #expect(tiles.count == icons.count)
+        for (found, icon) in zip(tiles, icons) {
+            for (a, b) in [(found.minX, icon.minX), (found.maxX, icon.maxX), (found.minY, icon.minY), (found.maxY, icon.maxY)] {
+                #expect(abs(a - b) <= 3, "found \(found), icon \(icon)")
+            }
         }
     }
 
