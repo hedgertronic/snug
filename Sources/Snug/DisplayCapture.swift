@@ -19,6 +19,22 @@ enum DisplayCapture {
         return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
     }
 
+    /// One area of the display, `area` in display points with a top-left origin, at full pixel resolution, without Snug's windows.
+    @concurrent
+    static func image(of displayID: CGDirectDisplayID, area: CGRect) async throws -> CGImage {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        let display = content.displays.first { $0.displayID == displayID }!
+        let ownWindows = content.windows.filter { $0.owningApplication?.processID == getpid() }
+        let filter = SCContentFilter(display: display, excludingWindows: ownWindows)
+        let scale = CGFloat(SCShareableContent.info(for: filter).pointPixelScale)
+        let configuration = SCStreamConfiguration()
+        configuration.sourceRect = area
+        configuration.width = Int((area.width * scale).rounded())
+        configuration.height = Int((area.height * scale).rounded())
+        configuration.showsCursor = false
+        return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+    }
+
     /// One window as macOS captures it: real rounded corners and, unless `shadow` is false, its shadow, on a transparent
     /// background, including parts other windows cover. Needs Screen Recording.
     @concurrent

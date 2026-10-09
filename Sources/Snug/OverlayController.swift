@@ -102,6 +102,13 @@ final class OverlayController {
     var bypassSnap = false
     private var hadSelection = false
     var spaceHeld = false
+    /// Scrolling capture (G): the area in image pixels, the stitched height so far, the stitcher, and the loop capturing the area.
+    /// Debug runs replace the live frame source.
+    var scrollArea: CGRect?
+    var scrollHeight = 0
+    var stitcher: ScrollStitcher?
+    var scrollTask: Task<Void, Never>?
+    var scrollFrames: ((CGRect) async throws -> CGImage)?
 
     var snapEnabled: Bool { defaults.bool(forKey: Pref.snap) }
     var style: OutputStyle {
@@ -194,6 +201,14 @@ final class OverlayController {
     /// Closes the overlay, cancels pending work, and releases the frozen image.
     func dismiss() {
         cancelWork()
+        scrollTask?.cancel()
+        scrollTask = nil
+        scrollArea = nil
+        scrollHeight = 0
+        stitcher = nil
+        window.isOpaque = true
+        window.backgroundColor = .black
+        if !isHeadless { window.ignoresMouseEvents = false }
         view.liveText.analysis = nil
         smallImage = nil
         window.orderOut(nil)
@@ -278,7 +293,7 @@ final class OverlayController {
     }
 
     /// The rectangle a click would capture. The full display shows once a key has walked out to it or the pointer is at the screen edge.
-    private var hoverRect: CGRect? {
+    var hoverRect: CGRect? {
         guard mode == .capture, let session, let selected = session.selected,
               selected.kind != .display || session.isLocked || session.anchorAtEdge else { return nil }
         return selected.bounds
@@ -476,6 +491,7 @@ final class OverlayController {
     /// The single key dispatch point; each mode routes its own keys.
     func handleKey(_ event: NSEvent) -> Bool {
         text.notice = nil
+        if scrollArea != nil { return handleScrollKey(event) }
         var handled = handleExtrasKey(event)
         if !handled {
             switch mode {
@@ -516,6 +532,7 @@ final class OverlayController {
         case (_, true, "3"): style = .backdrop
         case (_, false, "m"): style = style.next
         case (_, false, "s"): toggleSnap()
+        case (_, false, "g"): startScroll()
         case (_, false, "f"):
             cancelWork()
             selection = AreaSelection(extent: extent, exact: extent)
@@ -658,6 +675,7 @@ final class OverlayController {
         overlays.snappedEdges = snappedEdges
         overlays.showsHandles = selection != nil
         if selection == nil, case .none = interaction { overlays.hover = hoverRect }
+        if let scrollArea { overlays.selection = scrollArea; overlays.showsHandles = false; overlays.hover = nil }
         let fit = selection.flatMap { $0.rect == $0.exact ? nil : $0.rect }
         for rect in [snapPreview, fit, overlays.hover] { measureRadius(rect) }
         overlays.radius = radii[selection?.rect ?? snapPreview ?? .null] ?? 0

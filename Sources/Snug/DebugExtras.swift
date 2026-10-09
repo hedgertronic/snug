@@ -355,7 +355,7 @@ extension DebugRun {
         require(texts(in: chrome.size) == ["\(Int(fit.width)) x \(Int(fit.height))"] && texts(in: chrome.status) == ["Snap ready: release to take it, Tab for others"], "a snap preview shows its size and Snap ready")
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.status) == ["Snapped - S: exact, Tab: other fits"], "after release on a fit: Snapped")
-        require(chrome.bottomBar.isHidden && !chrome.styleBar.isHidden && texts(in: chrome.hints) == ["Handles: resize", "Arrows: nudge", "Shift-Return: copy text", "Tab: other fits", "Esc: cancel"], "the style bar replaces the bottom bar, with the released hints")
+        require(chrome.bottomBar.isHidden && !chrome.styleBar.isHidden && texts(in: chrome.hints) == ["Handles: resize", "Arrows: nudge", "Shift-Return: copy text", "G: scroll capture", "Tab: other fits", "Esc: cancel"], "the style bar replaces the bottom bar, with the released hints")
         require(["Tight", "Margin", "Backdrop", "\u{2318}1", "\u{2318}2", "\u{2318}3", "cycles", "Save", "\u{2318}S", "Copy", "Return"].allSatisfy(texts(in: chrome.styleBar).contains), "the style bar shows segments, Save, and Copy with key caps")
         require(chrome.hints.frame.maxY < chrome.styleBar.frame.minY, "the released hints sit below the style bar")
         chrome.styleBar.segments[2].onClick()
@@ -365,6 +365,45 @@ extension DebugRun {
         require(texts(in: chrome.status) == ["Exact - Tab: fits"], "Tab to the exact drag shows Exact")
         key(53, "")
         require(chrome.styleBar.isHidden && chrome.size.isHidden && chrome.status.isHidden, "Esc takes the style bar and badges away")
+
+        // G: scrolling capture of a released selection inside a window, with frames cut from the fixture as if the page scrolled 300 px.
+        let page = CGRect(x: 400, y: 200, width: 1000, height: 600)
+        var offsets = [0, 0, 150, 300]
+        overlay.scrollFrames = { area in
+            let offset = offsets.count > 1 ? offsets.removeFirst() : offsets[0]
+            return image.cropping(to: area.offsetBy(dx: 0, dy: CGFloat(offset)))!
+        }
+        open()
+        overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        overlay.selection = AreaSelection(extent: extent, exact: page)
+        key(5, "g")
+        require(overlay.scrollArea == page && overlay.selection == nil && overlay.view.image == nil && overlay.window.ignoresMouseEvents && chrome.bottomBar.isHidden,
+                "G starts scrolling capture: the frozen image goes away and the pointer reaches the app below")
+        for _ in 0..<3000 where overlay.scrollHeight < 900 { try await Task.sleep(for: .milliseconds(10)) }
+        require(overlay.scrollHeight == 900 && texts(in: chrome.hints) == ["Scroll to capture more: 900 px", "Return: done", "Esc: cancel"],
+                "frames stitch as the area scrolls, and the hint strip counts the height: \(overlay.scrollHeight) \(texts(in: chrome.hints))")
+        key(5, "g")
+        require(overlay.scrollArea == page, "other keys do nothing while scrolling")
+        pasteboard.clearContents()
+        key(returnKey, "\r")
+        await overlay.commitTask?.value
+        let stitched = NSBitmapImageRep(data: pasteboard.data(forType: .png)!)!
+        require(!overlay.window.isVisible && stitched.pixelsWide == 1000 && stitched.pixelsHigh == 900 && overlay.window.isOpaque,
+                "Return copies the stitched image and closes: \(stitched.pixelsWide) x \(stitched.pixelsHigh)")
+        offsets = [0]
+        open()
+        overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        overlay.selection = AreaSelection(extent: extent, exact: page)
+        key(5, "g")
+        pasteboard.clearContents()
+        key(53, "")
+        require(!overlay.window.isVisible && overlay.scrollArea == nil && pasteboard.data(forType: .png) == nil, "Esc cancels scrolling capture with the clipboard untouched")
+        open()
+        overlay.selection = AreaSelection(extent: extent, exact: CGRect(x: 1700, y: 100, width: 300, height: 300))
+        key(5, "g")
+        require(overlay.scrollArea == nil, "G does nothing for an area outside every window")
+        key(53, "")
+        overlay.scrollFrames = nil
 
         // Hint strip: on a narrow screen it drops hints from the end and keeps "?: keys" last.
         open()

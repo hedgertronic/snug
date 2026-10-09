@@ -8,9 +8,13 @@ extension OverlayController {
 
     private var hints: [String] {
         let shadowHint = windowShadow(option: false) ? "Option-click: no shadow" : "Option-click: with shadow"
+        if scrollArea != nil {
+            let height = scrollHeight >= ScrollStitcher.maximumHeight ? "\(ScrollStitcher.maximumHeight) px, the limit" : "\(scrollHeight) px"
+            return ["Scroll to capture more: \(height)", "Return: done", "Esc: cancel"]
+        }
         return switch mode {
         case .text: ["Drag: select text", "Return: copy", "Option-Return: translate", "F: all text", "C: color", "A: back to capture", "?: keys"]
-        case .capture where selection != nil: ["Handles: resize", "Arrows: nudge", "Shift-Return: copy text", "Tab: other fits", "Esc: cancel"]
+        case .capture where selection != nil: ["Handles: resize", "Arrows: nudge", "Shift-Return: copy text", "G: scroll capture", "Tab: other fits", "Esc: cancel"]
         case .capture: [snapEnabled ? "Pause to snap, S: off" : "S: snap back on", "Click: capture", "Up / Down: bigger / smaller", "Option: exact", shadowHint, "F: full screen", "?: keys"]
         }
     }
@@ -27,7 +31,7 @@ extension OverlayController {
         c.help.layoutPanel()
 
         c.bottomBar.update(mode: mode, defaults: defaults, style: style)
-        c.bottomBar.isHidden = released || !defaults.bool(forKey: Pref.modeBar)
+        c.bottomBar.isHidden = released || scrollArea != nil || !defaults.bool(forKey: Pref.modeBar)
         c.styleBar.style = style
         c.styleBar.isHidden = !released
         var items = hints
