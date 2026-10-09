@@ -229,3 +229,63 @@ struct DockRectTests {
         #expect(AccessibilityBounds.dockRect(lists: bad, displayOrigin: .zero, scale: 2, extent: extent) == nil)
     }
 }
+
+/// Hover over system surfaces, with frames and rectangles from the user's hover.log (a 2x display, 1512 x 982 pt).
+struct SystemSurfaceHoverTests {
+    let extent = CGRect(x: 0, y: 0, width: 3024, height: 1964)
+
+    /// What hover merges for one lookup in the window under the pointer, as `requestAccessibility` does.
+    private func lookup(_ frames: [AXFrame], inWindowNamed name: String, frozen: Bool) async throws -> [Candidate] {
+        guard AccessibilityBounds.looksUp(inWindowNamed: name, frozen: frozen) else { return [] }
+        return try await AccessibilityBounds.candidates(frames: AccessibilityBounds.hoverLevel(frames), displayOrigin: .zero, scale: 2, extent: extent)
+    }
+
+    /// A Dock lookup's chain (item, its magnified list, the Dock application) over the frozen Dock `panel` with one icon `tile`:
+    /// a gap in the panel hovers the panel, the icon hovers its tile, and no Accessibility frame of the Dock joins.
+    private func expectPanelHover(item: CGRect, list: CGRect, panel: CGRect, tile: CGRect, gap: CGPoint) async throws {
+        let frames = [AXFrame(roleDescription: "application dock item", rect: item, role: "AXDockItem", title: "Safari"),
+                      AXFrame(roleDescription: "list", rect: list, role: "AXList"),
+                      AXFrame(roleDescription: "application", rect: .zero, role: "AXApplication", title: "Dock")]
+        let found = try await lookup(frames, inWindowNamed: "Dock", frozen: true)
+        #expect(found.isEmpty)
+        let dock = Candidate(id: "window-0", label: "Window", bounds: panel, score: 0, kind: .window)
+        let icon = Candidate(id: "dock-2", label: "Safari", bounds: tile, score: AccessibilityBounds.baseScore, kind: .element)
+        var session = SelectionSession(candidates: [dock, icon] + found, extent: extent, anchor: gap)
+        #expect(session.selected?.id == dock.id, "a gap in the Dock hovers the panel, not \(String(describing: session.selected))")
+        #expect(!session.parents.contains { $0.kind == .element })
+        session.hover(at: CGPoint(x: tile.midX, y: tile.midY))
+        #expect(session.selected?.id == icon.id)
+        #expect(session.parents.first?.id == dock.id)
+    }
+
+    @Test func theLeftVerticalMagnifiedDockHoversItsPanelNeverItsList() async throws {
+        // hover.log: a lookup over Safari with magnification on, and the panel read from the frozen image's rim.
+        try await expectPanelHover(item: CGRect(x: 5, y: 155.9, width: 115, height: 99), list: CGRect(x: 10, y: -20, width: 67, height: 1058),
+                                   panel: CGRect(x: 8, y: 140, width: 138, height: 1750), tile: CGRect(x: 29, y: 316, width: 96, height: 96), gap: CGPoint(x: 77, y: 430))
+    }
+
+    @Test func theBottomMagnifiedDockHoversItsPanelNeverItsList() async throws {
+        try await expectPanelHover(item: CGRect(x: 700, y: 880, width: 100, height: 84), list: CGRect(x: 440, y: 880, width: 640, height: 102),
+                                   panel: CGRect(x: 1000, y: 1820, width: 1024, height: 136), tile: CGRect(x: 1100, y: 1840, width: 96, height: 96), gap: CGPoint(x: 1250, y: 1888))
+    }
+
+    @Test func otherFrozenTargetsAndWindowsStillLookUp() {
+        #expect(AccessibilityBounds.looksUp(inWindowNamed: "Control Center", frozen: true))
+        #expect(AccessibilityBounds.looksUp(inWindowNamed: "Dock", frozen: false))
+    }
+
+    @Test func stageManagerHoversTheThumbnailAndNeverItsFullScreenGroup() async throws {
+        // hover.log: a lookup over the "-zsh" thumbnail in the Stage Manager strip on the right.
+        let frames = [AXFrame(roleDescription: "button", rect: CGRect(x: 1294.71, y: 342.27, width: 201.29, height: 150.23), role: "AXButton", title: "-zsh"),
+                      AXFrame(roleDescription: "list", rect: CGRect(x: 1294.71, y: 162.03, width: 201.29, height: 690.94), role: "AXList"),
+                      AXFrame(roleDescription: "group", rect: CGRect(x: 0, y: 0, width: 1512, height: 982), role: "AXGroup"),
+                      AXFrame(roleDescription: "application", rect: .zero, role: "AXApplication", title: "WindowManager")]
+        let found = try await lookup(frames, inWindowNamed: "WindowManager", frozen: false)
+        #expect(found.map(\.label) == ["Button", "List"])
+        let window = Candidate(id: "window-1", label: "Window", bounds: CGRect(x: 200, y: 100, width: 2000, height: 1500), score: -1, kind: .window)
+        var session = SelectionSession(candidates: [window] + found, extent: extent, anchor: CGPoint(x: 2838, y: 847))
+        #expect(session.selected?.bounds == CGRect(x: 2589, y: 684, width: 403, height: 301))
+        session.hover(at: CGPoint(x: 1000, y: 800))
+        #expect(session.selected?.id == window.id, "the window behind is hovered, not \(String(describing: session.selected))")
+    }
+}

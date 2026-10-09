@@ -41,6 +41,22 @@ extension DebugRun {
         context.strokePath()
     }
 
+    /// A 1280 x 800 capture at 1x: a vertical Dock on the left like the user's (4 pt from the screen edge, 69 x 720, 24 px corners,
+    /// a light rim) on a gradient wallpaper, with light icons down its middle.
+    static let leftDockFixture = fixture { context in
+        context.drawLinearGradient(CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB)!, colors: [CGColor(red: 0.1, green: 0.08, blue: 0.2, alpha: 1),
+                                              CGColor(red: 0.3, green: 0.25, blue: 0.4, alpha: 1)] as CFArray, locations: nil)!,
+                                   start: .zero, end: CGPoint(x: 1280, y: 800), options: [])
+        let panel = CGRect(x: 4, y: 40, width: 69, height: 720)
+        context.addPath(CGPath(roundedRect: panel.insetBy(dx: 1, dy: 1), cornerWidth: 23, cornerHeight: 23, transform: nil))
+        context.setStrokeColor(gray: 0.55, alpha: 1)
+        context.setLineWidth(2)
+        context.setFillColor(gray: 0.22, alpha: 1)
+        context.drawPath(using: .fillStroke)
+        context.setFillColor(gray: 0.9, alpha: 1)
+        for y in stride(from: 60, to: 720, by: 60) { context.fill(CGRect(x: 14, y: CGFloat(y), width: 48, height: 48)) }
+    }
+
     private static func fixture(_ draw: (CGContext) -> Void) -> CGImage {
         let context = CGContext(data: nil, width: 1280, height: 800, bitsPerComponent: 8, bytesPerRow: 0,
                                 space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!

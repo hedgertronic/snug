@@ -48,6 +48,10 @@ public enum AccessibilityBounds {
         frames.filter { $0.role != "AXWindow" && $0.role != "AXStaticText" && $0.rect.width >= minimumHoverSide && $0.rect.height >= minimumHoverSide }
     }
 
+    /// Whether hover looks up accessibility frames in a window: not in the frozen Dock (named "Dock" by the window listing), whose live
+    /// frames are the magnified Dock. Its panel (the window's rectangle) and its icon tiles come from the frozen image instead.
+    public static func looksUp(inWindowNamed name: String, frozen: Bool) -> Bool { !(frozen && name == "Dock") }
+
     /// Each frame clipped to the visible area of its nearest `AXScrollArea` or `AXWebArea` ancestor (itself clipped the same way);
     /// frames that end up empty are dropped. Order is kept.
     public static func clippedToViewports(_ frames: [AXFrame]) -> [AXFrame] {
@@ -61,7 +65,8 @@ public enum AccessibilityBounds {
     }
 
     /// Candidates from `frames` (innermost element first, window last), in image pixels clipped to `extent` and to scroll viewports.
-    /// The innermost element scores highest; repeated rectangles and padding-only parents keep only the innermost.
+    /// The innermost element scores highest; repeated rectangles and padding-only parents keep only the innermost. A frame covering all of
+    /// `extent` (Stage Manager's full-screen group) is the display, not an element.
     public static func candidates(frames: [AXFrame], displayOrigin: CGPoint, scale: CGFloat, extent: CGRect) async throws -> [Candidate] {
         var output: [Candidate] = []
         var inner: CGRect?
@@ -69,7 +74,7 @@ public enum AccessibilityBounds {
             let r = frame.rect
             let pixels = CGRect(x: (r.minX - displayOrigin.x) * scale, y: (r.minY - displayOrigin.y) * scale,
                                 width: r.width * scale, height: r.height * scale).intersection(extent).integral
-            guard !pixels.isNull, pixels.width >= 8, pixels.height >= 8 else { continue }
+            guard !pixels.isNull, pixels.width >= 8, pixels.height >= 8, pixels != extent else { continue }
             let tolerance = paddingTolerance * scale
             if let inner, abs(pixels.minX - inner.minX) <= tolerance, abs(pixels.minY - inner.minY) <= tolerance,
                abs(pixels.maxX - inner.maxX) <= tolerance, abs(pixels.maxY - inner.maxY) <= tolerance { continue }
