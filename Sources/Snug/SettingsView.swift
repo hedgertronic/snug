@@ -31,40 +31,71 @@ enum Shortcut {
     }
 }
 
-/// Shortcut, after capture, save folder, Accessibility status, open at login.
-struct SettingsView: View {
+extension Highlight {
+    /// Swatches for the highlight color: the system accent ("" stored) first, then the macOS accent colors in sRGB.
+    static let presets: [(name: String, hex: String)] = [
+        ("System accent", ""), ("Blue", "#007AFF"), ("Purple", "#A550A7"), ("Pink", "#F74F9E"), ("Red", "#FF5257"),
+        ("Orange", "#F7821B"), ("Yellow", "#FFC600"), ("Green", "#62BA46"), ("Graphite", "#8C8C8C")
+    ]
+}
+
+/// The Settings window's toolbar tabs. The window title follows the selected tab.
+@MainActor
+enum SettingsTabs {
+    static let width: CGFloat = 500
+    static let panes: [(title: String, symbol: String, view: AnyView)] = [
+        ("General", "gearshape", AnyView(GeneralPane())),
+        ("Appearance", "paintpalette", AnyView(AppearancePane())),
+        ("Keys", "keyboard", AnyView(KeysPane()))
+    ]
+
+    static func makeController() -> NSTabViewController {
+        let controller = NSTabViewController()
+        controller.tabStyle = .toolbar
+        for pane in panes {
+            let host = NSHostingController(rootView: pane.view)
+            host.sizingOptions = .preferredContentSize
+            let item = NSTabViewItem(viewController: host)
+            item.label = pane.title
+            item.image = NSImage(systemSymbolName: pane.symbol, accessibilityDescription: pane.title)
+            controller.addTabViewItem(item)
+        }
+        return controller
+    }
+}
+
+/// The app icon and name once, then shortcut, after capture, save folder, open at login, and the permissions.
+private struct GeneralPane: View {
     @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
     @AppStorage(Pref.afterCapture) private var afterCapture = "copy"
     @AppStorage(Pref.saveFolder) private var saveFolder = ""
-    @AppStorage(Pref.highlightColor) private var highlightColor = ""
-    @AppStorage(Pref.highlightFill) private var highlightFill = 0.0
-    @AppStorage(Pref.highlightFade) private var highlightFade = 0.42
-    @AppStorage(Pref.highlightGlow) private var highlightGlow = true
-    @AppStorage(Pref.toastPreview) private var toastPreview = true
-    @AppStorage(Pref.toastPosition) private var toastPosition = "bottomCenter"
     @State private var opensAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
-        VStack(spacing: 0) {
-            Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 20) {
-                GridRow {
-                    label("Shortcut")
-                    ShortcutRecorder(label: Shortcut.label(code: hotKeyCode, modifiers: hotKeyModifiers))
-                        .frame(width: 130, height: 28)
-                }
-                GridRow {
-                    label("After capture")
-                    Picker("After capture", selection: $afterCapture) {
-                        Text("Copy").tag("copy")
-                        Text("Copy and save").tag("copyAndSave")
+        Form {
+            Section {
+                HStack(spacing: 14) {
+                    Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 60, height: 60)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Snug").font(.system(size: 28, weight: .heavy, design: .rounded))
+                        Text("Press \(Shortcut.label(code: hotKeyCode, modifiers: hotKeyModifiers)) to capture. Press ? in the overlay for every key.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .fixedSize()
                 }
-                GridRow {
-                    label("Save to")
+                .listRowBackground(Color.clear)
+            }
+            Section {
+                LabeledContent("Shortcut") {
+                    ShortcutRecorder(label: Shortcut.label(code: hotKeyCode, modifiers: hotKeyModifiers)).frame(width: 130, height: 28)
+                }
+                Picker("After capture", selection: $afterCapture) {
+                    Text("Copy").tag("copy")
+                    Text("Copy and save").tag("copyAndSave")
+                }
+                .pickerStyle(.segmented)
+                LabeledContent("Save to") {
                     Button(URL(fileURLWithPath: saveFolder).lastPathComponent) {
                         let panel = NSOpenPanel()
                         panel.canChooseFiles = false
@@ -74,99 +105,146 @@ struct SettingsView: View {
                         if panel.runModal() == .OK { saveFolder = panel.url!.path }
                     }
                 }
-                GridRow {
-                    label("Accessibility")
-                    TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        if AXIsProcessTrusted() {
-                            Label("On", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                        } else {
-                            Button("Allow, to highlight parts of apps") { Accessibility.requestTrust() }
+                Toggle("Open at login", isOn: $opensAtLogin)
+                    .onChange(of: opensAtLogin) { _, enabled in
+                        do {
+                            if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+                        } catch {
+                            NSApp.presentError(error)
+                            opensAtLogin = SMAppService.mainApp.status == .enabled
                         }
                     }
-                }
-                GridRow {
-                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
-                    Toggle("Open at login", isOn: $opensAtLogin)
-                        .onChange(of: opensAtLogin) { _, enabled in
-                            do {
-                                if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
-                            } catch {
-                                NSApp.presentError(error)
-                                opensAtLogin = SMAppService.mainApp.status == .enabled
-                            }
-                        }
-                }
-                GridRow {
-                    label("Highlight")
-                    HStack(spacing: 10) {
-                        ColorPicker("Highlight color", selection: Binding(
-                            get: { Color(nsColor: Highlight.color(hex: highlightColor)) },
-                            set: {
-                                let picked = NSColor($0).usingColorSpace(.sRGB)!
-                                highlightColor = ColorFormat.hex.string(for: SRGBColor(red: picked.redComponent, green: picked.greenComponent, blue: picked.blueComponent))
-                            }
-                        ), supportsOpacity: false)
-                        .labelsHidden()
-                        Button("System accent") { highlightColor = "" }.disabled(highlightColor.isEmpty)
+            }
+            // macOS sends no notification when a permission changes, so the rows re-read both every second.
+            Section("Permissions") {
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    permission("Screen Recording", detail: "Required", granted: CGPreflightScreenCaptureAccess()) {
+                        CGRequestScreenCaptureAccess()
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
                     }
                 }
-                GridRow {
-                    label("Fill")
-                    HStack {
-                        Slider(value: $highlightFill, in: 0...0.3).frame(width: 180)
-                        Text("\(Int((highlightFill * 100).rounded()))%").monospacedDigit().foregroundStyle(.secondary)
-                    }
-                }
-                GridRow {
-                    label("Background fade")
-                    HStack {
-                        Slider(value: $highlightFade, in: 0...0.6).frame(width: 180)
-                        Text("\(Int((highlightFade * 100).rounded()))%").monospacedDigit().foregroundStyle(.secondary)
-                    }
-                }
-                GridRow {
-                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
-                    Toggle("Glow", isOn: $highlightGlow)
-                }
-                GridRow {
-                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
-                    HighlightPreview(color: Color(nsColor: Highlight.color(hex: highlightColor)), fill: highlightFill, fade: highlightFade, glow: highlightGlow)
-                        .frame(width: 220, height: 90)
-                }
-                GridRow {
-                    label("Toast")
-                    Toggle("Preview after capture", isOn: $toastPreview)
-                }
-                GridRow {
-                    label("Toast position")
-                    Picker("Toast position", selection: $toastPosition) {
-                        Text("Bottom center").tag("bottomCenter")
-                        Text("Bottom right").tag("bottomRight")
-                        Text("Top right").tag("topRight")
-                    }
-                    .labelsHidden()
-                    .fixedSize()
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    permission("Accessibility", detail: "Recommended, highlights parts of apps", granted: AXIsProcessTrusted()) { Accessibility.requestTrust() }
                 }
             }
-            .padding(.horizontal, 36)
-            .padding(.vertical, 32)
-            Divider()
-            Text("Everything else lives in the capture overlay. Press ? there.")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 36)
-                .padding(.top, 12)
-                .padding(.bottom, 18)
         }
-        .frame(width: 540)
-        .fixedSize()
+        .formStyle(.grouped)
+        .scrollDisabled(true)
+        .frame(width: SettingsTabs.width)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func label(_ text: String) -> some View {
-        Text(text)
-            .foregroundStyle(.secondary)
-            .frame(width: 130, alignment: .trailing)
+    private func permission(_ name: String, detail: String, granted: Bool, allow: @escaping () -> Void) -> some View {
+        LabeledContent {
+            if granted {
+                Label("On", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+            } else {
+                Button("Allow", action: allow)
+            }
+        } label: {
+            Text(name)
+            Text(detail)
+        }
+    }
+}
+
+/// The highlight (live preview, color swatches, fill, fade, glow) and the toast.
+private struct AppearancePane: View {
+    @AppStorage(Pref.highlightColor) private var highlightColor = ""
+    @AppStorage(Pref.highlightFill) private var highlightFill = 0.0
+    @AppStorage(Pref.highlightFade) private var highlightFade = 0.42
+    @AppStorage(Pref.highlightGlow) private var highlightGlow = 0.5
+    @AppStorage(Pref.toastPreview) private var toastPreview = true
+    @AppStorage(Pref.toastPosition) private var toastPosition = "bottomCenter"
+
+    private var customSelected: Bool { !Highlight.presets.contains { $0.hex == highlightColor } }
+
+    var body: some View {
+        Form {
+            Section("Highlight") {
+                HighlightPreview(color: Color(nsColor: Highlight.color(hex: highlightColor)), fill: highlightFill, fade: highlightFade, glow: highlightGlow)
+                    .frame(height: 104)
+                    .listRowInsets(EdgeInsets())
+                LabeledContent("Color") {
+                    HStack(spacing: 6) {
+                        ForEach(Highlight.presets, id: \.hex) { preset in
+                            swatch(Color(nsColor: Highlight.color(hex: preset.hex)), selected: highlightColor == preset.hex)
+                                .onTapGesture { highlightColor = preset.hex }
+                                .help(preset.name)
+                        }
+                        swatch(customSelected ? Color(nsColor: Highlight.color(hex: highlightColor)) : nil, selected: customSelected)
+                            .overlay {
+                                ColorPicker("Custom...", selection: Binding(
+                                    get: { Color(nsColor: Highlight.color(hex: highlightColor)) },
+                                    set: {
+                                        let picked = NSColor($0).usingColorSpace(.sRGB)!
+                                        highlightColor = ColorFormat.hex.string(for: SRGBColor(red: picked.redComponent, green: picked.greenComponent, blue: picked.blueComponent))
+                                    }
+                                ), supportsOpacity: false)
+                                .labelsHidden()
+                                .opacity(0.02)
+                            }
+                            .help("Custom...")
+                    }
+                }
+                slider("Fill", value: $highlightFill, range: 0...0.3)
+                slider("Background fade", value: $highlightFade, range: 0...0.6)
+                slider("Glow", value: $highlightGlow, range: 0...1)
+            }
+            Section("After capture") {
+                Toggle(isOn: $toastPreview) {
+                    Text("Show a preview")
+                    Text("Thumbnail above the toast. Drag it out to drop the image.")
+                }
+                Picker("Toast position", selection: $toastPosition) {
+                    Text("Bottom center").tag("bottomCenter")
+                    Text("Bottom right").tag("bottomRight")
+                    Text("Top right").tag("topRight")
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .scrollDisabled(true)
+        .frame(width: SettingsTabs.width)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// A 20 pt circle; a nil color draws the "Custom..." rainbow. The selected one gets an outer ring.
+    private func swatch(_ color: Color?, selected: Bool) -> some View {
+        Circle()
+            .fill(color.map { AnyShapeStyle($0) } ?? AnyShapeStyle(AngularGradient(colors: [.red, .yellow, .green, .cyan, .blue, .purple, .red], center: .center)))
+            .frame(width: 20, height: 20)
+            .overlay(Circle().stroke(.black.opacity(0.15), lineWidth: 0.5))
+            .padding(2)
+            .overlay(Circle().stroke(Color.primary.opacity(0.7), lineWidth: 1.5).opacity(selected ? 1 : 0))
+            .contentShape(Circle())
+    }
+
+    /// A slider with its value as a percentage.
+    private func slider(_ title: String, value: Binding<Double>, range: ClosedRange<Double>) -> some View {
+        LabeledContent(title) {
+            HStack {
+                Slider(value: value, in: range).frame(width: 180)
+                Text("\(Int((value.wrappedValue * 100).rounded()))%").monospacedDigit().foregroundStyle(.secondary).frame(width: 40, alignment: .trailing)
+            }
+        }
+    }
+}
+
+/// A read-only guide to the overlay keys, built from the same table as the ? sheet.
+private struct KeysPane: View {
+    var body: some View {
+        Form {
+            ForEach(HelpSheet.columns, id: \.title) { column in
+                Section(column.title) {
+                    ForEach(column.rows, id: \.action) { row in
+                        LabeledContent(row.action) { Text(row.keys).font(.system(size: 11, weight: .semibold, design: .monospaced)) }
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: SettingsTabs.width, height: 520)
     }
 }
 
@@ -175,7 +253,7 @@ struct HighlightPreview: View {
     let color: Color
     let fill: Double
     let fade: Double
-    let glow: Bool
+    let glow: Double
 
     var body: some View {
         Canvas { context, size in
@@ -190,7 +268,7 @@ struct HighlightPreview: View {
             context.fill(dim, with: .color(.black.opacity(fade)), style: FillStyle(eoFill: true))
             context.fill(shape, with: .color(color.opacity(fill)))
             context.drawLayer { layer in
-                if glow { layer.addFilter(.shadow(color: color.opacity(0.45), radius: 9)) }
+                layer.addFilter(.shadow(color: color.opacity(0.9 * glow), radius: 3 + 9 * glow))
                 layer.stroke(shape, with: .color(color), lineWidth: 1.5)
             }
             context.stroke(Path(roundedRect: sample.insetBy(dx: -2.25, dy: -2.25), cornerRadius: 12.25), with: .color(color.opacity(0.28)), lineWidth: 3)

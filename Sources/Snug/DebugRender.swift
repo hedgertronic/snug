@@ -309,17 +309,13 @@ extension DebugRun {
         let firstRun = NSHostingView(rootView: FirstRunView())
         try render("first-run", FirstRunView())
         require(firstRun.fittingSize.width == 500, "the first-run window is 500 pt wide")
-        try render("settings", SettingsView())
-        try render("settings-highlight", VStack(spacing: 16) {
-            HighlightPreview(color: Color(nsColor: Highlight.color(hex: "")), fill: 0, fade: 0.42, glow: true).frame(width: 220, height: 90)
-            HighlightPreview(color: Color(nsColor: Highlight.color(hex: "#E5484D")), fill: 0.15, fade: 0.55, glow: false).frame(width: 220, height: 90)
-        }.padding(20))
+        try renderSettings(into: directory)
 
         let menu = SnugApp.makeMenu(defaults: defaults)
         let capture = menu.items[0]
-        require(menu.items.map(\.title) == ["Capture", "Copy Text", "Repeat Last Area", "Open Image...", "", "Snap While Dragging", "", "Settings...", "Quit"], "menu items: \(menu.items.map(\.title))")
+        require(menu.items.map(\.title) == ["Capture", "Capture Text", "Repeat Last Area", "Open Image...", "", "Settings...", "About Snug", "", "Quit Snug"], "menu items: \(menu.items.map(\.title))")
         require(capture.keyEquivalent == " " && capture.keyEquivalentModifierMask == [.control, .shift], "Capture shows the shortcut as a key equivalent")
-        require(menu.items[7].keyEquivalent == "," && menu.items[8].keyEquivalent == "q", "Settings and Quit carry their command keys")
+        require(menu.items[5].keyEquivalent == "," && menu.items[8].keyEquivalent == "q", "Settings and Quit carry their command keys")
         require(Shortcut.label(from: defaults) == "\u{2303}\u{21E7}Space", "the default shortcut displays as glyphs: \(Shortcut.label(from: defaults))")
         defaults.set(40, forKey: Pref.hotKeyCode)
         defaults.set(Int(NSEvent.ModifierFlags([.control, .option]).rawValue), forKey: Pref.hotKeyModifiers)
@@ -329,5 +325,24 @@ extension DebugRun {
         let hintFill = overlay.chrome.hints.layer!.backgroundColor.flatMap(NSColor.init(cgColor:))!
         require(hintFill.alphaComponent >= 0.9, "the hint strip is nearly opaque: \(hintFill.alphaComponent)")
         exit(EXIT_SUCCESS)
+    }
+
+    /// Each Settings tab hosted in an NSHostingView inside a window that is never shown, drawn to a PNG in `directory`.
+    static func renderSettings(into directory: URL) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let tabs = SettingsTabs.makeController()
+        for item in tabs.tabViewItems {
+            let host = NSHostingView(rootView: (item.viewController as! NSHostingController<AnyView>).rootView)
+            let offscreen = NSWindow(contentRect: CGRect(origin: .zero, size: host.fittingSize), styleMask: [.borderless], backing: .buffered, defer: true)
+            offscreen.contentView = host
+            host.layoutSubtreeIfNeeded()
+            precondition(host.fittingSize.width == SettingsTabs.width, "the \(item.label) tab is \(SettingsTabs.width) pt wide: \(host.fittingSize.width)")
+            let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
+            host.cacheDisplay(in: host.bounds, to: rep)
+            let file = directory.appending(path: "settings-\(item.label.lowercased()).png")
+            try rep.representation(using: .png, properties: [:])!.write(to: file)
+            print(file.path, host.fittingSize)
+        }
+        precondition(tabs.tabViewItems.map(\.label) == ["General", "Appearance", "Keys"], "Settings tabs: \(tabs.tabViewItems.map(\.label))")
     }
 }

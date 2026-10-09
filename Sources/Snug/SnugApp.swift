@@ -37,6 +37,10 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             }
             return
         }
+        if let index = arguments.firstIndex(of: "--render-settings") {
+            try! DebugRun.renderSettings(into: URL(fileURLWithPath: arguments[index + 1]))
+            exit(EXIT_SUCCESS)
+        }
         let image = arguments.firstIndex(of: "--image").map { index in
             let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: arguments[index + 1]) as CFURL, nil)!
             return CGImageSourceCreateImageAtIndex(source, 0, nil)!
@@ -149,20 +153,23 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         let capture = menu.addItem(withTitle: "Capture", action: #selector(captureFromMenu), keyEquivalent: "")
         capture.setShortcut(from: defaults)
-        menu.addItem(withTitle: "Copy Text", action: #selector(copyTextFromMenu), keyEquivalent: "")
+        menu.addItem(withTitle: "Capture Text", action: #selector(copyTextFromMenu), keyEquivalent: "")
         menu.addItem(withTitle: "Repeat Last Area", action: #selector(repeatLastArea), keyEquivalent: "")
         menu.addItem(withTitle: "Open Image...", action: #selector(openImage), keyEquivalent: "")
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Snap While Dragging", action: #selector(toggleSnap), keyEquivalent: "")
-        menu.addItem(.separator())
         menu.addItem(withTitle: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
-        menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(withTitle: "About Snug", action: #selector(showAbout), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit Snug", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         return menu
     }
 
     @objc private func captureFromMenu() { capture() }
 
-    @objc private func toggleSnap() { UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: Pref.snap), forKey: Pref.snap) }
+    @objc private func showAbout() {
+        NSApp.activate()
+        NSApp.orderFrontStandardAboutPanel(nil)
+    }
 
     @objc private func copyTextFromMenu() { capture(text: true) }
 
@@ -254,8 +261,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     @objc private func showSettings() {
         if settingsWindow == nil {
-            let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
-            window.title = "Snug Settings"
+            let window = NSWindow(contentViewController: SettingsTabs.makeController())
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
             settingsWindow = window
@@ -275,14 +281,6 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         NSApp.activate()
         firstRunWindow!.center()
         firstRunWindow!.makeKeyAndOrderFront(nil)
-    }
-}
-
-extension SnugApp: NSMenuItemValidation {
-    /// Checks Snap While Dragging when snapping is on; the S key in the overlay changes the same preference.
-    func validateMenuItem(_ item: NSMenuItem) -> Bool {
-        if item.action == #selector(toggleSnap) { item.state = UserDefaults.standard.bool(forKey: Pref.snap) ? .on : .off }
-        return true
     }
 }
 
