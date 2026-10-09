@@ -312,29 +312,46 @@ extension DebugRun {
         open()
         overlay.detectionTask?.cancel()
         mouse(.mouseMoved, flat)
-        require(["Capture", "Text", "Loupe", "Rulers", "Snap", "Tight", "M", "Shadow", "D"].allSatisfy(texts(in: chrome.bottomBar).contains), "the bottom bar shows modes, toggles, style, and shadow with key caps: \(texts(in: chrome.bottomBar))")
+        require(texts(in: chrome.bottomBar) == ["Mode", "Capture", "A", "Text", "T", "View", "Loupe", "L", "Rulers", "R", "Output", "Snap", "S", "Round", "O", "Tight", "M", "Shadow", "D"], "the bottom bar shows three titled groups with key caps: \(texts(in: chrome.bottomBar))")
         let bottom = chrome.bottomBar
         let barButtons = [.capture, .text].map { bottom.modeButtons[$0]! } + bottom.toggles.map { $0.1 } + [bottom.styleButton, bottom.shadowButton]
         func clipped() -> [String] {
             barButtons.filter { $0.title.cell!.cellSize.width > $0.title.frame.width || $0.title.frame.maxX > $0.frame.width }.map { $0.title.stringValue }
         }
-        let barWidth = bottom.frame.width
+        var styleWidths: [CGFloat] = []
         for style in OutputStyle.allCases {
             for mode in [OverlayController.Mode.capture, .text] {
                 defaults.set(style.rawValue, forKey: Pref.style)
                 bottom.click(mode)
                 overlay.refresh()
-                require(clipped().isEmpty && bottom.frame.width == barWidth, "no bar title clips and the bar keeps its width with \(style) and \(mode) selected: \(clipped()) \(bottom.frame.width)")
+                let button = bottom.styleButton
+                require(clipped().isEmpty && abs(button.cap!.frame.minX - button.title.frame.maxX - 7) < 0.01 && abs(button.bounds.maxX - button.cap!.frame.maxX - 10) < 0.01,
+                        "no bar title clips and the style button hugs \(style) with \(mode) selected: \(clipped()) \(button.frame)")
             }
+            styleWidths.append(bottom.styleButton.frame.width)
         }
+        require(styleWidths[0] < styleWidths[1] && bottom.frame.width > 0, "the style button is narrower for Tight than Backdrop: \(styleWidths)")
         defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
         bottom.click(.capture)
         overlay.refresh()
         require(barButtons.allSatisfy { $0.cap!.frame.minX >= $0.title.frame.maxX }, "every bar button shows its key cap after its title")
         bottom.layoutSubtreeIfNeeded()
-        let d = bottom.dividers.map(\.frame.minX), toggles = bottom.toggles.map { $0.1 }
-        require(bottom.modeButtons[.text]!.frame.maxX <= d[0] && d[0] <= toggles[0].frame.minX && toggles[2].frame.maxX <= d[1] && d[1] <= bottom.styleButton.frame.minX
-                && bottom.styleButton.frame.maxX <= bottom.shadowButton.frame.minX, "the bar has three groups: modes | loupe, rulers, snap | style, shadow")
+        func box(_ view: NSView) -> CGRect { bottom.convert(view.bounds, from: view) }
+        let d = bottom.dividers.map { box($0).minX }, toggles = bottom.toggles.map { box($0.1) }
+        require(box(bottom.modeButtons[.text]!).maxX <= d[0] && d[0] <= toggles[0].minX && toggles[1].maxX <= d[1] && d[1] <= toggles[2].minX
+                && toggles[3].maxX <= box(bottom.styleButton).minX && box(bottom.styleButton).maxX <= box(bottom.shadowButton).minX,
+                "the bar has three groups: Capture, Text | Loupe, Rulers | Snap, Round, style, Shadow")
+        let titles = bottom.groups.map { box($0.arrangedSubviews[0]) }, buttonRows = bottom.groups.map { box($0.arrangedSubviews[1]) }
+        require(zip(titles, buttonRows).allSatisfy { $0.minY >= $1.maxY } && titles.allSatisfy { $0.height < 14 } && bottom.frame.height < 66,
+                "each group title sits above its buttons and the bar stays compact: \(titles) \(buttonRows) \(bottom.frame.height)")
+        defaults.set(false, forKey: Pref.roundCorners)
+        overlay.refresh()
+        require(bottom.toggles[3].1.layer!.backgroundColor == nil, "with Round off its button is not highlighted")
+        bottom.toggles[3].1.onClick()
+        require(defaults.bool(forKey: Pref.roundCorners) && bottom.toggles[3].1.layer!.backgroundColor != nil, "the Round button turns round corners on and highlights")
+        bottom.toggles[3].1.onClick()
+        require(!defaults.bool(forKey: Pref.roundCorners), "the Round button turns round corners off")
+        defaults.set(true, forKey: Pref.roundCorners)
         defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
         require(defaults.bool(forKey: Pref.shadow) && bottom.shadowButton.layer!.backgroundColor != nil, "the window shadow defaults to on")
         key(2, "d")
@@ -371,14 +388,14 @@ extension DebugRun {
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.status) == ["Snapped"], "after release on a fit: Snapped")
         require(chrome.bottomBar.isHidden && !chrome.actionBar.isHidden && texts(in: chrome.hints)
-                    == ["\u{2318}1", "\u{2318}2", "\u{2318}3", "style", "Tab", "other fits", "S", "exact", "\u{2190}", "\u{2192}", "\u{2191}", "\u{2193}", "nudge", "\u{2325}\u{2190}", "edge", "Dots", "corners", "G", "scroll capture", "esc", "cancel"],
+                    == ["\u{2318}1", "\u{2318}2", "style", "Tab", "other fits", "S", "exact", "\u{2190}", "\u{2192}", "\u{2191}", "\u{2193}", "nudge", "\u{2325}\u{2190}", "edge", "Dots", "corners", "G", "scroll capture", "esc", "cancel"],
                 "the action bar replaces the bottom bar, with the released hints: \(texts(in: chrome.hints))")
-        require(texts(in: chrome.actionBar) == ["Tight", "Margin", "Backdrop", "Text", "\u{21E7}\u{21A9}", "Save", "\u{2318}S", "Copy", "\u{21A9}"], "the action bar shows styles, Text, Save, and Copy with key caps: \(texts(in: chrome.actionBar))")
+        require(texts(in: chrome.actionBar) == ["Tight", "Backdrop", "Text", "\u{21E7}\u{21A9}", "Save", "\u{2318}S", "Copy", "\u{21A9}"], "the action bar shows styles, Text, Save, and Copy with key caps: \(texts(in: chrome.actionBar))")
         let released = overlay.view.viewRect(overlay.selection!.rect)
         require(chrome.actionBar.frame.maxY == released.minY - 8 && chrome.actionBar.frame.minX == min(max(released.minX, 8), overlay.view.bounds.width - chrome.actionBar.frame.width - 8),
                 "the action bar is attached under the selection: \(chrome.actionBar.frame) \(released)")
         require(chrome.size.frame.minY == released.maxY + 8, "the size badge sits above the selection")
-        chrome.actionBar.segments[2].onClick()
+        chrome.actionBar.segments[1].onClick()
         require(overlay.style == .backdrop, "clicking a style segment sets the style")
         defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
         for _ in 0..<overlay.selection!.fits.count where texts(in: chrome.status) != ["Exact"] { key(48, "") }

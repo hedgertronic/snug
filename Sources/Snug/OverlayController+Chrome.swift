@@ -15,7 +15,7 @@ extension OverlayController {
         return switch mode {
         case .text: [(["Drag"], "select text"), (["\u{21A9}"], "copy"), (["\u{2325}", "\u{21A9}"], "translate"), (["F"], "all text"), (["C"], "color"), (["?"], "all keys")]
         case .capture where selection != nil:
-            [(["\u{2318}1", "\u{2318}2", "\u{2318}3"], "style"), (["Tab"], "other fits"), (["S"], selection!.rect == selection!.exact ? "best fit" : "exact"),
+            [(["\u{2318}1", "\u{2318}2"], "style"), (["Tab"], "other fits"), (["S"], selection!.rect == selection!.exact ? "best fit" : "exact"),
              (["\u{2190}", "\u{2192}", "\u{2191}", "\u{2193}"], "nudge"), (["\u{2325}\u{2190}"], "edge"),
              (["Dots"], "corners"), (["G"], "scroll capture"), (["esc"], "cancel")]
         case .capture: [(["Click"], "capture"), (["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["\u{2325}"], "drag exact"), (["F"], "full screen"), (["?"], "all keys")]

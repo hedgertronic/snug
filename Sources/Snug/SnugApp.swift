@@ -92,11 +92,47 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     private func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button!.image = NSImage(systemSymbolName: "rectangle.dashed", accessibilityDescription: "Snug")
+        item.button!.image = Self.menuBarIcon()
         let menu = Self.makeMenu(defaults: .standard)
         captureItem = menu.items[0]
         item.menu = menu
         statusItem = item
+    }
+
+    /// The logo as a template image: the app tile as a rounded outline, the dashed arch inside it, and the band across its lower part.
+    /// Drawn in an 18 pt space and scaled to whatever rectangle it is asked for, so it is sharp at 1x and 2x.
+    static func menuBarIcon() -> NSImage {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
+            let transform = NSAffineTransform()
+            transform.scale(by: rect.width / 18)
+            transform.concat()
+            let tile = NSBezierPath(roundedRect: CGRect(x: 1.25, y: 1.25, width: 15.5, height: 15.5), xRadius: 3.5, yRadius: 3.5)
+            NSGraphicsContext.saveGraphicsState()
+            tile.addClip()
+            let band = NSBezierPath()
+            band.move(to: CGPoint(x: 0, y: 5.4))
+            band.curve(to: CGPoint(x: 18, y: 5.4), controlPoint1: CGPoint(x: 6, y: 7.2), controlPoint2: CGPoint(x: 12, y: 7.2))
+            band.line(to: CGPoint(x: 18, y: 0))
+            band.line(to: CGPoint(x: 0, y: 0))
+            band.fill()
+            NSGraphicsContext.restoreGraphicsState()
+            tile.lineWidth = 1.3
+            tile.stroke()
+            let arch = NSBezierPath()
+            arch.move(to: CGPoint(x: 4.66, y: 9))
+            arch.line(to: CGPoint(x: 4.66, y: 11.79))
+            arch.appendArc(withCenter: CGPoint(x: 6.83, y: 11.79), radius: 2.17, startAngle: 180, endAngle: 90, clockwise: true)
+            arch.line(to: CGPoint(x: 11.17, y: 13.96))
+            arch.appendArc(withCenter: CGPoint(x: 11.17, y: 11.79), radius: 2.17, startAngle: 90, endAngle: 0, clockwise: true)
+            arch.line(to: CGPoint(x: 13.34, y: 9))
+            arch.lineWidth = 1.3
+            arch.setLineDash([1.3, 1.5], count: 2, phase: 0)
+            arch.stroke()
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "Snug"
+        return image
     }
 
     static func makeMenu(defaults: UserDefaults) -> NSMenu {

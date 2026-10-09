@@ -82,8 +82,6 @@ extension DebugRun {
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         try snapshot("area-released")
         key(0, "2", .command)
-        try snapshot("area-margin")
-        key(0, "3", .command)
         try snapshot("area-backdrop")
         overlay.dismiss()
         defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
@@ -166,6 +164,41 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: 1200, y: 90))
         try snapshot("area-idle-notch")
         overlay.dismiss()
+
+        // The menu bar icon on light and dark menu bars: real pixel size (1x, 2x) above, magnified to 144 px below.
+        let icon = SnugApp.menuBarIcon()
+        let sheet = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 640, pixelsHigh: 200, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                     isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: sheet)
+        NSGraphicsContext.current!.imageInterpolation = .none
+        for (index, (scale, dark)) in [(1, false), (2, false), (1, true), (2, true)].enumerated() {
+            let x = CGFloat(index * 160)
+            let pixels = CGFloat(18 * scale)
+            let small = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 18 * scale, pixelsHigh: 18 * scale, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                         isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: small)
+            NSColor(white: dark ? 0.12 : 0.93, alpha: 1).setFill()
+            CGRect(x: 0, y: 0, width: pixels, height: pixels).fill()
+            let tinted = NSImage(size: icon.size, flipped: false) { rect in
+                icon.draw(in: rect)
+                (dark ? NSColor.white : NSColor.black).set()
+                rect.fill(using: .sourceIn)
+                return true
+            }
+            tinted.draw(in: CGRect(x: 0, y: 0, width: pixels, height: pixels))
+            NSGraphicsContext.restoreGraphicsState()
+            NSColor(white: dark ? 0.12 : 0.93, alpha: 1).setFill()
+            CGRect(x: x, y: 0, width: 160, height: 200).fill()
+            let image = NSImage(size: CGSize(width: pixels, height: pixels))
+            image.addRepresentation(small)
+            image.draw(in: CGRect(x: x + 8, y: 176, width: pixels, height: pixels))
+            image.draw(in: CGRect(x: x + 8, y: 8, width: 144, height: 144))
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        try sheet.representation(using: .png, properties: [:])!.write(to: directory.appending(path: "menubar-icon.png"))
+        print(directory.appending(path: "menubar-icon.png").path)
 
         let toast = Toast(png: nil, message: "Copied", detail: "1824 x 768  backdrop", file: nil, color: nil).contentView!
         let rep = toast.bitmapImageRepForCachingDisplay(in: toast.bounds)!

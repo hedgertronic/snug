@@ -150,24 +150,29 @@ enum DebugRun {
         let tightSize = try await copiedSize()
         require(tightSize == tight.size, "Return writes a PNG of \(tight.size)")
 
-        // Margin and backdrop sizes.
-        for (command, extra, name) in [("2", 32 * scale, "margin"), ("3", 48 * scale, "backdrop")] {
-            open()
-            pressDrag(rough)
-            try await waitFor("preview for \(name)") { overlay.snapPreview != nil }
-            release(rough)
-            let crop = overlay.selection!.rect
-            key(0, command, .command)
-            require(overlay.style.rawValue == name && defaults.string(forKey: Pref.style) == name, "Cmd-\(command) sets \(name) and remembers it")
-            pasteboard.clearContents()
-            key(returnKey, "\r")
-            let size = try await copiedSize()
-            require(size == CGSize(width: crop.width + extra, height: crop.height + extra),
-                    "\(name) PNG is \(extra / scale) pt larger per dimension (\(String(describing: size)))")
-        }
+        // Backdrop size, Cmd-3 gone, and a stored "margin" reading as tight.
+        open()
+        pressDrag(rough)
+        try await waitFor("preview for backdrop") { overlay.snapPreview != nil }
+        release(rough)
+        let crop = overlay.selection!.rect
+        key(0, "2", .command)
+        require(overlay.style == .backdrop && defaults.string(forKey: Pref.style) == "backdrop", "Cmd-2 sets backdrop and remembers it")
+        pasteboard.clearContents()
+        key(returnKey, "\r")
+        let size = try await copiedSize()
+        require(size == CGSize(width: crop.width + 48 * scale, height: crop.height + 48 * scale),
+                "backdrop PNG is 48 pt larger per dimension (\(String(describing: size)))")
         open()
         key(0, "m")
         require(overlay.style == .tight, "M cycles backdrop to tight")
+        key(0, "m")
+        require(overlay.style == .backdrop, "M cycles tight to backdrop")
+        key(0, "3", .command)
+        require(overlay.style == .backdrop, "Cmd-3 does nothing now")
+        defaults.set("margin", forKey: Pref.style)
+        require(overlay.style == .tight, "a stored margin style reads as tight")
+        defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
         overlay.dismiss()
 
         // Cmd-S saves only, to the save folder.
