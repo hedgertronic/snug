@@ -405,6 +405,25 @@ enum DebugRun {
         try await waitFor("the frozen panel's radius is measured") { overlay.radii[dockPanel] != nil }
         require(abs(overlay.radii[dockPanel]! - 30) <= 4, "a frozen Dock-like panel with a gradient takes its outline's radius: \(overlay.radii[dockPanel]!)")
         overlay.dismiss()
+        // The left vertical Dock, 4 pt from the screen edge: a gap between icons hovers the panel with its radius, and a click copies the
+        // panel with transparent corners.
+        openFixture(DebugRun.leftDockFixture)
+        let leftDock = CGRect(x: 4, y: 40, width: 69, height: 720)
+        overlay.setWindows([leftDock], names: ["Dock"], ids: [3], frozen: [true], pointer: CGPoint(x: frame.minX + 600, y: frame.maxY - 400))
+        mouse(.mouseMoved, CGPoint(x: 38, y: 114))
+        require(overlay.view.overlays.hover == leftDock, "a gap in the left Dock hovers its panel: \(String(describing: overlay.view.overlays.hover))")
+        try await waitFor("the left Dock's radius is measured") { overlay.radii[leftDock] != nil }
+        require(abs(overlay.radii[leftDock]! - 23) <= 4 && overlay.view.overlays.hoverRadii == CornerRadii(overlay.radii[leftDock]!),
+                "the left Dock's outline takes its radius: \(overlay.radii[leftDock]!), drawn \(overlay.view.overlays.hoverRadii)")
+        pasteboard.clearContents()
+        mouse(.leftMouseDown, CGPoint(x: 38, y: 114))
+        mouse(.leftMouseUp, CGPoint(x: 38, y: 114))
+        await overlay.commitTask?.value
+        let dockShot = NSBitmapImageRep(data: pasteboard.data(forType: .png)!)!
+        require(CGSize(width: dockShot.pixelsWide, height: dockShot.pixelsHigh) == leftDock.size && dockShot.colorAt(x: 0, y: 0)!.alphaComponent == 0
+                && dockShot.colorAt(x: dockShot.pixelsWide - 1, y: dockShot.pixelsHigh - 1)!.alphaComponent == 0 && dockShot.colorAt(x: 34, y: 2)!.alphaComponent == 1,
+                "a click on the left Dock copies its panel with rounded corners")
+        overlay.dismiss()
         let pillFixture = DebugRun.pillFixture, cardsFixture = DebugRun.cardsFixture
         defaults.set(true, forKey: Pref.snap)
         let extent = CGRect(x: 0, y: 0, width: 1280, height: 800)
