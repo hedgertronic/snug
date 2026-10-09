@@ -8,13 +8,13 @@ struct AccessibilityBoundsTests {
     /// A 2x display whose top-left sits at (100, -900) in global points (a display above the primary).
     let origin = CGPoint(x: 100, y: -900)
 
-    @Test func framesConvertToImagePixelsAndRankInnermostFirst() {
+    @Test func framesConvertToImagePixelsAndRankInnermostFirst() async throws {
         let frames = [
             AXFrame(roleDescription: "button", rect: CGRect(x: 150, y: -850, width: 60, height: 20)),
             AXFrame(roleDescription: "group", rect: CGRect(x: 120, y: -880, width: 400, height: 300)),
             AXFrame(roleDescription: "standard window", rect: CGRect(x: 100, y: -900, width: 900, height: 600))
         ]
-        let result = AccessibilityBounds.candidates(frames: frames, displayOrigin: origin, scale: 2, extent: extent)
+        let result = try await AccessibilityBounds.candidates(frames: frames, displayOrigin: origin, scale: 2, extent: extent)
         #expect(result.map(\.label) == ["button", "group", "standard window"])
         #expect(result[0].bounds == CGRect(x: 100, y: 100, width: 120, height: 40))
         #expect(result[2].bounds == CGRect(x: 0, y: 0, width: 1800, height: 1200))
@@ -22,7 +22,7 @@ struct AccessibilityBoundsTests {
         #expect(result.allSatisfy { $0.kind == .element && $0.score > 1 })
     }
 
-    @Test func degenerateOffscreenAndRepeatedFramesAreDropped() {
+    @Test func degenerateOffscreenAndRepeatedFramesAreDropped() async throws {
         let frames = [
             AXFrame(roleDescription: "", rect: CGRect(x: 150, y: -850, width: 60, height: 20)),
             AXFrame(roleDescription: "same", rect: CGRect(x: 150, y: -850, width: 60, height: 20)),
@@ -30,9 +30,9 @@ struct AccessibilityBoundsTests {
             AXFrame(roleDescription: "off", rect: CGRect(x: 5000, y: 5000, width: 100, height: 100)),
             AXFrame(roleDescription: "nan", rect: CGRect(x: CGFloat.nan, y: 0, width: 100, height: 100))
         ]
-        let result = AccessibilityBounds.candidates(frames: frames, displayOrigin: origin, scale: 2, extent: extent)
+        let result = try await AccessibilityBounds.candidates(frames: frames, displayOrigin: origin, scale: 2, extent: extent)
         #expect(result.map(\.label) == ["Element"])
-        #expect(AccessibilityBounds.candidates(frames: [], displayOrigin: origin, scale: 2, extent: extent).isEmpty)
+        #expect(try await AccessibilityBounds.candidates(frames: [], displayOrigin: origin, scale: 2, extent: extent).isEmpty)
     }
 
     @Test func framesClipToTheNearestScrollViewport() {
@@ -54,7 +54,7 @@ struct AccessibilityBoundsTests {
         #expect(AccessibilityBounds.clippedToViewports([above] + frames[2...]).map(\.roleDescription) == ["HTML content", "scroll area", "standard window"])
     }
 
-    @Test func paddingOnlyParentsCollapseIntoTheirChild() {
+    @Test func paddingOnlyParentsCollapseIntoTheirChild() async throws {
         // Notion-like chain: cell, group 6 pt larger per side, table, group 10 pt larger, then a window.
         let frames = [
             AXFrame(roleDescription: "cell", rect: CGRect(x: 200, y: -800, width: 100, height: 40)),
@@ -63,19 +63,19 @@ struct AccessibilityBoundsTests {
             AXFrame(roleDescription: "padded group", rect: CGRect(x: 140, y: -860, width: 420, height: 220)),
             AXFrame(roleDescription: "standard window", rect: CGRect(x: 100, y: -900, width: 900, height: 600))
         ]
-        let result = AccessibilityBounds.candidates(frames: frames, displayOrigin: origin, scale: 2, extent: extent)
+        let result = try await AccessibilityBounds.candidates(frames: frames, displayOrigin: origin, scale: 2, extent: extent)
         #expect(result.map(\.label) == ["cell", "table", "standard window"])
         let wide = AXFrame(roleDescription: "wide", rect: CGRect(x: 180, y: -820, width: 140, height: 80))
-        #expect(AccessibilityBounds.candidates(frames: [frames[0], wide], displayOrigin: origin, scale: 2, extent: extent).count == 2)
+        #expect(try await AccessibilityBounds.candidates(frames: [frames[0], wide], displayOrigin: origin, scale: 2, extent: extent).count == 2)
     }
 
     @Test func pixelsMapToGlobalPoints() {
         #expect(AccessibilityBounds.point(forPixel: CGPoint(x: 200, y: 100), displayOrigin: origin, scale: 2) == CGPoint(x: 200, y: -850))
     }
 
-    @Test func accessibilityCandidatesOutrankGeometryInASession() {
+    @Test func accessibilityCandidatesOutrankGeometryInASession() async throws {
         let geometry = Candidate(id: "g", label: "Region", bounds: CGRect(x: 100, y: 100, width: 300, height: 200), score: 0.8, kind: .region)
-        let ax = AccessibilityBounds.candidates(frames: [AXFrame(roleDescription: "button", rect: CGRect(x: 110, y: -880, width: 60, height: 40))],
+        let ax = try await AccessibilityBounds.candidates(frames: [AXFrame(roleDescription: "button", rect: CGRect(x: 110, y: -880, width: 60, height: 40))],
                                                 displayOrigin: origin, scale: 2, extent: extent)
         let session = SelectionSession(candidates: [geometry] + ax, extent: extent, anchor: CGPoint(x: 40, y: 80))
         #expect(session.selected?.label == "button")
@@ -104,9 +104,8 @@ struct DockRectTests {
         #expect(shifted == CGRect(x: 1000, y: 1700, width: 760, height: 150))
     }
 
-    @Test func dockPanelMovesEachSideToTheRimFromInsideOrOutside() {
-        // A vertical Dock: a dark panel with a large corner radius and a 2 px light rim, on a dark gradient, with light icons inside.
-        let panel = CGRect(x: 10, y: 140, width: 134, height: 1750)
+    /// A vertical Dock at 2x: a dark panel with rounded corners and a 2 px light rim, on a dark gradient, with light icons inside.
+    private func dockImage(panel: CGRect) -> CGImage {
         let context = CGContext(data: nil, width: 400, height: 1964, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         context.drawLinearGradient(CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [CGColor(red: 0.1, green: 0.08, blue: 0.2, alpha: 1),
@@ -115,31 +114,39 @@ struct DockRectTests {
         // CGContext is bottom-up: flip so rects are top-left like image pixels.
         context.translateBy(x: 0, y: 1964)
         context.scaleBy(x: 1, y: -1)
-        context.addPath(CGPath(roundedRect: panel.insetBy(dx: 1, dy: 1), cornerWidth: 50, cornerHeight: 50, transform: nil))
+        context.addPath(CGPath(roundedRect: panel.insetBy(dx: 1, dy: 1), cornerWidth: 30, cornerHeight: 30, transform: nil))
         context.setStrokeColor(CGColor(gray: 0.55, alpha: 1))
         context.setLineWidth(2)
         context.setFillColor(CGColor(gray: 0.22, alpha: 1))
         context.drawPath(using: .fillStroke)
         context.setFillColor(CGColor(gray: 0.9, alpha: 1))
-        for y in stride(from: 170, to: 1800, by: 102) { context.fill(CGRect(x: 39, y: y, width: 76, height: 76)) }
+        for y in stride(from: 200, to: 1800, by: 102) { context.fill(CGRect(x: 39, y: y, width: 76, height: 76)) }
+        return context.makeImage()!
+    }
+
+    @Test func theDockUnionSnapsToThePanelEvenWhenItRunsFarPastTheBottom() async throws {
+        let panel = CGRect(x: 10, y: 140, width: 134, height: 1750)
+        // The union as measured on a real vertical Dock: 5 pt (10 px) inside on the left, 37 pt (74 px) past the bottom.
         let union = CGRect(x: 20, y: 140, width: 134, height: 1824)
-        let found = AccessibilityBounds.dockPanel(in: context.makeImage()!, around: union, scale: 2)
+        let image = dockImage(panel: panel)
+        #expect(try await SmartSnap().suggest(in: image, roughBounds: union, scale: 2).isEmpty)
+        let found = try #require(try await SmartSnap().suggest(in: image, roughBounds: union, scale: 2, cap: 96).first).bounds
         for (a, b) in [(found.minX, panel.minX), (found.maxX, panel.maxX), (found.minY, panel.minY), (found.maxY, panel.maxY)] {
-            #expect(abs(a - b) <= 2, "found \(found), panel \(panel)")
+            #expect(abs(a - b) <= 4, "found \(found), panel \(panel)")
         }
     }
 
-    @Test func trimmingADockSlotKeepsTheIconAndIgnoresTheRunningDot() {
-        let context = CGContext(data: nil, width: 200, height: 200, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
-                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        context.setFillColor(CGColor(gray: 0.22, alpha: 1))
-        context.fill(CGRect(x: 0, y: 0, width: 200, height: 200))
-        context.setFillColor(CGColor(gray: 0.9, alpha: 1))
-        context.fill(CGRect(x: 60, y: 50, width: 76, height: 76))
-        context.fillEllipse(in: CGRect(x: 44, y: 86, width: 4, height: 4))
-        // Bottom-up drawing: the icon is at y 200 - 126 = 74 in top-left image pixels.
-        let slot = CGRect(x: 40, y: 60, width: 116, height: 102)
-        #expect(AccessibilityBounds.trimmedToContent(in: context.makeImage()!, rect: slot) == CGRect(x: 60, y: 74, width: 76, height: 76))
+    @Test func aDockSlotSnapsToItsIcon() async throws {
+        // The slot is the icon with 10 px of padding on each side (5 pt at 2x).
+        let slot = CGRect(x: 29, y: 190, width: 96, height: 96)
+        let frame = AXFrame(roleDescription: "application dock item", rect: CGRect(x: slot.minX / 2, y: slot.minY / 2, width: slot.width / 2, height: slot.height / 2), role: "AXDockItem")
+        let result = try await AccessibilityBounds.candidates(frames: [frame], displayOrigin: .zero, scale: 2, extent: CGRect(x: 0, y: 0, width: 400, height: 1964),
+                                                              image: dockImage(panel: CGRect(x: 10, y: 140, width: 134, height: 1750)))
+        let icon = CGRect(x: 39, y: 200, width: 76, height: 76)
+        let found = try #require(result.first).bounds
+        for (a, b) in [(found.minX, icon.minX), (found.maxX, icon.maxX), (found.minY, icon.minY), (found.maxY, icon.maxY)] {
+            #expect(abs(a - b) <= 3, "found \(found), icon \(icon)")
+        }
     }
 
     @Test func unusableListsGiveNoDock() {

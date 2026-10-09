@@ -23,17 +23,18 @@ public struct SmartSnap {
     /// Creates a local rough-drag snapper.
     public init() {}
 
-    /// How far a side may move to snap, in pixels: 12% of the side's length, at most 56, and never under 8 points.
-    public static func band(side: CGFloat, scale: CGFloat) -> Int {
-        max(Int((8 * scale).rounded()), min(56, Int((side * 0.12).rounded())))
+    /// How far a side may move to snap, in pixels: 12% of the side's length, at most `cap` (56 unless a caller
+    /// knows its rough rectangle is further off), and never under 8 points.
+    public static func band(side: CGFloat, scale: CGFloat, cap: Int = 56) -> Int {
+        max(Int((8 * scale).rounded()), min(cap, Int((side * 0.12).rounded())))
     }
 
     /// Suggests nearby rectangles whose four sides have continuous pixel-edge support.
     ///
     /// The rough drag and returned bounds use source-image pixels with a top-left origin; `scale` is the capture's
-    /// pixels per point, which sets the smallest search band. A side whose band reaches the image border snaps to it.
+    /// pixels per point, which sets the smallest search band; `cap` raises the largest. A side whose band reaches the image border snaps to it.
     /// Empty results mean the drag should be kept as drawn.
-    public func suggest(in image: CGImage, roughBounds: CGRect, scale: CGFloat = 1) async throws -> [SnapSuggestion] {
+    public func suggest(in image: CGImage, roughBounds: CGRect, scale: CGFloat = 1, cap: Int = 56) async throws -> [SnapSuggestion] {
         try Task.checkCancellation()
         let extent = CGRect(x: 0, y: 0, width: image.width, height: image.height)
         guard roughBounds.minX.isFinite, roughBounds.minY.isFinite,
@@ -41,8 +42,8 @@ public struct SmartSnap {
         let rough = roughBounds.standardized.intersection(extent)
         guard !rough.isNull, rough.width >= 16, rough.height >= 16 else { return [] }
 
-        let maxMoveX = Self.band(side: rough.width, scale: scale)
-        let maxMoveY = Self.band(side: rough.height, scale: scale)
+        let maxMoveX = Self.band(side: rough.width, scale: scale, cap: cap)
+        let maxMoveY = Self.band(side: rough.height, scale: scale, cap: cap)
         let crop = CGRect(x: max(0, rough.minX - CGFloat(maxMoveX + 4)),
                           y: max(0, rough.minY - CGFloat(maxMoveY + 4)),
                           width: 0, height: 0)
