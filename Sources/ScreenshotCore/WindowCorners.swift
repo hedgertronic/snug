@@ -3,6 +3,8 @@ import CoreGraphics
 /// Rounds the corners of a window capture that came back square. The window is the opaque bounding box of `image`; any
 /// transparent border around it is the window's shadow. Each corner outside a circle of `radius` pixels is replaced by the shadow
 /// just past that corner (black at the alpha found diagonally outside it), or by transparency when there is no shadow.
+/// Fully transparent margins past the shadow are cropped off: a Finder window capture came back about 200 px wider on one side
+/// than its shadow reaches.
 public func roundingWindowCorners(_ image: CGImage, radius: CGFloat) -> CGImage {
     let width = image.width, height = image.height, bytesPerRow = width * 4
     let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: bytesPerRow,
@@ -13,13 +15,20 @@ public func roundingWindowCorners(_ image: CGImage, radius: CGFloat) -> CGImage 
 
     // Rows are top-down in memory. The window is every fully opaque pixel; the shadow never reaches alpha 255.
     var (minX, minY, maxX, maxY) = (width, height, -1, -1)
+    var (visibleMinX, visibleMinY, visibleMaxX, visibleMaxY) = (width, height, -1, -1)
     for y in 0..<height {
-        for x in 0..<width where bytes[y * bytesPerRow + x * 4 + 3] == 255 {
-            minX = min(minX, x); maxX = max(maxX, x); minY = min(minY, y); maxY = max(maxY, y)
+        for x in 0..<width {
+            let alpha = bytes[y * bytesPerRow + x * 4 + 3]
+            guard alpha > 0 else { continue }
+            visibleMinX = min(visibleMinX, x); visibleMaxX = max(visibleMaxX, x); visibleMinY = min(visibleMinY, y); visibleMaxY = max(visibleMaxY, y)
+            if alpha == 255 { minX = min(minX, x); maxX = max(maxX, x); minY = min(minY, y); maxY = max(maxY, y) }
         }
     }
+    guard visibleMaxX >= 0 else { return image }
+    let visible = CGRect(x: visibleMinX, y: visibleMinY, width: visibleMaxX - visibleMinX + 1, height: visibleMaxY - visibleMinY + 1)
+    let trimmed = { (output: CGImage) in visible.size == CGSize(width: width, height: height) ? output : output.cropping(to: visible)! }
     let r = Int(radius.rounded())
-    guard maxX >= 0, r > 0, maxX - minX + 1 >= 2 * r, maxY - minY + 1 >= 2 * r else { return image }
+    guard maxX >= 0, r > 0, maxX - minX + 1 >= 2 * r, maxY - minY + 1 >= 2 * r else { return trimmed(image) }
 
     for (cornerX, cornerY, stepX, stepY) in [(minX, minY, 1, 1), (maxX, minY, -1, 1), (minX, maxY, 1, -1), (maxX, maxY, -1, -1)] {
         let outsideX = cornerX - stepX, outsideY = cornerY - stepY
@@ -38,5 +47,5 @@ public func roundingWindowCorners(_ image: CGImage, radius: CGFloat) -> CGImage 
             }
         }
     }
-    return context.makeImage()!
+    return trimmed(context.makeImage()!)
 }

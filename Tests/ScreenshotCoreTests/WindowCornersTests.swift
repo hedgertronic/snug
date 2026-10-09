@@ -37,4 +37,15 @@ struct WindowCornersTests {
         let rounded = roundingWindowCorners(capture(width: 60, height: 50, border: 0), radius: 10)
         #expect(alpha(rounded, 0, 0) == 0 && alpha(rounded, 59, 49) == 0 && alpha(rounded, 30, 25) == 255)
     }
+
+    @Test func transparentMarginsPastTheShadowAreCropped() {
+        // The 100 x 80 capture with a 10 px shadow, drawn at the left of a 160 px wide transparent canvas.
+        let source = capture(width: 100, height: 80, border: 10)
+        let context = CGContext(data: nil, width: 160, height: 80, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.draw(source, in: CGRect(x: 0, y: 0, width: 100, height: 80))
+        let trimmed = roundingWindowCorners(context.makeImage()!, radius: 12)
+        #expect(trimmed.width == 100 && trimmed.height == 80)
+        #expect(roundingWindowCorners(context.makeImage()!, radius: 0).width == 100)
+    }
 }
