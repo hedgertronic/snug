@@ -596,7 +596,7 @@ final class OverlayController {
         guard displayID != nil, !windowFrozen.indices.contains(index) || !windowFrozen[index] else { return finish(crop: rect, copy: copy, save: save) }
         let id = windowIDs[index]
         // macOS 26 window captures come back with square corners; the radius is measured on the frozen screen around the window.
-        let radius = radii[windows[index]] ?? image.map { cornerRadius(in: $0, rect: windows[index]) } ?? 0
+        let radius = radii[windows[index]] ?? image.map { windowCornerRadius(in: $0, rect: windows[index]) } ?? 0
         dismiss()
         commitTask = Task { [pasteboard, defaults] in
             do {
@@ -619,11 +619,13 @@ final class OverlayController {
         return task
     }
 
-    /// Measures a fit's corner radius off the main thread, once, and redraws when it arrives.
+    /// Measures a fit's corner radius off the main thread, once, and redraws when it arrives. A window's radius is fitted to where its
+    /// own color starts at each corner.
     private func measureRadius(_ rect: CGRect?) {
         guard let rect, let image, radii[rect] == nil, radiusTasks[rect] == nil else { return }
+        let isWindow = windows.contains(rect)
         radiusTasks[rect] = Task {
-            let radius = await Task.detached { cornerRadius(in: image, rect: rect) }.value
+            let radius = await Task.detached { isWindow ? windowCornerRadius(in: image, rect: rect) : cornerRadius(in: image, rect: rect) }.value
             if self.image === image {
                 radii[rect] = radius
                 refresh()

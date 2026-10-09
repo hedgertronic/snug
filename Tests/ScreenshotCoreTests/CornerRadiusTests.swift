@@ -124,4 +124,22 @@ struct CornerRadiusTests {
             #expect(abs(estimate - radius) <= max(2, radius * 0.1), "radius \(radius) estimated \(estimate)")
         }
     }
+
+    @Test func aWindowRadiusFollowsWhereTheWindowColorStarts() {
+        // A dark window with a 28 px radius and a darker 1 px rim on a near-black desktop: the fit lands on the window's color,
+        // inside the rim, where the ray measurement finds the rim's outer edge.
+        let context = CGContext(data: nil, width: 400, height: 300, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(CGColor(red: 0.02, green: 0.02, blue: 0.03, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 400, height: 300))
+        let window = CGRect(x: 40, y: 30, width: 320, height: 240)
+        context.addPath(CGPath(roundedRect: window, cornerWidth: 28, cornerHeight: 28, transform: nil))
+        context.setFillColor(CGColor(red: 0.07, green: 0.07, blue: 0.09, alpha: 1))
+        context.fillPath()
+        context.addPath(CGPath(roundedRect: window.insetBy(dx: 1, dy: 1), cornerWidth: 27, cornerHeight: 27, transform: nil))
+        context.setFillColor(CGColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1))
+        context.fillPath()
+        let radius = windowCornerRadius(in: context.makeImage()!, rect: window)
+        #expect(abs(radius - 28) <= 1.5, "fitted \(radius)")
+    }
 }
