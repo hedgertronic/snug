@@ -31,14 +31,6 @@ enum Shortcut {
     }
 }
 
-extension Highlight {
-    /// Swatches for the highlight color: the system accent ("" stored) first, then the macOS accent colors in sRGB.
-    static let presets: [(name: String, hex: String)] = [
-        ("System accent", ""), ("Blue", "#007AFF"), ("Purple", "#A550A7"), ("Pink", "#F74F9E"), ("Red", "#FF5257"),
-        ("Orange", "#F7821B"), ("Yellow", "#FFC600"), ("Green", "#62BA46"), ("Graphite", "#8C8C8C")
-    ]
-}
-
 /// The Settings window's toolbar tabs. The window title follows the selected tab.
 @MainActor
 enum SettingsTabs {
@@ -268,7 +260,7 @@ struct HighlightPreview: View {
             context.fill(dim, with: .color(.black.opacity(fade)), style: FillStyle(eoFill: true))
             context.fill(shape, with: .color(color.opacity(fill)))
             context.drawLayer { layer in
-                layer.addFilter(.shadow(color: color.opacity(0.9 * glow), radius: 3 + 9 * glow))
+                layer.addFilter(.shadow(color: color.opacity(min(1, 1.6 * glow)), radius: 4 + 14 * glow))
                 layer.stroke(shape, with: .color(color), lineWidth: 1.5)
             }
             context.stroke(Path(roundedRect: sample.insetBy(dx: -2.25, dy: -2.25), cornerRadius: 12.25), with: .color(color.opacity(0.28)), lineWidth: 3)

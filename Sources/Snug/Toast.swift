@@ -1,6 +1,6 @@
 import AppKit
 
-/// A small non-activating confirmation, with a thumbnail of the capture above it when the preview is on. It goes away after 2 s
+/// A small non-activating confirmation, with a thumbnail of the capture joined to the top of it when the preview is on. It goes away after 2 s
 /// (4 s with a thumbnail) while the pointer is elsewhere, and stays while it is over the toast.
 /// Drag it to drop the image; a "Saved" toast reveals the file when clicked.
 @MainActor
@@ -81,25 +81,26 @@ final class Toast: NSPanel, NSDraggingSource {
         row.spacing = 10
         row.edgeInsets = NSEdgeInsets(top: 9, left: 12, bottom: 9, right: 16)
         row.frame.size = row.fittingSize
-        let content = NSVisualEffectView(frame: row.frame)
-        content.material = .hudWindow
-        content.state = .active
-        content.wantsLayer = true
-        content.layer!.cornerRadius = 20
-        content.layer!.masksToBounds = true
-        content.addSubview(row)
-        // The capture's thumbnail sits above the pill; its own transparent corners give it the capture's rounding.
-        let gap: CGFloat = preview == nil ? 0 : 8
-        let size = CGSize(width: max(content.frame.width, previewSize.width), height: content.frame.height + gap + previewSize.height)
-        let container = NSView(frame: CGRect(origin: .zero, size: size))
-        content.frame.origin = CGPoint(x: ((size.width - content.frame.width) / 2).rounded(), y: 0)
-        container.addSubview(content)
+        // One card: the thumbnail sits flush on top of the pill, and a single rounded, outlined clip gives the thumbnail its top corners and
+        // the pill its bottom corners (a pill alone is fully rounded). The window's shadow follows the card's shape.
+        let pill = row.frame.size
+        let size = CGSize(width: max(pill.width, previewSize.width), height: pill.height + previewSize.height)
+        let card = NSVisualEffectView(frame: CGRect(origin: .zero, size: size))
+        card.material = .hudWindow
+        card.state = .active
+        card.wantsLayer = true
+        card.layer!.cornerRadius = 20
+        card.layer!.masksToBounds = true
+        card.layer!.borderWidth = 1
+        card.layer!.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
+        row.frame.origin = CGPoint(x: ((size.width - pill.width) / 2).rounded(), y: 0)
+        card.addSubview(row)
         if let preview {
-            preview.frame.origin = CGPoint(x: ((size.width - previewSize.width) / 2).rounded(), y: content.frame.height + gap)
-            container.addSubview(preview)
+            preview.frame.origin = CGPoint(x: ((size.width - previewSize.width) / 2).rounded(), y: pill.height)
+            card.addSubview(preview)
         }
-        container.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
-        contentView = container
+        card.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+        contentView = card
         setContentSize(size)
         let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main!
         let visible = screen.visibleFrame
