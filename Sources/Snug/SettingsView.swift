@@ -40,7 +40,7 @@ struct SettingsView: View {
     @AppStorage(Pref.highlightColor) private var highlightColor = ""
     @AppStorage(Pref.highlightFill) private var highlightFill = 0.0
     @AppStorage(Pref.highlightFade) private var highlightFade = 0.42
-    @AppStorage(Pref.highlightGlow) private var highlightGlow = true
+    @AppStorage(Pref.highlightGlow) private var highlightGlow = 0.5
     @AppStorage(Pref.toastPreview) private var toastPreview = true
     @AppStorage(Pref.toastPosition) private var toastPosition = "bottomCenter"
     @State private var opensAtLogin = SMAppService.mainApp.status == .enabled
@@ -126,7 +126,7 @@ struct SettingsView: View {
                 }
                 GridRow {
                     Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
-                    Toggle("Glow", isOn: $highlightGlow)
+                    Toggle("Glow", isOn: Binding(get: { highlightGlow > 0 }, set: { highlightGlow = $0 ? 0.5 : 0 }))
                 }
                 GridRow {
                     Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
@@ -175,7 +175,7 @@ struct HighlightPreview: View {
     let color: Color
     let fill: Double
     let fade: Double
-    let glow: Bool
+    let glow: Double
 
     var body: some View {
         Canvas { context, size in
@@ -190,7 +190,7 @@ struct HighlightPreview: View {
             context.fill(dim, with: .color(.black.opacity(fade)), style: FillStyle(eoFill: true))
             context.fill(shape, with: .color(color.opacity(fill)))
             context.drawLayer { layer in
-                if glow { layer.addFilter(.shadow(color: color.opacity(0.45), radius: 9)) }
+                if glow > 0 { layer.addFilter(.shadow(color: color.opacity(min(1, glow * 1.6)), radius: 4 + 14 * glow)) }
                 layer.stroke(shape, with: .color(color), lineWidth: 1.5)
             }
             context.stroke(Path(roundedRect: sample.insetBy(dx: -2.25, dy: -2.25), cornerRadius: 12.25), with: .color(color.opacity(0.28)), lineWidth: 3)

@@ -9,13 +9,20 @@ struct Highlight {
     var fill: CGFloat
     /// Opacity of the dim outside the highlight, 0...0.6.
     var fade: CGFloat
-    var glow: Bool
+    /// Strength of the glow around the hovered rectangle, 0 (none)...1.
+    var glow: CGFloat
+
+    /// The color choices, in order: the system accent ("" hex), then the macOS accent colors.
+    static let presets: [(name: String, hex: String)] = [
+        ("System accent", ""), ("Blue", "#007AFF"), ("Purple", "#A550A7"), ("Pink", "#F74F9E"), ("Red", "#FF5257"),
+        ("Orange", "#F7821B"), ("Yellow", "#FFC600"), ("Green", "#62BA46"), ("Graphite", "#8C8C8C")
+    ]
 
     init(defaults: UserDefaults) {
         color = Self.color(hex: defaults.string(forKey: Pref.highlightColor)!)
         fill = defaults.double(forKey: Pref.highlightFill)
         fade = defaults.double(forKey: Pref.highlightFade)
-        glow = defaults.bool(forKey: Pref.highlightGlow)
+        glow = defaults.double(forKey: Pref.highlightGlow)
     }
 
     /// The color for a stored "#RRGGBB"; the system accent for "".
@@ -61,6 +68,9 @@ final class OverlayView: NSView {
     private let imageLayer = CALayer()
     let dimLayer = CAShapeLayer()
     let hoverLayer = CAShapeLayer()
+    /// The glow: the shadow of the hovered rectangle's filled shape, masked to the outside of it so the inside stays clear.
+    let glowLayer = CAShapeLayer()
+    private let glowMask = CAShapeLayer()
     private let hoverRingLayer = CAShapeLayer()
     private let levelHintLayer = CAShapeLayer()
     private let styleLayer = CAShapeLayer()
@@ -76,7 +86,7 @@ final class OverlayView: NSView {
         super.init(frame: frame)
         wantsLayer = true
         layer!.addSublayer(imageLayer)
-        for shape in [dimLayer, levelHintLayer, hoverRingLayer, hoverLayer, styleLayer, ghostLayer, outlineLayer, previewLayer, snappedLayer, handlesLayer] {
+        for shape in [dimLayer, levelHintLayer, hoverRingLayer, glowLayer, hoverLayer, styleLayer, ghostLayer, outlineLayer, previewLayer, snappedLayer, handlesLayer] {
             shape.fillColor = nil
             layer!.addSublayer(shape)
         }
@@ -95,8 +105,9 @@ final class OverlayView: NSView {
         levelHintLayer.lineWidth = 1
         levelHintLayer.lineDashPattern = [4, 3]
         hoverRingLayer.lineWidth = 3
-        hoverLayer.shadowOffset = .zero
-        hoverLayer.shadowRadius = 9
+        glowLayer.shadowOffset = .zero
+        glowMask.fillRule = .evenOdd
+        glowLayer.mask = glowMask
         handlesLayer.fillColor = NSColor.white.cgColor
         handlesLayer.lineWidth = 1.5
         cornerDotsLayer.strokeColor = NSColor.white.cgColor
@@ -155,8 +166,10 @@ final class OverlayView: NSView {
             // The hover: a hairline with a 3 pt ring just outside it, an optional soft glow, and an optional fill.
             hoverLayer.strokeColor = accent.cgColor
             hoverLayer.lineWidth = 1.5
-            hoverLayer.shadowColor = accent.cgColor
-            hoverLayer.shadowOpacity = highlight?.glow == false ? 0 : 0.45
+            glowLayer.shadowColor = accent.cgColor
+            let glow = highlight?.glow ?? 0.5
+            glowLayer.shadowOpacity = Float(min(1, glow * 1.6))
+            glowLayer.shadowRadius = 4 + 14 * glow
             hoverLayer.fillColor = (highlight?.fill ?? 0) > 0 ? accent.withAlphaComponent(highlight!.fill).cgColor : nil
             dimLayer.fillColor = NSColor.black.withAlphaComponent(highlight?.fade ?? 0.42).cgColor
             hoverRingLayer.strokeColor = accent.withAlphaComponent(0.28).cgColor
@@ -199,6 +212,18 @@ final class OverlayView: NSView {
         }
         dimLayer.path = dim
         hoverLayer.path = o.hover.map { path($0, radii: o.hoverRadii, inset: 0.75) }
+        glowLayer.path = hoverLayer.path
+        // Core Animation scales a shadow by its layer's content alpha, so the shape is filled opaque; the mask hides the fill.
+        glowLayer.fillColor = NSColor.black.cgColor
+        glowLayer.frame = bounds
+        glowMask.frame = bounds
+        glowLayer.shadowPath = o.hover.map { path($0, radii: o.hoverRadii) }
+        let outside = CGMutablePath()
+        if let shape = glowLayer.shadowPath {
+            outside.addRect(bounds.insetBy(dx: -64, dy: -64))
+            outside.addPath(shape)
+        }
+        glowMask.path = outside
         hoverRingLayer.path = o.hover.map { path($0, radii: o.hoverRadii, inset: 3, outset: 2.25) }
         let hints = CGMutablePath()
         if let rect = o.upHint { hints.addPath(path(rect, radii: o.upHintRadii, inset: 0.5)) }

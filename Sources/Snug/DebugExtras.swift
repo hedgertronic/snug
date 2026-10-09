@@ -257,19 +257,54 @@ extension DebugRun {
         defaults.set("#FF0000", forKey: Pref.highlightColor)
         defaults.set(0.2, forKey: Pref.highlightFill)
         defaults.set(0.6, forKey: Pref.highlightFade)
-        defaults.set(false, forKey: Pref.highlightGlow)
+        defaults.set(0.0, forKey: Pref.highlightGlow)
         open()
         let dim = overlay.view.dimLayer.fillColor.flatMap(NSColor.init(cgColor:))!
         let hoverFill = overlay.view.hoverLayer.fillColor.flatMap(NSColor.init(cgColor:))
         require(abs(dim.alphaComponent - 0.6) < 0.001, "the background fade follows the setting: \(dim.alphaComponent)")
         require(hoverFill.map { abs($0.alphaComponent - 0.2) < 0.001 && $0.redComponent > 0.99 } == true, "the fill uses the picked color at the set opacity: \(String(describing: hoverFill))")
-        require(overlay.view.hoverLayer.shadowOpacity == 0, "glow off removes the hover's shadow")
+        require(overlay.view.glowLayer.shadowOpacity == 0, "glow off removes the hover's shadow")
         overlay.dismiss()
         for key in [Pref.highlightColor, Pref.highlightFill, Pref.highlightFade, Pref.highlightGlow] { defaults.removeObject(forKey: key) }
         open()
-        require(abs(overlay.view.dimLayer.fillColor.flatMap(NSColor.init(cgColor:))!.alphaComponent - 0.42) < 0.001 && overlay.view.hoverLayer.fillColor == nil && overlay.view.hoverLayer.shadowOpacity > 0,
+        require(abs(overlay.view.dimLayer.fillColor.flatMap(NSColor.init(cgColor:))!.alphaComponent - 0.42) < 0.001 && overlay.view.hoverLayer.fillColor == nil && overlay.view.glowLayer.shadowOpacity > 0,
                 "the defaults are a 42% fade, no fill, and a glow")
         overlay.dismiss()
+
+        // The glow, sampled on rendered pixels 3, 6 and 10 pt outside the hover's right edge, against the same frame with no glow.
+        defaults.set("#007AFF", forKey: Pref.highlightColor)
+        let sampleBox = CGRect(x: 600, y: 400, width: 800, height: 500)
+        for (page, gray) in [("light", 0.96), ("dark", 0.12)] {
+            let flatPage = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            flatPage.setFillColor(gray: gray, alpha: 1)
+            flatPage.fill(CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            for fade in [0.0, 0.42] {
+                defaults.set(fade, forKey: Pref.highlightFade)
+                var samples: [Double: [[Int]]] = [:]
+                for glow in [0.0, 0.5, 1.0] {
+                    defaults.set(glow, forKey: Pref.highlightGlow)
+                    overlay.present(image: flatPage.makeImage()!, frame: frame, displayID: nil)
+                    overlay.detectionTask?.cancel()
+                    overlay.setWindows([sampleBox], names: ["Sample"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+                    mouse(.mouseMoved, CGPoint(x: sampleBox.midX, y: sampleBox.midY))
+                    let view = overlay.view
+                    view.layoutSubtreeIfNeeded()
+                    let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)!
+                    view.cacheDisplay(in: view.bounds, to: rep)
+                    let density = CGFloat(rep.pixelsWide) / view.bounds.width
+                    let edge = sampleBox.maxX / overlay.scale, row = Int(sampleBox.midY / overlay.scale * density)
+                    samples[glow] = [3, 6, 10].map { distance in
+                        bytes(rep.colorAt(x: Int((edge + CGFloat(distance)) * density), y: row)!)
+                    }
+                    overlay.dismiss()
+                }
+                print("glow, \(page) page, fade \(fade), RGB at 3/6/10 pt outside the edge: off \(samples[0]!), 0.5 \(samples[0.5]!), 1 \(samples[1]!)")
+                func change(_ glow: Double, _ index: Int) -> Int { zip(samples[glow]![index], samples[0]![index]).map { abs($0 - $1) }.max()! }
+                require(change(0.5, 0) >= 12, "\(page) page, fade \(fade): glow 0.5 changes a channel by at least 12/255 at 3 pt: \(change(0.5, 0))")
+                require((0..<3).allSatisfy { change(1, $0) > change(0.5, $0) && change(0.5, $0) > 0 }, "\(page) page, fade \(fade): the glow rises with intensity at 3, 6 and 10 pt")
+            }
+        }
+        for key in [Pref.highlightColor, Pref.highlightFill, Pref.highlightFade, Pref.highlightGlow] { defaults.removeObject(forKey: key) }
 
         // The toast's preview, position, and lifetime.
         let capture = try await Output.png(image.cropping(to: CGRect(x: 0, y: 0, width: 1200, height: 400))!)
@@ -283,7 +318,13 @@ extension DebugRun {
         let thumbnail = withPreview.contentView!.subviews.last!.frame.size
         require(withPreview.contentView!.subviews.count == 2 && without.contentView!.subviews.count == 1, "the preview setting adds or removes the thumbnail")
         require(thumbnail.width <= 240 && thumbnail.height <= 160 && abs(thumbnail.width / thumbnail.height - 3) < 0.02, "the thumbnail is aspect-fit within 240 x 160: \(thumbnail)")
-        require(withPreview.frame.height - without.frame.height > thumbnail.height && withPreview.lifetime == .seconds(4) && without.lifetime == .seconds(2), "the thumbnail sits above the pill and lasts 4 s")
+        require(withPreview.frame.height - without.frame.height >= thumbnail.height && withPreview.lifetime == .seconds(4) && without.lifetime == .seconds(2), "the thumbnail sits above the pill and lasts 4 s")
+        let card = withPreview.contentView!, thumbnailFrame = card.subviews.last!.frame
+        require(thumbnailFrame.maxY == card.bounds.height && thumbnailFrame.minY == card.subviews.first!.frame.maxY && thumbnailFrame.width <= card.bounds.width,
+                "the thumbnail sits flush on the pill inside one card: \(thumbnailFrame) \(card.subviews.first!.frame) \(card.bounds)")
+        require(card.layer!.cornerRadius == 20 && card.layer!.borderWidth == 1 && card.layer!.masksToBounds && card.subviews.allSatisfy { $0.layer?.cornerRadius ?? 0 == 0 && $0.layer?.borderWidth ?? 0 == 0 },
+                "one rounded, outlined clip covers the card, so the thumbnail has only its top corners and the pill only its bottom ones")
+        require(without.contentView!.layer!.cornerRadius * 2 >= without.frame.height, "the preview-off toast is a fully rounded pill: \(without.frame.height)")
         let bottomRight = toast { $0.set("bottomRight", forKey: Pref.toastPosition) }, topRight = toast { $0.set("topRight", forKey: Pref.toastPosition) }
         require(bottomRight.frame.minX > withPreview.frame.minX && bottomRight.frame.minY == withPreview.frame.minY && topRight.frame.minX == bottomRight.frame.minX && topRight.frame.minY > bottomRight.frame.minY,
                 "the position setting moves the toast: \(withPreview.frame) \(bottomRight.frame) \(topRight.frame)")

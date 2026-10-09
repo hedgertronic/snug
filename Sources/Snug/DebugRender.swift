@@ -130,11 +130,23 @@ extension DebugRun {
         try snapshot("hint-outlines-rounded")
         overlay.dismiss()
 
+        // The default highlight: the accent glow at 0.5, and at full strength on the rounded window.
+        for (name, glow) in [("highlight-glow", 0.5), ("highlight-glow-full", 1.0)] {
+            defaults.set(glow, forKey: Pref.highlightGlow)
+            open()
+            overlay.radii[rounded] = 40
+            overlay.setWindows([rounded], names: ["Rounded window"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+            mouse(.mouseMoved, CGPoint(x: 1600, y: 600))
+            try snapshot(name)
+            overlay.dismiss()
+        }
+        defaults.removeObject(forKey: Pref.highlightGlow)
+
         // Highlight with a fill and no glow, in a picked color.
         defaults.set("#E5484D", forKey: Pref.highlightColor)
         defaults.set(0.15, forKey: Pref.highlightFill)
         defaults.set(0.55, forKey: Pref.highlightFade)
-        defaults.set(false, forKey: Pref.highlightGlow)
+        defaults.set(0.0, forKey: Pref.highlightGlow)
         open()
         overlay.radii[rounded] = 40
         overlay.setWindows([rounded], names: ["Rounded window"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
@@ -284,8 +296,8 @@ extension DebugRun {
         require(firstRun.fittingSize.width == 500, "the first-run window is 500 pt wide")
         try render("settings", SettingsView())
         try render("settings-highlight", VStack(spacing: 16) {
-            HighlightPreview(color: Color(nsColor: Highlight.color(hex: "")), fill: 0, fade: 0.42, glow: true).frame(width: 220, height: 90)
-            HighlightPreview(color: Color(nsColor: Highlight.color(hex: "#E5484D")), fill: 0.15, fade: 0.55, glow: false).frame(width: 220, height: 90)
+            HighlightPreview(color: Color(nsColor: Highlight.color(hex: "")), fill: 0, fade: 0.42, glow: 0.5).frame(width: 220, height: 90)
+            HighlightPreview(color: Color(nsColor: Highlight.color(hex: "#E5484D")), fill: 0.15, fade: 0.55, glow: 0).frame(width: 220, height: 90)
         }.padding(20))
 
         let menu = SnugApp.makeMenu(defaults: defaults)
