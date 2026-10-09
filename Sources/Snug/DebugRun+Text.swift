@@ -107,6 +107,22 @@ extension DebugRun {
         let line = await copied() ?? ""
         require(line.contains("Product name") && !line.contains("Billing"), "Return copies the selected text: \(line.debugDescription)")
 
+        // A drag across a whole line reaches its last word, and a double click on the last word selects exactly that word.
+        for (box, whole, last) in [(productName, "Product name", "name"), (billing, "Billing address", "address")] {
+            try await open()
+            textDrag(from: CGPoint(x: box.minX + 3, y: box.midY), to: CGPoint(x: box.maxX - 3, y: box.midY))
+            require(liveText.selectedText == whole, "a drag across \"\(whole)\" selects the whole line: \(liveText.selectedText.debugDescription)")
+            overlay.dismiss()
+            try await open()
+            let lastWord = CGPoint(x: box.maxX - 15, y: box.midY)
+            for clicks in 1...2 {
+                mouse(.leftMouseDown, lastWord, clicks: clicks)
+                mouse(.leftMouseUp, lastWord, clicks: clicks)
+            }
+            require(liveText.selectedText == last, "a double click on the last word of \"\(whole)\" selects exactly it: \(liveText.selectedText.debugDescription)")
+            overlay.dismiss()
+        }
+
         // Esc with focus in Live Text closes.
         try await open()
         textDrag(from: CGPoint(x: productName.minX + 10, y: productName.midY), to: CGPoint(x: productName.maxX - 10, y: productName.midY))
