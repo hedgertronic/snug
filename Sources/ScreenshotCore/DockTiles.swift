@@ -33,7 +33,7 @@ public enum DockTiles {
 
         func difference(_ a: Int, _ c: Int, _ a2: Int, _ c2: Int) -> Int {
             let (first, second) = (vertical ? (a * width + c) * 4 : (c * width + a) * 4, vertical ? (a2 * width + c2) * 4 : (c2 * width + a2) * 4)
-            return (0..<3).map { abs(Int(pixels[first + $0]) - Int(pixels[second + $0])) }.max()!
+            return max(abs(Int(pixels[first]) - Int(pixels[second])), abs(Int(pixels[first + 1]) - Int(pixels[second + 1])), abs(Int(pixels[first + 2]) - Int(pixels[second + 2])))
         }
         /// The 20th percentile of the edge across (or along) the Dock at each of `lines`: what is there on 80% of them.
         func persistent(_ lines: [Int], _ edge: (Int) -> Int) -> Int { lines.map(edge).sorted()[lines.count / 5] }
@@ -96,7 +96,7 @@ public enum DockTiles {
 
         func channelDifference(_ a: Int, _ c: Int, _ a2: Int, _ c2: Int) -> Int {
             let (first, second) = (vertical ? (a * width + c) * 4 : (c * width + a) * 4, vertical ? (a2 * width + c2) * 4 : (c2 * width + a2) * 4)
-            return (0..<3).map { abs(Int(pixels[first + $0]) - Int(pixels[second + $0])) }.max()!
+            return max(abs(Int(pixels[first]) - Int(pixels[second])), abs(Int(pixels[first + 1]) - Int(pixels[second + 1])), abs(Int(pixels[first + 2]) - Int(pixels[second + 2])))
         }
         func isEdge(_ a: Int, _ c: Int) -> Bool {
             channelDifference(a, c - 1, a, c + 1) > edgeThreshold || channelDifference(a - 1, c, a + 1, c) > edgeThreshold
