@@ -371,7 +371,7 @@ extension DebugRun {
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.status) == ["Snapped"], "after release on a fit: Snapped")
         require(chrome.bottomBar.isHidden && !chrome.actionBar.isHidden && texts(in: chrome.hints)
-                    == ["\u{2318}1", "\u{2318}2", "\u{2318}3", "style", "Tab", "other fits", "S", "exact", "\u{2190}", "\u{2192}", "\u{2191}", "\u{2193}", "nudge", "G", "scroll capture", "esc", "cancel"],
+                    == ["\u{2318}1", "\u{2318}2", "\u{2318}3", "style", "Tab", "other fits", "S", "exact", "\u{2190}", "\u{2192}", "\u{2191}", "\u{2193}", "nudge", "\u{2325}\u{2190}", "edge", "Dots", "corners", "G", "scroll capture", "esc", "cancel"],
                 "the action bar replaces the bottom bar, with the released hints: \(texts(in: chrome.hints))")
         require(texts(in: chrome.actionBar) == ["Tight", "Margin", "Backdrop", "Text", "\u{21E7}\u{21A9}", "Save", "\u{2318}S", "Copy", "\u{21A9}"], "the action bar shows styles, Text, Save, and Copy with key caps: \(texts(in: chrome.actionBar))")
         let released = overlay.view.viewRect(overlay.selection!.rect)

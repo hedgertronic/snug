@@ -16,8 +16,9 @@ extension OverlayController {
         case .text: [(["Drag"], "select text"), (["\u{21A9}"], "copy"), (["\u{2325}", "\u{21A9}"], "translate"), (["F"], "all text"), (["C"], "color"), (["?"], "all keys")]
         case .capture where selection != nil:
             [(["\u{2318}1", "\u{2318}2", "\u{2318}3"], "style"), (["Tab"], "other fits"), (["S"], selection!.rect == selection!.exact ? "best fit" : "exact"),
-             (["\u{2190}", "\u{2192}", "\u{2191}", "\u{2193}"], "nudge"), (["G"], "scroll capture"), (["esc"], "cancel")]
-        case .capture: [(["Click"], "capture"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["\u{2325}"], "drag exact"), (["F"], "full screen"), (["?"], "all keys")]
+             (["\u{2190}", "\u{2192}", "\u{2191}", "\u{2193}"], "nudge"), (["\u{2325}\u{2190}"], "edge"),
+             (["Dots"], "corners"), (["G"], "scroll capture"), (["esc"], "cancel")]
+        case .capture: [(["Click"], "capture"), (["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["\u{2325}"], "drag exact"), (["F"], "full screen"), (["?"], "all keys")]
         }
     }
 
@@ -107,7 +108,8 @@ extension OverlayController {
         if mode != .text, let rect = overlays.selection ?? overlays.preview ?? overlays.ghost ?? (radiusReadout == nil ? nil : overlays.hover) {
             let size = radiusReadout ?? "\(Int(rect.width)) x \(Int(rect.height))"
             c.size.show(size) { [NSTextField(size, size: 12, mono: true, color: .white)] }
-            var pills = [c.size]
+            var pills: [NSView] = [c.size]
+            if showsApplyChip { pills.append(applyChip) }
             var status: (text: String, dot: NSColor)?
             if mode == .capture {
                 if let selection {

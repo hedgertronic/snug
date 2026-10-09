@@ -19,9 +19,9 @@ extension DebugRun {
             for _ in 0..<10000 where !condition() { try await Task.sleep(for: .milliseconds(10)) }
             guard condition() else { throw CocoaError(.userCancelled, userInfo: [NSLocalizedDescriptionKey: "timed out waiting for \(message)"]) }
         }
-        func mouse(_ type: NSEvent.EventType, _ pixel: CGPoint) {
+        func mouse(_ type: NSEvent.EventType, _ pixel: CGPoint, _ flags: NSEvent.ModifierFlags = []) {
             let point = CGPoint(x: pixel.x / overlay.scale, y: overlay.view.bounds.height - pixel.y / overlay.scale)
-            overlay.window.sendEvent(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+            overlay.window.sendEvent(NSEvent.mouseEvent(with: type, location: point, modifierFlags: flags,
                 timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: overlay.window.windowNumber,
                 context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!)
         }
@@ -100,6 +100,18 @@ extension DebugRun {
         overlay.radii[rounded] = 40
         mouse(.mouseMoved, CGPoint(x: 1600, y: 600))
         try snapshot("window-hover-rounded")
+        key(14, "e")
+        try await waitFor("E to carry the radii") { overlay.editedRadii[rounded] != nil }
+        try snapshot("selection-corner-dots")
+        let topLeft = overlay.cornerRadii(of: rounded).dot(of: .topLeft, in: rounded, minimumInset: 8 * overlay.scale)
+        mouse(.leftMouseDown, topLeft)
+        mouse(.leftMouseDragged, CGPoint(x: topLeft.x + 30, y: topLeft.y + 30))
+        mouse(.leftMouseUp, CGPoint(x: topLeft.x + 30, y: topLeft.y + 30))
+        let bottomRight = overlay.cornerRadii(of: rounded).dot(of: .bottomRight, in: rounded, minimumInset: 8 * overlay.scale)
+        mouse(.leftMouseDown, bottomRight, .option)
+        mouse(.leftMouseDragged, CGPoint(x: bottomRight.x - 30, y: bottomRight.y - 30), .option)
+        mouse(.leftMouseUp, CGPoint(x: bottomRight.x - 30, y: bottomRight.y - 30), .option)
+        try snapshot("selection-corners-unequal")
         overlay.dismiss()
 
         open()

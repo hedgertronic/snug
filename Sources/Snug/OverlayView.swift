@@ -42,6 +42,8 @@ final class OverlayView: NSView {
     private let previewLayer = CAShapeLayer()
     private let handlesLayer = CAShapeLayer()
     private let snappedLayer = CAShapeLayer()
+    /// The corner-radius dots, drawn over the resize handles.
+    private let cornerDotsLayer = CAShapeLayer()
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -72,6 +74,9 @@ final class OverlayView: NSView {
         hoverLayer.shadowOpacity = 0.45
         handlesLayer.fillColor = NSColor.white.cgColor
         handlesLayer.lineWidth = 1.5
+        cornerDotsLayer.strokeColor = NSColor.white.cgColor
+        cornerDotsLayer.lineWidth = 1.5
+        handlesLayer.addSublayer(cornerDotsLayer)
         applyAccent()
     }
 
@@ -133,6 +138,7 @@ final class OverlayView: NSView {
             snappedLayer.lineWidth = 4
             outlineLayer.strokeColor = accent.cgColor
             handlesLayer.strokeColor = accent.cgColor
+            cornerDotsLayer.fillColor = accent.cgColor
         }
     }
 
@@ -188,5 +194,13 @@ final class OverlayView: NSView {
             }
         }
         handlesLayer.path = handles
+        let dots = CGMutablePath()
+        if o.showsHandles, let selection = o.selection {
+            for corner in CornerRadii.corners {
+                let point = o.radii.dot(of: corner, in: selection, minimumInset: 8 * scale)
+                dots.addEllipse(in: CGRect(x: point.x / scale - 3, y: bounds.height - point.y / scale - 3, width: 6, height: 6))
+            }
+        }
+        cornerDotsLayer.path = dots
     }
 }
