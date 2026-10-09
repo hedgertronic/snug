@@ -132,6 +132,13 @@ public struct SelectionSession: Sendable {
         }.max { $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height } ?? current
     }
 
+    /// Whether a level picked with a key still holds with the pointer at `point`: while the pointer stays inside it, or for the
+    /// display, which the pointer can never leave, while it stays within 12 units of where the level was picked.
+    public func holds(at point: CGPoint) -> Bool {
+        guard let selected else { return false }
+        return selected.kind == .display ? hypot(point.x - anchor.x, point.y - anchor.y) <= 12 : selected.bounds.contains(point)
+    }
+
     /// Changes pointer locking without modifying the selected rectangle.
     public mutating func toggleLock() { isLocked.toggle() }
 

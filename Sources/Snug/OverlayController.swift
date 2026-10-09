@@ -271,7 +271,7 @@ final class OverlayController {
         guard selection == nil, case .none = interaction else { return }
         if mode == .capture, session != nil {
             requestAccessibility(at: pixel)
-            if session!.isLocked, !session!.selected!.bounds.contains(pixel) { session!.toggleLock() }
+            if session!.isLocked, !session!.holds(at: pixel) { session!.toggleLock() }
             session!.hover(at: pixel)
         }
         refresh()
