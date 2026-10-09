@@ -26,20 +26,20 @@ public enum OutputStyle: String, CaseIterable, Sendable {
         }
     }
 
-    /// Renders the output image for a crop given in source-image pixels.
-    public func render(_ image: CGImage, crop: CGRect, scale: CGFloat, cornerRadius: CGFloat = 0) throws -> CGImage {
+    /// Renders the output image for a crop given in source-image pixels. `tight` is transparent outside `cornerRadii`; `backdrop` rounds
+    /// its card with them, or by 10 pt when they are all square.
+    public func render(_ image: CGImage, crop: CGRect, scale: CGFloat, cornerRadii: CornerRadii = .zero) throws -> CGImage {
         let extent = CGRect(x: 0, y: 0, width: image.width, height: image.height)
         let crop = crop.integral.intersection(extent)
         let frame = frame(around: crop, in: extent, scale: scale).integral
         guard let source = image.cropping(to: self == .backdrop ? crop : frame) else { throw CocoaError(.fileReadCorruptFile) }
-        if self == .tight, cornerRadius > 0 {
+        if self == .tight, !cornerRadii.isSquare {
             guard let context = CGContext(data: nil, width: source.width, height: source.height, bitsPerComponent: 8,
                                           bytesPerRow: 0, space: image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
                                           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)
             else { throw CocoaError(.fileWriteUnknown) }
             context.setShouldAntialias(true)
-            context.addPath(CGPath(roundedRect: CGRect(x: 0, y: 0, width: source.width, height: source.height),
-                                   cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil))
+            context.addPath(cornerRadii.path(in: CGRect(x: 0, y: 0, width: source.width, height: source.height)))
             context.clip()
             context.draw(source, in: CGRect(x: 0, y: 0, width: source.width, height: source.height))
             guard let output = context.makeImage() else { throw CocoaError(.fileWriteUnknown) }
@@ -54,10 +54,10 @@ public enum OutputStyle: String, CaseIterable, Sendable {
         else { throw CocoaError(.fileWriteUnknown) }
         // CGContext has a bottom-left origin; the padding is symmetric so the image rect needs no flip.
         let target = CGRect(x: crop.minX - frame.minX, y: crop.minY - frame.minY, width: crop.width, height: crop.height)
-        let radius = cornerRadius > 0 ? cornerRadius : 10 * scale
+        let radii = cornerRadii.isSquare ? CornerRadii(10 * scale) : cornerRadii
         context.setShadow(offset: CGSize(width: 0, height: -6 * scale), blur: 18 * scale, color: CGColor(gray: 0, alpha: 0.28))
         context.beginTransparencyLayer(auxiliaryInfo: nil)
-        context.addPath(CGPath(roundedRect: target, cornerWidth: radius, cornerHeight: radius, transform: nil))
+        context.addPath(radii.path(in: target))
         context.clip()
         context.draw(source, in: target)
         context.endTransparencyLayer()

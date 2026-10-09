@@ -80,6 +80,11 @@ final class OverlayController {
     /// A rectangle that is not here (an exact drag, a nudged or resized selection) has square corners.
     var radii: [CGRect: CGFloat] = [:]
     private var radiusTasks: [CGRect: Task<CGFloat, Never>] = [:]
+    /// Per-corner radii set with `[` and `]`, by rectangle; they replace the measured ones.
+    private var editedRadii: [CGRect: CornerRadii] = [:]
+    /// The size pill's text while a radius edit is fresh, e.g. "r 12".
+    var radiusReadout: String?
+    private var radiusReadoutTask: Task<Void, Error>?
     /// The last pointer position in image pixels.
     var pointer = CGPoint.zero
     /// Capture mode: what the pointer is over (accessibility elements, pixel geometry, windows, the display), and the running geometry analysis.
@@ -205,6 +210,9 @@ final class OverlayController {
         windowFrozen = []
         radii = [:]
         radiusTasks = [:]
+        editedRadii = [:]
+        radiusReadoutTask?.cancel()
+        radiusReadout = nil
         selection = nil
         interaction = .none
         spaceHeld = false
@@ -514,6 +522,8 @@ final class OverlayController {
         case (_, true, "1"): style = .tight
         case (_, true, "2"): style = .margin
         case (_, true, "3"): style = .backdrop
+        case (_, false, "]"), (_, false, "}"): adjustRadii(by: shift ? 4 : 1)
+        case (_, false, "["), (_, false, "{"): adjustRadii(by: shift ? -4 : -1)
         case (_, false, "m"): style = style.next
         case (_, false, "s"): toggleSnap()
         case (_, false, "f"):
@@ -605,14 +615,43 @@ final class OverlayController {
         }
     }
 
+    /// The frontmost window holding `rect`: its measured radius applies to the corners of `rect` that sit on the window's corners.
+    private func container(of rect: CGRect) -> CGRect? {
+        windows.first { $0.insetBy(dx: -2, dy: -2).contains(rect) }
+    }
+
+    /// The corner radii of `rect`: the edited ones, else its measured radius on all four corners, with the corners that sit on its
+    /// window's corners taking the window's radius.
+    private func cornerRadii(of rect: CGRect) -> CornerRadii {
+        if let edited = editedRadii[rect] { return edited }
+        let measured = CornerRadii(radii[rect] ?? 0)
+        guard let window = container(of: rect) else { return measured }
+        return measured.replacingCorners(sharedWith: window, in: rect, with: radii[window] ?? 0)
+    }
+
+    /// `]` / `[`: every corner of the selection (or the hovered rectangle) grows or shrinks by `points`, from its current radii.
+    private func adjustRadii(by points: CGFloat) {
+        guard let rect = selection?.rect ?? hoverRect else { return }
+        let adjusted = cornerRadii(of: rect).offset(by: points * scale, in: rect.size)
+        editedRadii[rect] = adjusted
+        let corners = [adjusted.topLeft, adjusted.topRight, adjusted.bottomLeft, adjusted.bottomRight].map { Int(($0 / scale).rounded()) }
+        radiusReadout = "r " + (Set(corners).count == 1 ? "\(corners[0])" : corners.map(String.init).joined(separator: " "))
+        radiusReadoutTask?.cancel()
+        radiusReadoutTask = Task {
+            try await Task.sleep(for: .seconds(1.5))
+            radiusReadout = nil
+            refresh()
+        }
+    }
+
     /// Closes the overlay first, then encodes off main and delivers.
     func finish(crop: CGRect, copy: Bool, save: Bool) {
         guard let image else { return }
         let style = style, scale = scale
-        let known = radii[crop], measuring = radiusTasks[crop]
-        // The frontmost window holding the crop: its measured radius clears the crop's corners that sit on the window's corners.
-        let container = windows.first { $0.insetBy(dx: -2, dy: -2).contains(crop) }
-        let containerRadius = container.flatMap { radii[$0] }
+        let container = container(of: crop)
+        let edited = editedRadii[crop]
+        let (known, measuring) = (radii[crop], radiusTasks[crop])
+        let (windowKnown, windowMeasuring) = (container.flatMap { radii[$0] }, container.flatMap { radiusTasks[$0] })
         if let displayID {
             let area = [Double(displayID)] + [crop.minX, crop.minY, crop.width, crop.height].map { Double($0 / scale) }
             defaults.set(area, forKey: Pref.lastArea)
@@ -621,12 +660,12 @@ final class OverlayController {
         commitTask = Task { [pasteboard, defaults] in
             do {
                 let radius = if let known { known } else { await measuring?.value ?? 0 }
-                var window: (rect: CGRect, radius: CGFloat)?
+                var radii = CornerRadii(radius)
                 if let container {
-                    let measured = containerRadius == nil ? await Task.detached { cornerRadius(in: image, rect: container) }.value : 0
-                    window = (container, containerRadius ?? measured)
+                    let windowRadius = if let windowKnown { windowKnown } else { await windowMeasuring?.value ?? 0 }
+                    radii = radii.replacingCorners(sharedWith: container, in: crop, with: windowRadius)
                 }
-                try await Output.deliver(image, crop: crop, style: style, scale: scale, cornerRadius: radius, window: window, copy: copy, save: save,
+                try await Output.deliver(image, crop: crop, style: style, scale: scale, cornerRadii: edited ?? radii, copy: copy, save: save,
                                          pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
@@ -659,9 +698,11 @@ final class OverlayController {
         overlays.showsHandles = selection != nil
         if selection == nil, case .none = interaction { overlays.hover = hoverRect }
         let fit = selection.flatMap { $0.rect == $0.exact ? nil : $0.rect }
+        let shown = selection?.rect ?? snapPreview
         for rect in [snapPreview, fit, overlays.hover] { measureRadius(rect) }
-        overlays.radius = radii[selection?.rect ?? snapPreview ?? .null] ?? 0
-        overlays.hoverRadius = radii[overlays.hover ?? .null] ?? 0
+        for rect in [shown, overlays.hover] { measureRadius(rect.flatMap(container)) }
+        overlays.radii = shown.map(cornerRadii) ?? .zero
+        overlays.hoverRadii = overlays.hover.map(cornerRadii) ?? .zero
         if let rect = selection?.rect, style != .tight { overlays.styleFrame = style.frame(around: rect, in: extent, scale: scale) }
         view.overlays = overlays
         refreshExtras()

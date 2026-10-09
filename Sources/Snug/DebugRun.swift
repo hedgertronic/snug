@@ -103,7 +103,7 @@ enum DebugRun {
         require(overlay.selection?.rect == preview, "release takes the preview")
         // The form field rounds by about 6 px, under the detector's 8 px minimum, so its measured radius is 0; the check is that the measurement lands.
         try await waitFor("the snap's corner radius is measured") { overlay.radii[preview] != nil }
-        require(overlay.view.overlays.radius == overlay.radii[preview], "the released snap keeps its measured corner radius \(overlay.view.overlays.radius)")
+        require(overlay.view.overlays.radii == CornerRadii(overlay.radii[preview]!), "the released snap keeps its measured corner radius \(overlay.view.overlays.radii)")
 
         // Tab cycles to the exact drag and back.
         var reachedExact = false
@@ -122,7 +122,7 @@ enum DebugRun {
         let before = overlay.selection!.rect
         key(right)
         require(overlay.selection?.rect == before.offsetBy(dx: scale, dy: 0), "Right nudges 1 pt")
-        require(overlay.view.overlays.radius == 0, "a nudged selection has square corners")
+        require(overlay.view.overlays.radii == .zero, "a nudged selection has square corners")
         key(down, "", .shift)
         require(overlay.selection?.rect == before.offsetBy(dx: scale, dy: 10 * scale), "Shift-Down nudges 10 pt")
         key(left)
@@ -299,6 +299,30 @@ enum DebugRun {
         require(clipped.colorAt(x: 0, y: last)!.alphaComponent == 0 && clipped.colorAt(x: clipped.pixelsWide - 1, y: last)!.alphaComponent == 0
             && clipped.colorAt(x: 0, y: 0)!.alphaComponent == 1 && clipped.colorAt(x: clipped.pixelsWide - 1, y: 0)!.alphaComponent == 1,
             "a tight crop sharing a window's bottom corners clears them and keeps the top corners")
+
+        // The outline draws the same per-corner shape; ] and [ change every corner by 1 pt (Shift: 4 pt) and the copy follows.
+        open()
+        overlay.setWindows([windowRect], pointer: CGPoint(x: frame.minX + 10, y: frame.maxY - 10))
+        overlay.radii[windowRect] = 20 * scale
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: bottomHalf)
+        overlay.refresh()
+        func corners(_ top: CGFloat, _ bottom: CGFloat) -> CornerRadii {
+            CornerRadii(topLeft: top * scale, topRight: top * scale, bottomLeft: bottom * scale, bottomRight: bottom * scale)
+        }
+        require(overlay.view.overlays.radii == corners(0, 20), "the outline hugs the window's bottom corners and keeps the top square")
+        key(30, "]")
+        require(overlay.view.overlays.radii == corners(1, 20 + 1) && overlay.radiusReadout == "r 1 1 21 21", "] grows every corner by 1 pt")
+        key(30, "}", .shift)
+        require(overlay.view.overlays.radii == corners(5, 20 + 5), "Shift-] grows every corner by 4 pt")
+        key(33, "[")
+        require(overlay.view.overlays.radii == corners(4, 20 + 4), "[ shrinks every corner by 1 pt")
+        pasteboard.clearContents()
+        overlay.copy()
+        await overlay.commitTask?.value
+        let edited = NSBitmapImageRep(data: pasteboard.data(forType: .png)!)!
+        require(edited.colorAt(x: 0, y: 0)!.alphaComponent < 0.5 && edited.colorAt(x: edited.pixelsWide - 1, y: 0)!.alphaComponent < 0.5
+            && edited.colorAt(x: 0, y: edited.pixelsHigh - 1)!.alphaComponent == 0 && edited.colorAt(x: edited.pixelsWide / 2, y: 0)!.alphaComponent == 1,
+            "the copy rounds the top corners with the edited radius and still clears the bottom ones")
 
         // The pointer pinned against the screen edge highlights the full display; Return takes it.
         open()

@@ -53,23 +53,17 @@ enum Output {
 
     /// Renders the style and encodes a PNG off the main thread.
     @concurrent
-    static func encode(_ image: CGImage, crop: CGRect, style: OutputStyle, scale: CGFloat, cornerRadius: CGFloat = 0,
-                       window: (rect: CGRect, radius: CGFloat)? = nil) async throws -> (png: Data, width: Int, height: Int) {
-        var rendered = try style.render(image, crop: crop, scale: scale, cornerRadius: cornerRadius)
-        if style == .tight, let window {
-            rendered = clearingWindowCorners(rendered, crop: crop, window: window.rect, radius: window.radius)
-        }
+    static func encode(_ image: CGImage, crop: CGRect, style: OutputStyle, scale: CGFloat, cornerRadii: CornerRadii = .zero) async throws -> (png: Data, width: Int, height: Int) {
+        let rendered = try style.render(image, crop: crop, scale: scale, cornerRadii: cornerRadii)
         return (try await png(rendered), rendered.width, rendered.height)
     }
 
-    /// Encodes a crop, then copies it to the pasteboard and/or saves it, and shows a toast. A tight crop that reaches corners of
-    /// `window`, the window containing it, has those corners cleared outside the window's rounded shape.
+    /// Encodes a crop, then copies it to the pasteboard and/or saves it, and shows a toast.
     @MainActor
-    static func deliver(_ image: CGImage, crop: CGRect, style: OutputStyle, scale: CGFloat, cornerRadius: CGFloat = 0,
-                        window: (rect: CGRect, radius: CGFloat)? = nil, copy: Bool, save: Bool,
-                        pasteboard: NSPasteboard, defaults: UserDefaults) async throws {
+    static func deliver(_ image: CGImage, crop: CGRect, style: OutputStyle, scale: CGFloat, cornerRadii: CornerRadii = .zero,
+                        copy: Bool, save: Bool, pasteboard: NSPasteboard, defaults: UserDefaults) async throws {
         let id = signposter.beginInterval("encode")
-        let output = try await encode(image, crop: crop, style: style, scale: scale, cornerRadius: cornerRadius, window: window)
+        let output = try await encode(image, crop: crop, style: style, scale: scale, cornerRadii: cornerRadii)
         signposter.endInterval("encode", id)
         try publish(png: output.png, detail: "\(output.width) x \(output.height)  \(style.rawValue)", copy: copy, save: save,
                     pasteboard: pasteboard, defaults: defaults)

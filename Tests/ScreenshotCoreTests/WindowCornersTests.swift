@@ -37,31 +37,4 @@ struct WindowCornersTests {
         let rounded = roundingWindowCorners(capture(width: 60, height: 50, border: 0), radius: 10)
         #expect(alpha(rounded, 0, 0) == 0 && alpha(rounded, 59, 49) == 0 && alpha(rounded, 30, 25) == 255)
     }
-
-    /// An opaque 200 x 160 screen of blue wallpaper with a white window of rounded corners at (20, 20, 160 x 120).
-    private func screen(radius: CGFloat) -> CGImage {
-        let context = CGContext(data: nil, width: 200, height: 160, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
-                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        context.setFillColor(CGColor(red: 0, green: 0, blue: 1, alpha: 1))
-        context.fill(CGRect(x: 0, y: 0, width: 200, height: 160))
-        context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
-        context.addPath(CGPath(roundedRect: CGRect(x: 20, y: 20, width: 160, height: 120), cornerWidth: radius, cornerHeight: radius, transform: nil))
-        context.fillPath()
-        return context.makeImage()!
-    }
-
-    @Test func aCropReachingTheWindowBottomClearsOnlyThoseCorners() {
-        let window = CGRect(x: 20, y: 20, width: 160, height: 120), crop = CGRect(x: 20, y: 60, width: 160, height: 80)
-        let image = screen(radius: 16).cropping(to: crop)!
-        #expect(alpha(image, 0, 79) == 255 && alpha(image, 159, 79) == 255) // wallpaper-coloured, opaque before clearing
-        let cleared = clearingWindowCorners(image, crop: crop, window: window, radius: 16)
-        #expect(alpha(cleared, 0, 79) == 0 && alpha(cleared, 159, 79) == 0)
-        #expect(alpha(cleared, 0, 0) == 255 && alpha(cleared, 159, 0) == 255 && alpha(cleared, 80, 40) == 255 && alpha(cleared, 80, 79) == 255)
-    }
-
-    @Test func aCropAwayFromTheWindowCornersIsUntouched() {
-        let window = CGRect(x: 20, y: 20, width: 160, height: 120), crop = CGRect(x: 40, y: 40, width: 100, height: 60)
-        let image = screen(radius: 16).cropping(to: crop)!
-        #expect(clearingWindowCorners(image, crop: crop, window: window, radius: 16) === image)
-    }
 }

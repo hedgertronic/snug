@@ -86,8 +86,8 @@ extension OverlayController {
                                         y: min(max(box.midY - pill.frame.height / 2, 8), top - pill.frame.height - 8))
         }
 
-        if mode != .text, let rect = overlays.selection ?? overlays.preview ?? overlays.ghost {
-            let size = "\(Int(rect.width)) x \(Int(rect.height))"
+        if mode != .text, let rect = overlays.selection ?? overlays.preview ?? overlays.ghost ?? (radiusReadout == nil ? nil : overlays.hover) {
+            let size = radiusReadout ?? "\(Int(rect.width)) x \(Int(rect.height))"
             c.size.show(size) { [NSTextField(size, size: 12, mono: true, color: .white)] }
             var pills = [c.size]
             var status: (text: String, dot: NSColor)?
