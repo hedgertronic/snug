@@ -200,7 +200,7 @@ extension DebugRun {
         let hovered = overlay.view.overlays.hover!
         require(hovered != screenWindow && ![CandidateKind.window, .display].contains(overlay.session!.selected!.kind), "hover over geometry selects it, not the window \(hovered)")
         require(texts(in: overlay.chrome.hover).count == 2 && texts(in: overlay.chrome.hover)[1] == "\(Int(hovered.width)) x \(Int(hovered.height))", "the hover label shows the name and size: \(texts(in: overlay.chrome.hover))")
-        let element = Candidate(id: "ax-test", label: "button", bounds: CGRect(x: aim.x - 20, y: aim.y - 12, width: 40, height: 24), score: AccessibilityBounds.baseScore, kind: .element)
+        let element = Candidate(id: "ax-test", label: "Button", bounds: CGRect(x: aim.x - 20, y: aim.y - 12, width: 40, height: 24), score: AccessibilityBounds.baseScore, kind: .element)
         overlay.merge([element])
         require(overlay.view.overlays.hover == element.bounds && texts(in: overlay.chrome.hover)[0] == "Button", "an accessibility element outranks geometry and shows its role description")
         pasteboard.clearContents()
