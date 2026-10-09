@@ -50,7 +50,10 @@ enum DisplayCapture {
         configuration.ignoreGlobalClipSingleWindow = true
         configuration.ignoreShadowsSingleWindow = !shadow
         configuration.showsCursor = false
-        return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+        let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+        Pref.logHoverLine("window \(id) frame \(window.frame) contentRect \(info.contentRect) scale \(info.pointPixelScale) shadow \(shadow) "
+                          + "configured \(configuration.width)x\(configuration.height) image \(image.width)x\(image.height)")
+        return image
     }
 
     /// Window levels besides normal windows that are targets: the Dock, the menu bar, status items, and open menus.
