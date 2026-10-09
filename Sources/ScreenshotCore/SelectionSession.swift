@@ -49,7 +49,12 @@ public struct SelectionSession: Sendable {
             if $0.kind != $1.kind { return $0.kind == .text }
             return $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height
         }
-        let elements = content.filter { $0.kind == .element }
+        // Accessibility scores count only the depth inside the lookup that found a frame, so frames from lookups at different pointer positions
+        // do not compare by score: the smallest frame at the pointer wins, and score breaks ties.
+        let elements = content.filter { $0.kind == .element }.sorted { a, b in
+            let (areaA, areaB) = (a.bounds.width * a.bounds.height, b.bounds.width * b.bounds.height)
+            return areaA == areaB ? a.score > b.score : areaA < areaB
+        }
         let containers = content.filter { $0.kind != .cell && $0.kind != .text && $0.kind != .element }
         let remainingDetails = content.filter { item in
             (item.kind == .cell || item.kind == .text) && !detail.contains(where: { $0.id == item.id })

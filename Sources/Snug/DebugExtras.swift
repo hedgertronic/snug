@@ -235,6 +235,17 @@ extension DebugRun {
         await overlay.commitTask?.value
         require(pngSize(pasteboard.data(forType: .png)) == hovered.size && !overlay.window.isVisible, "a click on a hovered geometry region crops it \(hovered)")
 
+        // Accessibility lookups at different pointer positions score the same frame differently; the smallest frame at the pointer is the one hovered.
+        open()
+        await overlay.detectionTask?.value
+        overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        let outerRow = Candidate(id: "ax-test-row", label: "Group", bounds: CGRect(x: aim.x - 40, y: aim.y - 24, width: 80, height: 48), score: AccessibilityBounds.baseScore, kind: .element)
+        let innerLink = Candidate(id: "ax-test-link", label: "Link", bounds: CGRect(x: aim.x - 20, y: aim.y - 12, width: 40, height: 24), score: AccessibilityBounds.baseScore - 0.01, kind: .element)
+        overlay.merge([outerRow, innerLink])
+        mouse(.mouseMoved, aim)
+        require(overlay.view.overlays.hover == innerLink.bounds && overlay.view.overlays.upHint == outerRow.bounds,
+                "the smaller accessibility frame at the pointer is hovered although a larger one scored higher, and Up reaches the larger: \(String(describing: overlay.view.overlays.hover))")
+
         // Up walks out through the parents to the window, then the display; Down walks back in.
         open()
         await overlay.detectionTask?.value
