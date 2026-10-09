@@ -118,6 +118,14 @@ extension DebugRun {
         overlay.dismiss()
 
         open()
+        key(17, "t")
+        try await waitFor("Live Text") { liveText.analysis != nil }
+        key(48, "\t")
+        try await waitFor("a picked item") { overlay.text.picked != nil }
+        try snapshot("text-item-picked")
+        overlay.dismiss()
+
+        open()
         drag(cart, release: true)
         key(36, "\r", .shift)
         try snapshot("capture-text-reading")

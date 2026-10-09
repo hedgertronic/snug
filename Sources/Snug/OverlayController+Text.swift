@@ -3,11 +3,13 @@ import ScreenshotCore
 import Vision
 @preconcurrency import VisionKit
 
-/// Text state shared by both modes: where the "Reading text..." pill centers (image pixels) and a dark pill that explains why
-/// Option-Return did nothing.
+/// Text state shared by both modes: where the "Reading text..." pill centers (image pixels), a dark pill that explains why
+/// Option-Return did nothing or names the picked item, and Text mode's found items (nil until the first Tab) and the picked one.
 struct TextSession {
     var reading: CGRect?
     var notice: String?
+    var items: [FoundItem]?
+    var picked: Int?
 }
 
 /// Live Text's own drag selection is word-granular and anchors at the start of the pressed word, so a drag that goes backward leaves
@@ -78,12 +80,14 @@ extension OverlayWindow {
 extension OverlayController: ImageAnalysisOverlayViewDelegate {
     /// Analyzes the frozen image for text once per capture and attaches the result; the pill covers the screen until then.
     func startLiveText() {
+        view.liveText.preferredInteractionTypes = .textSelection
+        view.liveText.selectableItemsHighlighted = false
         guard let image, view.liveText.analysis == nil else { return }
         text.reading = extent
         textTask = Task {
             do {
                 let start = ContinuousClock.now
-                let analysis = try await ImageAnalyzer().analyze(image, orientation: .up, configuration: ImageAnalyzer.Configuration(.text))
+                let analysis = try await ImageAnalyzer().analyze(image, orientation: .up, configuration: ImageAnalyzer.Configuration([.text, .machineReadableCode]))
                 try Task.checkCancellation()
                 lastLiveTextMilliseconds = start.duration(to: .now).milliseconds
                 view.liveText.analysis = analysis
@@ -188,15 +192,112 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         }
     }
 
-    /// Esc: close. F: select all text. Return or Cmd-C: copy the selection; Option-Return: translate it.
+    /// Shift-Return: copies the selected text as rows, one visual row per line with columns tab-separated, from accurate OCR boxes
+    /// matched to the Live Text selection.
+    func copyTextRows() {
+        let selected = view.liveText.selectedText
+        guard !selected.isEmpty, text.reading == nil, let image else { return NSSound.beep() }
+        text.reading = extent
+        textTask = Task {
+            do {
+                let rows = TextLayout.rows(TextLayout.lines(of: selected, in: try await Self.recognize(image, crop: extent)))
+                try Task.checkCancellation()
+                text.reading = nil
+                copyText(TextLayout.table(rows), message: "Copied \(rows.count) \(rows.count == 1 ? "row" : "rows")", translating: false, rect: nil)
+                refresh()
+            } catch {
+                report(error)
+            }
+        }
+    }
+
+    /// Tab / Shift-Tab: picks the next or previous found item, finding them on the first press. While one is picked, Live Text turns
+    /// from text selection to its data detectors and highlights them (links, email addresses, phone numbers, codes).
+    func stepItem(backward: Bool) {
+        guard let items = text.items else {
+            guard text.reading == nil, let image else { return NSSound.beep() }
+            text.reading = extent
+            textTask = Task {
+                do {
+                    let items = try await Self.findItems(in: image)
+                    try Task.checkCancellation()
+                    text.reading = nil
+                    text.items = items
+                    stepItem(backward: backward)
+                    refresh()
+                } catch {
+                    report(error)
+                }
+            }
+            return
+        }
+        guard !items.isEmpty else {
+            text.notice = "No links, email addresses, phone numbers, or codes here."
+            return
+        }
+        let picked = ((text.picked ?? (backward ? 0 : -1)) + (backward ? -1 : 1) + items.count) % items.count
+        text.picked = picked
+        view.liveText.preferredInteractionTypes = .dataDetectors
+        view.liveText.selectableItemsHighlighted = true
+        // Switching away from text selection drops Live Text's focus to the window, where keys would no longer reach the overlay.
+        window.makeFirstResponder(view)
+        text.notice = "\(items[picked].text)    \u{21A9} copy\(items[picked].url == nil ? "" : "    \u{2318}\u{21A9} open")"
+    }
+
+    /// Accurate OCR's links, email addresses and phone numbers (boxed to the matched characters) and barcode payloads, in reading order.
+    @concurrent
+    static func findItems(in image: CGImage) async throws -> [FoundItem] {
+        let size = CGSize(width: image.width, height: image.height)
+        var request = RecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = true
+        request.automaticallyDetectsLanguage = true
+        let handler = ImageRequestHandler(image)
+        var items: [FoundItem] = []
+        for line in try await handler.perform(request) {
+            let candidate = line.topCandidates(1)[0]
+            for match in FoundItems.matches(in: candidate.string) {
+                let box = candidate.boundingBox(for: match.range)?.boundingBox ?? line.boundingBox
+                items.append(FoundItem(text: String(candidate.string[match.range]), url: match.url, bounds: box.toImageCoordinates(size, origin: .upperLeft)))
+            }
+        }
+        for code in try await handler.perform(DetectBarcodesRequest()) {
+            guard let payload = code.payloadString else { continue }
+            items.append(FoundItem(text: payload, url: URL(string: payload).flatMap { $0.scheme == nil ? nil : $0 },
+                                   bounds: code.boundingBox.toImageCoordinates(size, origin: .upperLeft)))
+        }
+        return FoundItems.readingOrder(items)
+    }
+
+    /// With an item picked: Return copies it, Cmd-Return opens it, Esc unpicks. Otherwise Esc: close. F: select all text. Return or
+    /// Cmd-C: copy the selection; Shift-Return: copy it as rows; Option-Return: translate it. Tab / Shift-Tab: step through found items.
     func handleTextKey(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags
         let liveText = view.liveText
+        if let picked = text.picked, let item = text.items?[picked], [36, 76, 53].contains(event.keyCode) {
+            switch (event.keyCode, flags.contains(.command)) {
+            case (53, _):
+                text.picked = nil
+                liveText.preferredInteractionTypes = .textSelection
+                liveText.selectableItemsHighlighted = false
+            case (_, true):
+                guard let url = item.url else { NSSound.beep(); break }
+                dismiss()
+                openURL(url)
+            default:
+                copyText(item.text, message: "Copied", translating: false, rect: item.bounds)
+            }
+            return true
+        }
         switch (event.keyCode, flags.contains(.command), event.charactersIgnoringModifiers ?? "") {
         case (53, _, _):
             dismiss()
+        case (48, false, _):
+            stepItem(backward: flags.contains(.shift))
         case (_, false, "f"):
             liveText.selectedRanges = [liveText.text.startIndex..<liveText.text.endIndex]
+        case (36, false, _) where flags.contains(.shift):
+            copyTextRows()
         case (36, _, _), (76, _, _), (_, true, "c"):
             let selected = liveText.selectedText
             guard !selected.isEmpty else { NSSound.beep(); break }

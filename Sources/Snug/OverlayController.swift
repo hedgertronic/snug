@@ -74,6 +74,8 @@ final class OverlayController {
     var translate: (String, Locale.Language, Locale.Language) async throws -> String = {
         try await TranslationSession(installedSource: $1, target: $2).translate($0).targetText
     }
+    /// Text mode's Cmd-Return on a picked item; debug runs record the URL instead.
+    var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
 
     let chrome = Chrome()
     /// Points at the top of the screen the camera housing covers; chrome stays below it.
@@ -138,6 +140,7 @@ final class OverlayController {
 
     init() {
         view.controller = self
+        view.liveText.delegate = self
         window.contentView = view
         chrome.all.forEach(view.addSubview)
         chrome.bottomBar.onMode = { [unowned self] in setMode($0) }
@@ -731,6 +734,7 @@ final class OverlayController {
         overlays.snappedEdges = snappedEdges
         overlays.showsHandles = selection != nil
         if selection == nil, case .none = interaction { overlays.hover = hoverRect }
+        if mode == .text, let picked = text.picked { overlays.hover = text.items![picked].bounds }
         // While hovering, faint outlines show what Up and Down would select, unless that is nothing, the display, or the hover itself.
         if mode == .capture, let hover = overlays.hover, let session {
             let level = { (candidate: Candidate?) in candidate.flatMap { $0.kind == .display || $0.bounds == hover ? nil : $0.bounds } }

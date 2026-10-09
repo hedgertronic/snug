@@ -1,5 +1,6 @@
 import AppKit
 import ScreenshotCore
+import CoreImage.CIFilterBuiltins
 import Translation
 
 extension DebugRun {
@@ -75,7 +76,7 @@ extension DebugRun {
         require(overlay.mode == .capture && liveText.isHidden && liveText.analysis == nil, "the overlay opens in Capture with Live Text hidden and nothing analyzed")
         key(tKey, "t")
         require(overlay.mode == .text && !liveText.isHidden, "T enters Text mode and shows Live Text")
-        require(texts(in: overlay.chrome.hints) == ["Drag", "select text", "\u{21A9}", "copy", "\u{2325}", "\u{21A9}", "translate", "F", "all text", "C", "color", "?", "all keys"],
+        require(texts(in: overlay.chrome.hints) == ["Drag", "select text", "\u{21A9}", "copy", "\u{21E7}", "\u{21A9}", "rows", "Tab", "links, codes", "\u{2325}", "\u{21A9}", "translate", "F", "all text", "C", "color", "?", "all keys"],
                 "Text mode shows its hint row: \(texts(in: overlay.chrome.hints))")
         require(!overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."], "a Reading text... pill shows while the analysis runs")
         try await waitFor("the Live Text analysis attaches") { liveText.analysis != nil }
@@ -364,8 +365,100 @@ extension DebugRun {
         }
         overlay.dismiss()
 
+        // Shift-Return in Text mode copies the selection as rows: columns tab-separated, one visual row per line.
+        try await open()
+        let transcript = liveText.text
+        liveText.selectedRanges = [transcript.range(of: "Product name")!.lowerBound..<transcript.range(of: "Second product")!.upperBound]
+        let liveOrder = liveText.selectedText
+        pasteboard.clearContents()
+        key(returnKey, "\r", .shift)
+        require(overlay.text.reading != nil, "Shift-Return in Text mode reads the boxes first")
+        await overlay.textTask?.value
+        let rows = await copied() ?? ""
+        require(rows.hasPrefix("Product name\t$12\nBrief description\nSecond product") && !overlay.window.isVisible,
+                "Shift-Return in Text mode copies rows, columns tab-separated: \(rows.debugDescription) (Live Text order: \(liveOrder.debugDescription))")
+        try await open()
+        liveText.selectedRanges = [transcript.range(of: "Product name")!.lowerBound..<transcript.range(of: "Second product")!.upperBound]
+        pasteboard.clearContents()
+        key(returnKey, "\r")
+        require(await copied() == liveOrder, "Return still copies in Live Text's order")
+
+        // Found items on a generated page: a link, an email address, a phone number, and a QR code.
+        let fixture = itemsFixture(width: image.width, height: image.height)
+        let qrBounds = CGRect(x: image.width - 700, y: image.height - 700, width: 500, height: 500)
+        var opened: [URL] = []
+        overlay.openURL = { opened.append($0) }
+        func openFixture() async throws {
+            overlay.present(image: fixture, frame: frame, displayID: nil)
+            key(tKey, "t")
+            try await waitFor("the fixture's Live Text analysis attaches") { liveText.analysis != nil }
+        }
+        try await openFixture()
+        textDrag(from: CGPoint(x: 203, y: 280), to: CGPoint(x: 330, y: 280))
+        require(overlay.window.firstResponder !== overlay.view, "focus is in Live Text before Tab")
+        key(48, "\t")
+        try await waitFor("Tab finds the items") { overlay.text.picked != nil }
+        let items = overlay.text.items!
+        require(items.map(\.text) == ["https://example.com/snug", "you@example.com", "+1 (555) 010-4477", "https://example.org/qr"],
+                "Tab finds the link, email, phone number and QR payload in reading order: \(items.map(\.text))")
+        require(items.map { $0.url?.absoluteString } == ["https://example.com/snug", "mailto:you@example.com", "tel:+15550104477", "https://example.org/qr"],
+                "each item opens its URL: \(items.map { $0.url?.absoluteString })")
+        require(items[0].bounds.minX > 330 && items[0].bounds.minY > 200 && items[0].bounds.maxY < 340,
+                "the link's box covers the link, not the whole line: \(items[0].bounds)")
+        require(abs(items[3].bounds.minX - qrBounds.minX) < 20 && abs(items[3].bounds.maxY - qrBounds.maxY) < 20, "the QR code's box is the code: \(items[3].bounds)")
+        require(overlay.text.picked == 0 && overlay.view.overlays.hover == items[0].bounds, "the first Tab picks the first item and outlines it")
+        require(liveText.selectableItemsHighlighted && liveText.preferredInteractionTypes == .dataDetectors,
+                "while an item is picked Live Text highlights its data detectors")
+        require(overlay.text.notice?.hasPrefix("https://example.com/snug") == true, "a pill names the picked item: \(overlay.text.notice.debugDescription)")
+        key(48, "\t")
+        require(overlay.text.picked == 1, "Tab steps to the next item")
+        key(48, "\t", .shift)
+        key(48, "\t", .shift)
+        require(overlay.text.picked == 3 && overlay.view.overlays.hover == items[3].bounds, "Shift-Tab steps back and wraps to the last item")
+        pasteboard.clearContents()
+        key(returnKey, "\r")
+        require(await copied() == "https://example.org/qr" && !overlay.window.isVisible, "Return copies the picked item and closes")
+        try await openFixture()
+        key(48, "\t")
+        try await waitFor("Tab finds the items") { overlay.text.picked != nil }
+        key(returnKey, "\r", .command)
+        try await openFixture()
+        require(liveText.preferredInteractionTypes == .textSelection && !liveText.selectableItemsHighlighted, "the next Text mode starts with text selection")
+        overlay.dismiss()
+        require(opened == [URL(string: "https://example.com/snug")!] && !overlay.window.isVisible, "Cmd-Return closes and opens the picked item: \(opened)")
+        try await openFixture()
+        key(48, "\t")
+        try await waitFor("Tab finds the items") { overlay.text.picked != nil }
+        key(escape)
+        require(overlay.window.isVisible && overlay.text.picked == nil && overlay.view.overlays.hover == nil && !liveText.selectableItemsHighlighted
+                && liveText.preferredInteractionTypes == .textSelection, "Esc with an item picked unpicks it and keeps the overlay")
+        textDrag(from: CGPoint(x: 203, y: 440), to: CGPoint(x: 330, y: 440))
+        require(liveText.selectedText.hasPrefix("Mail"), "after unpicking, a drag selects text again: \(liveText.selectedText.debugDescription)")
+        key(escape)
+        require(!overlay.window.isVisible, "Esc again closes")
+
         print("Text UI verification passed (\(passed.count) checks):")
         passed.forEach { print("- \($0)") }
         exit(EXIT_SUCCESS)
+    }
+
+    /// A white page of `width` x `height` pixels with a link, an email address and a phone number in large text from the top left, and a
+    /// 500 px QR code of a URL 200 px from the bottom-right corner.
+    static func itemsFixture(width: Int, height: Int) -> CGImage {
+        let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(.white)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        for (index, text) in ["Docs: https://example.com/snug", "Mail you@example.com", "Call +1 (555) 010-4477"].enumerated() {
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 56), .foregroundColor: NSColor.black]))
+            context.textPosition = CGPoint(x: 200, y: CGFloat(height - 300 - index * 160))
+            CTLineDraw(line, context)
+        }
+        let qr = CIFilter.qrCodeGenerator()
+        qr.message = Data("https://example.org/qr".utf8)
+        let code = CIContext().createCGImage(qr.outputImage!, from: qr.outputImage!.extent)!
+        context.interpolationQuality = .none
+        context.draw(code, in: CGRect(x: width - 700, y: 200, width: 500, height: 500))
+        return context.makeImage()!
     }
 }

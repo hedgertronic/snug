@@ -124,7 +124,8 @@ final class HelpSheet: NSView {
                      ("C", "Copy color"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
         ("Adjust and text", [("Tab", "Walk out, other fits"), ("Arrows", "Nudge (Shift: 10 pt)"), ("Up / Down", "Bigger / smaller element"),
                              ("1-5", "Pick from the list (N)"), ("Cmd-1/2/3", "Tight / Margin / Backdrop"), ("M", "Cycle output style"),
-                             ("Text: drag", "Select text"), ("Text: Return", "Copy selected text"), ("Option-Return", "Translate text"),
+                             ("Text: drag", "Select text"), ("Text: Return", "Copy selected text"), ("Text: Shift-Return", "Copy as rows"),
+                             ("Text: Tab", "Next link, email, phone, code"), ("Text: Cmd-Return", "Open the picked item"), ("Option-Return", "Translate text"),
                              ("Shift-C", "Cycle color format")]),
         ("Modes and view", [("A", "Capture"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),
                             ("X", "Crosshair"), ("D", "Window shadow"), ("N", "Candidate list"), ("B", "Bottom bar"), ("?", "This sheet")])
