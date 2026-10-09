@@ -62,25 +62,20 @@ public enum AccessibilityBounds {
 
     /// Candidates from `frames` (innermost element first, window last), in image pixels clipped to `extent` and to scroll viewports.
     /// The innermost element scores highest; repeated rectangles and padding-only parents keep only the innermost.
-    /// With an `image`, a Dock item's frame (its whole slot) is treated as a rough drag and takes the snap's best fit, if any.
-    public static func candidates(frames: [AXFrame], displayOrigin: CGPoint, scale: CGFloat, extent: CGRect, image: CGImage? = nil) async throws -> [Candidate] {
+    public static func candidates(frames: [AXFrame], displayOrigin: CGPoint, scale: CGFloat, extent: CGRect) async throws -> [Candidate] {
         var output: [Candidate] = []
         var inner: CGRect?
         for (index, frame) in clippedToViewports(frames.filter { [$0.rect.minX, $0.rect.minY, $0.rect.width, $0.rect.height].allSatisfy(\.isFinite) }).enumerated() {
             let r = frame.rect
-            var pixels = CGRect(x: (r.minX - displayOrigin.x) * scale, y: (r.minY - displayOrigin.y) * scale,
+            let pixels = CGRect(x: (r.minX - displayOrigin.x) * scale, y: (r.minY - displayOrigin.y) * scale,
                                 width: r.width * scale, height: r.height * scale).intersection(extent).integral
             guard !pixels.isNull, pixels.width >= 8, pixels.height >= 8 else { continue }
-            if frame.role == "AXDockItem", let image {
-                pixels = try await SmartSnap().suggest(in: image, roughBounds: pixels, scale: scale).first?.bounds ?? pixels
-            }
             let tolerance = paddingTolerance * scale
             if let inner, abs(pixels.minX - inner.minX) <= tolerance, abs(pixels.minY - inner.minY) <= tolerance,
                abs(pixels.maxX - inner.maxX) <= tolerance, abs(pixels.maxY - inner.maxY) <= tolerance { continue }
             inner = pixels
-            // A Dock item is named by its title ("Safari"), anything else by its role description ("Text Field").
-            let label = frame.role == "AXDockItem" && !frame.title.isEmpty ? frame.title
-                : frame.roleDescription.isEmpty ? "Element" : frame.roleDescription.capitalized
+            // Named by its role description ("Text Field").
+            let label = frame.roleDescription.isEmpty ? "Element" : frame.roleDescription.capitalized
             output.append(Candidate(id: "ax-\(Int(pixels.minX))-\(Int(pixels.minY))-\(Int(pixels.width))-\(Int(pixels.height))", label: label,
                                     bounds: pixels, score: baseScore - Double(index) * 0.01, kind: .element))
         }

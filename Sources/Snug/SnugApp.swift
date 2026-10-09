@@ -148,6 +148,15 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     Pref.logHoverLine("dock union \(windows[index].rect) scale \(scale) image \(image.width)x\(image.height)")
                     windows[index].rect = try await SmartSnap().suggest(in: image, roughBounds: windows[index].rect, scale: scale, cap: 96).first?.bounds ?? windows[index].rect
                     Pref.logHoverLine("dock panel \(windows[index].rect)")
+                    // Live item frames are magnified, so the tiles come from the frozen pixels; titles label them when the counts match.
+                    let tiles = DockTiles.tiles(in: image, panel: windows[index].rect, scale: scale)
+                    let pid = (CGWindowListCopyWindowInfo([.optionIncludingWindow], windows[index].id) as! [[String: Any]])[0][kCGWindowOwnerPID as String] as! Int32
+                    let titles = await Accessibility.dockItemTitles(pid: pid)
+                    Pref.logHoverLine("dock tiles \(tiles.count) titles \(titles)")
+                    overlay.dockTiles = tiles.enumerated().map { offset, rect in
+                        Candidate(id: "dock-\(offset)", label: titles.count == tiles.count && !titles[offset].isEmpty ? titles[offset] : "Dock Item",
+                                  bounds: rect, score: AccessibilityBounds.baseScore, kind: .element)
+                    }
                 }
                 if overlay.image === image { overlay.setWindows(windows.map(\.rect), names: windows.map(\.name), ids: windows.map(\.id), frozen: windows.map(\.frozen), pointer: NSEvent.mouseLocation) }
             } catch is CancellationError {

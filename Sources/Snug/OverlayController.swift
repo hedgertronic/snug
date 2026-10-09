@@ -91,6 +91,8 @@ final class OverlayController {
     var session: SelectionSession?
     var detectionTask: Task<Void, Never>?
     var detected: [Candidate] = []
+    /// The Dock's icon tiles read from the frozen image, labeled by the Dock's item titles.
+    var dockTiles: [Candidate] = []
     /// The running accessibility lookup and when the last one started (throttle).
     var accessibilityTask: Task<Void, Error>?
     var accessibilityStarted: ContinuousClock.Instant?
@@ -154,6 +156,7 @@ final class OverlayController {
         smallImage = nil
         detectionTask?.cancel()
         detected = []
+        dockTiles = []
         accessibilityTask?.cancel()
         let start = ContinuousClock.now
         let shown = signposter.beginInterval("overlay shown")

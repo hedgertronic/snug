@@ -61,6 +61,7 @@ extension OverlayController {
         accessibilityStarted = nil
         session = nil
         detected = []
+        dockTiles = []
         mode = .capture
         chrome.help.isHidden = true
         if !isHeadless { previousApp?.activate() }
@@ -121,7 +122,7 @@ extension OverlayController {
     }
 
     func buildSession() {
-        session = SelectionSession(candidates: detected + windowCandidates, extent: extent, anchor: pointer)
+        session = SelectionSession(candidates: detected + dockTiles + windowCandidates, extent: extent, anchor: pointer)
     }
 
     /// Late results (geometry, accessibility) join the pool; a level picked with a key and the list order stay as they are.
@@ -141,14 +142,16 @@ extension OverlayController {
         let primaryHeight = NSScreen.screens[0].frame.height
         let origin = CGPoint(x: window.frame.minX, y: primaryHeight - window.frame.maxY)
         let point = AccessibilityBounds.point(forPixel: pixel, displayOrigin: origin, scale: scale)
-        let (scale, extent, image) = (scale, extent, image)
+        let (scale, extent) = (scale, extent)
         accessibilityTask = Task {
             defer { accessibilityTask = nil }
             let info = CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]]
             guard let pid = info?.first?[kCGWindowOwnerPID as String] as? Int32 else { return }
             let frames = await Accessibility.frames(at: point, pid: pid)
             guard !Task.isCancelled, mode == .capture else { return }
-            let found = try await AccessibilityBounds.candidates(frames: AccessibilityBounds.hoverLevel(frames), displayOrigin: origin, scale: scale, extent: extent, image: image)
+            // Live Dock item frames are magnified; the frozen image shows the unmagnified Dock, whose tiles are in `dockTiles`.
+            let found = try await AccessibilityBounds.candidates(frames: AccessibilityBounds.hoverLevel(frames).filter { $0.role != "AXDockItem" },
+                                                                 displayOrigin: origin, scale: scale, extent: extent)
             Pref.logHoverLine("hover \(point) scale \(scale) frames " + frames.map { "\($0.role) '\($0.roleDescription)' '\($0.title)' \($0.rect)" }.joined(separator: " | ")
                 + " -> " + found.map { "\($0.label) \($0.bounds)" }.joined(separator: " | "))
             if !found.isEmpty { merge(found) }
