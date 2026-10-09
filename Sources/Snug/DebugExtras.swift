@@ -224,6 +224,77 @@ extension DebugRun {
         await overlay.commitTask?.value
         require(pngSize(pasteboard.data(forType: .png)) == element.bounds.size && !overlay.window.isVisible, "a click on a hovered element crops it \(element.bounds)")
 
+        // The Up and Down outlines take their rectangle's corner radii, and a level within 4 pt of the hover shows no outline.
+        let scale = overlay.scale
+        let hintIn = Candidate(id: "hint-hintIn", label: "Inner", bounds: CGRect(x: 600, y: 500, width: 400, height: 240), score: AccessibilityBounds.baseScore, kind: .element)
+        let hintOut = Candidate(id: "hint-hintOut", label: "Outer", bounds: hintIn.bounds.insetBy(dx: -200, dy: -150), score: AccessibilityBounds.baseScore, kind: .element)
+        let center = CGPoint(x: hintIn.bounds.midX, y: hintIn.bounds.midY)
+        open()
+        overlay.detectionTask?.cancel()
+        overlay.radii[hintOut.bounds] = 24
+        overlay.radii[hintIn.bounds] = 10
+        overlay.session = SelectionSession(candidates: [hintIn, hintOut], extent: extent, anchor: center)
+        mouse(.mouseMoved, center)
+        require(overlay.view.overlays.hover == hintIn.bounds && overlay.view.overlays.upHint == hintOut.bounds, "the Up outline is the parent rectangle")
+        require(overlay.view.overlays.upHintRadii == CornerRadii(24), "the Up outline takes its rectangle's radii: \(overlay.view.overlays.upHintRadii)")
+        key(126, "")
+        require(overlay.view.overlays.downHint == hintIn.bounds && overlay.view.overlays.downHintRadii == CornerRadii(10), "the Down outline takes its rectangle's radii: \(overlay.view.overlays.downHintRadii)")
+        overlay.dismiss()
+        let near = Candidate(id: "hint-near", label: "Near", bounds: hintIn.bounds.insetBy(dx: -3 * scale, dy: -3 * scale), score: AccessibilityBounds.baseScore, kind: .element)
+        let apart = Candidate(id: "hint-apart", label: "Apart", bounds: hintIn.bounds.insetBy(dx: -8 * scale, dy: -8 * scale), score: AccessibilityBounds.baseScore, kind: .element)
+        for (parent, shows) in [(near, false), (apart, true)] {
+            open()
+            overlay.detectionTask?.cancel()
+            overlay.session = SelectionSession(candidates: [hintIn, parent], extent: extent, anchor: center)
+            mouse(.mouseMoved, center)
+            require(overlay.session!.parents.first?.bounds == parent.bounds && overlay.view.overlays.hover == hintIn.bounds, "\(parent.label): the level above the hover is \(parent.bounds)")
+            require((overlay.view.overlays.upHint == parent.bounds) == shows && overlay.chrome.upHint.isHidden == !shows,
+                    "a level \(shows ? "8" : "3") pt from the hover on every side \(shows ? "keeps" : "loses") its outline: \(String(describing: overlay.view.overlays.upHint))")
+            overlay.dismiss()
+        }
+
+        // The highlight reads its settings on each present.
+        defaults.set("#FF0000", forKey: Pref.highlightColor)
+        defaults.set(0.2, forKey: Pref.highlightFill)
+        defaults.set(0.6, forKey: Pref.highlightFade)
+        defaults.set(false, forKey: Pref.highlightGlow)
+        open()
+        let dim = overlay.view.dimLayer.fillColor.flatMap(NSColor.init(cgColor:))!
+        let hoverFill = overlay.view.hoverLayer.fillColor.flatMap(NSColor.init(cgColor:))
+        require(abs(dim.alphaComponent - 0.6) < 0.001, "the background fade follows the setting: \(dim.alphaComponent)")
+        require(hoverFill.map { abs($0.alphaComponent - 0.2) < 0.001 && $0.redComponent > 0.99 } == true, "the fill uses the picked color at the set opacity: \(String(describing: hoverFill))")
+        require(overlay.view.hoverLayer.shadowOpacity == 0, "glow off removes the hover's shadow")
+        overlay.dismiss()
+        for key in [Pref.highlightColor, Pref.highlightFill, Pref.highlightFade, Pref.highlightGlow] { defaults.removeObject(forKey: key) }
+        open()
+        require(abs(overlay.view.dimLayer.fillColor.flatMap(NSColor.init(cgColor:))!.alphaComponent - 0.42) < 0.001 && overlay.view.hoverLayer.fillColor == nil && overlay.view.hoverLayer.shadowOpacity > 0,
+                "the defaults are a 42% fade, no fill, and a glow")
+        overlay.dismiss()
+
+        // The toast's preview, position, and lifetime.
+        let capture = try await Output.png(image.cropping(to: CGRect(x: 0, y: 0, width: 1200, height: 400))!)
+        func toast(_ setup: (UserDefaults) -> Void = { _ in }) -> Toast {
+            let toastDefaults = UserDefaults(suiteName: "snug-toast-\(UUID().uuidString)")!
+            Pref.register(in: toastDefaults)
+            setup(toastDefaults)
+            return Toast(png: capture, message: "Copied", detail: "1200 x 400", file: nil, color: nil, defaults: toastDefaults)
+        }
+        let withPreview = toast(), without = toast { $0.set(false, forKey: Pref.toastPreview) }
+        let thumbnail = withPreview.contentView!.subviews.last!.frame.size
+        require(withPreview.contentView!.subviews.count == 2 && without.contentView!.subviews.count == 1, "the preview setting adds or removes the thumbnail")
+        require(thumbnail.width <= 240 && thumbnail.height <= 160 && abs(thumbnail.width / thumbnail.height - 3) < 0.02, "the thumbnail is aspect-fit within 240 x 160: \(thumbnail)")
+        require(withPreview.frame.height - without.frame.height > thumbnail.height && withPreview.lifetime == .seconds(4) && without.lifetime == .seconds(2), "the thumbnail sits above the pill and lasts 4 s")
+        let bottomRight = toast { $0.set("bottomRight", forKey: Pref.toastPosition) }, topRight = toast { $0.set("topRight", forKey: Pref.toastPosition) }
+        require(bottomRight.frame.minX > withPreview.frame.minX && bottomRight.frame.minY == withPreview.frame.minY && topRight.frame.minX == bottomRight.frame.minX && topRight.frame.minY > bottomRight.frame.minY,
+                "the position setting moves the toast: \(withPreview.frame) \(bottomRight.frame) \(topRight.frame)")
+        withPreview.scheduleDismissal()
+        let enter = NSEvent.enterExitEvent(with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: withPreview.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil)!
+        withPreview.mouseEntered(with: enter)
+        require(withPreview.dismissal!.isCancelled, "the toast stays while the pointer is over it")
+        withPreview.mouseExited(with: enter)
+        require(!withPreview.dismissal!.isCancelled, "the toast's timer restarts when the pointer leaves")
+        withPreview.dismissal?.cancel()
+
         open()
         await overlay.detectionTask?.value
         overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))

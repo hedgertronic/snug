@@ -1,5 +1,6 @@
 import AppKit
 import ServiceManagement
+import ScreenshotCore
 import SwiftUI
 
 /// The hot key's display string and menu key equivalent, derived from the stored key code and modifiers.
@@ -37,6 +38,12 @@ struct SettingsView: View {
     @AppStorage(Pref.afterCapture) private var afterCapture = "copy"
     @AppStorage(Pref.saveFolder) private var saveFolder = ""
     @AppStorage(Pref.roundCorners) private var roundCorners = true
+    @AppStorage(Pref.highlightColor) private var highlightColor = ""
+    @AppStorage(Pref.highlightFill) private var highlightFill = 0.0
+    @AppStorage(Pref.highlightFade) private var highlightFade = 0.42
+    @AppStorage(Pref.highlightGlow) private var highlightGlow = true
+    @AppStorage(Pref.toastPreview) private var toastPreview = true
+    @AppStorage(Pref.toastPosition) private var toastPosition = "bottomCenter"
     @State private var opensAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -94,6 +101,57 @@ struct SettingsView: View {
                             }
                         }
                 }
+                GridRow {
+                    label("Highlight")
+                    HStack(spacing: 10) {
+                        ColorPicker("Highlight color", selection: Binding(
+                            get: { Color(nsColor: Highlight.color(hex: highlightColor)) },
+                            set: {
+                                let picked = NSColor($0).usingColorSpace(.sRGB)!
+                                highlightColor = ColorFormat.hex.string(for: SRGBColor(red: picked.redComponent, green: picked.greenComponent, blue: picked.blueComponent))
+                            }
+                        ), supportsOpacity: false)
+                        .labelsHidden()
+                        Button("System accent") { highlightColor = "" }.disabled(highlightColor.isEmpty)
+                    }
+                }
+                GridRow {
+                    label("Fill")
+                    HStack {
+                        Slider(value: $highlightFill, in: 0...0.3).frame(width: 180)
+                        Text("\(Int((highlightFill * 100).rounded()))%").monospacedDigit().foregroundStyle(.secondary)
+                    }
+                }
+                GridRow {
+                    label("Background fade")
+                    HStack {
+                        Slider(value: $highlightFade, in: 0...0.6).frame(width: 180)
+                        Text("\(Int((highlightFade * 100).rounded()))%").monospacedDigit().foregroundStyle(.secondary)
+                    }
+                }
+                GridRow {
+                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                    Toggle("Glow", isOn: $highlightGlow)
+                }
+                GridRow {
+                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                    HighlightPreview(color: Color(nsColor: Highlight.color(hex: highlightColor)), fill: highlightFill, fade: highlightFade, glow: highlightGlow)
+                        .frame(width: 220, height: 90)
+                }
+                GridRow {
+                    label("Toast")
+                    Toggle("Preview after capture", isOn: $toastPreview)
+                }
+                GridRow {
+                    label("Toast position")
+                    Picker("Toast position", selection: $toastPosition) {
+                        Text("Bottom center").tag("bottomCenter")
+                        Text("Bottom right").tag("bottomRight")
+                        Text("Top right").tag("topRight")
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
             }
             .padding(.horizontal, 36)
             .padding(.vertical, 32)
@@ -114,6 +172,36 @@ struct SettingsView: View {
         Text(text)
             .foregroundStyle(.secondary)
             .frame(width: 130, alignment: .trailing)
+    }
+}
+
+/// The highlight on a sample rectangle: the dim, the optional fill and glow, the hairline, and the ring.
+struct HighlightPreview: View {
+    let color: Color
+    let fill: Double
+    let fade: Double
+    let glow: Bool
+
+    var body: some View {
+        Canvas { context, size in
+            let sample = CGRect(origin: .zero, size: size).insetBy(dx: 40, dy: 20)
+            let shape = Path(roundedRect: sample, cornerRadius: 10)
+            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(white: 0.92)))
+            for row in 0..<4 {
+                context.fill(Path(CGRect(x: 8, y: 10 + CGFloat(row) * 22, width: size.width - 16, height: 8)), with: .color(Color(white: 0.78)))
+            }
+            var dim = Path(CGRect(origin: .zero, size: size))
+            dim.addPath(shape)
+            context.fill(dim, with: .color(.black.opacity(fade)), style: FillStyle(eoFill: true))
+            context.fill(shape, with: .color(color.opacity(fill)))
+            context.drawLayer { layer in
+                if glow { layer.addFilter(.shadow(color: color.opacity(0.45), radius: 9)) }
+                layer.stroke(shape, with: .color(color), lineWidth: 1.5)
+            }
+            context.stroke(Path(roundedRect: sample.insetBy(dx: -2.25, dy: -2.25), cornerRadius: 12.25), with: .color(color.opacity(0.28)), lineWidth: 3)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary))
     }
 }
 

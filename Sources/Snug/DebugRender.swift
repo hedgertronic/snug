@@ -102,6 +102,36 @@ extension DebugRun {
         try snapshot("window-hover-rounded")
         overlay.dismiss()
 
+        // Up and Down outlines around a rounded hover.
+        open()
+        let hintInner = Candidate(id: "hint-inner", label: "Card", bounds: CGRect(x: 1250, y: 420, width: 500, height: 300), score: AccessibilityBounds.baseScore, kind: .element)
+        let hintOuter = Candidate(id: "hint-outer", label: "Panel", bounds: hintInner.bounds.insetBy(dx: -160, dy: -120), score: AccessibilityBounds.baseScore, kind: .element)
+        let hintChild = Candidate(id: "hint-child", label: "Button", bounds: hintInner.bounds.insetBy(dx: 90, dy: 70), score: AccessibilityBounds.baseScore, kind: .element)
+        overlay.detectionTask?.cancel()
+        overlay.radii[hintInner.bounds] = 28
+        overlay.radii[hintOuter.bounds] = 48
+        overlay.radii[hintChild.bounds] = 20
+        let hintAim = CGPoint(x: hintInner.bounds.midX, y: hintInner.bounds.midY)
+        overlay.session = SelectionSession(candidates: [hintChild, hintInner, hintOuter], extent: CGRect(x: 0, y: 0, width: image.width, height: image.height), anchor: hintAim)
+        mouse(.mouseMoved, hintAim)
+        key(126, "")
+        require(overlay.view.overlays.hover == hintInner.bounds && overlay.view.overlays.upHint == hintOuter.bounds && overlay.view.overlays.downHint == hintChild.bounds, "hint render: hover, up and down are set: \(String(describing: overlay.view.overlays.hover)) \(String(describing: overlay.view.overlays.upHint)) \(String(describing: overlay.view.overlays.downHint)) \(overlay.view.bounds) \(overlay.scale)")
+        try snapshot("hint-outlines-rounded")
+        overlay.dismiss()
+
+        // Highlight with a fill and no glow, in a picked color.
+        defaults.set("#E5484D", forKey: Pref.highlightColor)
+        defaults.set(0.15, forKey: Pref.highlightFill)
+        defaults.set(0.55, forKey: Pref.highlightFade)
+        defaults.set(false, forKey: Pref.highlightGlow)
+        open()
+        overlay.radii[rounded] = 40
+        overlay.setWindows([rounded], names: ["Rounded window"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, CGPoint(x: 1600, y: 600))
+        try snapshot("highlight-fill-no-glow")
+        overlay.dismiss()
+        for key in [Pref.highlightColor, Pref.highlightFill, Pref.highlightFade, Pref.highlightGlow] { defaults.removeObject(forKey: key) }
+
         open()
         key(17, "t")
         try snapshot("text-reading")
@@ -155,11 +185,30 @@ extension DebugRun {
         try snapshot("area-idle-notch")
         overlay.dismiss()
 
-        let toast = Toast(png: nil, message: "Copied", detail: "1824 x 768  backdrop", file: nil, color: nil).contentView!
-        let rep = toast.bitmapImageRepForCachingDisplay(in: toast.bounds)!
-        toast.cacheDisplay(in: toast.bounds, to: rep)
-        try rep.representation(using: .png, properties: [:])!.write(to: directory.appending(path: "toast.png"))
-        print(directory.appending(path: "toast.png").path)
+        /// A toast's content on a mid-gray backdrop, since its panel is transparent.
+        func renderToast(_ name: String, _ toast: Toast) throws {
+            let content = toast.contentView!
+            let rep = content.bitmapImageRepForCachingDisplay(in: content.bounds)!
+            content.cacheDisplay(in: content.bounds, to: rep)
+            let backed = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: rep.pixelsWide, pixelsHigh: rep.pixelsHigh, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                          isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: backed)
+            let whole = NSRect(x: 0, y: 0, width: rep.pixelsWide, height: rep.pixelsHigh)
+            NSColor(white: 0.5, alpha: 1).setFill()
+            whole.fill()
+            rep.draw(in: whole)
+            NSGraphicsContext.restoreGraphicsState()
+            try backed.representation(using: .png, properties: [:])!.write(to: directory.appending(path: "\(name).png"))
+            print(directory.appending(path: "\(name).png").path)
+        }
+        try renderToast("toast", Toast(png: nil, message: "Copied", detail: "1824 x 768  backdrop", file: nil, color: nil, defaults: defaults))
+        let roundedCapture = CGContext(data: nil, width: 960, height: 520, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        roundedCapture.addPath(CGPath(roundedRect: CGRect(x: 0, y: 0, width: 960, height: 520), cornerWidth: 40, cornerHeight: 40, transform: nil))
+        roundedCapture.clip()
+        roundedCapture.draw(image.cropping(to: CGRect(x: 300, y: 380, width: 960, height: 520))!, in: CGRect(x: 0, y: 0, width: 960, height: 520))
+        try renderToast("toast-preview", Toast(png: try await Output.png(roundedCapture.makeImage()!), message: "Copied", detail: "960 x 520  tight", file: nil, color: nil, defaults: defaults))
 
         func render(_ name: String, _ content: some View) throws {
             let renderer = ImageRenderer(content: content.background(Color(nsColor: .windowBackgroundColor)))
@@ -172,6 +221,10 @@ extension DebugRun {
         try render("first-run", FirstRunView())
         require(firstRun.fittingSize.width == 500, "the first-run window is 500 pt wide")
         try render("settings", SettingsView())
+        try render("settings-highlight", VStack(spacing: 16) {
+            HighlightPreview(color: Color(nsColor: Highlight.color(hex: "")), fill: 0, fade: 0.42, glow: true).frame(width: 220, height: 90)
+            HighlightPreview(color: Color(nsColor: Highlight.color(hex: "#E5484D")), fill: 0.15, fade: 0.55, glow: false).frame(width: 220, height: 90)
+        }.padding(20))
 
         let menu = SnugApp.makeMenu(defaults: defaults)
         let capture = menu.items[0]

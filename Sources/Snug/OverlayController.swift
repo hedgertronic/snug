@@ -194,6 +194,7 @@ final class OverlayController {
         previousApp = displayID == nil || isHeadless ? nil : NSWorkspace.shared.frontmostApplication
         pointer = CGPoint(x: (NSEvent.mouseLocation.x - frame.minX) * scale, y: (frame.maxY - NSEvent.mouseLocation.y) * scale)
         view.scale = scale
+        view.highlight = Highlight(defaults: defaults)
         view.image = image
         window.setFrame(frame, display: false)
         if isHeadless {
@@ -742,19 +743,21 @@ final class OverlayController {
         overlays.snappedEdges = snappedEdges
         overlays.showsHandles = selection != nil
         if selection == nil, case .none = interaction { overlays.hover = hoverRect }
-        // While hovering, faint outlines show what Up and Down would select, unless that is nothing, the display, or the hover itself.
+        // While hovering, faint outlines show what Up and Down would select, unless that is nothing, the display, or within 4 pt of the hover.
         if mode == .capture, let hover = overlays.hover, let session {
-            let level = { (candidate: Candidate?) in candidate.flatMap { $0.kind == .display || $0.bounds == hover ? nil : $0.bounds } }
+            let level = { (candidate: Candidate?) in candidate.flatMap { $0.kind == .display || $0.bounds.isNear(hover, within: 4 * self.scale) ? nil : $0.bounds } }
             overlays.upHint = level(session.parents.first)
             overlays.downHint = level(session.child)
         }
         if let scrollArea { overlays.selection = scrollArea; overlays.showsHandles = false; overlays.hover = nil }
         let fit = selection.flatMap { $0.rect == $0.exact ? nil : $0.rect }
         let shown = selection?.rect ?? snapPreview
-        for rect in [snapPreview, fit, overlays.hover] { measureRadius(rect) }
-        for rect in [shown, overlays.hover] { measureRadius(rect.flatMap(container)) }
+        for rect in [snapPreview, fit, overlays.hover, overlays.upHint, overlays.downHint] { measureRadius(rect) }
+        for rect in [shown, overlays.hover, overlays.upHint, overlays.downHint] { measureRadius(rect.flatMap(container)) }
         overlays.radii = shown.map(cornerRadii) ?? .zero
         overlays.hoverRadii = overlays.hover.map(cornerRadii) ?? .zero
+        overlays.upHintRadii = overlays.upHint.map(cornerRadii) ?? .zero
+        overlays.downHintRadii = overlays.downHint.map(cornerRadii) ?? .zero
         if let rect = selection?.rect, style != .tight { overlays.styleFrame = style.frame(around: rect, in: extent, scale: scale) }
         view.overlays = overlays
         refreshExtras()
