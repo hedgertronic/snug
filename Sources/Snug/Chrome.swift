@@ -255,13 +255,12 @@ class Capsule: NSView {
 final class BottomBar: Capsule {
     var onMode: (OverlayController.Mode) -> Void = { _ in }
     var onToggle: (String) -> Void = { _ in }
-    var onStyle: () -> Void = {}
     let modeButtons: [OverlayController.Mode: BarButton] = [.capture: BarButton("Capture", key: "A"), .text: BarButton("Text", key: "T")]
     let toggles = [(Pref.loupe, BarButton("Loupe", key: "L")),
                    (Pref.rulers, BarButton("Rulers", key: "R")),
                    (Pref.snap, BarButton("Snap", key: "S")),
-                   (Pref.roundCorners, BarButton("Round", key: "O"))]
-    let styleButton = BarButton("Tight", key: "M")
+                   (Pref.roundCorners, BarButton("Rounded", key: "O")),
+                   (Pref.frame, BarButton("Frame", key: "M"))]
     let shadowButton = BarButton("Shadow", key: "D")
     let groups: [NSStackView]
     let dividers = [Capsule.divider(height: 36), Capsule.divider(height: 36)]
@@ -270,25 +269,24 @@ final class BottomBar: Capsule {
         func group(_ title: String, _ buttons: [BarButton]) -> NSStackView {
             let row = NSStackView(views: buttons)
             row.spacing = 6
-            let column = NSStackView(views: [NSTextField(title, size: 9, weight: .semibold, color: .secondaryLabelColor), row])
+            let column = NSStackView(views: [NSTextField(title, size: 10, weight: .semibold, color: .secondaryLabelColor), row])
             column.orientation = .vertical
-            column.spacing = 2
+            column.spacing = 5
             return column
         }
         let buttons = toggles.map(\.1)
         groups = [group("Mode", [modeButtons[.capture]!, modeButtons[.text]!]), group("View", Array(buttons[0..<2])),
-                  group("Output", [buttons[2], buttons[3], styleButton, shadowButton])]
+                  group("Output", [buttons[2], buttons[3], buttons[4], shadowButton])]
         super.init()
         for (mode, button) in modeButtons { button.onClick = { [unowned self] in onMode(mode) } }
         for (key, button) in toggles { button.onClick = { [unowned self] in onToggle(key) } }
-        styleButton.onClick = { [unowned self] in onStyle() }
         shadowButton.onClick = { [unowned self] in onToggle(Pref.shadow) }
         setItems([groups[0], dividers[0], groups[1], dividers[1], groups[2]])
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
-    func update(mode: OverlayController.Mode, defaults: UserDefaults, style: OutputStyle) {
+    func update(mode: OverlayController.Mode, defaults: UserDefaults) {
         for (current, button) in modeButtons {
             let selected = current == mode
             button.style(fill: selected ? .controlAccentColor : nil, text: selected ? .white : .labelColor, bold: selected, prominent: selected)
@@ -297,8 +295,6 @@ final class BottomBar: Capsule {
             let on = defaults.bool(forKey: key)
             button.style(fill: on ? NSColor.controlAccentColor.withAlphaComponent(0.22) : nil, text: on ? .controlAccentColor : .labelColor)
         }
-        styleButton.setTitle(style.rawValue.capitalized)
-        styleButton.style(fill: nil, text: .labelColor)
         relayout()
     }
 
@@ -306,37 +302,33 @@ final class BottomBar: Capsule {
     func click(_ mode: OverlayController.Mode) { modeButtons[mode]!.onClick() }
 }
 
-/// The bar attached to a released selection: output style, Text, Save, and Copy.
+/// The bar attached to a released selection: Frame, Text, Save, and Copy.
 @MainActor
 final class ActionBar: Capsule {
-    var onStyle: (OutputStyle) -> Void = { _ in }
+    var onFrame: () -> Void = {}
     var onText: () -> Void = {}
     var onSave: () -> Void = {}
     var onCopy: () -> Void = {}
-    let segments = OutputStyle.allCases.map { BarButton($0.rawValue.capitalized, key: nil, height: 28, size: 12) }
+    let frameButton = BarButton("Frame", key: "M", height: 28, size: 12)
     let text = BarButton("Text", key: "\u{21E7}\u{21A9}", height: 28, size: 12)
     let save = BarButton("Save", key: "\u{2318}S", height: 28, size: 12)
     let copy = BarButton("Copy", key: "\u{21A9}", height: 28, size: 12)
 
-    var style = OutputStyle.tight {
-        didSet {
-            for (candidate, segment) in zip(OutputStyle.allCases, segments) {
-                segment.style(fill: candidate == style ? NSColor.white.withAlphaComponent(0.16) : nil, text: .labelColor, bold: candidate == style)
-            }
-        }
+    var framed = false {
+        didSet { frameButton.style(fill: framed ? NSColor.white.withAlphaComponent(0.16) : nil, text: .labelColor, bold: framed) }
     }
 
     init() {
         super.init(spacing: 4, inset: 4, radius: 11)
-        for (candidate, segment) in zip(OutputStyle.allCases, segments) { segment.onClick = { [unowned self] in onStyle(candidate) } }
+        frameButton.onClick = { [unowned self] in onFrame() }
         text.style(fill: nil, text: .labelColor)
         save.style(fill: nil, text: .labelColor)
         copy.style(fill: .controlAccentColor, text: .white, bold: true, prominent: true)
         text.onClick = { [unowned self] in onText() }
         save.onClick = { [unowned self] in onSave() }
         copy.onClick = { [unowned self] in onCopy() }
-        setItems(segments + [Capsule.divider(height: 18), text, save, copy])
-        style = .tight
+        setItems([frameButton, Capsule.divider(height: 18), text, save, copy])
+        framed = false
     }
 
     required init?(coder: NSCoder) { fatalError() }

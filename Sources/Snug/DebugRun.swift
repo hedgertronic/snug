@@ -150,29 +150,35 @@ enum DebugRun {
         let tightSize = try await copiedSize()
         require(tightSize == tight.size, "Return writes a PNG of \(tight.size)")
 
-        // Backdrop size, Cmd-3 gone, and a stored "margin" reading as tight.
+        // Frame size, M toggling it, Cmd-1 / Cmd-2 / Cmd-3 gone, and the one-time SnugStyle migration.
         open()
         pressDrag(rough)
-        try await waitFor("preview for backdrop") { overlay.snapPreview != nil }
+        try await waitFor("preview for the frame") { overlay.snapPreview != nil }
         release(rough)
         let crop = overlay.selection!.rect
-        key(0, "2", .command)
-        require(overlay.style == .backdrop && defaults.string(forKey: Pref.style) == "backdrop", "Cmd-2 sets backdrop and remembers it")
+        key(0, "m")
+        require(overlay.framed && defaults.bool(forKey: Pref.frame), "M turns Frame on and remembers it")
         pasteboard.clearContents()
         key(returnKey, "\r")
         let size = try await copiedSize()
         require(size == CGSize(width: crop.width + 48 * scale, height: crop.height + 48 * scale),
-                "backdrop PNG is 48 pt larger per dimension (\(String(describing: size)))")
+                "a framed PNG is 48 pt larger per dimension (\(String(describing: size)))")
         open()
+        require(overlay.framed, "Frame stays on for the next overlay")
         key(0, "m")
-        require(overlay.style == .tight, "M cycles backdrop to tight")
+        require(!overlay.framed && !defaults.bool(forKey: Pref.frame), "M turns Frame off")
         key(0, "m")
-        require(overlay.style == .backdrop, "M cycles tight to backdrop")
-        key(0, "3", .command)
-        require(overlay.style == .backdrop, "Cmd-3 does nothing now")
-        defaults.set("margin", forKey: Pref.style)
-        require(overlay.style == .tight, "a stored margin style reads as tight")
-        defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
+        require(overlay.framed, "M turns Frame back on")
+        for digit in ["1", "2", "3"] { key(0, digit, .command) }
+        require(overlay.framed, "Cmd-1, Cmd-2 and Cmd-3 do nothing now")
+        for (stored, framed) in [("backdrop", true), ("tight", false), ("margin", false)] {
+            let legacy = UserDefaults(suiteName: "snug-migrate-\(UUID().uuidString)")!
+            legacy.set(stored, forKey: "SnugStyle")
+            Pref.register(in: legacy)
+            require(legacy.bool(forKey: Pref.frame) == framed && legacy.object(forKey: "SnugStyle") == nil,
+                    "a stored SnugStyle of \(stored) migrates to Frame \(framed) and the old key is removed")
+        }
+        defaults.set(false, forKey: Pref.frame)
         overlay.dismiss()
 
         // Cmd-S saves only, to the save folder.
@@ -269,7 +275,7 @@ enum DebugRun {
         overlay.setWindows([windowRect], pointer: CGPoint(x: frame.minX + 10, y: frame.maxY - 10))
         mouse(.mouseMoved, CGPoint(x: 350, y: 350))
         require(overlay.view.overlays.hover == windowRect && !overlay.view.dimLayer.path!.isEmpty, "hovering a window dims everything outside it")
-        defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
+        defaults.set(false, forKey: Pref.frame)
         pasteboard.clearContents()
         mouse(.leftMouseDown, CGPoint(x: 350, y: 350))
         mouse(.leftMouseUp, CGPoint(x: 350, y: 350))
@@ -511,9 +517,9 @@ enum DebugRun {
         release(rough)
         require(overlay.selection?.rect == live, "release takes the preview")
         key(1, "s")
-        require(overlay.selection?.rect == rough && texts(in: overlay.chrome.status) == ["Exact, snap off"] && texts(in: overlay.chrome.hints).contains("best fit"), "S after release switches to the exact drag and says so")
+        require(overlay.selection?.rect == rough && texts(in: overlay.chrome.status) == ["Exact, snap off"] && texts(in: overlay.chrome.hints).contains("snap on"), "S after release switches to the exact drag and says so")
         key(1, "s")
-        require(overlay.selection?.rect == live && texts(in: overlay.chrome.status) == ["Snapped"] && texts(in: overlay.chrome.hints).contains("exact"), "S again switches back to the best fit")
+        require(overlay.selection?.rect == live && texts(in: overlay.chrome.status) == ["Snapped"] && texts(in: overlay.chrome.hints).contains("snap off"), "S again switches back to the best fit")
         overlay.chrome.bottomBar.toggles.first { $0.0 == Pref.snap }!.1.onClick()
         require(!defaults.bool(forKey: Pref.snap) && overlay.selection?.rect == rough, "the Snap button acts the same way")
         overlay.chrome.bottomBar.toggles.first { $0.0 == Pref.snap }!.1.onClick()
@@ -595,7 +601,7 @@ enum DebugRun {
             snapCount = try await SmartSnap().suggest(in: image, roughBounds: rough).count
             run.append(start.duration(to: .now).milliseconds)
             start = ContinuousClock.now
-            let output = try await Output.encode(image, crop: rough, style: .tight, scale: overlay.scale)
+            let output = try await Output.encode(image, crop: rough, framed: false, scale: overlay.scale)
             run.append(start.duration(to: .now).milliseconds)
             start = ContinuousClock.now
             overlay.pasteboard.clearContents()

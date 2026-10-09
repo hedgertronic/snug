@@ -69,9 +69,10 @@ extension DebugRun {
         require(overlay.mode == .capture, "A switches back to Capture")
         key(14, "e")
         require(overlay.mode == .capture && overlay.session != nil, "E does nothing: there is no Element mode")
+        require(overlay.selection == nil, "E leaves no selection: \(String(describing: overlay.selection))")
         key(1, "s")
         drag(rough)
-        require(overlay.selection?.rect == rough, "a drag selects")
+        require(overlay.selection?.rect == rough, "a drag selects: \(String(describing: overlay.selection)) snap \(defaults.bool(forKey: Pref.snap))")
         key(17, "t")
         require(overlay.mode == .text && overlay.selection == nil, "changing mode clears the selection")
         overlay.chrome.bottomBar.click(.capture)
@@ -166,6 +167,9 @@ extension DebugRun {
         require(sheet.contains("Esc or ? closes this.") || sheet.contains { $0.hasSuffix("Esc or ? closes this.") }, "the sheet says how to close it")
         let panel = help.panel.frame
         require(panel.width == 900 && help.bounds.insetBy(dx: 1, dy: 1).contains(panel), "the sheet panel is 900 pt wide and inside the screen \(panel)")
+        let caps = help.panel.subviews.compactMap { $0 as? KeyCap }, labels = help.panel.subviews.compactMap { $0 as? NSTextField }
+        let crowded = caps.flatMap { cap in labels.filter { $0.frame.minY < cap.frame.maxY && $0.frame.maxY > cap.frame.minY && $0.frame.minX < cap.frame.minX && $0.frame.maxX > cap.frame.minX - 8 }.map(\.stringValue) }
+        require(!caps.isEmpty && crowded.isEmpty, "no help label comes within 8 pt of its key cap: \(crowded)")
         key(44, "?", .shift)
         require(help.isHidden, "? hides the keys sheet")
         key(44, "?", .shift)
@@ -394,26 +398,23 @@ extension DebugRun {
         open()
         overlay.detectionTask?.cancel()
         mouse(.mouseMoved, flat)
-        require(texts(in: chrome.bottomBar) == ["Mode", "Capture", "A", "Text", "T", "View", "Loupe", "L", "Rulers", "R", "Output", "Snap", "S", "Round", "O", "Tight", "M", "Shadow", "D"], "the bottom bar shows three titled groups with key caps: \(texts(in: chrome.bottomBar))")
+        require(texts(in: chrome.bottomBar) == ["Mode", "Capture", "A", "Text", "T", "View", "Loupe", "L", "Rulers", "R", "Output", "Snap", "S", "Rounded", "O", "Frame", "M", "Shadow", "D"], "the bottom bar shows three titled groups with key caps: \(texts(in: chrome.bottomBar))")
         let bottom = chrome.bottomBar
-        let barButtons = [.capture, .text].map { bottom.modeButtons[$0]! } + bottom.toggles.map { $0.1 } + [bottom.styleButton, bottom.shadowButton]
+        let barButtons = [.capture, .text].map { bottom.modeButtons[$0]! } + bottom.toggles.map { $0.1 } + [bottom.shadowButton]
         func clipped() -> [String] {
             barButtons.filter { $0.title.cell!.cellSize.width > $0.title.frame.width || $0.title.frame.maxX > $0.frame.width }.map { $0.title.stringValue }
         }
-        var styleWidths: [CGFloat] = []
-        for style in OutputStyle.allCases {
+        let frameButton = bottom.toggles[4].1
+        for framed in [false, true] {
             for mode in [OverlayController.Mode.capture, .text] {
-                defaults.set(style.rawValue, forKey: Pref.style)
+                defaults.set(framed, forKey: Pref.frame)
                 bottom.click(mode)
                 overlay.refresh()
-                let button = bottom.styleButton
-                require(clipped().isEmpty && abs(button.cap!.frame.minX - button.title.frame.maxX - 7) < 0.01 && abs(button.bounds.maxX - button.cap!.frame.maxX - 10) < 0.01,
-                        "no bar title clips and the style button hugs \(style) with \(mode) selected: \(clipped()) \(button.frame)")
+                require(clipped().isEmpty && abs(frameButton.cap!.frame.minX - frameButton.title.frame.maxX - 7) < 0.01 && abs(frameButton.bounds.maxX - frameButton.cap!.frame.maxX - 10) < 0.01,
+                        "no bar title clips and the Frame button hugs its cap with Frame \(framed) and \(mode) selected: \(clipped()) \(frameButton.frame)")
             }
-            styleWidths.append(bottom.styleButton.frame.width)
         }
-        require(styleWidths[0] < styleWidths[1] && bottom.frame.width > 0, "the style button is narrower for Tight than Backdrop: \(styleWidths)")
-        defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
+        defaults.set(false, forKey: Pref.frame)
         bottom.click(.capture)
         overlay.refresh()
         require(barButtons.allSatisfy { $0.cap!.frame.minX >= $0.title.frame.maxX }, "every bar button shows its key cap after its title")
@@ -421,20 +422,28 @@ extension DebugRun {
         func box(_ view: NSView) -> CGRect { bottom.convert(view.bounds, from: view) }
         let d = bottom.dividers.map { box($0).minX }, toggles = bottom.toggles.map { box($0.1) }
         require(box(bottom.modeButtons[.text]!).maxX <= d[0] && d[0] <= toggles[0].minX && toggles[1].maxX <= d[1] && d[1] <= toggles[2].minX
-                && toggles[3].maxX <= box(bottom.styleButton).minX && box(bottom.styleButton).maxX <= box(bottom.shadowButton).minX,
-                "the bar has three groups: Capture, Text | Loupe, Rulers | Snap, Round, style, Shadow")
+                && toggles[3].maxX <= toggles[4].minX && toggles[4].maxX <= box(bottom.shadowButton).minX,
+                "the bar has three groups: Capture, Text | Loupe, Rulers | Snap, Rounded, Frame, Shadow")
         let titles = bottom.groups.map { box($0.arrangedSubviews[0]) }, buttonRows = bottom.groups.map { box($0.arrangedSubviews[1]) }
         require(zip(titles, buttonRows).allSatisfy { $0.minY >= $1.maxY } && titles.allSatisfy { $0.height < 14 } && bottom.frame.height < 66,
                 "each group title sits above its buttons and the bar stays compact: \(titles) \(buttonRows) \(bottom.frame.height)")
+        let titleFonts = bottom.groups.map { ($0.arrangedSubviews[0] as! NSTextField).font! }
+        let gaps = zip(titles, buttonRows).map { $0.minY - $1.maxY }
+        require(titleFonts.allSatisfy { $0.pointSize == 10 && NSFontManager.shared.weight(of: $0) >= 8 } && gaps.allSatisfy { $0 == 5 },
+                "group titles are 10 pt semibold with 5 pt clear above the button capsules: \(titleFonts) \(gaps)")
         defaults.set(false, forKey: Pref.roundCorners)
         overlay.refresh()
-        require(bottom.toggles[3].1.layer!.backgroundColor == nil, "with Round off its button is not highlighted")
+        require(bottom.toggles[3].1.layer!.backgroundColor == nil, "with Rounded off its button is not highlighted")
         bottom.toggles[3].1.onClick()
-        require(defaults.bool(forKey: Pref.roundCorners) && bottom.toggles[3].1.layer!.backgroundColor != nil, "the Round button turns round corners on and highlights")
+        require(defaults.bool(forKey: Pref.roundCorners) && bottom.toggles[3].1.layer!.backgroundColor != nil, "the Rounded button turns rounded corners on and highlights")
         bottom.toggles[3].1.onClick()
-        require(!defaults.bool(forKey: Pref.roundCorners), "the Round button turns round corners off")
+        require(!defaults.bool(forKey: Pref.roundCorners), "the Rounded button turns rounded corners off")
         defaults.set(true, forKey: Pref.roundCorners)
-        defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
+        require(!defaults.bool(forKey: Pref.frame) && frameButton.layer!.backgroundColor == nil, "Frame defaults to off and its button is not highlighted")
+        key(46, "m")
+        require(defaults.bool(forKey: Pref.frame) && frameButton.layer!.backgroundColor != nil, "M turns Frame on and the Frame button highlights")
+        frameButton.onClick()
+        require(!defaults.bool(forKey: Pref.frame) && frameButton.layer!.backgroundColor == nil, "the Frame button turns Frame off")
         require(defaults.bool(forKey: Pref.shadow) && bottom.shadowButton.layer!.backgroundColor != nil, "the window shadow defaults to on")
         key(2, "d")
         require(!defaults.bool(forKey: Pref.shadow) && bottom.shadowButton.layer!.backgroundColor == nil, "D turns the window shadow off and the Shadow button follows")
@@ -470,18 +479,25 @@ extension DebugRun {
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.status) == ["Snapped"], "after release on a fit: Snapped")
         require(chrome.bottomBar.isHidden && !chrome.actionBar.isHidden && texts(in: chrome.hints)
-                    == ["\u{2318}1", "\u{2318}2", "style", "Tab", "other fits", "S", "exact", "\u{2190}", "\u{2192}", "\u{2191}", "\u{2193}", "nudge", "\u{2325}\u{2190}", "edge", "Dots", "corners", "G", "scroll capture", "esc", "cancel"],
+                    == ["M", "frame", "Tab", "next snap", "S", "snap off", "\u{2325}", "arrows", "grow", "\u{2325}\u{2318}", "shrink", "P", "ratio free", "G", "scroll", "esc", "cancel"],
                 "the action bar replaces the bottom bar, with the released hints: \(texts(in: chrome.hints))")
-        require(texts(in: chrome.actionBar) == ["Tight", "Backdrop", "Text", "\u{21E7}\u{21A9}", "Save", "\u{2318}S", "Copy", "\u{21A9}"], "the action bar shows styles, Text, Save, and Copy with key caps: \(texts(in: chrome.actionBar))")
+        require(chrome.hints.frame.height < 40 && chrome.hints.frame.width <= overlay.view.bounds.width - 16, "the released hint strip is one line and fits: \(chrome.hints.frame) in \(overlay.view.bounds.width)")
+        defaults.set(false, forKey: Pref.snap)
+        overlay.refresh()
+        require(texts(in: chrome.hints).contains("snap on") && !texts(in: chrome.hints).contains("snap off"), "with snap off the strip offers S as snap on: \(texts(in: chrome.hints))")
+        defaults.set(true, forKey: Pref.snap)
+        overlay.refresh()
+        require(texts(in: chrome.actionBar) == ["Frame", "M", "Text", "\u{21E7}\u{21A9}", "Save", "\u{2318}S", "Copy", "\u{21A9}"], "the action bar shows Frame, Text, Save, and Copy with key caps: \(texts(in: chrome.actionBar))")
         let released = overlay.view.viewRect(overlay.selection!.rect)
         require(chrome.actionBar.frame.maxY == released.minY - 8 && chrome.actionBar.frame.minX == min(max(released.minX, 8), overlay.view.bounds.width - chrome.actionBar.frame.width - 8),
                 "the action bar is attached under the selection: \(chrome.actionBar.frame) \(released)")
         require(chrome.size.frame.minY == released.maxY + 8, "the size badge sits above the selection")
-        chrome.actionBar.segments[1].onClick()
-        require(overlay.style == .backdrop, "clicking a style segment sets the style")
-        defaults.set(OutputStyle.tight.rawValue, forKey: Pref.style)
+        chrome.actionBar.frameButton.onClick()
+        require(overlay.framed && chrome.actionBar.frameButton.layer!.backgroundColor != nil, "clicking the action bar's Frame turns Frame on and highlights it")
+        key(46, "m")
+        require(!overlay.framed && chrome.actionBar.frameButton.layer!.backgroundColor == nil, "M turns Frame off on a released selection")
         for _ in 0..<overlay.selection!.fits.count where texts(in: chrome.status) != ["Exact"] { key(48, "") }
-        require(texts(in: chrome.status) == ["Exact"] && texts(in: chrome.hints).contains("best fit"), "Tab to the exact drag shows Exact, and S offers the best fit")
+        require(texts(in: chrome.status) == ["Exact"], "Tab to the exact drag shows Exact")
         key(53, "")
         require(chrome.actionBar.isHidden && chrome.size.isHidden && chrome.status.isHidden, "Esc takes the action bar and badges away")
 

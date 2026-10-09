@@ -62,7 +62,7 @@ extension OverlayController {
         commitTask = Task { [pasteboard, defaults] in
             do {
                 let image = await stitcher.image()
-                try await Output.deliver(image, crop: CGRect(x: 0, y: 0, width: image.width, height: image.height), style: .tight, scale: scale,
+                try await Output.deliver(image, crop: CGRect(x: 0, y: 0, width: image.width, height: image.height), framed: false, scale: scale,
                                          copy: copy, save: save, pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)

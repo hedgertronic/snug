@@ -100,12 +100,12 @@ struct CornerRadiiTests {
                 == CornerRadii(topLeft: 16, topRight: 3, bottomLeft: 3, bottomRight: 3))
     }
 
-    @Test func tightRenderRoundsOnlyTheBottomCornersOfACropOnAWindow() throws {
+    @Test func unframedRenderRoundsOnlyTheBottomCornersOfACropOnAWindow() throws {
         let window = CGRect(x: 20, y: 20, width: 160, height: 120), crop = CGRect(x: 20, y: 60, width: 160, height: 80)
         let radii = CornerRadii(0).replacingCorners(sharedWith: window, in: crop, with: 16)
-        let plain = try OutputStyle.tight.render(screen(radius: 16), crop: crop, scale: 1)
+        let plain = try OutputFrame.render(screen(radius: 16), crop: crop, scale: 1, framed: false)
         #expect(alpha(plain, 0, 79) == 255 && alpha(plain, 159, 79) == 255) // opaque wallpaper before rounding
-        let rounded = try OutputStyle.tight.render(screen(radius: 16), crop: crop, scale: 1, cornerRadii: radii)
+        let rounded = try OutputFrame.render(screen(radius: 16), crop: crop, scale: 1, framed: false, cornerRadii: radii)
         #expect((rounded.width, rounded.height) == (160, 80))
         #expect(alpha(rounded, 0, 79) == 0 && alpha(rounded, 159, 79) == 0)
         #expect(alpha(rounded, 0, 0) == 255 && alpha(rounded, 159, 0) == 255 && alpha(rounded, 80, 40) == 255 && alpha(rounded, 80, 79) == 255)
@@ -115,7 +115,7 @@ struct CornerRadiiTests {
 
     @Test func eachCornerKeepsItsOwnRadius() throws {
         let radii = CornerRadii(topLeft: 0, topRight: 30, bottomLeft: 10, bottomRight: 0)
-        let rounded = try OutputStyle.tight.render(screen(radius: 0), crop: CGRect(x: 0, y: 0, width: 200, height: 160), scale: 1, cornerRadii: radii)
+        let rounded = try OutputFrame.render(screen(radius: 0), crop: CGRect(x: 0, y: 0, width: 200, height: 160), scale: 1, framed: false, cornerRadii: radii)
         #expect(alpha(rounded, 0, 0) == 255 && alpha(rounded, 199, 159) == 255)
         #expect(alpha(rounded, 199, 0) == 0 && alpha(rounded, 0, 159) == 0)
         #expect(alpha(rounded, 190, 3) == 0 && alpha(rounded, 1, 150) == 255)

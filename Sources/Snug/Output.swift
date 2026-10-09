@@ -9,7 +9,9 @@ let signposter = OSSignposter(subsystem: "local.snug", category: "capture")
 /// UserDefaults keys and their registered defaults.
 enum Pref {
     static let snap = "SnugSnap"
-    static let style = "SnugStyle"
+    /// Whether output sits on a framed card with padding and a shadow (Frame). Replaces the "SnugStyle" string, which `register` migrates once.
+    static let frame = "SnugFrame"
+    private static let legacyStyle = "SnugStyle"
     static let afterCapture = "SnugAfterCapture"
     static let saveFolder = "SnugSaveFolder"
     static let hotKeyCode = "SnugHotKeyCode"
@@ -54,9 +56,13 @@ enum Pref {
     }
 
     static func register(in defaults: UserDefaults) {
+        if let style = defaults.string(forKey: legacyStyle) {
+            defaults.set(style == "backdrop", forKey: frame)
+            defaults.removeObject(forKey: legacyStyle)
+        }
         defaults.register(defaults: [
             snap: true,
-            style: OutputStyle.tight.rawValue,
+            frame: false,
             afterCapture: "copy",
             saveFolder: NSHomeDirectory() + "/Desktop",
             hotKeyCode: 49,
@@ -87,21 +93,21 @@ enum Output {
         return data as Data
     }
 
-    /// Renders the style and encodes a PNG off the main thread.
+    /// Renders the frame (or not) and encodes a PNG off the main thread.
     @concurrent
-    static func encode(_ image: CGImage, crop: CGRect, style: OutputStyle, scale: CGFloat, cornerRadii: CornerRadii = .zero) async throws -> (png: Data, width: Int, height: Int) {
-        let rendered = try style.render(image, crop: crop, scale: scale, cornerRadii: cornerRadii)
+    static func encode(_ image: CGImage, crop: CGRect, framed: Bool, scale: CGFloat, cornerRadii: CornerRadii = .zero) async throws -> (png: Data, width: Int, height: Int) {
+        let rendered = try OutputFrame.render(image, crop: crop, scale: scale, framed: framed, cornerRadii: cornerRadii)
         return (try await png(rendered), rendered.width, rendered.height)
     }
 
     /// Encodes a crop, then copies it to the pasteboard and/or saves it, and shows a toast.
     @MainActor
-    static func deliver(_ image: CGImage, crop: CGRect, style: OutputStyle, scale: CGFloat, cornerRadii: CornerRadii = .zero,
+    static func deliver(_ image: CGImage, crop: CGRect, framed: Bool, scale: CGFloat, cornerRadii: CornerRadii = .zero,
                         copy: Bool, save: Bool, destination: URL? = nil, pasteboard: NSPasteboard, defaults: UserDefaults) async throws {
         let id = signposter.beginInterval("encode")
-        let output = try await encode(image, crop: crop, style: style, scale: scale, cornerRadii: cornerRadii)
+        let output = try await encode(image, crop: crop, framed: framed, scale: scale, cornerRadii: cornerRadii)
         signposter.endInterval("encode", id)
-        try publish(png: output.png, detail: "\(output.width) x \(output.height)  \(style.rawValue)", copy: copy, save: save, destination: destination,
+        try publish(png: output.png, detail: "\(output.width) x \(output.height)" + (framed ? "  frame" : ""), copy: copy, save: save, destination: destination,
                     pasteboard: pasteboard, defaults: defaults)
     }
 

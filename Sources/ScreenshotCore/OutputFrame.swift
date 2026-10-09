@@ -1,36 +1,24 @@
 import Foundation
 import CoreGraphics
 
-/// How a copied or saved area is framed.
-public enum OutputStyle: String, CaseIterable, Sendable {
-    case tight, backdrop
+/// How a copied or saved area is framed: tight, or (Frame on) a card on transparent padding with a soft shadow.
+public enum OutputFrame {
+    /// Padding around the image when framed, in points.
+    public static let points: CGFloat = 24
 
-    /// Padding around the image in `backdrop`, in points.
-    public static let backdropPoints: CGFloat = 24
-
-    /// The next style, wrapping around.
-    public var next: OutputStyle {
-        let all = Self.allCases
-        return all[(all.firstIndex(of: self)! + 1) % all.count]
+    /// The output's footprint around a crop in image pixels. A frame may extend past the image because its padding is synthetic.
+    public static func rect(around crop: CGRect, scale: CGFloat, framed: Bool) -> CGRect {
+        framed ? crop.insetBy(dx: -points * scale, dy: -points * scale) : crop
     }
 
-    /// The output's footprint around a crop in image pixels. `backdrop` may extend past the extent
-    /// because its padding is synthetic.
-    public func frame(around crop: CGRect, in extent: CGRect, scale: CGFloat) -> CGRect {
-        switch self {
-        case .tight: crop
-        case .backdrop: crop.insetBy(dx: -Self.backdropPoints * scale, dy: -Self.backdropPoints * scale)
-        }
-    }
-
-    /// Renders the output image for a crop given in source-image pixels. `tight` is transparent outside `cornerRadii`; `backdrop` rounds
-    /// its card with them, or by 10 pt when they are all square.
-    public func render(_ image: CGImage, crop: CGRect, scale: CGFloat, cornerRadii: CornerRadii = .zero) throws -> CGImage {
+    /// Renders the output image for a crop given in source-image pixels. Unframed output is transparent outside `cornerRadii`; framed
+    /// output rounds its card with them, or by 10 pt when they are all square.
+    public static func render(_ image: CGImage, crop: CGRect, scale: CGFloat, framed: Bool, cornerRadii: CornerRadii = .zero) throws -> CGImage {
         let extent = CGRect(x: 0, y: 0, width: image.width, height: image.height)
         let crop = crop.integral.intersection(extent)
-        let frame = frame(around: crop, in: extent, scale: scale).integral
-        guard let source = image.cropping(to: self == .backdrop ? crop : frame) else { throw CocoaError(.fileReadCorruptFile) }
-        if self == .tight, !cornerRadii.isSquare {
+        let frame = rect(around: crop, scale: scale, framed: framed).integral
+        guard let source = image.cropping(to: framed ? crop : frame) else { throw CocoaError(.fileReadCorruptFile) }
+        if !framed, !cornerRadii.isSquare {
             guard let context = CGContext(data: nil, width: source.width, height: source.height, bitsPerComponent: 8,
                                           bytesPerRow: 0, space: image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
                                           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)
@@ -42,7 +30,7 @@ public enum OutputStyle: String, CaseIterable, Sendable {
             guard let output = context.makeImage() else { throw CocoaError(.fileWriteUnknown) }
             return output
         }
-        guard self == .backdrop else { return source }
+        guard framed else { return source }
 
         let width = Int(frame.width), height = Int(frame.height)
         guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,

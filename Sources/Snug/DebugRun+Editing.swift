@@ -74,7 +74,9 @@ extension DebugRun {
         open()
         require(texts(in: overlay.chrome.hints).contains("edit"), "the hover hint row offers E")
         let helpKeys = HelpSheet.columns.flatMap(\.rows).map(\.keys)
-        require(["Cmd-Shift-S", "E / Shift-click", "Option-arrow", "Shift-click", "Corner dot", "=", "O"].allSatisfy(helpKeys.contains), "the help table lists the new keys")
+        require(["Cmd-Shift-S", "E / Shift-click", "Option-arrow", "Shift-click", "Shift-drag handle", "Shift-move", "P", "M", "=", "O"].allSatisfy(helpKeys.contains), "the help table lists the new keys")
+        require(!["Cmd-1/2", "Corner dot"].contains(where: helpKeys.contains) && HelpSheet.columns.flatMap(\.rows).contains { $0.keys == "O" && $0.action == "Rounded corners" },
+                "the help table has no Cmd-1/2 or Corner dot row, and O reads Rounded corners")
 
         // E opens the hovered window as a selection that keeps its radii, even after a nudge (the measured radius is by rectangle).
         require(overlay.view.overlays.hover == a, "the pointer hovers window A")
@@ -85,7 +87,8 @@ extension DebugRun {
         key(right, "", .shift)
         require(overlay.selection?.rect == a.offsetBy(dx: 10 * scale, dy: 0) && overlay.view.overlays.radii == CornerRadii(radius), "a nudged E selection keeps its radii")
         key(left, "", .shift)
-        require(texts(in: overlay.chrome.hints).contains("edge") && texts(in: overlay.chrome.hints).contains("corners"), "the selection hint row offers edge nudges and corners")
+        require(["frame", "next snap", "grow", "shrink", "scroll"].allSatisfy(texts(in: overlay.chrome.hints).contains) && !texts(in: overlay.chrome.hints).contains("corners"),
+                "the selection hint row offers frame, next snap, grow and shrink, and no corners hint")
 
         // Corner dots: cursor, drag all, Option-drag one, clamp.
         mouse(.mouseMoved, dot(.topLeft))
