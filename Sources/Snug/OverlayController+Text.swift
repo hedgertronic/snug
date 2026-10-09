@@ -99,6 +99,11 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         }
     }
 
+    /// A click on a highlighted item does not open it behind the overlay; Cmd-Return opens the picked one.
+    func overlayView(_ overlayView: ImageAnalysisOverlayView, shouldBeginAt point: CGPoint, forAnalysisType analysisType: ImageAnalysisOverlayView.InteractionTypes) -> Bool {
+        analysisType != .dataDetectors
+    }
+
     /// Keys stay with the overlay: Return, Esc, and the mode keys must work after a click moves focus into the text.
     func overlayView(_ overlayView: ImageAnalysisOverlayView, shouldHandleKeyDownEvent event: NSEvent) -> Bool { false }
 

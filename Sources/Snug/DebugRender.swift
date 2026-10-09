@@ -5,6 +5,7 @@ import ScreenshotCore
 extension DebugRun {
     /// `--render-states DIR`: renders the overlay offscreen to one PNG per state with `cacheDisplay`.
     static func renderStates(into directory: URL, image: CGImage, frame: CGRect, overlay: OverlayController) async throws {
+        try await warmVision(image)
         _ = privateSetup(overlay)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let defaults = overlay.defaults
@@ -123,6 +124,14 @@ extension DebugRun {
         key(48, "\t")
         try await waitFor("a picked item") { overlay.text.picked != nil }
         try snapshot("text-item-picked")
+        overlay.dismiss()
+
+        overlay.present(image: itemsFixture(width: image.width, height: image.height), frame: frame, displayID: nil)
+        key(17, "t")
+        try await waitFor("Live Text") { liveText.analysis != nil }
+        key(48, "\t", .shift)
+        try await waitFor("the QR code picked") { overlay.text.picked != nil }
+        try snapshot("text-item-code")
         overlay.dismiss()
 
         open()
