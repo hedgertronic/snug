@@ -177,6 +177,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 overlay.present(image: image, frame: screen.frame, displayID: id)
                 if text { overlay.setMode(.text) }
                 let scale = overlay.scale
+                let listing = signposter.beginInterval("windows")
                 var windows = await DisplayCapture.windows(on: id, pixelScale: scale)
                 // The Dock's AXList union is the magnified Dock, tens of points past the panel; the panel's rim in the frozen image gives its edges.
                 for index in windows.indices where windows[index].name == "Dock" && windows[index].frozen {
@@ -199,6 +200,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                                   bounds: rect, score: AccessibilityBounds.baseScore, kind: .element)
                     }
                 }
+                signposter.endInterval("windows", listing)
                 if overlay.image === image { overlay.setWindows(windows.map(\.rect), names: windows.map(\.name), ids: windows.map(\.id), frozen: windows.map(\.frozen), pointer: NSEvent.mouseLocation) }
             } catch is CancellationError {
             } catch {
