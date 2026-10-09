@@ -34,6 +34,60 @@ struct CornerRadiiTests {
         #expect(radii.scaled(by: 0.5) == CornerRadii(topLeft: 0, topRight: 1, bottomLeft: 5, bottomRight: 15))
     }
 
+    @Test func subscriptReadsAndWritesEachCorner() {
+        var radii = CornerRadii(topLeft: 1, topRight: 2, bottomLeft: 3, bottomRight: 4)
+        #expect(CornerRadii.corners.map { radii[$0] } == [1, 2, 3, 4])
+        radii[.bottomLeft] = 9
+        #expect(radii == CornerRadii(topLeft: 1, topRight: 2, bottomLeft: 9, bottomRight: 4))
+    }
+
+    @Test func dotSitsOnTheArcAtItsFortyFiveDegreePointAndNeverNearerThanTheInset() {
+        let rect = CGRect(x: 100, y: 50, width: 200, height: 100)
+        let onArc = 40 * (1 - 1 / 2.0.squareRoot())
+        let radii = CornerRadii(topLeft: 40, topRight: 40, bottomLeft: 40, bottomRight: 40)
+        let topLeft = radii.dot(of: .topLeft, in: rect, minimumInset: 8)
+        #expect(abs(topLeft.x - (100 + onArc)) < 1e-9 && abs(topLeft.y - (50 + onArc)) < 1e-9)
+        let bottomRight = radii.dot(of: .bottomRight, in: rect, minimumInset: 8)
+        #expect(abs(bottomRight.x - (300 - onArc)) < 1e-9 && abs(bottomRight.y - (150 - onArc)) < 1e-9)
+        // Square: 8 along the diagonal is 8 / sqrt 2 on each axis. Small radii stay at the inset.
+        let inset = 8 / 2.0.squareRoot()
+        for radius in [0, 3] as [CGFloat] {
+            let dot = CornerRadii(radius).dot(of: .topRight, in: rect, minimumInset: 8)
+            #expect(abs(dot.x - (300 - inset)) < 1e-9 && abs(dot.y - (50 + inset)) < 1e-9)
+        }
+        // A radius past half the short side is drawn clamped, and so is its dot.
+        let clamped = CornerRadii(90).dot(of: .topLeft, in: rect, minimumInset: 8)
+        #expect(abs(clamped.x - (100 + 50 * (1 - 1 / 2.0.squareRoot()))) < 1e-9)
+    }
+
+    @Test func cornerHitTestPicksTheNearestDotWithinTolerance() {
+        let rect = CGRect(x: 0, y: 0, width: 200, height: 100)
+        let radii = CornerRadii(topLeft: 0, topRight: 30, bottomLeft: 0, bottomRight: 0)
+        let dot = radii.dot(of: .topRight, in: rect, minimumInset: 8)
+        #expect(radii.corner(at: dot, in: rect, tolerance: 6, minimumInset: 8) == .topRight)
+        #expect(radii.corner(at: CGPoint(x: dot.x + 5, y: dot.y), in: rect, tolerance: 6, minimumInset: 8) == .topRight)
+        #expect(radii.corner(at: CGPoint(x: dot.x + 7, y: dot.y), in: rect, tolerance: 6, minimumInset: 8) == nil)
+        // The corner itself is 8 pt along the diagonal from a square corner's dot: the resize handle keeps it.
+        #expect(radii.corner(at: CGPoint(x: 0, y: 0), in: rect, tolerance: 6, minimumInset: 8) == nil)
+    }
+
+    @Test func inwardDistanceIsTheDragAlongTheDiagonalTowardTheCenter() {
+        let step = CGPoint(x: 10, y: 10), root = 2.0.squareRoot()
+        #expect(abs(CornerRadii.inwardDistance(of: step, from: .topLeft) - 10 * root) < 1e-9)
+        #expect(abs(CornerRadii.inwardDistance(of: step, from: .bottomRight) + 10 * root) < 1e-9)
+        #expect(abs(CornerRadii.inwardDistance(of: CGPoint(x: -10, y: 10), from: .topRight) - 10 * root) < 1e-9)
+        #expect(CornerRadii.inwardDistance(of: CGPoint(x: 10, y: -10), from: .topLeft) == 0)
+    }
+
+    @Test func movingChangesAllCornersOrOneAndClamps() {
+        let radii = CornerRadii(topLeft: 0, topRight: 10, bottomLeft: 4, bottomRight: 30)
+        let size = CGSize(width: 100, height: 40)
+        #expect(radii.moving(.topLeft, by: 6, alone: false, in: size) == CornerRadii(topLeft: 6, topRight: 16, bottomLeft: 10, bottomRight: 20))
+        #expect(radii.moving(.bottomLeft, by: 6, alone: true, in: size) == CornerRadii(topLeft: 0, topRight: 10, bottomLeft: 10, bottomRight: 30))
+        #expect(radii.moving(.topRight, by: 50, alone: true, in: size) == CornerRadii(topLeft: 0, topRight: 20, bottomLeft: 4, bottomRight: 30))
+        #expect(radii.moving(.topLeft, by: -5, alone: true, in: size) == radii)
+    }
+
     @Test func cornersWithinTwoPixelsOfTheWindowsCornersTakeItsRadius() {
         let window = CGRect(x: 20, y: 20, width: 160, height: 120)
         let bottomHalf = CGRect(x: 20, y: 60, width: 160, height: 80)

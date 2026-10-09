@@ -28,6 +28,61 @@ public struct CornerRadii: Equatable, Sendable {
         map { min(max($0 + delta, 0), min(size.width, size.height) / 2) }
     }
 
+    public static let corners: [Handle] = [.topLeft, .topRight, .bottomLeft, .bottomRight]
+
+    /// The radius of a corner handle (`.topLeft`, `.topRight`, `.bottomLeft`, `.bottomRight`).
+    public subscript(corner: Handle) -> CGFloat {
+        get {
+            switch corner {
+            case .topLeft: topLeft
+            case .topRight: topRight
+            case .bottomLeft: bottomLeft
+            case .bottomRight: bottomRight
+            default: preconditionFailure("\(corner) is not a corner")
+            }
+        }
+        set {
+            switch corner {
+            case .topLeft: topLeft = newValue
+            case .topRight: topRight = newValue
+            case .bottomLeft: bottomLeft = newValue
+            case .bottomRight: bottomRight = newValue
+            default: preconditionFailure("\(corner) is not a corner")
+            }
+        }
+    }
+
+    /// The corner dot's position on `rect` (top-left origin): on the corner's arc at its 45-degree point, and never closer to the corner
+    /// than `minimumInset` along the diagonal, so a square corner's dot sits clear of its resize handle.
+    public func dot(of corner: Handle, in rect: CGRect, minimumInset: CGFloat) -> CGPoint {
+        let radius = min(self[corner], min(rect.width, rect.height) / 2)
+        let along = max(radius * (2.0.squareRoot() - 1), minimumInset) / 2.0.squareRoot()
+        let origin = corner.position(on: rect)
+        return CGPoint(x: origin.x + (corner.movesLeft ? along : -along), y: origin.y + (corner.movesTop ? along : -along))
+    }
+
+    /// The corner whose dot is within `tolerance` of `point`, nearest first.
+    public func corner(at point: CGPoint, in rect: CGRect, tolerance: CGFloat, minimumInset: CGFloat) -> Handle? {
+        Self.corners
+            .map { (corner: $0, dot: dot(of: $0, in: rect, minimumInset: minimumInset)) }
+            .map { (corner: $0.corner, distance: hypot($0.dot.x - point.x, $0.dot.y - point.y)) }
+            .filter { $0.distance <= tolerance }
+            .min { $0.distance < $1.distance }?.corner
+    }
+
+    /// How far `delta` goes along the diagonal from `corner` toward the rectangle's center.
+    public static func inwardDistance(of delta: CGPoint, from corner: Handle) -> CGFloat {
+        ((corner.movesLeft ? delta.x : -delta.x) + (corner.movesTop ? delta.y : -delta.y)) / 2.0.squareRoot()
+    }
+
+    /// Every corner changed by `delta`, or only `corner` when `alone`; kept within 0 and half the short side of a rectangle of `size`.
+    public func moving(_ corner: Handle, by delta: CGFloat, alone: Bool, in size: CGSize) -> CornerRadii {
+        guard alone else { return offset(by: delta, in: size) }
+        var result = self
+        result[corner] = min(max(self[corner] + delta, 0), min(size.width, size.height) / 2)
+        return result
+    }
+
     /// The corners of `crop` within 2 px of the same corner of `window` take `radius`; the others keep their value.
     /// Both rectangles are in the same image's pixels, top-left origin.
     public func replacingCorners(sharedWith window: CGRect, in crop: CGRect, with radius: CGFloat) -> CornerRadii {
