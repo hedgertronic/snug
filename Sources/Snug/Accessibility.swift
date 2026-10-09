@@ -25,7 +25,10 @@ enum Accessibility {
             AXUIElementCopyAttributeValue(element, kAXRoleDescriptionAttribute as CFString, &description)
             var role: CFTypeRef?
             AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role)
-            frames.append(AXFrame(roleDescription: description as? String ?? "", rect: CGRect(origin: position, size: size), role: role as? String ?? ""))
+            var title: CFTypeRef?
+            AXUIElementCopyAttributeValue(element, kAXTitleAttribute as CFString, &title)
+            frames.append(AXFrame(roleDescription: description as? String ?? "", rect: CGRect(origin: position, size: size), role: role as? String ?? "",
+                                  title: title as? String ?? ""))
             var parent: CFTypeRef?
             guard role as? String != kAXWindowRole, AXUIElementCopyAttributeValue(element, kAXParentAttribute as CFString, &parent) == .success,
                   let parent else { break }

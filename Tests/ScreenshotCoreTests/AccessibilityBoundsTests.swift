@@ -15,7 +15,7 @@ struct AccessibilityBoundsTests {
             AXFrame(roleDescription: "standard window", rect: CGRect(x: 100, y: -900, width: 900, height: 600))
         ]
         let result = try await AccessibilityBounds.candidates(frames: frames, displayOrigin: origin, scale: 2, extent: extent)
-        #expect(result.map(\.label) == ["button", "group", "standard window"])
+        #expect(result.map(\.label) == ["Button", "Group", "Standard Window"])
         #expect(result[0].bounds == CGRect(x: 100, y: 100, width: 120, height: 40))
         #expect(result[2].bounds == CGRect(x: 0, y: 0, width: 1800, height: 1200))
         #expect(result.map(\.score) == result.map(\.score).sorted(by: >))
@@ -64,7 +64,7 @@ struct AccessibilityBoundsTests {
             AXFrame(roleDescription: "standard window", rect: CGRect(x: 100, y: -900, width: 900, height: 600))
         ]
         let result = try await AccessibilityBounds.candidates(frames: frames, displayOrigin: origin, scale: 2, extent: extent)
-        #expect(result.map(\.label) == ["cell", "table", "standard window"])
+        #expect(result.map(\.label) == ["Cell", "Table", "Standard Window"])
         let wide = AXFrame(roleDescription: "wide", rect: CGRect(x: 180, y: -820, width: 140, height: 80))
         #expect(try await AccessibilityBounds.candidates(frames: [frames[0], wide], displayOrigin: origin, scale: 2, extent: extent).count == 2)
     }
@@ -78,7 +78,7 @@ struct AccessibilityBoundsTests {
         let ax = try await AccessibilityBounds.candidates(frames: [AXFrame(roleDescription: "button", rect: CGRect(x: 110, y: -880, width: 60, height: 40))],
                                                 displayOrigin: origin, scale: 2, extent: extent)
         let session = SelectionSession(candidates: [geometry] + ax, extent: extent, anchor: CGPoint(x: 40, y: 80))
-        #expect(session.selected?.label == "button")
+        #expect(session.selected?.label == "Button")
     }
 
     @Test func hoverLevelSkipsWindowsStaticTextAndTinyFrames() {
@@ -139,11 +139,12 @@ struct DockRectTests {
     @Test func aDockSlotSnapsToItsIcon() async throws {
         // The slot is the icon with 10 px of padding on each side (5 pt at 2x).
         let slot = CGRect(x: 29, y: 190, width: 96, height: 96)
-        let frame = AXFrame(roleDescription: "application dock item", rect: CGRect(x: slot.minX / 2, y: slot.minY / 2, width: slot.width / 2, height: slot.height / 2), role: "AXDockItem")
+        let frame = AXFrame(roleDescription: "application dock item", rect: CGRect(x: slot.minX / 2, y: slot.minY / 2, width: slot.width / 2, height: slot.height / 2), role: "AXDockItem", title: "Safari")
         let result = try await AccessibilityBounds.candidates(frames: [frame], displayOrigin: .zero, scale: 2, extent: CGRect(x: 0, y: 0, width: 400, height: 1964),
                                                               image: dockImage(panel: CGRect(x: 10, y: 140, width: 134, height: 1750)))
         let icon = CGRect(x: 39, y: 200, width: 76, height: 76)
         let found = try #require(result.first).bounds
+        #expect(result.first?.label == "Safari")
         for (a, b) in [(found.minX, icon.minX), (found.maxX, icon.maxX), (found.minY, icon.minY), (found.maxY, icon.maxY)] {
             #expect(abs(a - b) <= 3, "found \(found), icon \(icon)")
         }

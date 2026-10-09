@@ -23,6 +23,21 @@ enum Pref {
     static let candidates = "SnugCandidateList"
     static let shadow = "SnugShadow"
     static let accessibilityAsked = "SnugAccessibilityAsked"
+    /// Off unless set with `defaults write local.snug SnugLogHover -bool true`: each hover lookup and the Dock's window rect append to
+    /// ~/Library/Logs/Snug/hover.log, so live accessibility frames can be read back without Accessibility in a terminal.
+    static let logHover = "SnugLogHover"
+
+    static func logHoverLine(_ line: String) {
+        guard UserDefaults.standard.bool(forKey: logHover) else { return }
+        let folder = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Logs/Snug")
+        try! FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file = folder.appending(path: "hover.log")
+        if !FileManager.default.fileExists(atPath: file.path) { FileManager.default.createFile(atPath: file.path, contents: nil) }
+        let handle = try! FileHandle(forWritingTo: file)
+        defer { try! handle.close() }
+        try! handle.seekToEnd()
+        try! handle.write(contentsOf: Data((line + "\n").utf8))
+    }
 
     static func register(in defaults: UserDefaults) {
         defaults.register(defaults: [

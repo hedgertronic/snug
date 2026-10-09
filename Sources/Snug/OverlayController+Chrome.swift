@@ -121,7 +121,7 @@ extension OverlayController {
             let name = switch hovered.kind {
             case .window: windowNames.indices.contains(index) ? windowNames[index] : "Window"
             case .display: "Full screen"
-            default: hovered.label.capitalized
+            default: hovered.label
             }
             let size = "\(Int(rect.width)) x \(Int(rect.height))" + (isWindow && windowShadow(option: optionHeld) ? "  +  shadow" : "")
             c.hover.show("\(name)|\(size)|\(isWindow)") {

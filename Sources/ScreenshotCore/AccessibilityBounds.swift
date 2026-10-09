@@ -1,16 +1,18 @@
 import Foundation
 import CoreGraphics
 
-/// One accessibility element's frame in global screen points with a top-left origin, its role description, and its AX role.
+/// One accessibility element's frame in global screen points with a top-left origin, its role description, its AX role, and its title.
 public struct AXFrame: Sendable, Equatable {
     public let roleDescription: String
     public let rect: CGRect
     public let role: String
+    public let title: String
 
-    public init(roleDescription: String, rect: CGRect, role: String = "") {
+    public init(roleDescription: String, rect: CGRect, role: String = "", title: String = "") {
         self.roleDescription = roleDescription
         self.rect = rect
         self.role = role
+        self.title = title
     }
 }
 
@@ -52,7 +54,7 @@ public enum AccessibilityBounds {
         var clipped = frames
         for index in frames.indices.reversed() {
             if let viewport = frames[(index + 1)...].indices.first(where: { ["AXScrollArea", "AXWebArea"].contains(frames[$0].role) }) {
-                clipped[index] = AXFrame(roleDescription: frames[index].roleDescription, rect: frames[index].rect.intersection(clipped[viewport].rect), role: frames[index].role)
+                clipped[index] = AXFrame(roleDescription: frames[index].roleDescription, rect: frames[index].rect.intersection(clipped[viewport].rect), role: frames[index].role, title: frames[index].title)
             }
         }
         return clipped.filter { !$0.rect.isNull && !$0.rect.isEmpty }
@@ -76,7 +78,9 @@ public enum AccessibilityBounds {
             if let inner, abs(pixels.minX - inner.minX) <= tolerance, abs(pixels.minY - inner.minY) <= tolerance,
                abs(pixels.maxX - inner.maxX) <= tolerance, abs(pixels.maxY - inner.maxY) <= tolerance { continue }
             inner = pixels
-            let label = frame.roleDescription.isEmpty ? "Element" : frame.roleDescription
+            // A Dock item is named by its title ("Safari"), anything else by its role description ("Text Field").
+            let label = frame.role == "AXDockItem" && !frame.title.isEmpty ? frame.title
+                : frame.roleDescription.isEmpty ? "Element" : frame.roleDescription.capitalized
             output.append(Candidate(id: "ax-\(Int(pixels.minX))-\(Int(pixels.minY))-\(Int(pixels.width))-\(Int(pixels.height))", label: label,
                                     bounds: pixels, score: baseScore - Double(index) * 0.01, kind: .element))
         }

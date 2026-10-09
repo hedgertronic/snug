@@ -149,6 +149,8 @@ extension OverlayController {
             let frames = await Accessibility.frames(at: point, pid: pid)
             guard !Task.isCancelled, mode == .capture else { return }
             let found = try await AccessibilityBounds.candidates(frames: AccessibilityBounds.hoverLevel(frames), displayOrigin: origin, scale: scale, extent: extent, image: image)
+            Pref.logHoverLine("hover \(point) scale \(scale) frames " + frames.map { "\($0.role) '\($0.roleDescription)' '\($0.title)' \($0.rect)" }.joined(separator: " | ")
+                + " -> " + found.map { "\($0.label) \($0.bounds)" }.joined(separator: " | "))
             if !found.isEmpty { merge(found) }
         }
     }
