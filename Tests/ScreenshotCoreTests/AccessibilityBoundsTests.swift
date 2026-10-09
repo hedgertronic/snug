@@ -169,6 +169,59 @@ struct DockRectTests {
         }
     }
 
+    /// A 2x Dock panel (rounded, 2 px light rim, icon tiles along its length) on a dark gradient, with a lighter window whose edge sits 25 px past the panel.
+    private func rimmedDock(size: CGSize, panel: CGRect, window: CGRect) -> CGImage {
+        let context = CGContext(data: nil, width: Int(size.width), height: Int(size.height), bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.drawLinearGradient(CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [CGColor(red: 0.1, green: 0.08, blue: 0.2, alpha: 1),
+                                   CGColor(red: 0.2, green: 0.2, blue: 0.3, alpha: 1)] as CFArray, locations: nil)!,
+                                   start: .zero, end: CGPoint(x: size.width, y: size.height), options: [])
+        context.translateBy(x: 0, y: size.height)
+        context.scaleBy(x: 1, y: -1)
+        context.setFillColor(CGColor(gray: 0.3, alpha: 1))
+        context.fill(window)
+        context.addPath(CGPath(roundedRect: panel.insetBy(dx: 1, dy: 1), cornerWidth: 30, cornerHeight: 30, transform: nil))
+        context.setStrokeColor(CGColor(gray: 0.55, alpha: 1))
+        context.setLineWidth(2)
+        context.setFillColor(CGColor(gray: 0.22, alpha: 1))
+        context.drawPath(using: .fillStroke)
+        context.setFillColor(CGColor(gray: 0.9, alpha: 1))
+        let vertical = panel.height > panel.width
+        for offset in stride(from: 60, to: Int(vertical ? panel.height : panel.width) - 100, by: 102) {
+            context.fill(vertical ? CGRect(x: panel.minX + 29, y: panel.minY + CGFloat(offset), width: 76, height: 76)
+                         : CGRect(x: panel.minX + CGFloat(offset), y: panel.minY + 29, width: 76, height: 76))
+        }
+        return context.makeImage()!
+    }
+
+    @Test func theDockPanelComesFromItsRimWhenTheUnionIsMagnified() throws {
+        // As measured on a real vertical Dock: the union 10 px inside on the left, 8 past on the right, 86 above and 74 below the panel.
+        let panel = CGRect(x: 10, y: 140, width: 136, height: 1751)
+        let image = rimmedDock(size: CGSize(width: 400, height: 1964), panel: panel, window: CGRect(x: 171, y: 100, width: 229, height: 1500))
+        let union = CGRect(x: 20, y: 54, width: 134, height: 1910)
+        let found = try #require(DockTiles.panel(in: image, near: union, scale: 2))
+        for (a, b) in [(found.minX, panel.minX), (found.maxX, panel.maxX), (found.minY, panel.minY), (found.maxY, panel.maxY)] {
+            #expect(abs(a - b) <= 3, "found \(found), panel \(panel)")
+        }
+        // A union that stops short of the panel's ends finds the same panel.
+        #expect(DockTiles.panel(in: image, near: CGRect(x: 4, y: 200, width: 150, height: 1700), scale: 2) == found)
+    }
+
+    @Test func aHorizontalDockPanelComesFromItsRim() throws {
+        let panel = CGRect(x: 300, y: 1780, width: 1200, height: 136)
+        let image = rimmedDock(size: CGSize(width: 1800, height: 1964), panel: panel, window: CGRect(x: 0, y: 0, width: 1800, height: 1755))
+        let union = CGRect(x: 230, y: 1770, width: 1340, height: 150)
+        let found = try #require(DockTiles.panel(in: image, near: union, scale: 2))
+        for (a, b) in [(found.minX, panel.minX), (found.maxX, panel.maxX), (found.minY, panel.minY), (found.maxY, panel.maxY)] {
+            #expect(abs(a - b) <= 3, "found \(found), panel \(panel)")
+        }
+    }
+
+    @Test func noRimNearTheUnionGivesNoPanel() {
+        let image = rimmedDock(size: CGSize(width: 400, height: 1964), panel: CGRect(x: 10, y: 140, width: 136, height: 1751), window: .zero)
+        #expect(DockTiles.panel(in: image, near: CGRect(x: 250, y: 300, width: 130, height: 1500), scale: 2) == nil)
+    }
+
     @Test func unusableListsGiveNoDock() {
         #expect(AccessibilityBounds.dockRect(lists: [], displayOrigin: .zero, scale: 2, extent: extent) == nil)
         let bad = [CGRect(x: CGFloat.nan, y: 0, width: 100, height: 100), CGRect(x: 5, y: 5, width: 0, height: 50),

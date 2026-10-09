@@ -392,6 +392,14 @@ enum DebugRun {
             require(overlay.selection?.rect == preview, "\(message): release takes the preview")
             return preview
         }
+        // A frozen target such as the Dock has no opaque window color to fit; its corner radius comes from its outline.
+        openFixture(DebugRun.dockFixture)
+        let dockPanel = CGRect(x: 100, y: 100, width: 200, height: 500)
+        overlay.setWindows([dockPanel], ids: [3], frozen: [true], pointer: CGPoint(x: frame.minX + 10, y: frame.maxY - 10))
+        mouse(.mouseMoved, CGPoint(x: 200, y: 350))
+        try await waitFor("the frozen panel's radius is measured") { overlay.radii[dockPanel] != nil }
+        require(abs(overlay.radii[dockPanel]! - 30) <= 4, "a frozen Dock-like panel with a gradient takes its outline's radius: \(overlay.radii[dockPanel]!)")
+        overlay.dismiss()
         let pillFixture = DebugRun.pillFixture, cardsFixture = DebugRun.cardsFixture
         defaults.set(true, forKey: Pref.snap)
         let extent = CGRect(x: 0, y: 0, width: 1280, height: 800)
