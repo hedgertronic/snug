@@ -56,9 +56,9 @@ public struct SelectionSession: Sendable {
         }
         shortlist = Array(elements.prefix(4)) + Array(detail.prefix(4)) + Array(containers.prefix(4)) + Array(remainingDetails.prefix(2))
             + local.filter { $0.kind == .window || $0.kind == .display }
-        // A grid cell beats an accessibility element more than 4 times its size around it (a board drawn inside one web element).
+        // A regular grid's cell beats an accessibility element more than 4 times its size around it (a board drawn inside one web element).
         let cell = detail.first { cell in
-            cell.kind == .cell && elements.first.map { $0.bounds.contains(cell.bounds) && $0.bounds.width * $0.bounds.height > 4 * cell.bounds.width * cell.bounds.height } == true
+            cell.label == GeometryDetector.gridCellLabel && elements.first.map { $0.bounds.contains(cell.bounds) && $0.bounds.width * $0.bounds.height > 4 * cell.bounds.width * cell.bounds.height } == true
         }
         selected = anchorAtEdge ? candidates.first(where: { $0.kind == .display }) : cell ?? elements.first ?? detail.first ?? containers.first
             ?? local.first(where: { $0.kind == .window || $0.kind == .display })

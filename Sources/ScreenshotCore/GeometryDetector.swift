@@ -6,6 +6,9 @@ public struct GeometryDetector {
     /// Creates a local, pixel-based screenshot detector.
     public init() {}
 
+    /// The label of a regular grid's cells (boards, calendars, galleries), which hover prefers over a large accessibility element.
+    public static let gridCellLabel = "Grid Cell"
+
     /// Returns nested panel and table proposals in source-image pixels, with a top-left origin.
     public func detect(in image: CGImage) async throws -> [Candidate] {
         try Task.checkCancellation()
@@ -188,7 +191,8 @@ public struct GeometryDetector {
             let kindName = proposal.kind.rawValue
             output.append(Candidate(
                 id: "geometry-\(kindName)-\(x)-\(y)-\(w)-\(h)",
-                label: proposal.kind == .cell ? "Table Cell" : (proposal.kind == .table ? "Table" : "Panel"),
+                label: proposal.kind == .cell ? (grids.contains { $0.cells.contains(proposal.rect) } ? Self.gridCellLabel : "Table Cell")
+                    : (proposal.kind == .table ? "Table" : "Panel"),
                 bounds: bounds,
                 score: proposal.score,
                 kind: proposal.kind
