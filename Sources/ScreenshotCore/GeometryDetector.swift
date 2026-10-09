@@ -151,7 +151,7 @@ public struct GeometryDetector {
                 group[root(b)] = root(a)
             }
         }
-        let grids = Dictionary(grouping: cells.indices, by: root).values.map { $0.map { cells[$0].rect } }.compactMap { grid -> (cells: [CGRect], whole: CGRect, rowHeight: CGFloat)? in
+        let grids = Dictionary(grouping: cells.indices, by: root).values.sorted { $0[0] < $1[0] }.map { $0.map { cells[$0].rect } }.compactMap { grid -> (cells: [CGRect], whole: CGRect, rowHeight: CGFloat)? in
             guard grid.count >= 9 else { return nil }
             let width = grid.map(\.width).sorted()[grid.count / 2], height = grid.map(\.height).sorted()[grid.count / 2]
             let typical = grid.filter { abs($0.width - width) <= width * 0.1 && abs($0.height - height) <= height * 0.1 }
@@ -169,7 +169,7 @@ public struct GeometryDetector {
         for grid in grids {
             gridLevels.append(ScoredRectangle(rect: grid.whole, score: 0.92, kind: .table))
             let rows = grid.cells.filter { abs($0.height - grid.rowHeight) <= grid.rowHeight * 0.1 }
-            for band in Dictionary(grouping: rows, by: { "\(Int($0.minY))-\(Int($0.maxY))" }).values where band.count >= 3 {
+            for band in Dictionary(grouping: rows, by: { "\(Int($0.minY))-\(Int($0.maxY))" }).values.sorted(by: { $0[0].minY < $1[0].minY }) where band.count >= 3 {
                 gridLevels.append(ScoredRectangle(rect: CGRect(x: grid.whole.minX, y: band[0].minY, width: grid.whole.width, height: band[0].height), score: 0.9, kind: .table))
             }
         }
