@@ -139,6 +139,7 @@ final class OverlayController {
     var scrollFrames: ((CGRect) async throws -> CGImage)?
 
     var snapEnabled: Bool { defaults.bool(forKey: Pref.snap) }
+    /// A stored "margin" (removed in wave 5) is not a style, so it reads as tight.
     var style: OutputStyle {
         get { defaults.string(forKey: Pref.style).flatMap(OutputStyle.init(rawValue:)) ?? .tight }
         set {
@@ -561,8 +562,7 @@ final class OverlayController {
         case (126, _, _): selection?.move(by: CGPoint(x: 0, y: -step * scale))
         case (_, true, "s"): save()
         case (_, true, "1"): style = .tight
-        case (_, true, "2"): style = .margin
-        case (_, true, "3"): style = .backdrop
+        case (_, true, "2"): style = .backdrop
         case (_, false, "]"), (_, false, "}"): adjustRadii(by: shift ? 4 : 1)
         case (_, false, "["), (_, false, "{"): adjustRadii(by: shift ? -4 : -1)
         case (_, false, "m"): style = style.next

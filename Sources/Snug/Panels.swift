@@ -123,7 +123,7 @@ final class HelpSheet: NSView {
                      ("G", "Scrolling capture of the selection"),
                      ("C", "Copy color"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
         ("Adjust and text", [("Tab", "Walk out, other fits"), ("Arrows", "Nudge (Shift: 10 pt)"), ("Up / Down", "Bigger / smaller element"),
-                             ("1-5", "Pick from the list (N)"), ("Cmd-1/2/3", "Tight / Margin / Backdrop"), ("M", "Cycle output style"),
+                             ("1-5", "Pick from the list (N)"), ("Cmd-1/2", "Tight / Backdrop"), ("M", "Cycle output style"),
                              ("Text: drag", "Select text"), ("Text: Return", "Copy selected text"), ("Option-Return", "Translate text"),
                              ("Shift-C", "Cycle color format")]),
         ("Modes and view", [("A", "Capture"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),

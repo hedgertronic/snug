@@ -3,10 +3,8 @@ import CoreGraphics
 
 /// How a copied or saved area is framed.
 public enum OutputStyle: String, CaseIterable, Sendable {
-    case tight, margin, backdrop
+    case tight, backdrop
 
-    /// Surrounding screen kept by `margin`, in points.
-    public static let marginPoints: CGFloat = 16
     /// Padding around the image in `backdrop`, in points.
     public static let backdropPoints: CGFloat = 24
 
@@ -16,12 +14,11 @@ public enum OutputStyle: String, CaseIterable, Sendable {
         return all[(all.firstIndex(of: self)! + 1) % all.count]
     }
 
-    /// The output's footprint around a crop in image pixels. `margin` is clamped to the extent;
-    /// `backdrop` may extend past it because its padding is synthetic.
+    /// The output's footprint around a crop in image pixels. `backdrop` may extend past the extent
+    /// because its padding is synthetic.
     public func frame(around crop: CGRect, in extent: CGRect, scale: CGFloat) -> CGRect {
         switch self {
         case .tight: crop
-        case .margin: crop.insetBy(dx: -Self.marginPoints * scale, dy: -Self.marginPoints * scale).intersection(extent)
         case .backdrop: crop.insetBy(dx: -Self.backdropPoints * scale, dy: -Self.backdropPoints * scale)
         }
     }

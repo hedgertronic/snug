@@ -134,29 +134,32 @@ extension Pill {
     }
 }
 
-/// A clickable title with its key cap after it. The width fits the widest of `titles` in semibold, so a changing or selected
-/// title never clips and the button never changes size. A nil key has no cap.
+/// A clickable title with its key cap after it. The width fits the current title in semibold, so a selected title never clips and
+/// the key cap follows the text. A nil key has no cap.
 @MainActor
 final class BarButton: NSView {
     var onClick: () -> Void = {}
     let title: NSTextField
     let cap: KeyCap?
+    private let size: CGFloat
+    private let padding: CGFloat
 
-    init(_ title: String, key: String?, titles: [String] = [], height: CGFloat = 32, size: CGFloat = 13) {
+    init(_ title: String, key: String?, height: CGFloat = 32, size: CGFloat = 13) {
         self.title = NSTextField(title, size: size, weight: .medium)
         cap = key.map { KeyCap($0) }
+        self.size = size
+        padding = height > 30 ? 10 : 8
         super.init(frame: .zero)
         wantsLayer = true
         layer!.cornerRadius = height > 30 ? 9 : 8
-        let widest = (titles + [title]).map { NSTextField($0, size: size, weight: .semibold).frame.width }.max()!
-        let padding: CGFloat = height > 30 ? 10 : 8
-        frame.size = CGSize(width: padding * 2 + widest + (cap.map { 7 + $0.frame.width } ?? 0), height: height)
-        self.title.frame = CGRect(x: padding, y: (height - self.title.frame.height) / 2, width: widest, height: self.title.frame.height)
+        frame.size.height = height
+        self.title.frame.origin.y = (height - self.title.frame.height) / 2
         addSubview(self.title)
         if let cap {
-            cap.frame.origin = CGPoint(x: padding + widest + 7, y: (height - cap.frame.height) / 2)
+            cap.frame.origin.y = (height - cap.frame.height) / 2
             addSubview(cap)
         }
+        fit()
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -164,6 +167,21 @@ final class BarButton: NSView {
     override var intrinsicContentSize: NSSize { frame.size }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) { onClick() }
+
+    /// Shows `text` and resizes the button to it.
+    func setTitle(_ text: String) {
+        title.stringValue = text
+        fit()
+    }
+
+    private func fit() {
+        let width = NSTextField(title.stringValue, size: size, weight: .semibold).frame.width
+        title.frame.origin.x = padding
+        title.frame.size.width = width
+        cap?.frame.origin.x = padding + width + 7
+        frame.size.width = padding * 2 + width + (cap.map { 7 + $0.frame.width } ?? 0)
+        invalidateIntrinsicContentSize()
+    }
 
     /// `fill` nil leaves the button transparent. The text and weight follow `text` and `bold`; `prominent` puts a white key cap on it.
     func style(fill: NSColor?, text: NSColor, bold: Bool = false, prominent: Bool = false) {
@@ -211,6 +229,11 @@ class Capsule: NSView {
 
     func setItems(_ views: [NSView]) {
         stack.setViews(views, in: .center)
+        relayout()
+    }
+
+    /// Resizes the capsule to its items, after one of them changed size.
+    func relayout() {
         stack.frame.size = stack.fittingSize
         frame.size = stack.frame.size
         material.frame = bounds
@@ -227,7 +250,7 @@ class Capsule: NSView {
     }
 }
 
-/// The bottom bar in three groups: modes, view toggles, and output (style and shadow).
+/// The bottom bar in three titled groups: Mode, View, and Output.
 @MainActor
 final class BottomBar: Capsule {
     var onMode: (OverlayController.Mode) -> Void = { _ in }
@@ -236,18 +259,31 @@ final class BottomBar: Capsule {
     let modeButtons: [OverlayController.Mode: BarButton] = [.capture: BarButton("Capture", key: "A"), .text: BarButton("Text", key: "T")]
     let toggles = [(Pref.loupe, BarButton("Loupe", key: "L")),
                    (Pref.rulers, BarButton("Rulers", key: "R")),
-                   (Pref.snap, BarButton("Snap", key: "S"))]
-    let styleButton = BarButton("Tight", key: "M", titles: OutputStyle.allCases.map { $0.rawValue.capitalized })
+                   (Pref.snap, BarButton("Snap", key: "S")),
+                   (Pref.roundCorners, BarButton("Round", key: "O"))]
+    let styleButton = BarButton("Tight", key: "M")
     let shadowButton = BarButton("Shadow", key: "D")
-    let dividers = [Capsule.divider(), Capsule.divider()]
+    let groups: [NSStackView]
+    let dividers = [Capsule.divider(height: 36), Capsule.divider(height: 36)]
 
     init() {
+        func group(_ title: String, _ buttons: [BarButton]) -> NSStackView {
+            let row = NSStackView(views: buttons)
+            row.spacing = 6
+            let column = NSStackView(views: [NSTextField(title, size: 9, weight: .semibold, color: .secondaryLabelColor), row])
+            column.orientation = .vertical
+            column.spacing = 2
+            return column
+        }
+        let buttons = toggles.map(\.1)
+        groups = [group("Mode", [modeButtons[.capture]!, modeButtons[.text]!]), group("View", Array(buttons[0..<2])),
+                  group("Output", [buttons[2], buttons[3], styleButton, shadowButton])]
         super.init()
         for (mode, button) in modeButtons { button.onClick = { [unowned self] in onMode(mode) } }
         for (key, button) in toggles { button.onClick = { [unowned self] in onToggle(key) } }
         styleButton.onClick = { [unowned self] in onStyle() }
         shadowButton.onClick = { [unowned self] in onToggle(Pref.shadow) }
-        setItems([modeButtons[.capture]!, modeButtons[.text]!, dividers[0]] + toggles.map(\.1) + [dividers[1], styleButton, shadowButton])
+        setItems([groups[0], dividers[0], groups[1], dividers[1], groups[2]])
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -261,8 +297,9 @@ final class BottomBar: Capsule {
             let on = defaults.bool(forKey: key)
             button.style(fill: on ? NSColor.controlAccentColor.withAlphaComponent(0.22) : nil, text: on ? .controlAccentColor : .labelColor)
         }
-        styleButton.title.stringValue = style.rawValue.capitalized
+        styleButton.setTitle(style.rawValue.capitalized)
         styleButton.style(fill: nil, text: .labelColor)
+        relayout()
     }
 
     /// Clicks the button for `mode`, as the pointer would.
