@@ -11,9 +11,9 @@ final class OverlayView: NSView {
         /// Sides a resize snapped to, as zero-width or zero-height rectangles.
         var snappedEdges: [CGRect] = []
         var showsHandles = false
-        /// Corner radius in image pixels of the selection (or the snap preview when there is no selection), and of the hovered window.
-        var radius: CGFloat = 0
-        var hoverRadius: CGFloat = 0
+        /// Corner radii in image pixels of the selection (or the snap preview when there is no selection), and of the hovered rectangle.
+        var radii = CornerRadii.zero
+        var hoverRadii = CornerRadii.zero
     }
 
     weak var controller: OverlayController?
@@ -128,23 +128,23 @@ final class OverlayView: NSView {
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         let o = overlays
-        func path(_ rect: CGRect, radius: CGFloat = 0) -> CGPath {
-            CGPath(roundedRect: viewRect(rect), cornerWidth: radius / scale, cornerHeight: radius / scale, transform: nil)
+        func path(_ rect: CGRect, radii: CornerRadii = .zero) -> CGPath {
+            radii.scaled(by: 1 / scale).path(in: viewRect(rect))
         }
         let dim = CGMutablePath()
         if let cutout = o.selection ?? o.preview ?? o.ghost {
             dim.addRect(bounds)
-            dim.addPath(path(cutout, radius: o.radius))
+            dim.addPath(path(cutout, radii: o.radii))
         } else if let hover = o.hover {
             dim.addRect(bounds)
-            dim.addPath(path(hover, radius: o.hoverRadius))
+            dim.addPath(path(hover, radii: o.hoverRadii))
         }
         dimLayer.path = dim
-        hoverLayer.path = o.hover.map { path($0, radius: o.hoverRadius) }
+        hoverLayer.path = o.hover.map { path($0, radii: o.hoverRadii) }
         styleLayer.path = o.styleFrame.map { path($0) }
         ghostLayer.path = o.ghost.map { path($0) }
-        outlineLayer.path = o.selection.map { path($0, radius: o.radius) }
-        previewLayer.path = o.preview.map { path($0, radius: o.radius) }
+        outlineLayer.path = o.selection.map { path($0, radii: o.radii) }
+        previewLayer.path = o.preview.map { path($0, radii: o.radii) }
         let snapped = CGMutablePath()
         for edge in o.snappedEdges {
             let line = viewRect(edge)
