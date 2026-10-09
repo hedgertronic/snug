@@ -32,6 +32,17 @@ struct SelectionSessionTests {
         #expect(session.selected?.kind == .display)
     }
 
+    @Test func childIsWhatDownWouldSelect() {
+        var session = SelectionSession(candidates: regions, extent: extent, anchor: CGPoint(x: 150, y: 150))
+        #expect(session.selected?.id == "cell" && session.child == nil && session.parents.first?.id == "table")
+        session.expand()
+        #expect(session.selected?.id == "table" && session.child?.id == "cell")
+        session.expand()
+        let child = session.child
+        session.shrink()
+        #expect(child?.id == "table" && session.selected?.id == "table" && session.child?.id == "cell")
+    }
+
     @Test func aKeyAtTheScreenEdgeReleasesOnceThePointerMovesAway() {
         var session = SelectionSession(candidates: regions, extent: extent, anchor: CGPoint(x: 0, y: 400))
         session.expand()

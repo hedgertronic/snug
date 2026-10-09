@@ -69,7 +69,8 @@ extension DebugRun {
         require(overlay.mode == .capture && liveText.isHidden && liveText.analysis == nil, "the overlay opens in Capture with Live Text hidden and nothing analyzed")
         key(tKey, "t")
         require(overlay.mode == .text && !liveText.isHidden, "T enters Text mode and shows Live Text")
-        require(texts(in: overlay.chrome.hints) == ["Drag: select text", "Return: copy", "Option-Return: translate", "F: all text", "C: color", "A: back to capture", "?: keys"], "Text mode shows its hint strip")
+        require(texts(in: overlay.chrome.hints) == ["Drag", "select text", "\u{21A9}", "copy", "\u{2325}", "\u{21A9}", "translate", "F", "all text", "C", "color", "?", "all keys"],
+                "Text mode shows its hint row: \(texts(in: overlay.chrome.hints))")
         require(!overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."], "a Reading text... pill shows while the analysis runs")
         try await waitFor("the Live Text analysis attaches") { liveText.analysis != nil }
         print("Live Text analysis: \(String(format: "%.1f", overlay.lastLiveTextMilliseconds)) ms (first in this process)")
@@ -232,7 +233,7 @@ extension DebugRun {
         }
         capture(cart)
         require(overlay.selection?.rect == cart, "an Option-drag releases the exact cart selection")
-        require(texts(in: overlay.chrome.hints).contains("Shift-Return: copy text"), "the released hint strip names Shift-Return")
+        require(texts(in: overlay.chrome.actionBar).contains("\u{21E7}\u{21A9}"), "the action bar's Text button names Shift-Return")
         pasteboard.clearContents()
         key(returnKey, "\r", .shift)
         require(!overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."], "a Reading text... pill shows while the selection is read")

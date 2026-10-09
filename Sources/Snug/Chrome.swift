@@ -81,60 +81,82 @@ final class Dot: NSView {
     override var intrinsicContentSize: NSSize { frame.size }
 }
 
-/// A small key glyph: mono text in a hairline rounded box.
+/// A key cap: the key's glyph on a raised rounded key. `prominent` is the white key on an accent button (Copy, the current mode).
 @MainActor
 final class KeyCap: NSView {
     private let label: NSTextField
     var color: NSColor {
-        didSet {
-            label.textColor = color
-            layer!.backgroundColor = color.withAlphaComponent(0.15).cgColor
-            layer!.borderColor = color.withAlphaComponent(0.35).cgColor
-        }
+        didSet { applyColor() }
+    }
+    var prominent = false {
+        didSet { applyColor() }
     }
 
     init(_ text: String, color: NSColor = .secondaryLabelColor) {
-        label = NSTextField(text, size: 10.5, weight: .medium, mono: true, color: color)
+        label = NSTextField(text, size: 11, weight: .semibold, color: color)
         self.color = color
         super.init(frame: .zero)
         wantsLayer = true
-        layer!.cornerRadius = 4
-        layer!.borderWidth = 1
-        layer!.backgroundColor = color.withAlphaComponent(0.15).cgColor
-        layer!.borderColor = color.withAlphaComponent(0.35).cgColor
+        layer!.cornerRadius = 5
+        layer!.borderWidth = 0.5
+        layer!.borderColor = NSColor.black.withAlphaComponent(0.45).cgColor
+        layer!.shadowColor = NSColor.black.cgColor
+        layer!.shadowOpacity = 0.55
+        layer!.shadowOffset = CGSize(width: 0, height: -1)
+        layer!.shadowRadius = 0
         label.sizeToFit()
-        frame.size = CGSize(width: max(18, label.frame.width + 10), height: 18)
+        frame.size = CGSize(width: max(20, label.frame.width + 12), height: 20)
         label.frame.origin = CGPoint(x: (frame.width - label.frame.width) / 2, y: (frame.height - label.frame.height) / 2)
         addSubview(label)
+        applyColor()
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    private func applyColor() {
+        label.textColor = prominent ? .controlAccentColor : color
+        layer!.backgroundColor = prominent ? NSColor.white.withAlphaComponent(0.9).cgColor : color.withAlphaComponent(0.2).cgColor
+    }
 
     override var intrinsicContentSize: NSSize { frame.size }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
-/// A clickable title with its key cap under it. The width fits the widest of `titles` in semibold, so a changing or selected
-/// title never clips and the button never changes size.
+extension Pill {
+    /// A hint: key caps then a label, on no fill.
+    static func chip(_ keys: [String], _ label: String) -> Pill {
+        let chip = Pill(fill: .clear, radius: 0, insets: NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0), spacing: 6)
+        let color = NSColor.white.withAlphaComponent(0.92)
+        chip.show(keys.joined() + label) {
+            keys.map { KeyCap($0, color: color) } + (label.isEmpty ? [] : [NSTextField(label, size: 12, weight: .medium, color: color)])
+        }
+        return chip
+    }
+}
+
+/// A clickable title with its key cap after it. The width fits the widest of `titles` in semibold, so a changing or selected
+/// title never clips and the button never changes size. A nil key has no cap.
 @MainActor
 final class BarButton: NSView {
     var onClick: () -> Void = {}
     let title: NSTextField
-    let cap: KeyCap
+    let cap: KeyCap?
 
-    init(_ title: String, key: String, titles: [String] = [], height: CGFloat = 46) {
-        self.title = NSTextField(title, size: 12)
-        cap = KeyCap(key)
+    init(_ title: String, key: String?, titles: [String] = [], height: CGFloat = 32, size: CGFloat = 13) {
+        self.title = NSTextField(title, size: size, weight: .medium)
+        cap = key.map { KeyCap($0) }
         super.init(frame: .zero)
         wantsLayer = true
-        layer!.cornerRadius = 9
-        let widest = (titles + [title]).map { NSTextField($0, size: 12, weight: .semibold).frame.width }.max()!
-        frame.size = CGSize(width: max(widest, cap.frame.width) + 20, height: height)
-        self.title.alignment = .center
-        self.title.frame = CGRect(x: 0, y: height - self.title.frame.height - 6, width: frame.width, height: self.title.frame.height)
-        cap.frame.origin = CGPoint(x: (frame.width - cap.frame.width) / 2, y: 6)
+        layer!.cornerRadius = height > 30 ? 9 : 8
+        let widest = (titles + [title]).map { NSTextField($0, size: size, weight: .semibold).frame.width }.max()!
+        let padding: CGFloat = height > 30 ? 10 : 8
+        frame.size = CGSize(width: padding * 2 + widest + (cap.map { 7 + $0.frame.width } ?? 0), height: height)
+        self.title.frame = CGRect(x: padding, y: (height - self.title.frame.height) / 2, width: widest, height: self.title.frame.height)
         addSubview(self.title)
-        addSubview(cap)
+        if let cap {
+            cap.frame.origin = CGPoint(x: padding + widest + 7, y: (height - cap.frame.height) / 2)
+            addSubview(cap)
+        }
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -143,38 +165,41 @@ final class BarButton: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) { onClick() }
 
-    /// `fill` nil leaves the button transparent. The text, key cap, and weight follow `text` and `bold`.
-    func style(fill: NSColor?, text: NSColor, bold: Bool = false) {
+    /// `fill` nil leaves the button transparent. The text and weight follow `text` and `bold`; `prominent` puts a white key cap on it.
+    func style(fill: NSColor?, text: NSColor, bold: Bool = false, prominent: Bool = false) {
         layer!.backgroundColor = fill?.cgColor
         title.textColor = text
-        title.font = .systemFont(ofSize: title.font!.pointSize, weight: bold ? .semibold : .regular)
-        cap.color = text.withAlphaComponent(text == .white ? 0.9 : 0.8)
+        title.font = .systemFont(ofSize: title.font!.pointSize, weight: bold ? .semibold : .medium)
+        cap?.color = text.withAlphaComponent(text == .white ? 0.94 : 0.85)
+        cap?.prominent = prominent
     }
 }
 
-/// The floating capsule shared by the bottom bar and the style bar: material, hairline, shadow.
+/// The floating capsule shared by the bottom bar and the action bar: material, hairline, shadow.
 @MainActor
 class Capsule: NSView {
     let material = NSVisualEffectView()
     private let stack = NSStackView()
+    private let radius: CGFloat
 
-    init(spacing: CGFloat = 4) {
+    init(spacing: CGFloat = 6, inset: CGFloat = 6, radius: CGFloat = 14) {
+        self.radius = radius
         super.init(frame: .zero)
         wantsLayer = true
         layer!.shadowColor = NSColor.black.cgColor
-        layer!.shadowOpacity = 0.35
+        layer!.shadowOpacity = 0.45
         layer!.shadowRadius = 15
         layer!.shadowOffset = CGSize(width: 0, height: -10)
         material.material = .hudWindow
         material.blendingMode = .withinWindow
         material.state = .active
         material.wantsLayer = true
-        material.layer!.cornerRadius = 14
+        material.layer!.cornerRadius = radius
         material.layer!.masksToBounds = true
         material.layer!.borderWidth = 0.5
-        material.layer!.borderColor = NSColor.white.withAlphaComponent(0.2).cgColor
+        material.layer!.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
         stack.spacing = spacing
-        stack.edgeInsets = NSEdgeInsets(top: 6, left: 6, bottom: 6, right: 6)
+        stack.edgeInsets = NSEdgeInsets(top: inset, left: inset, bottom: inset, right: inset)
         material.addSubview(stack)
         addSubview(material)
         isHidden = true
@@ -189,15 +214,15 @@ class Capsule: NSView {
         stack.frame.size = stack.fittingSize
         frame.size = stack.frame.size
         material.frame = bounds
-        layer!.shadowPath = CGPath(roundedRect: bounds, cornerWidth: 14, cornerHeight: 14, transform: nil)
+        layer!.shadowPath = CGPath(roundedRect: bounds, cornerWidth: radius, cornerHeight: radius, transform: nil)
     }
 
-    static func divider() -> NSView {
+    static func divider(height: CGFloat = 20) -> NSView {
         let line = NSView()
         line.wantsLayer = true
-        line.layer!.backgroundColor = NSColor.separatorColor.cgColor
+        line.layer!.backgroundColor = NSColor.white.withAlphaComponent(0.16).cgColor
         line.widthAnchor.constraint(equalToConstant: 1).isActive = true
-        line.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        line.heightAnchor.constraint(equalToConstant: height).isActive = true
         return line
     }
 }
@@ -216,8 +241,8 @@ final class BottomBar: Capsule {
     let shadowButton = BarButton("Shadow", key: "D")
     let dividers = [Capsule.divider(), Capsule.divider()]
 
-    override init(spacing: CGFloat = 4) {
-        super.init(spacing: spacing)
+    init() {
+        super.init()
         for (mode, button) in modeButtons { button.onClick = { [unowned self] in onMode(mode) } }
         for (key, button) in toggles { button.onClick = { [unowned self] in onToggle(key) } }
         styleButton.onClick = { [unowned self] in onStyle() }
@@ -230,51 +255,50 @@ final class BottomBar: Capsule {
     func update(mode: OverlayController.Mode, defaults: UserDefaults, style: OutputStyle) {
         for (current, button) in modeButtons {
             let selected = current == mode
-            button.style(fill: selected ? .controlAccentColor : nil, text: selected ? .white : .labelColor, bold: selected)
+            button.style(fill: selected ? .controlAccentColor : nil, text: selected ? .white : .labelColor, bold: selected, prominent: selected)
         }
         for (key, button) in toggles + [(Pref.shadow, shadowButton)] {
             let on = defaults.bool(forKey: key)
-            button.style(fill: on ? NSColor.controlAccentColor.withAlphaComponent(0.15) : nil, text: on ? .controlAccentColor : .secondaryLabelColor)
+            button.style(fill: on ? NSColor.controlAccentColor.withAlphaComponent(0.22) : nil, text: on ? .controlAccentColor : .labelColor)
         }
         styleButton.title.stringValue = style.rawValue.capitalized
-        styleButton.style(fill: nil, text: .secondaryLabelColor)
+        styleButton.style(fill: nil, text: .labelColor)
     }
 
     /// Clicks the button for `mode`, as the pointer would.
     func click(_ mode: OverlayController.Mode) { modeButtons[mode]!.onClick() }
 }
 
-/// The bar under a released selection: output style, Save, and Copy.
+/// The bar attached to a released selection: output style, Text, Save, and Copy.
 @MainActor
-final class StyleBar: Capsule {
+final class ActionBar: Capsule {
     var onStyle: (OutputStyle) -> Void = { _ in }
+    var onText: () -> Void = {}
     var onSave: () -> Void = {}
     var onCopy: () -> Void = {}
-    let segments = OutputStyle.allCases.enumerated().map { BarButton($1.rawValue.capitalized, key: "\u{2318}\($0 + 1)") }
-    let save = BarButton("Save", key: "\u{2318}S")
-    let copy = BarButton("Copy", key: "Return")
+    let segments = OutputStyle.allCases.map { BarButton($0.rawValue.capitalized, key: nil, height: 28, size: 12) }
+    let text = BarButton("Text", key: "\u{21E7}\u{21A9}", height: 28, size: 12)
+    let save = BarButton("Save", key: "\u{2318}S", height: 28, size: 12)
+    let copy = BarButton("Copy", key: "\u{21A9}", height: 28, size: 12)
 
     var style = OutputStyle.tight {
         didSet {
             for (candidate, segment) in zip(OutputStyle.allCases, segments) {
-                segment.style(fill: candidate == style ? NSColor.labelColor.withAlphaComponent(0.16) : nil, text: .labelColor, bold: candidate == style)
+                segment.style(fill: candidate == style ? NSColor.white.withAlphaComponent(0.16) : nil, text: .labelColor, bold: candidate == style)
             }
         }
     }
 
-    override init(spacing: CGFloat = 10) {
-        super.init(spacing: spacing)
-        let track = Pill(fill: NSColor.labelColor.withAlphaComponent(0.08), radius: 12, insets: NSEdgeInsets(top: 3, left: 3, bottom: 3, right: 3), spacing: 2)
-        track.isClickThrough = false
-        track.show("track") { segments }
+    init() {
+        super.init(spacing: 4, inset: 4, radius: 11)
         for (candidate, segment) in zip(OutputStyle.allCases, segments) { segment.onClick = { [unowned self] in onStyle(candidate) } }
-        let cycle = Pill(fill: .clear, radius: 0, insets: NSEdgeInsets(top: 0, left: 4, bottom: 0, right: 4), spacing: 6)
-        cycle.show("cycle") { [KeyCap("M"), NSTextField("cycles", size: 12, color: .secondaryLabelColor)] }
-        save.style(fill: NSColor.labelColor.withAlphaComponent(0.1), text: .labelColor)
-        copy.style(fill: .controlAccentColor, text: .white, bold: true)
+        text.style(fill: nil, text: .labelColor)
+        save.style(fill: nil, text: .labelColor)
+        copy.style(fill: .controlAccentColor, text: .white, bold: true, prominent: true)
+        text.onClick = { [unowned self] in onText() }
         save.onClick = { [unowned self] in onSave() }
         copy.onClick = { [unowned self] in onCopy() }
-        setItems([track, cycle, Capsule.divider(), save, copy])
+        setItems(segments + [Capsule.divider(height: 18), text, save, copy])
         style = .tight
     }
 
@@ -285,16 +309,19 @@ final class StyleBar: Capsule {
 @MainActor
 final class Chrome {
     let bottomBar = BottomBar()
-    let styleBar = StyleBar()
-    let hints = Pill.dark(0.92, radius: 8, insets: NSEdgeInsets(top: 5, left: 12, bottom: 5, right: 12), spacing: 14)
+    let actionBar = ActionBar()
+    let hints = Pill.dark(0.9, radius: 11, insets: NSEdgeInsets(top: 8, left: 14, bottom: 8, right: 14), spacing: 18)
+    /// Key caps at the top-left corners of the faint outlines of what Up and Down would select.
+    let upHint = KeyCap("\u{2191}", color: .white)
+    let downHint = KeyCap("\u{2193}", color: .white)
     let size = Pill.dark(0.86, radius: 6, insets: NSEdgeInsets(top: 4, left: 9, bottom: 4, right: 9))
     let status = Pill.dark(0.86, radius: 6, insets: NSEdgeInsets(top: 4, left: 9, bottom: 4, right: 9))
-    let hover = Pill.dark(0.86, radius: 12, insets: NSEdgeInsets(top: 10, left: 18, bottom: 10, right: 18), spacing: 3, vertical: true)
+    let hover = Pill.dark(0.9, radius: 9, insets: NSEdgeInsets(top: 5, left: 10, bottom: 5, right: 6), spacing: 10)
     let reading = Pill.dark(0.86, radius: 6, insets: NSEdgeInsets(top: 4, left: 9, bottom: 4, right: 9))
     let list = CandidateList()
     let help = HelpSheet()
     /// The bars and hint strip sit under the menu bar or notch instead of at the bottom edge.
     var atTop = false
 
-    var all: [NSView] { [hover, size, status, reading, hints, list, bottomBar, styleBar, help] }
+    var all: [NSView] { [upHint, downHint, hover, size, status, reading, hints, list, bottomBar, actionBar, help] }
 }
