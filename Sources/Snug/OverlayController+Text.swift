@@ -15,9 +15,13 @@ struct TextSession {
 /// Live Text's own drag selection is word-granular and anchors at the start of the pressed word, so a drag that goes backward leaves
 /// that word out (in the highlight while dragging and after), a drag inside one word selects nothing, and a press on the last few
 /// points of a line, just past its last glyph, anchors at the start of all text.
+///
+/// With real pointer input Live Text's text view holds a press back until the pointer moves or lifts (text.log: `selectedRanges` at
+/// mouseDown is still the previous caret or selection), so the anchor comes from the first selection change after the press.
 extension OverlayWindow {
-    /// Text mode's mouse events: a press up to 16 pt right of text moves onto it, and after Live Text handles each drag event and the
-    /// release the selection grows to cover the pressed word (or the word or line a double or triple click picked).
+    /// Text mode's mouse events: a press up to 16 pt right of text moves onto it and clears the selection, and after Live Text handles
+    /// each drag event and the release the selection grows to cover the pressed word (or the word or line a double or triple click
+    /// picked), which `OverlayController.textSelectionDidChange` takes from Live Text's first caret or range after the press.
     func sendTextMouse(_ event: NSEvent) {
         let liveText = (contentView as! OverlayView).liveText
         var event = event
@@ -36,20 +40,13 @@ extension OverlayWindow {
                 snapped = " moved \(-dx) pt onto text"
                 onText = true
             }
+            if onText { liveText.selectedRanges = [] }
+            textPress = onText ? (event.locationInWindow, nil) : nil
         }
         super.sendEvent(event)
         let text = liveText.text
         let raw = liveText.selectedRanges
         switch event.type {
-        case .leftMouseDown:
-            var anchor = raw.first.flatMap { $0.isEmpty ? nil : $0 }
-            if onText, event.clickCount == 1, let caret = raw.first?.lowerBound {
-                text.enumerateSubstrings(in: caret..<text.endIndex, options: .byWords) { _, word, _, stop in
-                    anchor = word
-                    stop = true
-                }
-            }
-            textPress = (event.locationInWindow, onText ? anchor : nil)
         case .leftMouseDragged, .leftMouseUp:
             guard let press = textPress, let anchor = press.anchor, raw.count <= 1,
                   hypot(event.locationInWindow.x - press.point.x, event.locationInWindow.y - press.point.y) >= 3 else { break }
@@ -69,9 +66,11 @@ extension OverlayWindow {
             + " at \(Int(point.x)),\(Int(point.y))\(snapped) live text [\(offsets(raw))] now [\(offsets(liveText.selectedRanges))]"
         if event.type == .leftMouseDown {
             let built = try! Bundle.main.executableURL!.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate!
-            line += " anchor [\(offsets(textPress!.anchor.map { [$0] } ?? []))] build \(built.formatted(.iso8601))"
+            line += " anchor [\(offsets(textPress?.anchor.map { [$0] } ?? []))] build \(built.formatted(.iso8601))"
         }
-        if event.type == .leftMouseUp { line += " selected \(liveText.selectedText.debugDescription)" }
+        if event.type == .leftMouseUp {
+            line += " anchor [\(offsets(textPress?.anchor.map { [$0] } ?? []))] selected \(liveText.selectedText.debugDescription)"
+        }
         Pref.logHoverLine(line, key: Pref.logText, file: "text.log")
     }
 }
@@ -93,6 +92,23 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
                 view.liveText.analysis = analysis
                 text.reading = nil
                 refresh()
+                warmVision(image)
+            } catch {
+                report(error)
+            }
+        }
+    }
+
+    /// The first Text mode of a newly built binary runs Tab's accurate OCR and barcode requests on the frozen image at utility priority,
+    /// so Vision compiles its models on device (35-90 s) while the user selects, not in the first Shift-Return or Tab. Text mode, not
+    /// launch: the process keeps 35-75 MiB after the requests are released. `defaults` keeps the binary's modification date.
+    private func warmVision(_ image: CGImage) {
+        let built = try! Bundle.main.executableURL!.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate!
+        guard visionWarm == nil, defaults.object(forKey: Pref.visionWarmedBuild) as? Date != built else { return }
+        visionWarm = Task(priority: .utility) {
+            do {
+                _ = try await Self.findItems(in: image)
+                defaults.set(built, forKey: Pref.visionWarmedBuild)
             } catch {
                 report(error)
             }
@@ -107,7 +123,20 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     /// Keys stay with the overlay: Return, Esc, and the mode keys must work after a click moves focus into the text.
     func overlayView(_ overlayView: ImageAnalysisOverlayView, shouldHandleKeyDownEvent event: NSEvent) -> Bool { false }
 
+    /// The first caret or range after a press on text anchors that press: a caret anchors the word it sits before, a range (a double or
+    /// triple click's word or line) anchors itself.
     func textSelectionDidChange(_ overlayView: ImageAnalysisOverlayView) {
+        if let press = window.textPress, press.anchor == nil, let range = overlayView.selectedRanges.first {
+            let text = overlayView.text
+            var anchor = range
+            if range.isEmpty {
+                text.enumerateSubstrings(in: range.lowerBound..<text.endIndex, options: .byWords) { _, word, _, stop in
+                    anchor = word
+                    stop = true
+                }
+            }
+            window.textPress!.anchor = anchor
+        }
         text.notice = nil
         refresh()
     }
