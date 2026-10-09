@@ -448,10 +448,10 @@ extension DebugRun {
             exit(EXIT_FAILURE)
         }
         defer { watchdog.cancel() }
-        let start = ContinuousClock.now
+        let (start, before) = (ContinuousClock.now, footprint())
         _ = try await OverlayController.recognize(image, crop: CGRect(x: 0, y: 0, width: image.width, height: image.height))
         _ = try await ImageRequestHandler(image).perform(DetectBarcodesRequest())
-        print("Vision warm-up: \(String(format: "%.1f", start.duration(to: .now).milliseconds)) ms")
+        print("Vision warm-up: \(String(format: "%.1f", start.duration(to: .now).milliseconds)) ms, footprint \(before) before, \(footprint()) after")
     }
 
     /// A white page of `width` x `height` pixels with a link, an email address and a phone number in large text from the top left, and a
