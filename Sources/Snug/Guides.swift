@@ -27,7 +27,6 @@ final class Guides {
     private let center = CAShapeLayer()
     private let readout = CATextLayer()
     private var tickKey: [CGFloat] = []
-    private var source: CGImage?
 
     init() {
         for layer in [crosshair, rulers, loupe] {
@@ -138,16 +137,17 @@ final class Guides {
             labelY.frame = CGRect(x: thickness + 3, y: point.y + 2, width: 48, height: 14)
         }
         if !loupe.isHidden, let image {
-            if source !== image {
-                source = image
-                magnified.contents = image
-            }
             let half = Self.loupePixels / 2
             let column = Int(pixel.x), row = Int(pixel.y)
-            // contentsRect's origin is the image's bottom left.
-            let width = CGFloat(image.width), height = CGFloat(image.height)
-            magnified.contentsRect = CGRect(x: CGFloat(column - half) / width, y: (height - CGFloat(row + half + 1)) / height,
-                                            width: CGFloat(Self.loupePixels) / width, height: CGFloat(Self.loupePixels) / height)
+            // Only a copy of the pixels around the pointer goes to the layer, so the loupe never holds the capture after the overlay closes.
+            // Pixels past the image's edge stay clear.
+            let side = Self.loupePixels
+            let window = CGRect(x: column - half, y: row - half, width: side, height: side)
+            let inside = window.intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            let context = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0, space: image.colorSpace!,
+                                    bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)!
+            context.draw(image.cropping(to: inside)!, in: CGRect(x: inside.minX - window.minX, y: window.maxY - inside.maxY, width: inside.width, height: inside.height))
+            magnified.contents = context.makeImage()
             center.strokeColor = accent.cgColor
             let color = ColorFormat.hex.string(for: ColorFormat.average(of: image, in: CGRect(x: column, y: row, width: 1, height: 1)))
             readout.string = "\(color)  C"
