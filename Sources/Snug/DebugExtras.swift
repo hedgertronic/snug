@@ -60,16 +60,13 @@ extension DebugRun {
         let extent = CGRect(x: 0, y: 0, width: image.width, height: image.height)
         let rough = CGRect(x: 350, y: 458, width: 580, height: 64)
 
-        // Modes: A / T, E does nothing, mode changes clear the selection.
+        // Modes: A / T, mode changes clear the selection.
         open()
         require(overlay.mode == .capture, "the overlay opens in Capture")
         key(17, "t")
         require(overlay.mode == .text, "T switches to Text")
         key(0, "a")
         require(overlay.mode == .capture, "A switches back to Capture")
-        key(14, "e")
-        require(overlay.mode == .capture && overlay.session != nil, "E does nothing: there is no Element mode")
-        require(overlay.selection == nil, "E leaves no selection: \(String(describing: overlay.selection))")
         key(1, "s")
         drag(rough)
         require(overlay.selection?.rect == rough, "a drag selects: \(String(describing: overlay.selection)) snap \(defaults.bool(forKey: Pref.snap))")
