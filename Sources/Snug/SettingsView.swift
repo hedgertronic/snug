@@ -79,7 +79,9 @@ private struct GeneralPane: View {
                 .listRowBackground(Color.clear)
             }
             Section {
-                LabeledContent("Shortcut") {
+                HStack {
+                    Text("Shortcut")
+                    Spacer()
                     ShortcutRecorder(label: Shortcut.label(code: hotKeyCode, modifiers: hotKeyModifiers)).frame(width: 130, height: 28)
                 }
                 Picker("After capture", selection: $afterCapture) {
