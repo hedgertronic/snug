@@ -5,6 +5,12 @@ import Translation
 extension DebugRun {
     /// `--verify-text-ui`: drives Live Text in Text mode and Capture's Shift-Return through synthesized events on form-test.png.
     static func verifyText(image: CGImage, frame: CGRect, overlay: OverlayController) async throws {
+        // The first accurate OCR in a process named Snug compiles Vision's text models into ~/Library/Caches/Snug (over a minute under
+        // load). Warming before the 120 s watchdog starts lets the compile finish and fill the cache, so a slow compile cannot be killed
+        // halfway and leave the next run to compile again.
+        let warm = ContinuousClock.now
+        _ = try await OverlayController.recognize(image, crop: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        print("Accurate OCR warm-up: \(String(format: "%.1f", warm.duration(to: .now).milliseconds)) ms")
         _ = privateSetup(overlay)
         let pasteboard = overlay.pasteboard
         let liveText = overlay.view.liveText

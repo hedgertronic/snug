@@ -174,7 +174,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
 
     /// Runs accurate OCR on the crop only; boxes come back in full-image pixels.
     @concurrent
-    private static func recognize(_ image: CGImage, crop: CGRect) async throws -> [TextLine] {
+    static func recognize(_ image: CGImage, crop: CGRect) async throws -> [TextLine] {
         let region = crop.integral
         let cropped = image.cropping(to: region)!
         let size = CGSize(width: cropped.width, height: cropped.height)
