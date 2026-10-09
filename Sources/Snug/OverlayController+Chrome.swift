@@ -109,7 +109,6 @@ extension OverlayController {
             let size = radiusReadout ?? "\(Int(rect.width)) x \(Int(rect.height))"
             c.size.show(size) { [NSTextField(size, size: 12, mono: true, color: .white)] }
             var pills: [NSView] = [c.size]
-            if showsApplyChip { pills.append(applyChip) }
             var status: (text: String, dot: NSColor)?
             if mode == .capture {
                 if let selection {
@@ -123,6 +122,9 @@ extension OverlayController {
                         status = ("Snap off: exact drag", .white)
                     }
                 }
+            }
+            if let ratioLock {
+                status = (status.map { "\($0.text), Ratio \(ratioLock.label)" } ?? "Ratio \(ratioLock.label)", status?.dot ?? .white)
             }
             if let status {
                 c.status.show(status.text) {

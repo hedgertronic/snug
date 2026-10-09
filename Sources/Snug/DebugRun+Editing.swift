@@ -105,14 +105,35 @@ extension DebugRun {
         require(overlay.radiusReadout?.split(separator: " ").count == 5, "unequal corners read as four values: \(overlay.radiusReadout ?? "nil")")
         require(overlay.lastEditedCorner == .bottomRight, "the dragged corner is the last edited one")
 
-        // Apply to all: the chip and =.
-        require(!overlay.applyChip.isHidden && texts(in: overlay.chrome.size).count == 1, "unequal corners show the Apply to all chip")
+        // Per-corner apply: hovering a dot shows its "All corners" chip outside that corner; = and the chip copy the hovered corner to all four.
+        mouse(.mouseMoved, CGPoint(x: a.midX, y: a.midY))
+        require(overlay.cornerChip.isHidden && overlay.hoveredCorner == nil, "no corner dot hovered: no chip")
         key(24, "=")
-        require(equal(radii(), CornerRadii(all.bottomRight + moved)) && overlay.applyChip.isHidden, "= copies the last-edited corner's radius to all four and hides the chip")
+        require(equal(radii(), CornerRadii(all.bottomRight + moved)), "= with no corner hovered copies the last-edited corner's radius to all four")
         drag(from: dot(.topRight), by: CGPoint(x: -step, y: step), .option)
-        require(!overlay.applyChip.isHidden, "an Option-drag brings the chip back")
-        overlay.applyChip.onClick()
-        require(overlay.applyChip.isHidden && Set(CornerRadii.corners.map { radii()[$0] }).count == 1, "clicking the chip applies one radius to all four corners")
+        require(Set(CornerRadii.corners.map { radii()[$0] }).count > 1, "an Option-drag makes the corners unequal")
+        func chipCenter() -> CGPoint { CGPoint(x: overlay.cornerChip.frame.midX * scale, y: (overlay.view.bounds.height - overlay.cornerChip.frame.midY) * scale) }
+        let box = overlay.view.viewRect(a)
+        mouse(.mouseMoved, dot(.topLeft))
+        require(overlay.hoveredCorner == .topLeft && !overlay.cornerChip.isHidden, "hovering a corner dot shows its chip")
+        require(texts(in: overlay.cornerChip).contains("All corners") && overlay.cornerChip.frame.maxX <= box.minX, "the top-left chip reads All corners, outside the selection's left edge")
+        let topLeftRadius = radii().topLeft
+        mouse(.mouseMoved, dot(.bottomRight))
+        require(overlay.hoveredCorner == .bottomRight && overlay.cornerChip.frame.minX >= box.maxX, "the bottom-right chip sits outside the right edge")
+        mouse(.mouseMoved, dot(.topLeft))
+        mouse(.mouseMoved, CGPoint(x: (dot(.topLeft).x + chipCenter().x) / 2, y: (dot(.topLeft).y + chipCenter().y) / 2))
+        require(overlay.hoveredCorner == .topLeft, "the chip stays while the pointer travels from the dot to it")
+        mouse(.mouseMoved, CGPoint(x: a.midX, y: a.midY))
+        require(overlay.cornerChip.isHidden, "moving off the dot and the chip hides it")
+        mouse(.mouseMoved, dot(.topLeft))
+        key(24, "=")
+        require(equal(radii(), CornerRadii(topLeftRadius)), "= applies the hovered corner's radius, not the last-edited corner's")
+        drag(from: dot(.topRight), by: CGPoint(x: -step, y: step), .option)
+        mouse(.mouseMoved, dot(.bottomLeft))
+        let bottomLeftRadius = radii().bottomLeft
+        mouse(.mouseMoved, chipCenter())
+        click(chipCenter())
+        require(equal(radii(), CornerRadii(bottomLeftRadius)), "clicking a corner's chip applies that corner's radius to all four")
         drag(from: dot(.topLeft), by: CGPoint(x: 1000 * scale, y: 1000 * scale))
         require(equal(radii(), CornerRadii(a.height / 2)), "a dot drag clamps to half the shorter side")
         drag(from: dot(.topLeft), by: CGPoint(x: -1000 * scale, y: -1000 * scale))
@@ -182,6 +203,79 @@ extension DebugRun {
         key(3, "f")
         key(right, "", .option)
         require(overlay.selection?.rect == overlay.extent, "growing stops at the extent")
+        overlay.dismiss()
+
+        // P cycles the ratio lock: Free, 1:1, 4:3, 3:2, 16:9, then Free; it lasts one capture and shows in the status line.
+        open()
+        func lock() -> String { overlay.ratioLock?.label ?? "free" }
+        var cycle: [String] = []
+        for _ in 0..<5 { key(35, "p"); cycle.append(lock()) }
+        require(cycle == ["1:1", "4:3", "3:2", "16:9", "free"], "P cycles the ratio lock: \(cycle)")
+        key(35, "p"); key(35, "p")
+        func same(_ rect: CGRect?, _ expected: CGRect) -> Bool {
+            guard let rect else { return false }
+            return near(rect.minX, expected.minX) && near(rect.minY, expected.minY) && near(rect.width, expected.width) && near(rect.height, expected.height)
+        }
+        func ratio() -> CGFloat { overlay.selection!.rect.width / overlay.selection!.rect.height }
+        mouse(.leftMouseDown, CGPoint(x: 1000, y: 600))
+        mouse(.leftMouseDragged, CGPoint(x: 1800, y: 900))
+        require(same(overlay.view.overlays.ghost, CGRect(x: 1000, y: 600, width: 800, height: 600)), "the ghost of a fresh drag keeps the lock while dragging: \(String(describing: overlay.view.overlays.ghost))")
+        mouse(.leftMouseUp, CGPoint(x: 1800, y: 900))
+        require(same(overlay.selection?.rect, CGRect(x: 1000, y: 600, width: 800, height: 600)), "a fresh drag with 4:3 locked is 4:3: \(String(describing: overlay.selection?.rect))")
+        require(texts(in: overlay.chrome.status).contains("Exact, Ratio 4:3"), "the status line reads Ratio 4:3: \(texts(in: overlay.chrome.status))")
+        require(overlay.selection?.fits.count == 1, "a locked ratio takes no snap fits")
+        drag(from: CGPoint(x: 300, y: 1200), by: CGPoint(x: 300, y: 800))
+        require(same(overlay.selection?.rect, CGRect(x: 300, y: 1200, width: 300, height: 400)), "a taller fresh drag, cut off by the extent, is 3:4: \(String(describing: overlay.selection?.rect))")
+        drag(from: CGPoint(x: 1000, y: 600), by: CGPoint(x: 800, y: 300))
+        drag(from: CGPoint(x: 1800, y: 1200), by: CGPoint(x: 200, y: 0))
+        require(same(overlay.selection?.rect, CGRect(x: 1000, y: 600, width: 1000, height: 750)), "a corner handle drag keeps the locked ratio, the opposite corner fixed: \(String(describing: overlay.selection?.rect))")
+        drag(from: CGPoint(x: 2000, y: 975), by: CGPoint(x: -400, y: 0))
+        require(same(overlay.selection?.rect, CGRect(x: 1000, y: 750, width: 600, height: 450)), "a side handle drag keeps the ratio, growing the other side about the center: \(String(describing: overlay.selection?.rect))")
+        key(35, "p"); key(35, "p"); key(35, "p")
+        require(lock() == "free" && !texts(in: overlay.chrome.status).contains { $0.contains("Ratio") }, "P back to Free drops the status text")
+        overlay.dismiss()
+        require(overlay.ratioLock == nil, "the lock does not outlive the capture")
+
+        // Shift on a handle keeps the ratio the selection had when the drag started.
+        open()
+        key(14, "e")
+        let corner = CGPoint(x: a.maxX, y: a.maxY)
+        drag(from: corner, by: CGPoint(x: 100, y: 0), .shift)
+        require(same(overlay.selection?.rect, CGRect(x: a.minX, y: a.minY, width: 500, height: 250)), "Shift on a corner handle keeps the start ratio: \(String(describing: overlay.selection?.rect))")
+        drag(from: CGPoint(x: 800, y: 550), by: CGPoint(x: 0, y: 100), .shift)
+        require(same(overlay.selection?.rect, CGRect(x: a.minX, y: a.minY, width: 700, height: 350)), "a vertical Shift drag of a corner keeps the ratio: \(String(describing: overlay.selection?.rect))")
+        drag(from: CGPoint(x: 1000, y: 475), by: CGPoint(x: 100, y: 0), .option)
+        require(overlay.selection?.rect.width == 800 && overlay.selection?.rect.height == 350, "without Shift a side handle changes only its side")
+        overlay.dismiss()
+
+        // Shift while moving locks the move to the axis with the larger travel; Space-drag too.
+        open()
+        key(14, "e")
+        drag(from: insideA, by: CGPoint(x: 60, y: 20), .shift)
+        require(overlay.selection?.rect == a.offsetBy(dx: 60, dy: 0), "Shift-moving mostly right moves horizontally only: \(String(describing: overlay.selection?.rect))")
+        drag(from: CGPoint(x: 400, y: 400), by: CGPoint(x: 20, y: 60), .shift)
+        require(overlay.selection?.rect == a.offsetBy(dx: 60, dy: 60), "Shift-moving mostly down moves vertically only: \(String(describing: overlay.selection?.rect))")
+        drag(from: CGPoint(x: 400, y: 460), by: CGPoint(x: 20, y: 60))
+        require(overlay.selection?.rect == a.offsetBy(dx: 80, dy: 120), "without Shift the move is free")
+        overlay.dismiss()
+        open()
+        mouse(.leftMouseDown, CGPoint(x: 1000, y: 600))
+        mouse(.leftMouseDragged, CGPoint(x: 1200, y: 800))
+        overlay.window.sendEvent(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: overlay.window.windowNumber, context: nil, characters: " ", charactersIgnoringModifiers: " ", isARepeat: false, keyCode: 49)!)
+        mouse(.leftMouseDragged, CGPoint(x: 1300, y: 830), .shift)
+        mouse(.leftMouseUp, CGPoint(x: 1300, y: 800), .shift)
+        overlay.window.sendEvent(NSEvent.keyEvent(with: .keyUp, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: overlay.window.windowNumber, context: nil, characters: " ", charactersIgnoringModifiers: " ", isARepeat: false, keyCode: 49)!)
+        require(overlay.selection?.rect == CGRect(x: 1100, y: 600, width: 200, height: 200), "Shift Space-drag moves the drawn rectangle along one axis: \(String(describing: overlay.selection?.rect))")
+        overlay.dismiss()
+
+        // Option-Command-arrow shrinks one side of a released drag selection.
+        open()
+        drag(from: CGPoint(x: 1000, y: 600), by: CGPoint(x: 400, y: 300))
+        let drawn = overlay.selection!.rect
+        key(right, "", [.option, .command])
+        require(overlay.selection?.rect == CGRect(x: drawn.minX, y: drawn.minY, width: drawn.width - scale, height: drawn.height), "Option-Command-Right shrinks a drawn selection's right side")
         overlay.dismiss()
 
         // Cmd-Shift-S: Save As writes where the panel (here the seam) says, with the usual name offered, and closes the overlay.

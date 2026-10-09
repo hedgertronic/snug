@@ -82,4 +82,34 @@ struct AreaSelectionTests {
         #expect(AreaSelection.preview(preview, stillFits: drag.offsetBy(dx: 2, dy: 1), scale: 1))
         #expect(!AreaSelection.preview(preview, stillFits: drag.offsetBy(dx: 80, dy: 0), scale: 1))
     }
+
+    @Test func ratioResizeKeepsTheRatioAndStopsAtTheExtent() {
+        var selection = AreaSelection(extent: extent, exact: CGRect(x: 100, y: 100, width: 200, height: 100))
+        selection.resize(.bottomRight, to: CGPoint(x: 400, y: 150), ratio: 2)
+        #expect(selection.rect == CGRect(x: 100, y: 100, width: 300, height: 150))
+        selection.resize(.topLeft, to: CGPoint(x: -500, y: -500), ratio: 2)
+        #expect(selection.rect == CGRect(x: 0, y: 100 + 150 - 200, width: 400, height: 200))
+        selection.resize(.right, to: CGPoint(x: 900, y: 0), ratio: 2)
+        #expect(selection.rect.width == 900 && selection.rect.height == 450 && selection.rect.minX == 0 && selection.rect.maxY <= 800)
+    }
+
+    @Test func ratioLockCyclesThroughFreeAndFlipsForPortrait() {
+        var lock: RatioLock?
+        var labels: [String] = []
+        for _ in 0..<5 { lock = RatioLock.next(after: lock); labels.append(lock?.label ?? "free") }
+        #expect(labels == ["1:1", "4:3", "3:2", "16:9", "free"])
+        #expect(RatioLock.fourThree.ratio(portrait: false) == 4.0 / 3 && RatioLock.fourThree.ratio(portrait: true) == 0.75)
+        var drag = AreaDrag(extent: extent, origin: CGPoint(x: 500, y: 100))
+        drag.update(to: CGPoint(x: 560, y: 500), moving: false, ratio: .fourThree)
+        #expect(drag.rect == CGRect(x: 500, y: 100, width: 300, height: 400))
+    }
+
+    @Test func axisLockedMoveStaysOnTheLargerTravel() {
+        var drag = AreaDrag(extent: extent, origin: CGPoint(x: 100, y: 100))
+        drag.update(to: CGPoint(x: 300, y: 200), moving: false)
+        drag.update(to: CGPoint(x: 340, y: 230), moving: true, axisLocked: true)
+        #expect(drag.rect == CGRect(x: 140, y: 100, width: 200, height: 100))
+        drag.update(to: CGPoint(x: 345, y: 330), moving: true, axisLocked: true)
+        #expect(drag.rect == CGRect(x: 100, y: 230, width: 200, height: 100))
+    }
 }

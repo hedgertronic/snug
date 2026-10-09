@@ -111,6 +111,20 @@ extension DebugRun {
         mouse(.leftMouseDragged, CGPoint(x: bottomRight.x - 30, y: bottomRight.y - 30), .option)
         mouse(.leftMouseUp, CGPoint(x: bottomRight.x - 30, y: bottomRight.y - 30), .option)
         try snapshot("selection-corners-unequal")
+        mouse(.mouseMoved, overlay.cornerRadii(of: rounded).dot(of: .topLeft, in: rounded, minimumInset: 8 * overlay.scale))
+        try snapshot("selection-corner-chip-top-left")
+        mouse(.mouseMoved, overlay.cornerRadii(of: rounded).dot(of: .bottomRight, in: rounded, minimumInset: 8 * overlay.scale))
+        try snapshot("selection-corner-chip-bottom-right")
+        overlay.dismiss()
+
+        open()
+        key(35, "p")
+        key(35, "p")
+        mouse(.leftMouseDown, CGPoint(x: 900, y: 500))
+        mouse(.leftMouseDragged, CGPoint(x: 1700, y: 800))
+        try snapshot("ratio-lock-drag")
+        mouse(.leftMouseUp, CGPoint(x: 1700, y: 800))
+        try snapshot("ratio-lock-released")
         overlay.dismiss()
 
         // Up and Down outlines around a rounded hover.

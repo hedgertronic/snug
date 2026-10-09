@@ -35,8 +35,8 @@ final class OverlayController {
     private enum Interaction {
         case none
         case drawing(AreaDrag)
-        case resizing(Handle)
-        case moving(last: CGPoint, moved: Bool)
+        case resizing(Handle, start: CGRect)
+        case moving(last: CGPoint, origin: CGPoint, moved: Bool)
         case rounding(Handle, start: CGPoint, from: CornerRadii)
     }
 
@@ -99,8 +99,11 @@ final class OverlayController {
     var radiusReadout: String?
     /// The corner a dot drag last changed; `=` copies its radius to the other corners.
     var lastEditedCorner: Handle?
-    /// The chip beside the size badge that applies one radius to all four corners.
-    let applyChip = BarButton("Apply to all", key: "=", height: 23, size: 11)
+    /// The corner whose dot the pointer is on (or whose chip it is heading to), and its "All corners" chip.
+    var hoveredCorner: Handle?
+    let cornerChip = BarButton("All corners", key: "=", height: 23, size: 11)
+    /// The aspect ratio P locks for new drags and handle drags; nil is free. It lasts one capture.
+    var ratioLock: RatioLock?
     /// Shift is down: with a selection open, the element under the pointer is outlined for a union.
     var shiftHeld = false
     /// Save As: the file to write, given the usual name in the save folder; nil cancels. Debug runs answer without a panel.
@@ -160,10 +163,10 @@ final class OverlayController {
         view.liveText.delegate = self
         window.contentView = view
         chrome.all.forEach(view.addSubview)
-        applyChip.isHidden = true
-        applyChip.style(fill: NSColor(srgbRed: 20 / 255, green: 20 / 255, blue: 22 / 255, alpha: 0.86), text: .white)
-        applyChip.onClick = { [unowned self] in applyRadiusToAll() }
-        view.addSubview(applyChip)
+        cornerChip.isHidden = true
+        cornerChip.style(fill: NSColor(srgbRed: 20 / 255, green: 20 / 255, blue: 22 / 255, alpha: 0.86), text: .white)
+        cornerChip.onClick = { [unowned self] in applyRadiusToAll() }
+        view.addSubview(cornerChip)
         chrome.bottomBar.onMode = { [unowned self] in setMode($0) }
         chrome.bottomBar.onToggle = { [unowned self] in
             if $0 == Pref.snap { return toggleSnap() }
@@ -268,6 +271,8 @@ final class OverlayController {
         radiusReadoutTask?.cancel()
         radiusReadout = nil
         lastEditedCorner = nil
+        hoveredCorner = nil
+        ratioLock = nil
         selection = nil
         interaction = .none
         spaceHeld = false
@@ -305,6 +310,7 @@ final class OverlayController {
         optionHeld = event.modifierFlags.contains(.option)
         shiftHeld = event.modifierFlags.contains(.shift)
         pointer = view.pixelPoint(event)
+        updateHoveredCorner()
         updateHover(pixel: pointer)
         updateGuides()
         updateCursor()
@@ -317,7 +323,7 @@ final class OverlayController {
         guard window.isVisible else { return }
         let cursor: NSCursor
         switch interaction {
-        case .resizing(let handle): cursor = Self.resizeCursors[handle]!
+        case .resizing(let handle, _): cursor = Self.resizeCursors[handle]!
         case .moving: cursor = .closedHand
         case .rounding: cursor = .pointingHand
         case .drawing: cursor = .crosshair
@@ -362,6 +368,7 @@ final class OverlayController {
         guard mode == .capture else { return }
         let point = view.pixelPoint(event)
         pointer = point
+        if cornerDot(at: point) == nil { hoveredCorner = nil }
         hadSelection = selection != nil
         shiftHeld = event.modifierFlags.contains(.shift)
         if let selection {
@@ -370,7 +377,7 @@ final class OverlayController {
                 return updateCursor()
             }
             if let handle = selection.handle(at: point, tolerance: 8 * scale) {
-                interaction = .resizing(handle)
+                interaction = .resizing(handle, start: selection.rect)
                 edgeFrames = []
                 edgeFramesTask?.cancel()
                 edgeFramesTask = Task { edgeFrames = try await snapFrames(around: selection.rect) }
@@ -378,10 +385,10 @@ final class OverlayController {
             }
             if shiftHeld {
                 updateHover(pixel: point)
-                if let hovered = hoverRect { return growSelection(toInclude: hovered) }
+                if let hovered = hoverRect, !selection.rect.contains(point) { return growSelection(toInclude: hovered) }
             }
             if selection.rect.contains(point) {
-                interaction = .moving(last: point, moved: false)
+                interaction = .moving(last: point, origin: point, moved: false)
                 return updateCursor()
             }
         } else if shiftHeld {
@@ -404,18 +411,23 @@ final class OverlayController {
         case .none:
             break
         case .drawing(var drag):
-            drag.update(to: point, moving: spaceHeld)
+            drag.update(to: point, moving: spaceHeld, axisLocked: event.modifierFlags.contains(.shift), ratio: ratioLock)
             interaction = .drawing(drag)
             scheduleSnap(for: drag.rect)
-        case .resizing(let handle):
+        case .resizing(let handle, let start):
             let old = selection!.rect
-            snapResize(handle, to: point, exact: event.modifierFlags.contains(.option))
+            let ratio = ratioLock?.ratio(portrait: start.height > start.width) ?? (event.modifierFlags.contains(.shift) ? start.width / start.height : nil)
+            snapResize(handle, to: point, exact: event.modifierFlags.contains(.option), ratio: ratio)
             carryRadii(from: old)
-        case .moving(let last, _):
+        case .moving(let last, let origin, _):
             let old = selection!.rect
-            selection?.move(by: CGPoint(x: point.x - last.x, y: point.y - last.y))
+            var target = point
+            if event.modifierFlags.contains(.shift) {
+                if abs(point.x - origin.x) >= abs(point.y - origin.y) { target.y = origin.y } else { target.x = origin.x }
+            }
+            selection?.move(by: CGPoint(x: target.x - last.x, y: target.y - last.y))
             carryRadii(from: old)
-            interaction = .moving(last: point, moved: true)
+            interaction = .moving(last: target, origin: origin, moved: true)
         case .rounding(let corner, let start, let from):
             let rect = selection!.rect
             let delta = CornerRadii.inwardDistance(of: CGPoint(x: point.x - start.x, y: point.y - start.y), from: corner)
@@ -429,12 +441,12 @@ final class OverlayController {
     }
 
     /// Moves the sides a handle controls to the pointer. Each snaps to the nearest pixel edge or accessibility edge
-    /// within the band, unless snap is off or Option is held.
-    private func snapResize(_ handle: Handle, to point: CGPoint, exact: Bool) {
+    /// within the band, unless snap is off, Option is held, or a `ratio` is kept (snapping fights a fixed ratio).
+    private func snapResize(_ handle: Handle, to point: CGPoint, exact: Bool, ratio: CGFloat?) {
         guard let image, let rect = selection?.rect else { return }
         var target = point
         var snapped = (x: false, y: false)
-        if snapEnabled, !exact {
+        if snapEnabled, !exact, ratio == nil {
             for vertical in [true, false] where vertical ? handle.movesLeft || handle.movesRight : handle.movesTop || handle.movesBottom {
                 let value = vertical ? point.x : point.y
                 let band = SmartSnap.band(side: vertical ? rect.width : rect.height, scale: scale)
@@ -444,7 +456,7 @@ final class OverlayController {
                 if vertical { target.x = edge; snapped.x = true } else { target.y = edge; snapped.y = true }
             }
         }
-        selection?.resize(handle, to: target)
+        selection?.resize(handle, to: target, ratio: ratio)
         let resized = selection!.rect
         snappedEdges = []
         if snapped.x {
@@ -466,10 +478,13 @@ final class OverlayController {
         switch finished {
         case .none, .resizing, .rounding:
             break
-        case .moving(_, let moved):
-            if !moved { copy() }
+        case .moving(_, _, let moved):
+            if !moved {
+                // Shift-click inside the selection still grows it to the element under the pointer; Shift-drag there moves it.
+                if event.modifierFlags.contains(.shift), let hovered = hoverRect { growSelection(toInclude: hovered) } else { copy() }
+            }
         case .drawing(var drag):
-            drag.update(to: point, moving: false)
+            drag.update(to: point, moving: false, ratio: ratioLock)
             let rect = drag.rect
             if rect.width < AreaSelection.minimumSize || rect.height < AreaSelection.minimumSize {
                 cancelWork()
@@ -495,7 +510,7 @@ final class OverlayController {
     /// Waits for a pause, then previews the snap. Keeps the previous preview while the drag stays in its search band.
     private func scheduleSnap(for rough: CGRect) {
         snapTask?.cancel()
-        guard snapEnabled, !bypassSnap, let image else {
+        guard snapEnabled, !bypassSnap, ratioLock == nil, let image else {
             snapPreview = nil
             snapSuggestions = []
             return
@@ -599,6 +614,7 @@ final class OverlayController {
             if hovering { clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true, saveAs: true) } else { save(saveAs: true) }
         case (_, false, "e") where hovering && hoverRect != nil: openAsSelection(hoverRect!)
         case (_, false, "o"): defaults.set(!defaults.bool(forKey: Pref.roundCorners), forKey: Pref.roundCorners)
+        case (_, false, "p"): ratioLock = RatioLock.next(after: ratioLock)
         case (_, false, "="): applyRadiusToAll()
         case (123...126, _, _) where option && !hovering: nudgeSide(keyCode: event.keyCode, outward: !command, by: step)
         case (_, true, "s") where hovering: clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true)
@@ -808,7 +824,7 @@ final class OverlayController {
         for rect in [shown, overlays.hover, overlays.upHint, overlays.downHint] { measureRadius(rect.flatMap(container)) }
         overlays.radii = shown.map(cornerRadii) ?? .zero
         overlays.hoverRadii = overlays.hover.map(cornerRadii) ?? .zero
-        applyChip.isHidden = !showsApplyChip
+        layoutCornerChip()
         overlays.upHintRadii = overlays.upHint.map(cornerRadii) ?? .zero
         overlays.downHintRadii = overlays.downHint.map(cornerRadii) ?? .zero
         if let rect = selection?.rect, style != .tight { overlays.styleFrame = style.frame(around: rect, in: extent, scale: scale) }

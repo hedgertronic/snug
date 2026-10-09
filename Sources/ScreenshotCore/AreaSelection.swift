@@ -21,6 +21,8 @@ public struct AreaDrag: Sendable {
     public let extent: CGRect
     public private(set) var origin: CGPoint
     public private(set) var current: CGPoint
+    /// Where `current` was when the rectangle started moving, for locking the move to one axis.
+    private var moveStart: CGPoint?
 
     /// Starts a drag at a point inside the extent.
     public init(extent: CGRect, origin: CGPoint) {
@@ -35,14 +37,32 @@ public struct AreaDrag: Sendable {
                width: abs(current.x - origin.x), height: abs(current.y - origin.y))
     }
 
-    /// Follows the pointer. While `moving`, the whole rectangle translates instead of resizing.
-    public mutating func update(to point: CGPoint, moving: Bool) {
+    /// Follows the pointer. While `moving`, the whole rectangle translates instead of resizing, along only the axis with the larger
+    /// travel since the move began when `axisLocked`. A resize with a `ratio` keeps it, portrait when the drag is taller than wide.
+    public mutating func update(to point: CGPoint, moving: Bool, axisLocked: Bool = false, ratio: RatioLock? = nil) {
         let clamped = CGPoint(x: min(max(point.x, extent.minX), extent.maxX),
                               y: min(max(point.y, extent.minY), extent.maxY))
-        guard moving else { current = clamped; return }
+        guard moving else {
+            moveStart = nil
+            guard let ratio else { current = clamped; return }
+            let dx = clamped.x - origin.x, dy = clamped.y - origin.y
+            let r = ratio.ratio(portrait: abs(dy) > abs(dx))
+            let sx: CGFloat = dx >= 0 ? 1 : -1, sy: CGFloat = dy >= 0 ? 1 : -1
+            let availableWidth = sx > 0 ? extent.maxX - origin.x : origin.x - extent.minX
+            let availableHeight = sy > 0 ? extent.maxY - origin.y : origin.y - extent.minY
+            let width = min(max(abs(dx), abs(dy) * r), availableWidth, availableHeight * r)
+            current = CGPoint(x: origin.x + sx * width, y: origin.y + sy * width / r)
+            return
+        }
+        let start = moveStart ?? current
+        moveStart = start
+        var target = point
+        if axisLocked {
+            if abs(point.x - start.x) >= abs(point.y - start.y) { target.y = start.y } else { target.x = start.x }
+        }
         let r = rect
-        let dx = min(max(point.x - current.x, extent.minX - r.minX), extent.maxX - r.maxX)
-        let dy = min(max(point.y - current.y, extent.minY - r.minY), extent.maxY - r.maxY)
+        let dx = min(max(target.x - current.x, extent.minX - r.minX), extent.maxX - r.maxX)
+        let dy = min(max(target.y - current.y, extent.minY - r.minY), extent.maxY - r.maxY)
         origin.x += dx; origin.y += dy
         current.x += dx; current.y += dy
     }
@@ -114,10 +134,38 @@ public struct AreaSelection: Sendable {
     }
 
     /// Moves the edges a handle controls to the point, keeping the minimum size inside the extent.
-    public mutating func resize(_ handle: Handle, to point: CGPoint) {
-        var minX = rect.minX, maxX = rect.maxX, minY = rect.minY, maxY = rect.maxY
+    /// With a `ratio` (width over height) the opposite corner or side holds still and the rectangle keeps that aspect ratio:
+    /// a corner follows the pointer's larger travel, a side sets one dimension and the other grows about the rectangle's center.
+    public mutating func resize(_ handle: Handle, to point: CGPoint, ratio: CGFloat? = nil) {
         let x = min(max(point.x, extent.minX), extent.maxX)
         let y = min(max(point.y, extent.minY), extent.maxY)
+        if let ratio {
+            let sx: CGFloat = handle.movesRight ? 1 : -1, sy: CGFloat = handle.movesBottom ? 1 : -1
+            let minimumWidth = max(Self.minimumSize, Self.minimumSize * ratio)
+            if (handle.movesLeft || handle.movesRight) && (handle.movesTop || handle.movesBottom) {
+                let anchor = CGPoint(x: handle.movesLeft ? rect.maxX : rect.minX, y: handle.movesTop ? rect.maxY : rect.minY)
+                let availableWidth = sx > 0 ? extent.maxX - anchor.x : anchor.x - extent.minX
+                let availableHeight = sy > 0 ? extent.maxY - anchor.y : anchor.y - extent.minY
+                let wanted = max(max((x - anchor.x) * sx, 0), max((y - anchor.y) * sy, 0) * ratio, minimumWidth)
+                let width = min(wanted, availableWidth, availableHeight * ratio)
+                let height = width / ratio
+                edit(CGRect(x: sx > 0 ? anchor.x : anchor.x - width, y: sy > 0 ? anchor.y : anchor.y - height, width: width, height: height))
+            } else if handle.movesLeft || handle.movesRight {
+                let available = sx > 0 ? extent.maxX - rect.minX : rect.maxX - extent.minX
+                let width = min(max(sx > 0 ? x - rect.minX : rect.maxX - x, minimumWidth), available, extent.height * ratio)
+                let height = width / ratio
+                edit(CGRect(x: sx > 0 ? rect.minX : rect.maxX - width, y: min(max(rect.midY - height / 2, extent.minY), extent.maxY - height),
+                            width: width, height: height))
+            } else {
+                let available = sy > 0 ? extent.maxY - rect.minY : rect.maxY - extent.minY
+                let height = min(max(sy > 0 ? y - rect.minY : rect.maxY - y, minimumWidth / ratio), available, extent.width / ratio)
+                let width = height * ratio
+                edit(CGRect(x: min(max(rect.midX - width / 2, extent.minX), extent.maxX - width), y: sy > 0 ? rect.minY : rect.maxY - height,
+                            width: width, height: height))
+            }
+            return
+        }
+        var minX = rect.minX, maxX = rect.maxX, minY = rect.minY, maxY = rect.maxY
         if handle.movesLeft { minX = min(x, maxX - Self.minimumSize) }
         if handle.movesRight { maxX = max(x, minX + Self.minimumSize) }
         if handle.movesTop { minY = min(y, maxY - Self.minimumSize) }
