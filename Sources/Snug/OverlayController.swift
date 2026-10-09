@@ -712,7 +712,8 @@ final class OverlayController {
     /// own color starts at each corner.
     private func measureRadius(_ rect: CGRect?) {
         guard let rect, let image, radii[rect] == nil, radiusTasks[rect] == nil else { return }
-        let isWindow = windows.contains(rect)
+        // A frozen target (the Dock) is not a window with its own opaque color; its corners are fitted to its outline like any region's.
+        let isWindow = windows.firstIndex(of: rect).map { !windowFrozen.indices.contains($0) || !windowFrozen[$0] } ?? false
         radiusTasks[rect] = Task {
             let radius = await Task.detached { isWindow ? windowCornerRadius(in: image, rect: rect) : cornerRadius(in: image, rect: rect) }.value
             if self.image === image {

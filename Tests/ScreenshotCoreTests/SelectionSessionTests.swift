@@ -191,4 +191,19 @@ struct SelectionSessionTests {
         session.shrink()
         #expect(session.selected?.id == "board")
     }
+
+    @Test func theSmallestAccessibilityFrameAtThePointerIsHoverableEvenWhenAnotherLookupScoredALargerOneHigher() {
+        // From the design canvas: a row group found as the innermost frame of one lookup (2.0) and the link inside it found one level up
+        // from another lookup (1.99). Up from the link reaches the row, and the pointer over the link must pick the link directly.
+        let row = Candidate(id: "row", label: "Group", bounds: CGRect(x: 372, y: 656, width: 2280, height: 84), score: 2.0, kind: .element)
+        let link = Candidate(id: "link", label: "Link", bounds: CGRect(x: 420, y: 672, width: 122, height: 52), score: 1.99, kind: .element)
+        let page = Candidate(id: "page", label: "Group", bounds: CGRect(x: 168, y: 248, width: 2484, height: 1694), score: 1.99, kind: .element)
+        var session = SelectionSession(candidates: [row, link, page], extent: CGRect(x: 0, y: 0, width: 3024, height: 1964), anchor: CGPoint(x: 480, y: 700))
+        #expect(session.selected?.id == "link")
+        #expect(session.parents.map(\.id).prefix(2) == ["row", "page"])
+        session.hover(at: CGPoint(x: 1500, y: 700))
+        #expect(session.selected?.id == "row")
+        session.hover(at: CGPoint(x: 1500, y: 900))
+        #expect(session.selected?.id == "page")
+    }
 }

@@ -178,11 +178,10 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 if text { overlay.setMode(.text) }
                 let scale = overlay.scale
                 var windows = await DisplayCapture.windows(on: id, pixelScale: scale)
-                // The Dock's AXList union is a rough drag: the panel is the snap's best fit. The union was measured 74 px past the
-                // panel's bottom, beyond the default band.
+                // The Dock's AXList union is the magnified Dock, tens of points past the panel; the panel's rim in the frozen image gives its edges.
                 for index in windows.indices where windows[index].name == "Dock" && windows[index].frozen {
                     Pref.logHoverLine("dock union \(windows[index].rect) scale \(scale) image \(image.width)x\(image.height)")
-                    windows[index].rect = try await SmartSnap().suggest(in: image, roughBounds: windows[index].rect, scale: scale, cap: 96).first?.bounds ?? windows[index].rect
+                    windows[index].rect = DockTiles.panel(in: image, near: windows[index].rect, scale: scale) ?? windows[index].rect
                     Pref.logHoverLine("dock panel \(windows[index].rect)")
                     // Live item frames are magnified, so the tiles come from the frozen pixels; titles label them when the counts match.
                     let tiles = DockTiles.tiles(in: image, panel: windows[index].rect, scale: scale)
