@@ -92,6 +92,23 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
                 view.liveText.analysis = analysis
                 text.reading = nil
                 refresh()
+                warmVision(image)
+            } catch {
+                report(error)
+            }
+        }
+    }
+
+    /// The first Text mode of a newly built binary runs Tab's accurate OCR and barcode requests on the frozen image at utility priority,
+    /// so Vision compiles its models on device (35-90 s) while the user selects, not in the first Shift-Return or Tab. Text mode, not
+    /// launch: the process keeps 35-75 MiB after the requests are released. `defaults` keeps the binary's modification date.
+    private func warmVision(_ image: CGImage) {
+        let built = try! Bundle.main.executableURL!.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate!
+        guard visionWarm == nil, defaults.object(forKey: Pref.visionWarmedBuild) as? Date != built else { return }
+        visionWarm = Task(priority: .utility) {
+            do {
+                _ = try await Self.findItems(in: image)
+                defaults.set(built, forKey: Pref.visionWarmedBuild)
             } catch {
                 report(error)
             }

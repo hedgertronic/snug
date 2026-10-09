@@ -85,6 +85,10 @@ extension DebugRun {
         try await waitFor("the Live Text analysis attaches") { liveText.analysis != nil }
         print("Live Text analysis: \(String(format: "%.1f", overlay.lastLiveTextMilliseconds)) ms (first in this process)")
         require(overlay.chrome.reading.isHidden, "the Reading text... pill goes away when the analysis attaches")
+        let built = try Bundle.main.executableURL!.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate!
+        require(overlay.visionWarm != nil && overlay.defaults.object(forKey: Pref.visionWarmedBuild) == nil, "the first Text mode of a new binary starts the Vision warm-up")
+        await overlay.visionWarm!.value
+        require(overlay.defaults.object(forKey: Pref.visionWarmedBuild) as? Date == built, "the warm-up records the binary's date when it finishes")
         require(liveText.frame == overlay.view.bounds && liveText.superview === overlay.view, "Live Text covers the frozen image exactly")
         require(liveText.isSupplementaryInterfaceHidden, "no Live Text button sits in the corner")
         require(liveText.text.contains("Product name") && liveText.text.contains("Billing address"), "the analysis reads the screen's text")
@@ -105,6 +109,10 @@ extension DebugRun {
         require(overlay.window.isVisible && pasteboard.string(forType: .string) == nil, "Return with nothing selected copies nothing and keeps the overlay open")
         overlay.dismiss()
         require(liveText.analysis == nil, "closing drops the analysis")
+        overlay.visionWarm = nil
+        try await open()
+        require(overlay.visionWarm == nil, "with this binary's date stored, Text mode does not warm Vision again")
+        overlay.dismiss()
 
         // Every drag and click case runs twice: with the press reaching Live Text at once, and held back as real pointer input is.
         for held in [false, true] {
@@ -479,7 +487,10 @@ extension DebugRun {
     }
 
     /// The first accurate OCR or barcode request of a newly built binary compiles Vision's models into ~/Library/Caches/Snug (35 s idle,
-    /// over a minute under load). Runs both before the 120 s watchdog starts, so a slow compile is not killed halfway; fails after 600 s.
+    /// over a minute under load). Runs Text mode's warm-up (Tab's requests) on `image`, then on the found-items fixture, whose QR code
+    /// reaches the barcode decoder, before the 120 s watchdog starts, so a slow compile is not killed halfway; fails after 600 s. Prints
+    /// the footprint before, the peak (sampled every 100 ms) while the warm-up's requests and handler are alive, and right after and 2 s
+    /// and 10 s after they are released.
     static func warmVision(_ image: CGImage) async throws {
         FileHandle.standardError.write(Data("Warming Vision's accurate OCR and barcode models...\n".utf8))
         let watchdog = Task {
@@ -489,9 +500,24 @@ extension DebugRun {
         }
         defer { watchdog.cancel() }
         let (start, before) = (ContinuousClock.now, footprint())
-        _ = try await OverlayController.recognize(image, crop: CGRect(x: 0, y: 0, width: image.width, height: image.height))
-        _ = try await ImageRequestHandler(image).perform(DetectBarcodesRequest())
-        print("Vision warm-up: \(String(format: "%.1f", start.duration(to: .now).milliseconds)) ms, footprint \(before) before, \(footprint()) after")
+        let poll = Task {
+            var peak = 0.0
+            while !Task.isCancelled {
+                peak = max(peak, Double(footprint().split(separator: " ")[0])!)
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            return peak
+        }
+        _ = try await OverlayController.findItems(in: image)
+        let (warmed, released) = (ContinuousClock.now, footprint())
+        poll.cancel()
+        let peak = max(await poll.value, Double(released.split(separator: " ")[0])!)
+        try await Task.sleep(for: .seconds(2))
+        let settled = footprint()
+        try await Task.sleep(for: .seconds(8))
+        print("Vision warm-up: \(String(format: "%.1f", start.duration(to: warmed).milliseconds)) ms, footprint \(before) before, "
+              + "\(String(format: "%.1f", peak)) MiB peak, \(released) after, \(settled) 2 s after, \(footprint()) 10 s after")
+        _ = try await OverlayController.findItems(in: itemsFixture(width: image.width, height: image.height))
     }
 
     /// A white page of `width` x `height` pixels with a link, an email address and a phone number in large text from the top left, and a
