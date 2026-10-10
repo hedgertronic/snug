@@ -83,16 +83,17 @@ public struct CornerRadii: Equatable, Sendable {
         return result
     }
 
-    /// The corners of `crop` within 2 px of the same corner of `window` take `radius`; the others keep their value.
-    /// Both rectangles are in the same image's pixels, top-left origin.
+    /// The corners of `crop` that lie outside the rounded corner of `window` (its `radius`), where a square corner would show what lies
+    /// outside the window: those within 2 px of the window's corner take `radius`, and those further inside take `radius` less their
+    /// inset beyond 2 px (the larger of the two sides), which keeps the corner inside the window's arc (concentric when the insets match).
+    /// The others keep their value. Both rectangles are in the same image's pixels, top-left origin.
     public func replacingCorners(sharedWith window: CGRect, in crop: CGRect, with radius: CGFloat) -> CornerRadii {
-        let left = abs(crop.minX - window.minX) <= 2, right = abs(crop.maxX - window.maxX) <= 2
-        let top = abs(crop.minY - window.minY) <= 2, bottom = abs(crop.maxY - window.maxY) <= 2
+        let left = crop.minX - window.minX, right = window.maxX - crop.maxX, top = crop.minY - window.minY, bottom = window.maxY - crop.maxY
         var result = self
-        if left && top { result.topLeft = radius }
-        if right && top { result.topRight = radius }
-        if left && bottom { result.bottomLeft = radius }
-        if right && bottom { result.bottomRight = radius }
+        for (corner, x, y) in [(Handle.topLeft, left, top), (.topRight, right, top), (.bottomLeft, left, bottom), (.bottomRight, right, bottom)]
+        where x >= -2 && y >= -2 && x < radius && y < radius && hypot(radius - x, radius - y) > radius {
+            result[corner] = radius - max(0, max(x, y) - 2)
+        }
         return result
     }
 
