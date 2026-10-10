@@ -341,6 +341,19 @@ struct SystemSurfaceHoverTests {
             session.hover(at: CGPoint(x: 2620, y: button.bounds.midY))
             #expect(session.selected?.id == window.id, "the padding left of the picture hovers the window behind, not \(String(describing: session.selected))")
         }
+        // The strip on the left (the default with the Dock at the bottom): the same capture mirrored at the screen's left edge, whose
+        // pictures' right edges sit at x 3024 - 2732 = 292.
+        context.clear(CGRect(x: 0, y: 0, width: 3024, height: 1964))
+        context.translateBy(x: 3024, y: 0)
+        context.scaleBy(x: -1, y: 1)
+        context.draw(strip, in: CGRect(x: 2586, y: 1964 - 378 - 1274, width: 406, height: 1274))
+        let mirrored = try #require(context.makeImage())
+        for index in 0..<3 {
+            let button = CGRect(x: 32, y: (378 + 360.46 * Double(index)).rounded(), width: 403, height: 301)
+            let thumbnail = StageManager.thumbnail(in: mirrored, button: button, scale: 2)
+            #expect(abs(thumbnail.maxX - 292) <= 2 && thumbnail.minX == button.minX && thumbnail.minY == button.minY && thumbnail.maxY == button.maxY,
+                    "mirrored button \(button), found \(thumbnail)")
+        }
         // Frames from any other app stay as they are.
         let other = Candidate(id: "ax", label: "Button", bounds: CGRect(x: 2589, y: 378, width: 403, height: 301), score: 2, kind: .element)
         #expect(StageManager.visibleThumbnails([other], frames: [AXFrame(roleDescription: "application", rect: .zero, role: "AXApplication", title: "Finder")], in: image, scale: 2) == [other])

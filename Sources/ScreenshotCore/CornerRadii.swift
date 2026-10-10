@@ -91,7 +91,7 @@ public struct CornerRadii: Equatable, Sendable {
         let left = crop.minX - window.minX, right = window.maxX - crop.maxX, top = crop.minY - window.minY, bottom = window.maxY - crop.maxY
         var result = self
         for (corner, x, y) in [(Handle.topLeft, left, top), (.topRight, right, top), (.bottomLeft, left, bottom), (.bottomRight, right, bottom)]
-        where x >= -2 && y >= -2 && x < radius && y < radius && hypot(radius - x, radius - y) > radius {
+        where abs(x) <= 2 && abs(y) <= 2 || x >= -2 && y >= -2 && x < radius && y < radius && hypot(radius - x, radius - y) > radius {
             result[corner] = radius - max(0, max(x, y) - 2)
         }
         return result

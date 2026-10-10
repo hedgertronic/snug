@@ -121,6 +121,11 @@ struct CornerRadiiTests {
                 == CornerRadii(topLeft: 3, topRight: 3, bottomLeft: 3, bottomRight: 32))
         // 20 px in on both sides: the square corner is inside the arc, so nothing outside the window shows and the corner keeps its radius.
         #expect(CornerRadii(3).replacingCorners(sharedWith: window, in: CGRect(x: 60, y: 60, width: 100, height: 60), with: 40) == CornerRadii(3))
+        // A corner on the window's corner takes its radius however small, 0 included (a square window, or one still being measured).
+        #expect(CornerRadii(3).replacingCorners(sharedWith: window, in: CGRect(x: 20, y: 60, width: 160, height: 80), with: 0)
+                == CornerRadii(topLeft: 3, topRight: 3, bottomLeft: 0, bottomRight: 0))
+        #expect(CornerRadii(3).replacingCorners(sharedWith: window, in: CGRect(x: 22, y: 60, width: 156, height: 78), with: 5)
+                == CornerRadii(topLeft: 3, topRight: 3, bottomLeft: 5, bottomRight: 5))
     }
 
     @Test func aCropNearTheWindowsCornerHidesTheWallpaperPastItsArc() throws {
