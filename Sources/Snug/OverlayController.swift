@@ -613,6 +613,7 @@ final class OverlayController {
         case (_, true, _) where shift && character.lowercased() == "s":
             if hovering { clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true, saveAs: true) } else { save(saveAs: true) }
         case (_, false, "e") where hovering && hoverRect != nil: openAsSelection(hoverRect!)
+        case (_, false, "k"): cutOut()
         case (_, false, "o"): defaults.set(!defaults.bool(forKey: Pref.roundCorners), forKey: Pref.roundCorners)
         case (_, false, "p"): ratioLock = RatioLock.next(after: ratioLock)
         case (_, false, "="): applyRadiusToAll()

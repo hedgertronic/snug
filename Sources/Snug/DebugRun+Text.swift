@@ -474,6 +474,69 @@ extension DebugRun {
         key(escape)
         require(!overlay.window.isVisible, "Esc again closes")
 
+        // K cuts the selection or the hovered element out to a transparent PNG with Vision's foreground mask; with no subject the overlay
+        // stays open with a notice. The fixtures are the background removal spike's (notes/cutout/fixtures).
+        suffix = ""
+        let kKey: UInt16 = 40
+        let fixtures = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../notes/cutout/fixtures").standardized
+        func spikeFixture(_ name: String) -> CGImage {
+            CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(fixtures.appending(path: name) as CFURL, nil)!, 0, nil)!
+        }
+        func pixels(_ image: CGImage) -> (rgba: [UInt8], width: Int) {
+            let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
+                                    space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            return (Array(UnsafeBufferPointer(start: context.data!.assumingMemoryBound(to: UInt8.self), count: image.width * image.height * 4)), image.width)
+        }
+        func cutOut() async -> CGImage? {
+            pasteboard.clearContents()
+            key(kKey, "k")
+            await overlay.textTask?.value
+            return pasteboard.data(forType: .png).map { CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithData($0 as CFData, nil)!, 0, nil)! }
+        }
+        overlay.defaults.set(false, forKey: Pref.snap)
+        let icon = spikeFixture("icon-flat-composite.png")
+        let iconRect = CGRect(x: 110, y: 60, width: 180, height: 180)
+        overlay.present(image: icon, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(icon.width) / 2, height: CGFloat(icon.height) / 2), displayID: nil)
+        mouse(.leftMouseDown, iconRect.origin)
+        mouse(.leftMouseDragged, CGPoint(x: iconRect.maxX, y: iconRect.maxY))
+        mouse(.leftMouseUp, CGPoint(x: iconRect.maxX, y: iconRect.maxY))
+        require(overlay.selection?.rect == iconRect, "with snap off a drag selects the icon's rect exactly: \(String(describing: overlay.selection?.rect))")
+        let beforeCutout = footprint()
+        let iconCut = await cutOut()
+        let afterCutout = footprint()
+        require(!overlay.window.isVisible && iconCut != nil, "K on a selection closes the overlay and copies a PNG")
+        let (cut, cutWidth) = pixels(iconCut!)
+        let (source, sourceWidth) = pixels(icon)
+        let center = ((iconCut!.height / 2) * cutWidth + cutWidth / 2) * 4
+        let sourceCenter = ((Int(iconRect.midY)) * sourceWidth + Int(iconRect.midX)) * 4
+        require(abs(iconCut!.width - 180) <= 2 && abs(iconCut!.height - 180) <= 2, "the cutout is the icon's size: \(iconCut!.width)x\(iconCut!.height)")
+        require(cut[3] == 0 && cut[(cutWidth - 1) * 4 + 3] == 0, "the cutout's rounded corners are transparent (alpha \(cut[3]), \(cut[(cutWidth - 1) * 4 + 3]))")
+        require(cut[center + 3] == 255 && (0..<3).allSatisfy { abs(Int(cut[center + $0]) - Int(source[sourceCenter + $0])) <= 3 },
+                "the cutout's center is opaque and keeps the source color: \(Array(cut[center..<center + 4])) vs \(Array(source[sourceCenter..<sourceCenter + 4]))")
+        try await Task.sleep(for: .seconds(2))
+        print("Cutout footprint: \(beforeCutout) before K, \(afterCutout) after delivery, \(footprint()) 2 s after")
+
+        overlay.defaults.set(true, forKey: Pref.snap)
+        overlay.present(image: icon, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(icon.width) / 2, height: CGFloat(icon.height) / 2), displayID: nil)
+        await overlay.detectionTask?.value
+        // Geometry finds only the arch inside the tile, so the tile comes in as a window rectangle, as a live capture lists it.
+        overlay.setWindows([iconRect], names: ["Icon"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, CGPoint(x: iconRect.minX + 20, y: iconRect.maxY - 20))
+        let hovered = overlay.hoverRect
+        require(hovered == iconRect, "hovering the icon tile picks it: \(String(describing: hovered))")
+        let tileCut = await cutOut()
+        require(!overlay.window.isVisible && tileCut.map { CGFloat($0.width) <= hovered!.width && pixels($0).rgba[3] == 0 } == true,
+                "K on the hovered element copies its cutout with transparent corners: \(String(describing: tileCut.map { "\($0.width)x\($0.height)" }))")
+
+        overlay.present(image: image, frame: frame, displayID: nil)
+        key(fKey, "f")
+        require(overlay.selection?.rect == CGRect(x: 0, y: 0, width: image.width, height: image.height), "F selects the whole page")
+        let pageCut = await cutOut()
+        require(overlay.window.isVisible && pageCut == nil && overlay.selection != nil, "K on a whole page finds no subject: nothing is copied and the overlay stays open")
+        require(texts(in: overlay.chrome.status) == ["No subject found"], "a No subject found notice shows: \(texts(in: overlay.chrome.status))")
+        overlay.dismiss()
+
         print("Text UI verification passed (\(passed.count) checks):")
         passed.forEach { print("- \($0)") }
         exit(EXIT_SUCCESS)
