@@ -616,18 +616,18 @@ extension DebugRun {
         exit(EXIT_SUCCESS)
     }
 
-    /// The found-items page at 2000 x 1100 px with a row of text above it in each of Cyrillic, Arabic, Devanagari, Chinese, Japanese, Korean
-    /// and Thai, and each row's rect (top-left origin, pixels). Of these, the Arabic and Devanagari rows compile recognizers of their own.
+    /// The found-items page at 2000 x 1100 px with an Arabic and a Devanagari row of text above it, and each row's rect (top-left origin,
+    /// pixels). Those two scripts have recognizers of their own; Cyrillic, Chinese, Japanese, Korean and Thai rows compiled nothing more.
     static func warmFixture() -> (page: CGImage, cells: [CGRect]) {
         let (width, height) = (2000, 1100)
         let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         context.draw(itemsFixture(width: width, height: height), in: CGRect(x: 0, y: 0, width: width, height: height))
-        let rows = ["Привет, как дела сегодня", "مرحبا بك في التطبيق", "नमस्ते, आप कैसे हैं", "今天天气很好，我们去公园", "今日はいい天気ですね", "안녕하세요, 반갑습니다", "สวัสดีครับ ยินดีต้อนรับ"]
+        let rows = ["مرحبا بك في التطبيق", "नमस्ते, आप कैसे हैं"]
         var cells: [CGRect] = []
         for (index, text) in rows.enumerated() {
             let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 30), .foregroundColor: NSColor.black]))
-            let baseline = CGPoint(x: 40 + (index % 2) * 640, y: 1050 - (index / 2) * 50)
+            let baseline = CGPoint(x: 40 + index * 640, y: 1050)
             context.textPosition = baseline
             CTLineDraw(line, context)
             cells.append(CGRect(x: baseline.x - 20, y: CGFloat(height) - baseline.y - 38, width: 640, height: 50))
