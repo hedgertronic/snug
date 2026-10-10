@@ -275,7 +275,11 @@ extension DebugRun {
         print(directory.appending(path: "menubar-icon.png").path)
 
         /// A toast's content on a mid-gray backdrop, since its panel is transparent.
-        func renderToast(_ name: String, _ toast: Toast) throws {
+        func renderToast(_ name: String, _ toast: Toast, hovered: Bool = false) throws {
+            if hovered {
+                toast.mouseEntered(with: NSEvent.enterExitEvent(with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: toast.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil)!)
+                toast.dismissal?.cancel()
+            }
             let content = toast.contentView!
             let rep = content.bitmapImageRepForCachingDisplay(in: content.bounds)!
             content.cacheDisplay(in: content.bounds, to: rep)
@@ -297,7 +301,14 @@ extension DebugRun {
         roundedCapture.addPath(CGPath(roundedRect: CGRect(x: 0, y: 0, width: 960, height: 520), cornerWidth: 40, cornerHeight: 40, transform: nil))
         roundedCapture.clip()
         roundedCapture.draw(image.cropping(to: CGRect(x: 300, y: 380, width: 960, height: 520))!, in: CGRect(x: 0, y: 0, width: 960, height: 520))
-        try renderToast("toast-preview", Toast(png: try await Output.png(roundedCapture.makeImage()!), message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: defaults))
+        let roundedPNG = try await Output.png(roundedCapture.makeImage()!)
+        try renderToast("toast-preview", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: defaults))
+        try renderToast("toast-preview-hover", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: defaults), hovered: true)
+        let noPreview = UserDefaults(suiteName: "snug-render-toast-\(UUID().uuidString)")!
+        Pref.register(in: noPreview)
+        noPreview.set(false, forKey: Pref.toastPreview)
+        try renderToast("toast-no-preview", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: noPreview))
+        try renderToast("toast-no-preview-hover", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: noPreview), hovered: true)
 
         func render(_ name: String, _ content: some View) throws {
             let renderer = ImageRenderer(content: content.background(Color(nsColor: .windowBackgroundColor)))
