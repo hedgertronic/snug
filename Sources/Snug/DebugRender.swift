@@ -1,4 +1,5 @@
 import AppKit
+import ScreenCaptureKit
 import SwiftUI
 import ScreenshotCore
 
@@ -327,12 +328,41 @@ extension DebugRun {
         exit(EXIT_SUCCESS)
     }
 
+    /// `--verify-settings-capture`: with the Settings window and the overlay window both ordered in far offscreen, the windows Snug's
+    /// captures exclude are the overlay and not Settings, and the window server lists both. With Screen Recording, the display's capture
+    /// filter also includes Settings and leaves the overlay out.
+    static func verifySettingsCapture(overlay: OverlayController) async throws {
+        let settings = SettingsTabs.makeWindow()
+        for window in [settings, overlay.window] {
+            window.setFrameOrigin(CGPoint(x: -20000, y: -20000))
+            window.orderFrontRegardless()
+        }
+        try await Task.sleep(for: .milliseconds(500))
+        let settingsID = CGWindowID(settings.windowNumber), overlayID = CGWindowID(overlay.window.windowNumber)
+        let excluded = DisplayCapture.excludedWindowIDs()
+        precondition(excluded.contains(overlayID), "the overlay window \(overlayID) is excluded from captures: \(excluded.sorted())")
+        precondition(!excluded.contains(settingsID), "the Settings window \(settingsID) is not excluded from captures: \(excluded.sorted())")
+        let onScreen = (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]).map { CGWindowID($0[kCGWindowNumber as String] as! Int) }
+        precondition(onScreen.contains(settingsID) && onScreen.contains(overlayID), "the window server lists both offscreen windows \(settingsID), \(overlayID)")
+        print("excluded \(excluded.sorted()): overlay \(overlayID) in, settings \(settingsID) out")
+        if CGPreflightScreenCaptureAccess() {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            let included = Set(DisplayCapture.filter(for: CGMainDisplayID(), in: content, excluding: excluded).includedWindows.map(\.windowID))
+            precondition(included.contains(settingsID), "the capture filter includes the Settings window \(settingsID)")
+            precondition(!included.contains(overlayID), "the capture filter leaves out the overlay window \(overlayID)")
+            print("capture filter: settings included, overlay excluded, \(included.count) windows included")
+        } else {
+            print("capture filter: skipped, this process has no Screen Recording permission")
+        }
+        exit(EXIT_SUCCESS)
+    }
+
     /// Each Settings tab hosted in an NSHostingView inside a window that is never shown, drawn to a PNG in `directory`.
     static func renderSettings(into directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let tabs = SettingsTabs.makeController()
         for item in tabs.tabViewItems {
-            let host = NSHostingView(rootView: (item.viewController as! NSHostingController<AnyView>).rootView)
+            let host = NSHostingView(rootView: (item.viewController as! NSHostingController<AnyView>).rootView.background(Color(nsColor: .windowBackgroundColor)))
             let offscreen = NSWindow(contentRect: CGRect(origin: .zero, size: host.fittingSize), styleMask: [.borderless], backing: .buffered, defer: true)
             offscreen.contentView = host
             host.layoutSubtreeIfNeeded()
@@ -344,5 +374,11 @@ extension DebugRun {
             print(file.path, host.fittingSize)
         }
         precondition(tabs.tabViewItems.map(\.label) == ["General", "Appearance", "Keys"], "Settings tabs: \(tabs.tabViewItems.map(\.label))")
+        let window = SettingsTabs.makeWindow()
+        let tabController = window.contentViewController as! NSTabViewController
+        for (index, item) in tabController.tabViewItems.enumerated() {
+            tabController.selectedTabViewItemIndex = index
+            precondition(window.title == item.label, "the Settings window title follows the \(item.label) tab: \"\(window.title)\"")
+        }
     }
 }
