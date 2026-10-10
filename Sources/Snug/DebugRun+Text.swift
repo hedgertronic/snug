@@ -79,7 +79,7 @@ extension DebugRun {
         require(overlay.mode == .capture && liveText.isHidden && liveText.analysis == nil, "the overlay opens in Capture with Live Text hidden and nothing analyzed")
         key(tKey, "t")
         require(overlay.mode == .text && !liveText.isHidden, "T enters Text mode and shows Live Text")
-        require(texts(in: overlay.chrome.hints) == ["Drag", "select text", "\u{21A9}", "copy", "\u{21E7}", "\u{21A9}", "rows", "Tab", "links, codes", "\u{2325}", "\u{21A9}", "translate", "F", "all text", "C", "color", "?", "all keys"],
+        require(texts(in: overlay.chrome.hints) == ["select text", "Drag", "copy", "\u{21A9}", "rows", "\u{21E7}", "\u{21A9}", "links, codes", "Tab", "translate", "\u{2325}", "\u{21A9}", "all text", "F", "color", "C", "all keys", "?"],
                 "Text mode shows its hint row: \(texts(in: overlay.chrome.hints))")
         require(!overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."], "a Reading text... pill shows while the analysis runs")
         try await waitFor("the Live Text analysis attaches") { liveText.analysis != nil }

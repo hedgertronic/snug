@@ -5,8 +5,10 @@ import ScreenshotCore
 
 extension DebugRun {
     /// `--render-states DIR`: renders the overlay offscreen to one PNG per state with `cacheDisplay`.
+    /// With `--no-vision` it skips the Vision warm-up and every Text and OCR state, so it can run while another process uses Vision.
     static func renderStates(into directory: URL, image: CGImage, frame: CGRect, overlay: OverlayController) async throws {
-        try await warmVision(image)
+        let vision = !CommandLine.arguments.contains("--no-vision")
+        if vision { try await warmVision(image) }
         _ = privateSetup(overlay)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let defaults = overlay.defaults
@@ -96,6 +98,13 @@ extension DebugRun {
         try snapshot("area-drag-snap")
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         try snapshot("area-released")
+        for (name, modifiers) in [("option", NSEvent.ModifierFlags.option), ("option-command", [.option, .command])] {
+            overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
+            try snapshot("area-released-\(name)")
+        }
+        overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
         key(0, "m")
         try snapshot("area-frame")
         overlay.dismiss()
@@ -171,42 +180,44 @@ extension DebugRun {
         overlay.dismiss()
         for key in [Pref.highlightColor, Pref.highlightFill, Pref.highlightFade, Pref.highlightGlow] { defaults.removeObject(forKey: key) }
 
-        open()
-        key(17, "t")
-        try snapshot("text-reading")
-        let liveText = overlay.view.liveText
-        try await waitFor("Live Text") { liveText.analysis != nil }
-        let all = liveText.text
-        liveText.selectedRanges = [all.range(of: "Product name")!.lowerBound..<all.range(of: "Second product")!.upperBound]
-        try snapshot("text")
-        overlay.targetLanguage = Locale.Language(identifier: "de")
-        overlay.translationStatus = { _, _ in .supported }
-        key(36, "\r", .option)
-        try await waitFor("the not-installed pill") { overlay.text.notice != nil }
-        try snapshot("text-translate-missing")
-        overlay.dismiss()
+        if vision {
+            open()
+            key(17, "t")
+            try snapshot("text-reading")
+            let liveText = overlay.view.liveText
+            try await waitFor("Live Text") { liveText.analysis != nil }
+            let all = liveText.text
+            liveText.selectedRanges = [all.range(of: "Product name")!.lowerBound..<all.range(of: "Second product")!.upperBound]
+            try snapshot("text")
+            overlay.targetLanguage = Locale.Language(identifier: "de")
+            overlay.translationStatus = { _, _ in .supported }
+            key(36, "\r", .option)
+            try await waitFor("the not-installed pill") { overlay.text.notice != nil }
+            try snapshot("text-translate-missing")
+            overlay.dismiss()
 
-        open()
-        key(17, "t")
-        try await waitFor("Live Text") { liveText.analysis != nil }
-        key(48, "\t")
-        try await waitFor("a picked item") { overlay.text.picked != nil }
-        try snapshot("text-item-picked")
-        overlay.dismiss()
+            open()
+            key(17, "t")
+            try await waitFor("Live Text") { liveText.analysis != nil }
+            key(48, "\t")
+            try await waitFor("a picked item") { overlay.text.picked != nil }
+            try snapshot("text-item-picked")
+            overlay.dismiss()
 
-        overlay.present(image: itemsFixture(width: image.width, height: image.height), frame: frame, displayID: nil)
-        key(17, "t")
-        try await waitFor("Live Text") { liveText.analysis != nil }
-        key(48, "\t", .shift)
-        try await waitFor("the QR code picked") { overlay.text.picked != nil }
-        try snapshot("text-item-code")
-        overlay.dismiss()
+            overlay.present(image: itemsFixture(width: image.width, height: image.height), frame: frame, displayID: nil)
+            key(17, "t")
+            try await waitFor("Live Text") { liveText.analysis != nil }
+            key(48, "\t", .shift)
+            try await waitFor("the QR code picked") { overlay.text.picked != nil }
+            try snapshot("text-item-code")
+            overlay.dismiss()
 
-        open()
-        drag(cart, release: true)
-        key(36, "\r", .shift)
-        try snapshot("capture-text-reading")
-        overlay.dismiss()
+            open()
+            drag(cart, release: true)
+            key(36, "\r", .shift)
+            try snapshot("capture-text-reading")
+            overlay.dismiss()
+        }
 
         open()
         try await overlay.detectionTask?.value

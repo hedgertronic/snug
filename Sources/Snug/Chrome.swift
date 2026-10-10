@@ -81,7 +81,8 @@ final class Dot: NSView {
     override var intrinsicContentSize: NSSize { frame.size }
 }
 
-/// A key cap: the key's glyph on a raised rounded key. `prominent` is the white key on an accent button (Copy, the current mode).
+/// A key cap: the key's glyph on a raised rounded key. `prominent` is the white key on an accent button (Copy, the current mode);
+/// `held` fills a modifier's key with the accent while that modifier is down.
 @MainActor
 final class KeyCap: NSView {
     private let label: NSTextField
@@ -89,6 +90,9 @@ final class KeyCap: NSView {
         didSet { applyColor() }
     }
     var prominent = false {
+        didSet { applyColor() }
+    }
+    var held = false {
         didSet { applyColor() }
     }
 
@@ -114,8 +118,8 @@ final class KeyCap: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     private func applyColor() {
-        label.textColor = prominent ? .controlAccentColor : color
-        layer!.backgroundColor = prominent ? NSColor.white.withAlphaComponent(0.9).cgColor : color.withAlphaComponent(0.2).cgColor
+        label.textColor = held ? .white : prominent ? .controlAccentColor : color
+        layer!.backgroundColor = held ? NSColor.controlAccentColor.cgColor : prominent ? NSColor.white.withAlphaComponent(0.9).cgColor : color.withAlphaComponent(0.2).cgColor
     }
 
     override var intrinsicContentSize: NSSize { frame.size }
@@ -123,12 +127,16 @@ final class KeyCap: NSView {
 }
 
 extension Pill {
-    /// A hint: key caps then a label, on no fill.
-    static func chip(_ keys: [String], _ label: String) -> Pill {
+    /// A hint: a label then its key caps, on no fill. A cap made only of `held` modifier glyphs is filled with the accent.
+    static func chip(_ keys: [String], _ label: String, held: Set<Character> = []) -> Pill {
         let chip = Pill(fill: .clear, radius: 0, insets: NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0), spacing: 6)
         let color = NSColor.white.withAlphaComponent(0.92)
-        chip.show(keys.joined() + label) {
-            keys.map { KeyCap($0, color: color) } + (label.isEmpty ? [] : [NSTextField(label, size: 12, weight: .medium, color: color)])
+        chip.show(label + keys.joined()) {
+            (label.isEmpty ? [] : [NSTextField(label, size: 12, weight: .medium, color: color)]) + keys.map { key in
+                let cap = KeyCap(key, color: color)
+                cap.held = key.allSatisfy(held.contains)
+                return cap
+            }
         }
         return chip
     }
@@ -302,14 +310,16 @@ final class BottomBar: Capsule {
     func click(_ mode: OverlayController.Mode) { modeButtons[mode]!.onClick() }
 }
 
-/// The bar attached to a released selection: Frame, Record, Text, Save, and Copy.
+/// The bar attached to a released selection: Frame, Snap, Record, Text, Save, and Copy.
 @MainActor
 final class ActionBar: Capsule {
     var onFrame: () -> Void = {}
+    var onSnap: () -> Void = {}
     var onText: () -> Void = {}
     var onSave: () -> Void = {}
     var onCopy: () -> Void = {}
     let frameButton = BarButton("Frame", key: "M", height: 28, size: 12)
+    let snapButton = BarButton("Snap", key: "S", height: 28, size: 12)
     let text = BarButton("Text", key: "\u{21E7}\u{21A9}", height: 28, size: 12)
     let save = BarButton("Save", key: "\u{2318}S", height: 28, size: 12)
     let copy = BarButton("Copy", key: "\u{21A9}", height: 28, size: 12)
@@ -318,19 +328,24 @@ final class ActionBar: Capsule {
     var framed = false {
         didSet { frameButton.style(fill: framed ? NSColor.white.withAlphaComponent(0.16) : nil, text: .labelColor, bold: framed) }
     }
+    var snapped = false {
+        didSet { snapButton.style(fill: snapped ? NSColor.white.withAlphaComponent(0.16) : nil, text: .labelColor, bold: snapped) }
+    }
 
     init() {
         super.init(spacing: 4, inset: 4, radius: 11)
         frameButton.onClick = { [unowned self] in onFrame() }
         record.style(fill: nil, text: .labelColor)
+        snapButton.onClick = { [unowned self] in onSnap() }
         text.style(fill: nil, text: .labelColor)
         save.style(fill: nil, text: .labelColor)
         copy.style(fill: .controlAccentColor, text: .white, bold: true, prominent: true)
         text.onClick = { [unowned self] in onText() }
         save.onClick = { [unowned self] in onSave() }
         copy.onClick = { [unowned self] in onCopy() }
-        setItems([frameButton, Capsule.divider(height: 18), record, text, save, copy])
+        setItems([frameButton, snapButton, Capsule.divider(height: 18), record, text, save, copy])
         framed = false
+        snapped = false
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -351,8 +366,12 @@ final class Chrome {
     let reading = Pill.dark(0.86, radius: 6, insets: NSEdgeInsets(top: 4, left: 9, bottom: 4, right: 9))
     let list = CandidateList()
     let help = HelpSheet()
+    /// While Option is held on a released selection: the arrow keys for growing or shrinking each side (left, right, top, bottom).
+    let sideHints = (0..<4).map { _ in Pill.dark(0.86, radius: 6, insets: NSEdgeInsets(top: 3, left: 3, bottom: 3, right: 3)) }
+    /// Beside the "All corners" chip of a hovered corner dot: the radius keys and Option for one corner.
+    let cornerKeys = Pill.dark(0.86, radius: 6, insets: NSEdgeInsets(top: 5, left: 8, bottom: 5, right: 5), spacing: 5, vertical: true)
     /// The bars and hint strip sit under the menu bar or notch instead of at the bottom edge.
     var atTop = false
 
-    var all: [NSView] { [upHint, downHint, hover, size, status, reading, hints, list, bottomBar, actionBar, help] }
+    var all: [NSView] { [upHint, downHint, hover, size, status, reading, hints] + sideHints + [cornerKeys, list, bottomBar, actionBar, help] }
 }

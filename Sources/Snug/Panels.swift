@@ -121,17 +121,17 @@ final class HelpSheet: NSView {
         ("Capture", [("drag", "Select a region"), ("click", "Element or window"), ("Option-click", "Flip window shadow"), ("Option-drag", "Exact, no snap"),
                      ("F", "Full screen, or all text"), ("Return", "Copy"), ("Shift-Return", "Copy text in the selection"), ("Cmd-S", "Save"), ("Cmd-Shift-S", "Save As"),
                      ("E / Shift-click", "Edit as a selection"),
-                     ("G", "Scrolling capture of the selection"),
-                     ("C", "Copy color"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
-        ("Adjust and text", [("Tab", "Walk out, other fits"), ("Arrows", "Nudge (Shift: 10 pt)"), ("Option-arrow", "Grow one side"), ("Option-Cmd-arrow", "Shrink one side"), ("Up / Down", "Bigger / smaller element"),
-                             ("Shift-click", "Add an element"), ("[ ]", "Corner radius"), ("=", "Same radius on all corners"),
+                     ("G", "Scrolling capture of the selection"), ("V", "Record to video"), ("K", "Cut out the background"),
+                     ("C", "Copy color"), ("Shift-C", "Cycle color format"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
+        ("Adjust and text", [("Tab", "Walk out, other fits"), ("Arrows", "Nudge 1 px (Shift: 10 px)"), ("Option-arrow", "Grow one side 1 px"), ("Option-Cmd-arrow", "Shrink one side 1 px"),
+                             ("Up / Down", "Bigger / smaller element"), ("Shift-click", "Add an element"),
+                             ("[ ]", "Corner radius"), ("Shift-[ ]", "Corner radius by 4 pt"), ("=", "Same radius on all corners"), ("Option-drag dot", "One corner's radius"),
                              ("Shift-drag handle", "Keep the aspect ratio"), ("Shift-move", "Lock to one axis"),
-                             ("1-5", "Pick from the list (N)"),
                              ("Text: drag", "Select text"), ("Text: Return", "Copy selected text"), ("Text: Shift-Return", "Copy as rows"),
-                             ("Text: Tab", "Next link, email, phone, code"), ("Text: Cmd-Return", "Open the picked item"), ("Option-Return", "Translate text"),
-                             ("Shift-C", "Cycle color format")]),
+                             ("Text: Tab", "Next link, email, phone, code"), ("Text: Cmd-Return", "Open the picked item"), ("Option-Return", "Translate text")]),
         ("Modes and view", [("A", "Capture"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),
-                            ("X", "Crosshair"), ("D", "Window shadow"), ("O", "Rounded corners"), ("M", "Frame on / off"), ("P", "Aspect ratio lock"), ("N", "Candidate list"), ("B", "Bottom bar"), ("?", "This sheet")])
+                            ("X", "Crosshair"), ("D", "Window shadow"), ("O", "Rounded corners"), ("M", "Frame on / off"), ("P", "Aspect ratio lock"), ("N", "Candidate list"),
+                            ("1-5", "Pick from the list (N)"), ("B", "Bottom bar"), ("?", "This sheet")])
     ]
     let panel = NSVisualEffectView()
 
