@@ -57,6 +57,9 @@ final class OverlayController {
         default: nil
         }
     }
+    /// Tab has another fit for the selection, a snap or the exact drag, more than 1 pt from it. False for a selection with a single fit
+    /// (opened from a hover, or edited), although Tab then computes fits on demand: on the public suite's targets those found none that differ.
+    var hasOtherFits: Bool { selection?.hasOtherFits(tolerance: scale) ?? false }
     private(set) var snapPreview: CGRect?
     private(set) var image: CGImage?
     private(set) var scale: CGFloat = 1
@@ -116,6 +119,17 @@ final class OverlayController {
     let cornerChip = BarButton("All corners", key: "=", height: 23, size: 11)
     /// The aspect ratio P locks for new drags and handle drags; nil is free. It lasts one capture.
     var ratioLock: RatioLock?
+    /// The selection before a run of P presses and the rectangle the last press conformed it to: each press in the run conforms the
+    /// rectangle from before the run, so cycling through 1:1 does not shrink the 16:9 that follows.
+    private var ratioBase: (base: CGRect, conformed: CGRect)?
+    /// The hovered level was walked to with Up, Down or Tab (not picked from the list); it lets go after 4 pt of pointer travel.
+    private var walkedLevel = false
+    /// The size badge's ratio: the lock, e.g. "4:3 locked", else the ratio of the rectangle being dragged or selected (see
+    /// `RatioLock.readout`); empty with neither.
+    var ratioReadout: String {
+        if let ratioLock { return "\(ratioLock.label) locked" }
+        return (draggedRect ?? selection?.rect).map { RatioLock.readout(for: $0.size) } ?? ""
+    }
     /// Shift is down: with a selection open, the element under the pointer is outlined for a union.
     var shiftHeld = false
     /// Save As: the file to write, given the usual name in the save folder; nil cancels. Debug runs answer without a panel.
@@ -279,6 +293,8 @@ final class OverlayController {
         lastEditedCorner = nil
         hoveredCorner = nil
         ratioLock = nil
+        ratioBase = nil
+        walkedLevel = false
         selection = nil
         interaction = .none
         spaceHeld = false
@@ -350,7 +366,9 @@ final class OverlayController {
         if !isHeadless { cursor.set() }
     }
 
-    /// Capture mode: the pointer picks the element, window, or display under it. A level picked with a key holds until the pointer leaves it.
+    /// Capture mode: the pointer picks the element, window, or display under it. A level picked with a key holds until the pointer leaves
+    /// it; one walked to with Up, Down or Tab also lets go once the pointer moves more than 4 pt from where the walk began (the session's
+    /// anchor stops following the pointer while a level holds).
     private func updateHover(pixel: CGPoint) {
         guard case .none = interaction else { return }
         guard selection == nil || shiftHeld else {
@@ -359,7 +377,9 @@ final class OverlayController {
         }
         if mode == .capture, session != nil {
             requestAccessibility(at: pixel)
-            if session!.isLocked, !session!.holds(at: pixel) { session!.toggleLock() }
+            let walkLetGo = walkedLevel && hypot(pixel.x - session!.anchor.x, pixel.y - session!.anchor.y) > 4 * scale
+            if session!.isLocked, !session!.holds(at: pixel) || walkLetGo { session!.toggleLock() }
+            if !session!.isLocked { walkedLevel = false }
             session!.hover(at: pixel)
         }
         refresh()
@@ -382,6 +402,8 @@ final class OverlayController {
         if let selection {
             if let corner = cornerDot(at: point) {
                 interaction = .rounding(corner, start: point, from: cornerRadii(of: selection.rect))
+                measureRadius(selection.rect)
+                measureRadius(container(of: selection.rect))
                 return updateCursor()
             }
             if let handle = selection.handle(at: point, tolerance: 8 * scale) {
@@ -438,7 +460,11 @@ final class OverlayController {
             interaction = .moving(last: target, origin: origin, moved: true)
         case .rounding(let corner, let start, let from):
             let rect = selection!.rect
-            let delta = CornerRadii.inwardDistance(of: CGPoint(x: point.x - start.x, y: point.y - start.y), from: corner)
+            var delta = CornerRadii.inwardDistance(of: CGPoint(x: point.x - start.x, y: point.y - start.y), from: corner)
+            // With Snap on, the dragged corner snaps to the radius detected under it when it ends within 3 pt of that radius.
+            if snapEnabled, let detected = detectedRadius(corner, of: rect), abs(from[corner] + delta - detected) <= 3 * scale {
+                delta = detected - from[corner]
+            }
             let radii = from.moving(corner, by: delta, alone: event.modifierFlags.contains(.option), in: rect.size)
             editedRadii[rect] = radii
             lastEditedCorner = corner
@@ -612,6 +638,7 @@ final class OverlayController {
         let command = event.modifierFlags.contains(.command)
         let shift = event.modifierFlags.contains(.shift)
         let option = event.modifierFlags.contains(.option)
+        // Arrow steps are device pixels: selections are in the capture's pixels, one per device pixel.
         let step: CGFloat = shift ? 10 : 1
         let character = event.charactersIgnoringModifiers ?? ""
         let hovering = selection == nil
@@ -622,22 +649,24 @@ final class OverlayController {
             if hovering { clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true, saveAs: true) } else { save(saveAs: true) }
         case (_, false, "e") where hovering && hoverRect != nil: openAsSelection(hoverRect!)
         case (_, false, "o"): defaults.set(!defaults.bool(forKey: Pref.roundCorners), forKey: Pref.roundCorners)
-        case (_, false, "p"): ratioLock = RatioLock.next(after: ratioLock)
+        case (_, false, "p"): cycleRatioLock()
         case (_, false, "="): applyRadiusToAll()
         case (123...126, _, _) where option && !hovering: nudgeSide(keyCode: event.keyCode, outward: !command, by: step)
         case (_, true, "s") where hovering: clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true)
         case (36, _, _) where shift || option, (76, _, _) where shift || option: copySelectionText(translating: option)
         case (36, _, _), (76, _, _): copy()
-        case (48, _, _) where hovering: if shift { session?.shrink() } else { session?.expand() }
-        case (126, _, _) where hovering: session?.expand()
-        case (125, _, _) where hovering: session?.shrink()
-        case (_, false, "1"..."5") where hovering && defaults.bool(forKey: Pref.candidates): session?.pick(Int(character)! - 1)
+        case (48, _, _) where hovering, (126, _, _) where hovering, (125, _, _) where hovering:
+            if event.keyCode == 125 || event.keyCode == 48 && shift { session?.shrink() } else { session?.expand() }
+            walkedLevel = true
+        case (_, false, "1"..."5") where hovering && defaults.bool(forKey: Pref.candidates):
+            session?.pick(Int(character)! - 1)
+            walkedLevel = false
         case (48, _, _): cycleFit(backward: shift)
         case (49, _, _): spaceHeld = true
-        case (123, _, _): nudge(CGPoint(x: -step * scale, y: 0))
-        case (124, _, _): nudge(CGPoint(x: step * scale, y: 0))
-        case (125, _, _): nudge(CGPoint(x: 0, y: step * scale))
-        case (126, _, _): nudge(CGPoint(x: 0, y: -step * scale))
+        case (123, _, _): nudge(CGPoint(x: -step, y: 0))
+        case (124, _, _): nudge(CGPoint(x: step, y: 0))
+        case (125, _, _): nudge(CGPoint(x: 0, y: step))
+        case (126, _, _): nudge(CGPoint(x: 0, y: -step))
         case (_, true, "s"): save()
         case (_, false, "]"), (_, false, "}"): adjustRadii(by: shift ? 4 : 1)
         case (_, false, "["), (_, false, "{"): adjustRadii(by: shift ? -4 : -1)
@@ -651,6 +680,17 @@ final class OverlayController {
         default: return false
         }
         return true
+    }
+
+    /// P: the next ratio lock. An open selection conforms at once: it becomes the largest rectangle of the lock's ratio (portrait when
+    /// taller than wide) that fits inside it and keeps its center, in whole pixels, clamped to the display. Free leaves it alone.
+    private func cycleRatioLock() {
+        ratioLock = RatioLock.next(after: ratioLock)
+        guard let ratioLock, let old = selection?.rect else { return }
+        let base = ratioBase?.conformed == old ? ratioBase!.base : old
+        selection!.conform(base, to: ratioLock.ratio(portrait: base.height > base.width))
+        ratioBase = (base, selection!.rect)
+        carryRadii(from: old)
     }
 
     // MARK: Output

@@ -37,6 +37,14 @@ extension OverlayController {
         editedRadii[new] = radii.offset(by: 0, in: new.size)
     }
 
+    /// The radius Rounded detects at `corner` of `rect`: the radius measured for `rect`, or its window's where the corner sits on the
+    /// window's corner. Nil until measured, or when it is 0 (square, or nothing consistent found).
+    func detectedRadius(_ corner: Handle, of rect: CGRect) -> CGFloat? {
+        var detected = CornerRadii(radii[rect] ?? 0)
+        if let window = container(of: rect), let radius = radii[window] { detected = detected.replacingCorners(sharedWith: window, in: rect, with: radius) }
+        return detected[corner] > 0 ? detected[corner] : nil
+    }
+
     /// `=` and the chip: the hovered corner's radius (else the last-edited corner's, else the largest) goes to all four corners.
     func applyRadiusToAll() {
         guard let rect = selection?.rect else { return }
@@ -98,8 +106,8 @@ extension OverlayController {
         carryRadii(from: old)
     }
 
-    /// Option-arrow moves only the side facing the arrow, outward; Option-Command-arrow moves it inward.
-    func nudgeSide(keyCode: UInt16, outward: Bool, by points: CGFloat) {
+    /// Option-arrow moves only the side facing the arrow, outward; Option-Command-arrow moves it inward, by `pixels` image pixels.
+    func nudgeSide(keyCode: UInt16, outward: Bool, by pixels: CGFloat) {
         let (side, direction): (Handle, CGPoint) = switch keyCode {
         case 123: (.left, CGPoint(x: -1, y: 0))
         case 124: (.right, CGPoint(x: 1, y: 0))
@@ -108,7 +116,7 @@ extension OverlayController {
         }
         let old = selection!.rect
         let from = side.position(on: old)
-        let distance = (outward ? points : -points) * scale
+        let distance = outward ? pixels : -pixels
         selection!.resize(side, to: CGPoint(x: from.x + direction.x * distance, y: from.y + direction.y * distance))
         carryRadii(from: old)
     }

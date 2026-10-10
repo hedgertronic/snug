@@ -99,6 +99,12 @@ public struct AreaSelection: Sendable {
         fitIndex = suggestions.count
     }
 
+    /// Whether a fit (a snap suggestion or the exact drag) differs from the current rectangle by more than `tolerance` on some side,
+    /// so Tab would visibly move the selection.
+    public func hasOtherFits(tolerance: CGFloat) -> Bool {
+        fits.contains { !$0.isNear(rect, within: tolerance) }
+    }
+
     /// Selects the exact drag.
     public mutating func selectExact() {
         fitIndex = fits.count - 1
@@ -178,6 +184,16 @@ public struct AreaSelection: Sendable {
         let dx = min(max(delta.x, extent.minX - rect.minX), extent.maxX - rect.maxX)
         let dy = min(max(delta.y, extent.minY - rect.minY), extent.maxY - rect.maxY)
         edit(rect.offsetBy(dx: dx, dy: dy))
+    }
+
+    /// Takes the largest rectangle of `ratio` (width over height) that fits inside `base` and shares its center, rounded to whole
+    /// pixels, then clamps it to the extent.
+    public mutating func conform(_ base: CGRect, to ratio: CGFloat) {
+        let width = min(base.width, base.height * ratio)
+        let size = CGSize(width: width.rounded(), height: (width / ratio).rounded())
+        let x = min(max((base.midX - size.width / 2).rounded(), extent.minX), extent.maxX - size.width)
+        let y = min(max((base.midY - size.height / 2).rounded(), extent.minY), extent.maxY - size.height)
+        edit(CGRect(origin: CGPoint(x: x, y: y), size: size))
     }
 
     private mutating func edit(_ edited: CGRect) {

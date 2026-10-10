@@ -6,10 +6,6 @@ extension OverlayController {
     /// Whether a window click captures the shadow: the remembered preference, inverted while Option is down.
     func windowShadow(option: Bool) -> Bool { defaults.bool(forKey: Pref.shadow) != option }
 
-    // Stubs for Order A's selection readouts: Tab has another fit to go to, and the ratio for the strip.
-    var hasOtherFits: Bool { selection?.fits.count ?? 0 > 1 }
-    var ratioReadout: String { ratioLock.map { "\($0.label) locked" } ?? "free" }
-
     /// The glyphs of the modifiers held now; hint key caps made of them fill with the accent.
     private var heldGlyphs: Set<Character> {
         Set([(optionHeld, "\u{2325}"), (commandHeld, "\u{2318}"), (shiftHeld, "\u{21E7}")].compactMap { $0.0 ? Character($0.1) : nil })

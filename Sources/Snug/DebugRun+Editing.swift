@@ -85,8 +85,11 @@ extension DebugRun {
         try await waitFor("E carries the hovered corner radii as edited ones") { overlay.editedRadii[a] == CornerRadii(radius) }
         require(overlay.view.overlays.showsHandles && overlay.view.overlays.radii == CornerRadii(radius), "the selection shows handles and the carried radii")
         key(right, "", .shift)
-        require(overlay.selection?.rect == a.offsetBy(dx: 10 * scale, dy: 0) && overlay.view.overlays.radii == CornerRadii(radius), "a nudged E selection keeps its radii")
+        require(overlay.selection?.rect == a.offsetBy(dx: 10, dy: 0) && overlay.view.overlays.radii == CornerRadii(radius), "Shift-Right moves 10 px, and a nudged E selection keeps its radii")
         key(left, "", .shift)
+        key(down)
+        require(overlay.selection?.rect == a.offsetBy(dx: 0, dy: 1), "an arrow moves the selection 1 device pixel, not 1 pt")
+        key(up)
         require(["resize", "scroll"].allSatisfy(texts(in: overlay.chrome.hints).contains) && !["frame", "corners"].contains(where: texts(in: overlay.chrome.hints).contains),
                 "the selection hint row offers resize and scroll, and no frame or corners hint")
 
@@ -145,6 +148,25 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: a.minX, y: a.minY))
         require(overlay.view.cursor === OverlayController.resizeCursors[.topLeft], "a square corner's handle keeps its resize cursor")
 
+        // A dot drag snaps the radius to the one detected under that corner (window A's 20 pt) within 3 pt, unless Snap is off.
+        func dragInward(_ corner: Handle, _ points: CGFloat, _ flags: NSEvent.ModifierFlags = []) {
+            let along = points * scale / 2.0.squareRoot()
+            drag(from: dot(corner), by: CGPoint(x: corner.movesLeft ? along : -along, y: corner.movesTop ? along : -along), flags)
+        }
+        overlay.editedRadii[a] = CornerRadii(radius - 8 * scale)
+        dragInward(.topLeft, 2)
+        require(near(radii().topLeft, radius - 6 * scale), "a dot drag ending 6 pt from the detected radius does not snap: \(radii().topLeft / scale) pt")
+        dragInward(.topLeft, 3.5)
+        require(equal(radii(), CornerRadii(radius)), "a dot drag ending within 3 pt of the detected radius snaps to it: \(radii().topLeft / scale) pt")
+        overlay.editedRadii[a] = CornerRadii(radius - 8 * scale)
+        dragInward(.bottomRight, 6, .option)
+        require(near(radii().bottomRight, radius) && near(radii().topLeft, radius - 8 * scale), "an Option dot drag snaps only its corner")
+        defaults.set(false, forKey: Pref.snap)
+        overlay.editedRadii[a] = CornerRadii(radius - 8 * scale)
+        dragInward(.topLeft, 6)
+        require(equal(radii(), CornerRadii(radius - 2 * scale)), "with Snap off a dot drag does not snap: \(radii().topLeft / scale) pt")
+        defaults.set(true, forKey: Pref.snap)
+
         // Corner dots and copies: the PNG follows the edited radii.
         drag(from: dot(.topLeft), by: CGPoint(x: 20 * scale, y: 20 * scale))
         pasteboard.clearContents()
@@ -187,21 +209,21 @@ extension DebugRun {
         require(overlay.editedRadii[a.union(b)] == CornerRadii(radius), "the union keeps the selection's edited corners")
         overlay.dismiss()
 
-        // Option-arrow grows one side; Option-Command-arrow shrinks it; Shift is 10 pt; the extent and the minimum size hold.
+        // Option-arrow grows one side; Option-Command-arrow shrinks it; 1 px a press, Shift 10 px; the extent and the minimum size hold.
         open()
         click(insideA, .shift)
         key(right, "", .option)
-        require(overlay.selection?.rect == CGRect(x: a.minX, y: a.minY, width: a.width + scale, height: a.height), "Option-Right grows the right side 1 pt")
+        require(overlay.selection?.rect == CGRect(x: a.minX, y: a.minY, width: a.width + 1, height: a.height), "Option-Right grows the right side 1 px")
         key(left, "", .option)
-        require(overlay.selection?.rect == CGRect(x: a.minX - scale, y: a.minY, width: a.width + 2 * scale, height: a.height), "Option-Left grows the left side 1 pt")
+        require(overlay.selection?.rect == CGRect(x: a.minX - 1, y: a.minY, width: a.width + 2, height: a.height), "Option-Left grows the left side 1 px")
         key(up, "", [.option, .shift])
-        require(overlay.selection?.rect.minY == a.minY - 10 * scale, "Shift-Option-Up grows the top side 10 pt")
+        require(overlay.selection?.rect.minY == a.minY - 10, "Shift-Option-Up grows the top side 10 px")
         key(down, "", [.option, .command])
         key(down, "", [.option, .command])
-        require(overlay.selection?.rect.maxY == a.maxY - 2 * scale, "Option-Command-Down shrinks the bottom side 1 pt each press")
+        require(overlay.selection?.rect.maxY == a.maxY - 2, "Option-Command-Down shrinks the bottom side 1 px each press")
         key(left, "", [.option, .command, .shift])
-        require(overlay.selection?.rect.minX == a.minX - scale + 10 * scale, "Shift-Option-Command-Left shrinks the left side 10 pt")
-        for _ in 0..<200 { key(right, "", [.option, .command, .shift]) }
+        require(overlay.selection?.rect.minX == a.minX - 1 + 10, "Shift-Option-Command-Left shrinks the left side 10 px")
+        for _ in 0..<400 { key(right, "", [.option, .command, .shift]) }
         require(overlay.selection!.rect.width == AreaSelection.minimumSize, "shrinking stops at the minimum size")
         key(3, "f")
         key(right, "", .option)
@@ -238,6 +260,39 @@ extension DebugRun {
         require(lock() == "free" && !texts(in: overlay.chrome.status).contains { $0.contains("Ratio") }, "P back to Free drops the status text")
         overlay.dismiss()
         require(overlay.ratioLock == nil, "the lock does not outlive the capture")
+
+        // hasOtherFits: Tab has a fit (a snap or the exact drag) that differs from the selection by more than 1 pt.
+        open()
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: a, suggestions: [a.insetBy(dx: -4, dy: -4)], takingFirst: true)
+        require(overlay.hasOtherFits, "a released snap has the exact drag as another fit")
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: a.insetBy(dx: -5, dy: -5), suggestions: [a.insetBy(dx: -4, dy: -4)], takingFirst: true)
+        require(!overlay.hasOtherFits, "an exact drag within 1 pt of the snap does not count")
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: a, suggestions: [a.insetBy(dx: 1, dy: 1)])
+        require(!overlay.hasOtherFits, "a snap within 1 pt of the selection does not count")
+        overlay.dismiss()
+
+        // P conforms an open selection at once: the largest rectangle of the lock's ratio inside the rectangle from before this run of
+        // P presses, on its center, in whole pixels. Free leaves the rectangle alone.
+        open()
+        key(14, "e")
+        require(overlay.ratioReadout == "2.00", "a free 2:1 selection reads its live ratio: \(overlay.ratioReadout)")
+        key(35, "p")
+        require(overlay.selection?.rect == CGRect(x: 400, y: 300, width: 200, height: 200), "P to 1:1 conforms the selection about its center: \(String(describing: overlay.selection?.rect))")
+        require(overlay.ratioReadout == "1:1 locked", "a lock reads as the lock: \(overlay.ratioReadout)")
+        key(35, "p")
+        require(overlay.selection?.rect == CGRect(x: 367, y: 300, width: 267, height: 200), "P to 4:3 fits the rectangle from before the P presses, not the square: \(String(describing: overlay.selection?.rect))")
+        key(35, "p")
+        require(overlay.selection?.rect == CGRect(x: 350, y: 300, width: 300, height: 200), "P to 3:2 conforms: \(String(describing: overlay.selection?.rect))")
+        key(35, "p")
+        let sixteenNine = CGRect(x: 322, y: 300, width: 356, height: 200)
+        require(overlay.selection?.rect == sixteenNine, "P to 16:9 conforms: \(String(describing: overlay.selection?.rect))")
+        key(35, "p")
+        require(overlay.ratioLock == nil && overlay.selection?.rect == sixteenNine, "P to Free leaves the rectangle alone")
+        require(overlay.ratioReadout == "1.78 ≈ 16:9", "356 x 200 px reads as near 16:9: \(overlay.ratioReadout)")
+        key(right)
+        key(35, "p")
+        require(overlay.selection?.rect == CGRect(x: 401, y: 300, width: 200, height: 200), "after a nudge, P conforms the nudged rectangle: \(String(describing: overlay.selection?.rect))")
+        overlay.dismiss()
 
         // Shift on a handle keeps the ratio the selection had when the drag started.
         open()
@@ -278,7 +333,7 @@ extension DebugRun {
         drag(from: CGPoint(x: 1000, y: 600), by: CGPoint(x: 400, y: 300))
         let drawn = overlay.selection!.rect
         key(right, "", [.option, .command])
-        require(overlay.selection?.rect == CGRect(x: drawn.minX, y: drawn.minY, width: drawn.width - scale, height: drawn.height), "Option-Command-Right shrinks a drawn selection's right side")
+        require(overlay.selection?.rect == CGRect(x: drawn.minX, y: drawn.minY, width: drawn.width - 1, height: drawn.height), "Option-Command-Right shrinks a drawn selection's right side")
         overlay.dismiss()
 
         // Cmd-Shift-S: Save As writes where the panel (here the seam) says, with the usual name offered, and closes the overlay.
@@ -304,7 +359,7 @@ extension DebugRun {
         try FileManager.default.removeItem(at: chosen)
         key(1, "S", [.command, .shift])
         await overlay.commitTask?.value
-        require(pngSize(try? Data(contentsOf: chosen)) == CGSize(width: a.width + scale, height: a.height), "Save As on a selection writes the selection")
+        require(pngSize(try? Data(contentsOf: chosen)) == CGSize(width: a.width + 1, height: a.height), "Save As on a selection writes the selection")
         overlay.chooseSaveURL = { _ in nil }
         try FileManager.default.removeItem(at: chosen)
         open()

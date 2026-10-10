@@ -527,6 +527,15 @@ extension DebugRun {
         key(48, "\t")
         key(48, "\t", .shift)
         require(overlay.view.overlays.hover == inner, "Tab walks out and Shift-Tab back in")
+        key(up, "")
+        let walked = overlay.view.overlays.hover!
+        mouse(.mouseMoved, CGPoint(x: aim.x + 2 * overlay.scale, y: aim.y))
+        require(overlay.view.overlays.hover == walked, "a walked-to level holds while the pointer moves 2 pt")
+        mouse(.mouseMoved, CGPoint(x: aim.x + 2 * overlay.scale, y: aim.y + 4 * overlay.scale))
+        require(walked.contains(CGPoint(x: aim.x + 2 * overlay.scale, y: aim.y + 4 * overlay.scale)) && !overlay.session!.isLocked,
+                "moving more than 4 pt from where Up walked returns to normal hover, though still inside the bigger element")
+        mouse(.mouseMoved, aim)
+        require(overlay.view.overlays.hover == inner, "back at the start the smaller element is hovered again")
         let far = CGPoint(x: extent.width - 40, y: extent.height - 40)
         mouse(.mouseMoved, far)
         require(overlay.view.overlays.hover != inner, "moving the pointer out of the level a key picked hovers again")
