@@ -1,6 +1,12 @@
 import AppKit
 import ScreenshotCore
 
+/// How the loupe and rulers appear: `fade` fades the loupe in with a small scale and the rulers by opacity alone, `slide` also slides the rulers
+/// in from the top and left edges, and `none` flips them at once. Read from `Pref.guidesAnimation` when a guide toggles.
+enum GuidesAnimation: String {
+    case fade, slide, none
+}
+
 /// Loupe, rulers, and crosshair layers. Each is hidden when its toggle is off and costs nothing then.
 @MainActor
 final class Guides {
@@ -9,6 +15,8 @@ final class Guides {
     static let rulerThickness: CGFloat = 18
     private static let readoutHeight: CGFloat = 32
     private static let readoutGap: CGFloat = 8
+    /// The readout sticks out this far on each side of the loupe's disc.
+    private static let readoutOverhang: CGFloat = 8
     /// One duration and curve for every loupe and ruler transition. The outro plays the intro backward, so its curve is the intro's mirrored.
     static let transitionDuration: CFTimeInterval = 0.18
     private static let introCurve = CAMediaTimingFunction(controlPoints: 0.2, 0, 0, 1)
@@ -122,7 +130,7 @@ final class Guides {
         centerAccent.fillColor = nil
         centerAccent.lineWidth = 1.5
         centerAccent.path = CGPath(rect: middle.insetBy(dx: 2.75, dy: 2.75), transform: nil)
-        readout.frame = CGRect(x: -8, y: 0, width: size + 16, height: Self.readoutHeight)
+        readout.frame = CGRect(x: -Self.readoutOverhang, y: 0, width: size + 2 * Self.readoutOverhang, height: Self.readoutHeight)
         readout.backgroundColor = NSColor(srgbRed: 20 / 255, green: 20 / 255, blue: 22 / 255, alpha: 0.88).cgColor
         readout.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
         readout.borderWidth = 0.5
@@ -147,13 +155,14 @@ final class Guides {
     func setShown(_ layer: CALayer, _ shown: Bool, from hidden: CATransform3D, animated: Bool) {
         let visible = !layer.isHidden && layer.opacity == 1
         guard shown != visible else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         guard animated else {
             layer.isHidden = !shown
             layer.opacity = shown ? 1 : 0
+            CATransaction.commit()
             return
         }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
         CATransaction.setCompletionBlock { if layer.opacity == 0 { layer.isHidden = true } }
         layer.isHidden = false
         layer.opacity = shown ? 1 : 0
@@ -176,10 +185,24 @@ final class Guides {
         return group
     }
 
+    /// The loupe's lower-left corner for a pointer at `point`: below and to the right of it, or the first of below-left, above-right and above-left
+    /// whose frame, readout included, lies inside the view under the inset and clear of every `avoiding` frame. With none free it takes the first
+    /// pushed inside the view. The result is on whole device pixels so the magnified cells stay crisp.
+    static func loupeOrigin(point: CGPoint, bounds: CGRect, topInset: CGFloat, scale: CGFloat, avoiding: [CGRect]) -> CGPoint {
+        let size = loupeSize, tall = size + readoutGap + readoutHeight, gap: CGFloat = 10
+        let usable = CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height - topInset - 4)
+        let xs = [point.x + gap, point.x - gap - size], ys = [point.y - gap - tall, point.y + gap]
+        let frames = ys.flatMap { y in xs.map { CGRect(x: $0 - readoutOverhang, y: y, width: size + 2 * readoutOverhang, height: tall) } }
+        let frame = frames.first { candidate in usable.contains(candidate) && !avoiding.contains { candidate.intersects($0) } }
+            ?? frames[0].offsetBy(dx: max(usable.minX - frames[0].minX, min(usable.maxX - frames[0].maxX, 0)), dy: max(usable.minY - frames[0].minY, min(usable.maxY - frames[0].maxY, 0)))
+        return CGPoint(x: ((frame.minX + readoutOverhang) * scale).rounded() / scale, y: (frame.minY * scale).rounded() / scale)
+    }
+
     /// Repositions the enabled guides. `point` is in view coordinates, `pixel` and `selected` (the selection or the rectangle being drawn)
     /// in image pixels with a top-left origin, and `dragging` says a drag is changing `selected`.
-    /// The top ruler sits below the `topInset` the camera housing covers.
-    func update(point: CGPoint, pixel: CGPoint, image: CGImage?, bounds: CGRect, scale: CGFloat, topInset: CGFloat, selected: CGRect?, dragging: Bool) {
+    /// The top ruler sits below the `topInset` the camera housing covers, and the loupe keeps clear of the `avoiding` frames (the visible bars).
+    /// Everything moves in one transaction with implicit actions off, so the loupe, its cells, and the outline never animate against each other.
+    func update(point: CGPoint, pixel: CGPoint, image: CGImage?, bounds: CGRect, scale: CGFloat, topInset: CGFloat, selected: CGRect?, dragging: Bool, avoiding: [CGRect]) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
@@ -299,19 +322,19 @@ final class Guides {
             context.draw(image.cropping(to: inside)!, in: CGRect(x: inside.minX - window.minX, y: window.maxY - inside.maxY, width: inside.width, height: inside.height))
             magnified.contents = context.makeImage()
             for layer in [edges, centerAccent] { layer.strokeColor = accent.cgColor }
-            // The dragged rectangle's edges, in the loupe's cells. The disc clips whatever lies outside the window.
+            // The dragged rectangle's edges, in the loupe's cells, each on the nearest pixel boundary so none sits between cells.
+            // The disc clips whatever lies outside the window.
             let cell = Self.loupeSize / CGFloat(side)
             edges.path = dragging ? selected.map {
-                CGPath(rect: CGRect(x: ($0.minX - window.minX) * cell, y: Self.loupeSize - ($0.maxY - window.minY) * cell, width: $0.width * cell, height: $0.height * cell), transform: nil)
+                let left = $0.minX.rounded(), right = $0.maxX.rounded(), top = $0.minY.rounded(), bottom = $0.maxY.rounded()
+                return CGPath(rect: CGRect(x: (left - window.minX) * cell, y: Self.loupeSize - (bottom - window.minY) * cell, width: (right - left) * cell, height: (bottom - top) * cell), transform: nil)
             } : nil
             let color = ColorFormat.average(of: image, in: CGRect(x: column, y: row, width: 1, height: 1))
             swatch.backgroundColor = CGColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1)
             hex.string = ColorFormat.hex.string(for: color)
             coordinates.string = "x \(column)  y \(row)"
-            let size = Self.loupeSize, tall = loupe.bounds.height, gap: CGFloat = 10
-            let x = point.x + gap + size > bounds.width ? point.x - gap - size : point.x + gap
-            let y = min(point.y - gap - tall < 0 ? point.y + gap : point.y - gap - tall, bounds.height - topInset - 4 - tall)
-            loupe.position = CGPoint(x: x + size / 2, y: y + tall / 2)
+            let origin = Self.loupeOrigin(point: point, bounds: bounds, topInset: topInset, scale: scale, avoiding: avoiding)
+            loupe.position = CGPoint(x: origin.x + Self.loupeSize / 2, y: origin.y + loupe.bounds.height / 2)
         }
     }
 }

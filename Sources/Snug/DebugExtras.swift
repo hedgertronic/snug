@@ -131,8 +131,28 @@ extension DebugRun {
         require(guides.widthLabel.string as? String == "\(Int(rough.width))" && !guides.widthLabel.isHidden, "the ruler shows the span's width")
         require(!(guides.numbers.sublayers!.contains { !$0.isHidden && $0.frame.intersects(guides.widthLabel.frame) }) && guides.numbers.sublayers!.contains { $0.isHidden },
                 "no tick number shows under the span's width")
+        // Sub-pixel pointer moves mid-drag: the outline's edges stay on the loupe's pixel grid, within one cell of the center's, and the loupe sits on whole device pixels.
+        for step in 1...8 {
+            let offset = CGFloat(step) * 0.17
+            mouse(.leftMouseDragged, CGPoint(x: rough.maxX + offset, y: rough.maxY + offset / 2))
+            let box = guides.edges.path!.boundingBox
+            let right = (box.maxX - middle) / loupeCell, bottom = (Guides.loupeSize - box.minY - middle) / loupeCell
+            require([right, bottom].allSatisfy { abs($0 - $0.rounded()) < 0.001 && abs($0) < 1.001 }, "step \(step): the outline's right and bottom edges sit on the loupe's grid next to the center cell: \(right) \(bottom)")
+            let corner = CGPoint(x: guides.loupe.frame.minX * overlay.scale, y: guides.loupe.frame.minY * overlay.scale)
+            require(abs(corner.x - corner.x.rounded()) < 0.001 && abs(corner.y - corner.y.rounded()) < 0.001, "step \(step): the loupe sits on whole device pixels: \(corner)")
+        }
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(guides.edges.path == nil, "the loupe draws no selection edges once the drag ends")
+
+        // The loupe flips away from a bar it would cover and stays on screen.
+        let viewBounds = overlay.view.bounds, barBox = CGRect(x: 300, y: 0, width: 600, height: 44)
+        let pointNearBar = CGPoint(x: 500, y: barBox.maxY + 30)
+        let flipped = Guides.loupeOrigin(point: pointNearBar, bounds: viewBounds, topInset: 0, scale: overlay.scale, avoiding: [barBox])
+        let flippedFrame = CGRect(x: flipped.x - 8, y: flipped.y, width: Guides.loupeSize + 16, height: Guides.loupeSize + 40)
+        require(!flippedFrame.intersects(barBox) && flipped.y > pointNearBar.y, "near a bar at the bottom the loupe goes above the pointer: \(flippedFrame)")
+        let cornerPoint = CGPoint(x: viewBounds.width - 4, y: viewBounds.height - 4)
+        let cornerOrigin = Guides.loupeOrigin(point: cornerPoint, bounds: viewBounds, topInset: 0, scale: overlay.scale, avoiding: [])
+        require(cornerOrigin.x + Guides.loupeSize + 8 <= viewBounds.width && cornerOrigin.x < cornerPoint.x, "at the right edge the loupe goes left of the pointer")
 
         // The loupe and rulers use one duration and curve, and each outro is its intro backward.
         for hidden in [Guides.loupeHiddenTransform, Guides.rulersHiddenTransform] {
@@ -153,6 +173,39 @@ extension DebugRun {
         for (code, character) in [(37, "l"), (15, "r"), (7, "x")] { key(UInt16(code), character) }
         require(guides.loupe.isHidden && guides.rulers.isHidden && guides.crosshair.isHidden, "L, R, X hide the layers again")
         overlay.dismiss()
+
+        // End to end: a pointer just above the visible bars never gets a loupe over them.
+        open()
+        let barChrome = overlay.chrome
+        defaults.set(true, forKey: Pref.loupe)
+        for y in stride(from: barChrome.bottomBar.frame.maxY + 4, through: barChrome.bottomBar.frame.maxY + 140, by: 12) {
+            mouse(.mouseMoved, CGPoint(x: barChrome.bottomBar.frame.midX * overlay.scale, y: (viewBounds.height - y) * overlay.scale))
+            let covered = [barChrome.bottomBar, barChrome.hints, barChrome.actionBar].filter { !$0.isHidden && guides.loupe.frame.intersects($0.frame) }
+            require(covered.isEmpty, "the loupe with the pointer at y \(y) covers no bar: \(guides.loupe.frame) \(covered.map(\.frame))")
+        }
+        overlay.dismiss()
+
+        // Animation variants: fade (the default) scales the loupe and fades the rulers without a slide, slide moves them in, none flips at once.
+        require(defaults.string(forKey: Pref.guidesAnimation) == "fade", "the guides animation defaults to fade")
+        for (animation, slides, animates) in [(GuidesAnimation.fade, false, true), (.slide, true, true), (.none, false, false)] {
+            defaults.set(animation.rawValue, forKey: Pref.guidesAnimation)
+            for key in [Pref.rulers, Pref.loupe] { defaults.set(false, forKey: key) }
+            open()
+            overlay.updateGuides()
+            for layer in [guides.rulers, guides.loupe] { layer.removeAllAnimations() }
+            overlay.isHeadless = false
+            for key in [Pref.rulers, Pref.loupe] { defaults.set(true, forKey: key) }
+            overlay.updateGuides()
+            overlay.isHeadless = true
+            let rulersGroup = guides.rulers.animation(forKey: "transition") as? CAAnimationGroup
+            require((rulersGroup != nil) == animates && (guides.loupe.animation(forKey: "transition") != nil) == animates, "\(animation): the layers \(animates ? "animate" : "flip at once")")
+            require(animates || (guides.rulers.animationKeys() == nil && guides.loupe.animationKeys() == nil), "none: no implicit animation runs either")
+            let slide = (rulersGroup?.animations?.first { ($0 as? CABasicAnimation)?.keyPath == "transform" } as? CABasicAnimation)?.fromValue as? NSValue
+            require((slide.map { $0.caTransform3DValue.m41 != 0 } ?? false) == slides, "\(animation): the rulers \(slides ? "slide in" : "do not slide")")
+            overlay.dismiss()
+        }
+        defaults.set(GuidesAnimation.fade.rawValue, forKey: Pref.guidesAnimation)
+        for key in [Pref.rulers, Pref.loupe] { defaults.set(false, forKey: key) }
 
         // C copies the pixel color; Shift-C cycles the format.
         open()

@@ -21,6 +21,7 @@ enum Pref {
     static let loupe = "SnugLoupe"
     static let rulers = "SnugRulers"
     static let crosshair = "SnugCrosshair"
+    static let guidesAnimation = "SnugGuidesAnimation"
     static let colorFormat = "SnugColorFormat"
     static let candidates = "SnugCandidateList"
     static let shadow = "SnugShadow"
@@ -76,6 +77,7 @@ enum Pref {
             highlightFill: 0.0,
             highlightFade: 0.42,
             highlightGlow: 0.5,
+            guidesAnimation: GuidesAnimation.fade.rawValue,
             toastPreview: true,
             toastPosition: "bottomCenter",
             roundCorners: true
