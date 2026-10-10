@@ -153,14 +153,15 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     if scale == 1 { dot.fill() } else { NSBezierPath(ovalIn: dot).fill() }
                 }
                 if scale == 1 {
-                    // The band's curve as a 1 px step, a pixel lower than at 2x so the bottom dots stay apart from it.
+                    // The band's curve as a 1 px step.
                     CGRect(x: 1, y: 5, width: 3, height: 1).fill()
                     CGRect(x: 4, y: 6, width: 10, height: 1).fill()
                     CGRect(x: 14, y: 5, width: 3, height: 1).fill()
                 } else {
+                    // Low enough that the bottom dots keep a pixel of tile between them and the cut.
                     let band = NSBezierPath()
-                    band.move(to: CGPoint(x: 0, y: 6))
-                    band.curve(to: CGPoint(x: 18, y: 6), controlPoint1: CGPoint(x: 5.4, y: 8.25), controlPoint2: CGPoint(x: 12.6, y: 8.25))
+                    band.move(to: CGPoint(x: 0, y: 5))
+                    band.curve(to: CGPoint(x: 18, y: 5), controlPoint1: CGPoint(x: 5.4, y: 7.25), controlPoint2: CGPoint(x: 12.6, y: 7.25))
                     band.lineWidth = 1.5
                     band.stroke()
                 }

@@ -357,12 +357,24 @@ extension DebugRun {
         try sheet.representation(using: .png, properties: [:])!.write(to: file)
         print(file.path)
 
+        // At 1x, variant a's five dots are fully clear 2 x 2 cells (top-left pixel listed, rows from the top) inside a ring of solid tile.
+        let small = SnugApp.menuBarIcon("a").representations.first { $0.pixelsWide == 18 } as! NSBitmapImageRep
+        for (x, y) in [(4, 8), (4, 4), (8, 3), (12, 4), (12, 8)] {
+            for column in x - 1...x + 2 {
+                for row in y - 1...y + 2 {
+                    let inside = (x...x + 1).contains(column) && (y...y + 1).contains(row)
+                    precondition(small.colorAt(x: column, y: row)!.alphaComponent == (inside ? 0 : 1), "1x dot at \(x), \(y): pixel \(column), \(row)")
+                }
+            }
+        }
+
         let suite = FileManager.default.temporaryDirectory.appending(path: "snug-icon-\(UUID().uuidString)").path
         let defaults = UserDefaults(suiteName: suite)!
         Pref.register(in: defaults)
         let button = NSButton()
         let observation = SnugApp.observeMenuBarIcon(on: button, defaults: defaults)
-        for variant in variants {
+        // "a" is the registered default, so "d" goes first to make both writes real changes.
+        for variant in variants.reversed() {
             let writer = try Process.run(URL(fileURLWithPath: "/usr/bin/defaults"), arguments: ["write", suite, Pref.menuBarIcon, variant])
             writer.waitUntilExit()
             let expected = SnugApp.menuBarIcon(variant).tiffRepresentation
