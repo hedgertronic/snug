@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import ImageIO
 import Testing
 @testable import ScreenshotCore
 
@@ -169,8 +170,8 @@ struct DockRectTests {
         }
     }
 
-    /// A 2x Dock panel (rounded, 2 px light rim, icon tiles along its length) on a dark gradient, with a lighter window whose edge sits 25 px past the panel.
-    private func rimmedDock(size: CGSize, panel: CGRect, window: CGRect) -> CGImage {
+    /// A 2x Dock panel (rounded, 2 px light rim, icon tiles along its length) on a dark gradient, with a lighter window (`windowGray`) beside it.
+    private func rimmedDock(size: CGSize, panel: CGRect, window: CGRect, windowGray: CGFloat = 0.3) -> CGImage {
         let context = CGContext(data: nil, width: Int(size.width), height: Int(size.height), bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         context.drawLinearGradient(CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [CGColor(red: 0.1, green: 0.08, blue: 0.2, alpha: 1),
@@ -178,7 +179,7 @@ struct DockRectTests {
                                    start: .zero, end: CGPoint(x: size.width, y: size.height), options: [])
         context.translateBy(x: 0, y: size.height)
         context.scaleBy(x: 1, y: -1)
-        context.setFillColor(CGColor(gray: 0.3, alpha: 1))
+        context.setFillColor(CGColor(gray: windowGray, alpha: 1))
         context.fill(window)
         context.addPath(CGPath(roundedRect: panel.insetBy(dx: 1, dy: 1), cornerWidth: 30, cornerHeight: 30, transform: nil))
         context.setStrokeColor(CGColor(gray: 0.55, alpha: 1))
@@ -205,6 +206,29 @@ struct DockRectTests {
         }
         // A union that stops short of the panel's ends finds the same panel.
         #expect(DockTiles.panel(in: image, near: CGRect(x: 4, y: 200, width: 150, height: 1700), scale: 2) == found)
+    }
+
+    @Test func aBrightWindowJustPastTheDockDoesNotTakeItsSide() throws {
+        // A white window 11 pt right of the panel: its edge is inside the side search and far stronger than the rim.
+        let panel = CGRect(x: 10, y: 140, width: 136, height: 1751)
+        let image = rimmedDock(size: CGSize(width: 400, height: 1964), panel: panel, window: CGRect(x: 168, y: 88, width: 232, height: 1852), windowGray: 1)
+        let found = try #require(DockTiles.panel(in: image, near: CGRect(x: 20, y: 140, width: 134, height: 1750), scale: 2))
+        for (a, b) in [(found.minX, panel.minX), (found.maxX, panel.maxX), (found.minY, panel.minY), (found.maxY, panel.maxY)] {
+            #expect(abs(a - b) <= 3, "found \(found), panel \(panel)")
+        }
+    }
+
+    @Test func theUsersLeftDockBesideSafariComesFromItsRim() throws {
+        // The user's left Dock with Safari 12 pt to its right: their 2000 px wide screenshot resampled to the display's 3024 px (2x) and cut
+        // to its left 400 px. The panel's rims in those pixels run x 9 to 145 and y 139 to 1891. The union is this Dock's live one (hover.log).
+        let url = try #require(Bundle.module.url(forResource: "DockBesideSafari", withExtension: "png", subdirectory: "Fixtures"))
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        let found = try #require(DockTiles.panel(in: image, near: CGRect(x: 20, y: 140, width: 134, height: 1750), scale: 2))
+        for (a, b) in [(found.minX, 9), (found.maxX, 145), (found.minY, 139), (found.maxY, 1891)] as [(CGFloat, CGFloat)] {
+            #expect(abs(a - b) <= 4, "found \(found)")
+        }
+        #expect(DockTiles.tiles(in: image, panel: found, scale: 2).count == 16)
     }
 
     @Test func aHorizontalDockPanelComesFromItsRim() throws {
@@ -281,11 +305,57 @@ struct SystemSurfaceHoverTests {
                       AXFrame(roleDescription: "group", rect: CGRect(x: 0, y: 0, width: 1512, height: 982), role: "AXGroup"),
                       AXFrame(roleDescription: "application", rect: .zero, role: "AXApplication", title: "WindowManager")]
         let found = try await lookup(frames, inWindowNamed: "WindowManager", frozen: false)
-        #expect(found.map(\.label) == ["Button", "List"])
+        #expect(found.map(\.label) == ["Button"], "the strip's list is never a candidate")
         let window = Candidate(id: "window-1", label: "Window", bounds: CGRect(x: 200, y: 100, width: 2000, height: 1500), score: -1, kind: .window)
         var session = SelectionSession(candidates: [window] + found, extent: extent, anchor: CGPoint(x: 2838, y: 847))
         #expect(session.selected?.bounds == CGRect(x: 2589, y: 684, width: 403, height: 301))
         session.hover(at: CGPoint(x: 1000, y: 800))
         #expect(session.selected?.id == window.id, "the window behind is hovered, not \(String(describing: session.selected))")
+        session.hover(at: CGPoint(x: 2838, y: 1100))
+        #expect(session.selected?.kind == .display, "the gap below the thumbnail hovers what is behind the strip, not \(String(describing: session.selected))")
+    }
+
+    @Test func stageManagerThumbnailsAreTheirVisiblePicturesNotTheirPaddedButtons() async throws {
+        // The user's capture of the strip's list (2586, 378, 406, 1274 px; hover.log), put back where it was on a 2x display, and the
+        // lookups' button frames. Each tilted picture's left edge is at x 146 in the capture; the frames start at x 3.
+        let url = try #require(Bundle.module.url(forResource: "StageManagerStrip", withExtension: "png", subdirectory: "Fixtures"))
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let strip = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        let context = try #require(CGContext(data: nil, width: 3024, height: 1964, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.draw(strip, in: CGRect(x: 2586, y: 1964 - 378 - 1274, width: 406, height: 1274))
+        let image = try #require(context.makeImage())
+        let window = Candidate(id: "window-1", label: "Window", bounds: CGRect(x: 168, y: 88, width: 2484, height: 1854), score: -1, kind: .window)
+        for index in 0..<3 {
+            let frames = [AXFrame(roleDescription: "button", rect: CGRect(x: 1294.71, y: 189.15 + 180.23 * Double(index), width: 201.29, height: 150.23), role: "AXButton"),
+                          AXFrame(roleDescription: "list", rect: CGRect(x: 1293.43, y: 189.15, width: 202.57, height: 636.7), role: "AXList"),
+                          AXFrame(roleDescription: "group", rect: CGRect(x: 0, y: 0, width: 1512, height: 982), role: "AXGroup"),
+                          AXFrame(roleDescription: "application", rect: .zero, role: "AXApplication", title: "WindowManager")]
+            let button = try #require(try await lookup(frames, inWindowNamed: "WindowManager", frozen: false).first)
+            let found = StageManager.visibleThumbnails([button], frames: frames, in: image, scale: 2)
+            let thumbnail = try #require(found.first).bounds
+            #expect(abs(thumbnail.minX - (2586 + 146)) <= 2 && thumbnail.maxX == button.bounds.maxX
+                    && thumbnail.minY == button.bounds.minY && thumbnail.maxY == button.bounds.maxY, "button \(button.bounds), found \(thumbnail)")
+            var session = SelectionSession(candidates: [window] + found, extent: extent, anchor: CGPoint(x: 2800, y: button.bounds.midY))
+            #expect(session.selected?.bounds == thumbnail)
+            session.hover(at: CGPoint(x: 2620, y: button.bounds.midY))
+            #expect(session.selected?.id == window.id, "the padding left of the picture hovers the window behind, not \(String(describing: session.selected))")
+        }
+        // The strip on the left (the default with the Dock at the bottom): the same capture mirrored at the screen's left edge, whose
+        // pictures' right edges sit at x 3024 - 2732 = 292.
+        context.clear(CGRect(x: 0, y: 0, width: 3024, height: 1964))
+        context.translateBy(x: 3024, y: 0)
+        context.scaleBy(x: -1, y: 1)
+        context.draw(strip, in: CGRect(x: 2586, y: 1964 - 378 - 1274, width: 406, height: 1274))
+        let mirrored = try #require(context.makeImage())
+        for index in 0..<3 {
+            let button = CGRect(x: 32, y: (378 + 360.46 * Double(index)).rounded(), width: 403, height: 301)
+            let thumbnail = StageManager.thumbnail(in: mirrored, button: button, scale: 2)
+            #expect(abs(thumbnail.maxX - 292) <= 2 && thumbnail.minX == button.minX && thumbnail.minY == button.minY && thumbnail.maxY == button.maxY,
+                    "mirrored button \(button), found \(thumbnail)")
+        }
+        // Frames from any other app stay as they are.
+        let other = Candidate(id: "ax", label: "Button", bounds: CGRect(x: 2589, y: 378, width: 403, height: 301), score: 2, kind: .element)
+        #expect(StageManager.visibleThumbnails([other], frames: [AXFrame(roleDescription: "application", rect: .zero, role: "AXApplication", title: "Finder")], in: image, scale: 2) == [other])
     }
 }

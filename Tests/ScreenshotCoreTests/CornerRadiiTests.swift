@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import ImageIO
 import Testing
 @testable import ScreenshotCore
 
@@ -111,6 +112,45 @@ struct CornerRadiiTests {
         #expect(alpha(rounded, 0, 0) == 255 && alpha(rounded, 159, 0) == 255 && alpha(rounded, 80, 40) == 255 && alpha(rounded, 80, 79) == 255)
         // A point inside the bottom arc stays opaque: 8 px in from the corner along the diagonal is within the 16 px circle.
         #expect(alpha(rounded, 8, 71) == 255 && alpha(rounded, 151, 71) == 255)
+    }
+
+    @Test func cornersInsideTheWindowsArcButOutsideItsShapeTakeTheArcLessTheirInset() {
+        let window = CGRect(x: 20, y: 20, width: 160, height: 120)
+        // 10 px in on both sides of the bottom-right corner, where a 40 px arc still cuts in: 40 less the 8 px past the 2 px tolerance.
+        #expect(CornerRadii(3).replacingCorners(sharedWith: window, in: CGRect(x: 60, y: 60, width: 110, height: 70), with: 40)
+                == CornerRadii(topLeft: 3, topRight: 3, bottomLeft: 3, bottomRight: 32))
+        // 20 px in on both sides: the square corner is inside the arc, so nothing outside the window shows and the corner keeps its radius.
+        #expect(CornerRadii(3).replacingCorners(sharedWith: window, in: CGRect(x: 60, y: 60, width: 100, height: 60), with: 40) == CornerRadii(3))
+        // A corner on the window's corner takes its radius however small, 0 included (a square window, or one still being measured).
+        #expect(CornerRadii(3).replacingCorners(sharedWith: window, in: CGRect(x: 20, y: 60, width: 160, height: 80), with: 0)
+                == CornerRadii(topLeft: 3, topRight: 3, bottomLeft: 0, bottomRight: 0))
+        #expect(CornerRadii(3).replacingCorners(sharedWith: window, in: CGRect(x: 22, y: 60, width: 156, height: 78), with: 5)
+                == CornerRadii(topLeft: 3, topRight: 3, bottomLeft: 5, bottomRight: 5))
+    }
+
+    @Test func aCropNearTheWindowsCornerHidesTheWallpaperPastItsArc() throws {
+        // The user's capture of the Slack composer's row (962, 1648, 1680 x 284 px, as logged), 10 px inside the bottom-right corner of the
+        // Slack window (168, 88, 2484 x 1854). The window's arc in those pixels fits a 58.5 px circle; the wallpaper past it is teal.
+        let url = try #require(Bundle.module.url(forResource: "SlackComposerRow", withExtension: "png", subdirectory: "Fixtures"))
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        let crop = CGRect(x: 0, y: 0, width: 1680, height: 284), window = CGRect(x: 168 - 962, y: 88 - 1648, width: 2484, height: 1854)
+        // Only the window's corner follows a circle at the crop's corners, so the crop measures no radius of its own.
+        #expect(cornerRadius(in: image, rect: crop) == 0)
+        let radii = CornerRadii(0).replacingCorners(sharedWith: window, in: crop, with: 58)
+        let rounded = try OutputFrame.render(image, crop: crop, scale: 2, framed: false, cornerRadii: radii)
+        let pixels = image.dataProvider!.data! as Data
+        var wallpaper = 0
+        for y in 200..<284 {
+            for x in 1580..<1680 {
+                let offset = y * image.bytesPerRow + x * 4
+                guard Int(pixels[offset + 1]) - Int(pixels[offset]) > 12 else { continue }
+                wallpaper += 1
+                #expect(alpha(rounded, x, y) == 0, "wallpaper at \(x), \(y) stays in the capture")
+            }
+        }
+        #expect(wallpaper > 50)
+        #expect(alpha(rounded, 0, 0) == 255 && alpha(rounded, 1679, 0) == 255 && alpha(rounded, 0, 283) == 255 && alpha(rounded, 1640, 250) == 255)
     }
 
     @Test func eachCornerKeepsItsOwnRadius() throws {
