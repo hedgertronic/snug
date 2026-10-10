@@ -65,6 +65,14 @@ extension DebugRun {
             try snapshot("loupe-drag-\(name)")
             mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
             overlay.dismiss()
+            // The pointer just above the bottom bar: the loupe flips above it instead of hiding behind the bar.
+            overlay.present(image: content, frame: frame, displayID: nil)
+            let barTop = overlay.chrome.bottomBar.frame.maxY
+            let nearBar = CGRect(x: 900, y: (overlay.view.bounds.height - barTop - 40) * overlay.scale - 200, width: 500, height: 200)
+            drag(nearBar, release: false)
+            try snapshot("loupe-near-bar-\(name)")
+            mouse(.leftMouseUp, CGPoint(x: nearBar.maxX, y: nearBar.maxY))
+            overlay.dismiss()
         }
         for key in [Pref.loupe, Pref.rulers] { defaults.set(false, forKey: key) }
 

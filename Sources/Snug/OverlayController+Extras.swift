@@ -167,11 +167,14 @@ extension OverlayController {
     func updateGuides() {
         let guides = view.guides
         guides.crosshair.isHidden = !defaults.bool(forKey: Pref.crosshair)
-        guides.setShown(guides.rulers, defaults.bool(forKey: Pref.rulers), from: Guides.rulersHiddenTransform, animated: !isHeadless)
-        guides.setShown(guides.loupe, defaults.bool(forKey: Pref.loupe), from: Guides.loupeHiddenTransform, animated: !isHeadless)
+        let animation = GuidesAnimation(rawValue: defaults.string(forKey: Pref.guidesAnimation)!)!
+        let animated = !isHeadless && animation != GuidesAnimation.none
+        guides.setShown(guides.rulers, defaults.bool(forKey: Pref.rulers), from: animation == .slide ? Guides.rulersHiddenTransform : CATransform3DIdentity, animated: animated)
+        guides.setShown(guides.loupe, defaults.bool(forKey: Pref.loupe), from: Guides.loupeHiddenTransform, animated: animated)
         guard !(guides.crosshair.isHidden && guides.rulers.isHidden && guides.loupe.isHidden) else { return }
         guides.update(point: CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale), pixel: pointerPixel,
                       image: image, bounds: view.bounds, scale: scale, topInset: topInset,
-                      selected: draggedRect ?? selection?.rect, dragging: draggedRect != nil)
+                      selected: draggedRect ?? selection?.rect, dragging: draggedRect != nil,
+                      avoiding: [chrome.bottomBar, chrome.actionBar, chrome.hints, chrome.list].filter { !$0.isHidden }.map(\.frame))
     }
 }
