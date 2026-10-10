@@ -117,6 +117,8 @@ final class OverlayController {
     /// The selection before a run of P presses and the rectangle the last press conformed it to: each press in the run conforms the
     /// rectangle from before the run, so cycling through 1:1 does not shrink the 16:9 that follows.
     private var ratioBase: (base: CGRect, conformed: CGRect)?
+    /// The hovered level was walked to with Up, Down or Tab (not picked from the list); it lets go after 4 pt of pointer travel.
+    private var walkedLevel = false
     /// The size badge's ratio: the lock, e.g. "4:3 locked", else the ratio of the rectangle being dragged or selected (see
     /// `RatioLock.readout`); empty with neither.
     var ratioReadout: String {
@@ -285,6 +287,7 @@ final class OverlayController {
         hoveredCorner = nil
         ratioLock = nil
         ratioBase = nil
+        walkedLevel = false
         selection = nil
         interaction = .none
         spaceHeld = false
@@ -354,7 +357,9 @@ final class OverlayController {
         if !isHeadless { cursor.set() }
     }
 
-    /// Capture mode: the pointer picks the element, window, or display under it. A level picked with a key holds until the pointer leaves it.
+    /// Capture mode: the pointer picks the element, window, or display under it. A level picked with a key holds until the pointer leaves
+    /// it; one walked to with Up, Down or Tab also lets go once the pointer moves more than 4 pt from where the walk began (the session's
+    /// anchor stops following the pointer while a level holds).
     private func updateHover(pixel: CGPoint) {
         guard case .none = interaction else { return }
         guard selection == nil || shiftHeld else {
@@ -363,7 +368,9 @@ final class OverlayController {
         }
         if mode == .capture, session != nil {
             requestAccessibility(at: pixel)
-            if session!.isLocked, !session!.holds(at: pixel) { session!.toggleLock() }
+            let walkLetGo = walkedLevel && hypot(pixel.x - session!.anchor.x, pixel.y - session!.anchor.y) > 4 * scale
+            if session!.isLocked, !session!.holds(at: pixel) || walkLetGo { session!.toggleLock() }
+            if !session!.isLocked { walkedLevel = false }
             session!.hover(at: pixel)
         }
         refresh()
@@ -639,10 +646,12 @@ final class OverlayController {
         case (_, true, "s") where hovering: clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true)
         case (36, _, _) where shift || option, (76, _, _) where shift || option: copySelectionText(translating: option)
         case (36, _, _), (76, _, _): copy()
-        case (48, _, _) where hovering: if shift { session?.shrink() } else { session?.expand() }
-        case (126, _, _) where hovering: session?.expand()
-        case (125, _, _) where hovering: session?.shrink()
-        case (_, false, "1"..."5") where hovering && defaults.bool(forKey: Pref.candidates): session?.pick(Int(character)! - 1)
+        case (48, _, _) where hovering, (126, _, _) where hovering, (125, _, _) where hovering:
+            if event.keyCode == 125 || event.keyCode == 48 && shift { session?.shrink() } else { session?.expand() }
+            walkedLevel = true
+        case (_, false, "1"..."5") where hovering && defaults.bool(forKey: Pref.candidates):
+            session?.pick(Int(character)! - 1)
+            walkedLevel = false
         case (48, _, _): cycleFit(backward: shift)
         case (49, _, _): spaceHeld = true
         case (123, _, _): nudge(CGPoint(x: -step, y: 0))
