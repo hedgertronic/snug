@@ -2,17 +2,34 @@ import AppKit
 import ScreenCaptureKit
 import ScreenshotCore
 
+/// Marks the windows Snug's own captures leave out: the overlay and the toast. Settings, About and First Run are not marked,
+/// so they can be captured and hovered like any other window.
+protocol CaptureExcluded {}
+
+extension OverlayWindow: CaptureExcluded {}
+extension Toast: CaptureExcluded {}
+
 /// Captures the display under the pointer at full pixel resolution.
 enum DisplayCapture {
+    /// The window IDs of Snug's marked windows.
+    @MainActor
+    static func excludedWindowIDs() -> Set<CGWindowID> {
+        Set(NSApp.windows.filter { $0 is CaptureExcluded }.map { CGWindowID($0.windowNumber) })
+    }
+
+    /// The display with the windows `excluded` (from `excludedWindowIDs`) left out.
+    static func filter(for displayID: CGDirectDisplayID, in content: SCShareableContent, excluding excluded: Set<CGWindowID>) -> SCContentFilter {
+        let display = content.displays.first { $0.displayID == displayID }!
+        return SCContentFilter(display: display, excludingWindows: content.windows.filter { excluded.contains($0.windowID) })
+    }
+
     /// The display's current contents, sized from the stream's point-to-pixel scale.
     @concurrent
     static func image(of displayID: CGDirectDisplayID) async throws -> CGImage {
         let listing = signposter.beginInterval("shareable content")
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         signposter.endInterval("shareable content", listing)
-        let display = content.displays.first { $0.displayID == displayID }!
-        let ownWindows = content.windows.filter { $0.owningApplication?.processID == getpid() }
-        let filter = SCContentFilter(display: display, excludingWindows: ownWindows)
+        let filter = filter(for: displayID, in: content, excluding: await excludedWindowIDs())
         let info = SCShareableContent.info(for: filter)
         let configuration = SCStreamConfiguration()
         configuration.width = Int((info.contentRect.width * CGFloat(info.pointPixelScale)).rounded())
@@ -27,9 +44,7 @@ enum DisplayCapture {
     @concurrent
     static func image(of displayID: CGDirectDisplayID, area: CGRect) async throws -> CGImage {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        let display = content.displays.first { $0.displayID == displayID }!
-        let ownWindows = content.windows.filter { $0.owningApplication?.processID == getpid() }
-        let filter = SCContentFilter(display: display, excludingWindows: ownWindows)
+        let filter = filter(for: displayID, in: content, excluding: await excludedWindowIDs())
         let scale = CGFloat(SCShareableContent.info(for: filter).pointPixelScale)
         let configuration = SCStreamConfiguration()
         configuration.sourceRect = area
@@ -72,11 +87,12 @@ enum DisplayCapture {
     static func windows(on displayID: CGDirectDisplayID, pixelScale: CGFloat) async -> [(rect: CGRect, name: String, id: CGWindowID, frozen: Bool)] {
         let display = CGDisplayBounds(displayID)
         let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as! [[String: Any]]
+        let excluded = await excludedWindowIDs()
         var result: [(rect: CGRect, name: String, id: CGWindowID, frozen: Bool)] = []
         for window in info {
             let layer = window[kCGWindowLayer as String] as! Int
             guard layer == 0 || systemLevels.contains(layer),
-                  window[kCGWindowOwnerPID as String] as! Int32 != getpid(),
+                  !excluded.contains(CGWindowID(window[kCGWindowNumber as String] as! Int)),
                   window[kCGWindowAlpha as String] as! Double > 0 else { continue }
             let bounds = CGRect(dictionaryRepresentation: window[kCGWindowBounds as String] as! CFDictionary)!
                 .intersection(display)

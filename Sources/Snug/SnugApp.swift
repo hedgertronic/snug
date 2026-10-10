@@ -41,6 +41,10 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             try! DebugRun.renderSettings(into: URL(fileURLWithPath: arguments[index + 1]))
             exit(EXIT_SUCCESS)
         }
+        if arguments.contains("--verify-settings-capture") {
+            Task { try! await DebugRun.verifySettingsCapture(overlay: overlay) }
+            return
+        }
         let image = arguments.firstIndex(of: "--image").map { index in
             let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: arguments[index + 1]) as CFURL, nil)!
             return CGImageSourceCreateImageAtIndex(source, 0, nil)!
@@ -261,10 +265,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     @objc private func showSettings() {
         if settingsWindow == nil {
-            let window = NSWindow(contentViewController: SettingsTabs.makeController())
-            window.styleMask = [.titled, .closable]
-            window.isReleasedWhenClosed = false
-            settingsWindow = window
+            settingsWindow = SettingsTabs.makeWindow()
         }
         NSApp.activate()
         settingsWindow!.makeKeyAndOrderFront(nil)
