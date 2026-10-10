@@ -78,8 +78,6 @@ final class OverlayController {
     /// The reading pill and notice, and the running text analysis, OCR, or translation.
     var text = TextSession()
     var textTask: Task<Void, Never>?
-    /// The first Text mode's Vision warm-up in this process; not cancelled on dismiss.
-    var visionWarm: Task<Void, Never>?
     /// Milliseconds the last Live Text analysis took, from the start of the analysis to the result.
     var lastLiveTextMilliseconds = 0.0
     /// Option-Return: the language to translate into, the installed-pair check, and the translation; debug runs replace them.
@@ -648,6 +646,7 @@ final class OverlayController {
         case (_, true, _) where shift && character.lowercased() == "s":
             if hovering { clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true, saveAs: true) } else { save(saveAs: true) }
         case (_, false, "e") where hovering && hoverRect != nil: openAsSelection(hoverRect!)
+        case (_, false, "k"): cutOut()
         case (_, false, "o"): defaults.set(!defaults.bool(forKey: Pref.roundCorners), forKey: Pref.roundCorners)
         case (_, false, "p"): cycleRatioLock()
         case (_, false, "="): applyRadiusToAll()

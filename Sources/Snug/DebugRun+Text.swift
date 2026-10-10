@@ -7,6 +7,7 @@ import Vision
 extension DebugRun {
     /// `--verify-text-ui`: drives Live Text in Text mode and Capture's Shift-Return through synthesized events on form-test.png.
     static func verifyText(image: CGImage, frame: CGRect, overlay: OverlayController) async throws {
+        try await verifyWarmVisionChild()
         try await warmVision(image)
         _ = privateSetup(overlay)
         let pasteboard = overlay.pasteboard
@@ -85,10 +86,6 @@ extension DebugRun {
         try await waitFor("the Live Text analysis attaches") { liveText.analysis != nil }
         print("Live Text analysis: \(String(format: "%.1f", overlay.lastLiveTextMilliseconds)) ms (first in this process)")
         require(overlay.chrome.reading.isHidden, "the Reading text... pill goes away when the analysis attaches")
-        let built = try Bundle.main.executableURL!.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate!
-        require(overlay.visionWarm != nil && overlay.defaults.object(forKey: Pref.visionWarmedBuild) == nil, "the first Text mode of a new binary starts the Vision warm-up")
-        await overlay.visionWarm!.value
-        require(overlay.defaults.object(forKey: Pref.visionWarmedBuild) as? Date == built, "the warm-up records the binary's date when it finishes")
         require(liveText.frame == overlay.view.bounds && liveText.superview === overlay.view, "Live Text covers the frozen image exactly")
         require(liveText.isSupplementaryInterfaceHidden, "no Live Text button sits in the corner")
         require(liveText.text.contains("Product name") && liveText.text.contains("Billing address"), "the analysis reads the screen's text")
@@ -109,10 +106,6 @@ extension DebugRun {
         require(overlay.window.isVisible && pasteboard.string(forType: .string) == nil, "Return with nothing selected copies nothing and keeps the overlay open")
         overlay.dismiss()
         require(liveText.analysis == nil, "closing drops the analysis")
-        overlay.visionWarm = nil
-        try await open()
-        require(overlay.visionWarm == nil, "with this binary's date stored, Text mode does not warm Vision again")
-        overlay.dismiss()
 
         // Every drag and click case runs twice: with the press reaching Live Text at once, and held back as real pointer input is.
         for held in [false, true] {
@@ -481,6 +474,69 @@ extension DebugRun {
         key(escape)
         require(!overlay.window.isVisible, "Esc again closes")
 
+        // K cuts the selection or the hovered element out to a transparent PNG with Vision's foreground mask; with no subject the overlay
+        // stays open with a notice. The fixtures are the background removal spike's (notes/cutout/fixtures).
+        suffix = ""
+        let kKey: UInt16 = 40
+        let fixtures = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../notes/cutout/fixtures").standardized
+        func spikeFixture(_ name: String) -> CGImage {
+            CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(fixtures.appending(path: name) as CFURL, nil)!, 0, nil)!
+        }
+        func pixels(_ image: CGImage) -> (rgba: [UInt8], width: Int) {
+            let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
+                                    space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            return (Array(UnsafeBufferPointer(start: context.data!.assumingMemoryBound(to: UInt8.self), count: image.width * image.height * 4)), image.width)
+        }
+        func cutOut() async -> CGImage? {
+            pasteboard.clearContents()
+            key(kKey, "k")
+            await overlay.textTask?.value
+            return pasteboard.data(forType: .png).map { CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithData($0 as CFData, nil)!, 0, nil)! }
+        }
+        overlay.defaults.set(false, forKey: Pref.snap)
+        let icon = spikeFixture("icon-flat-composite.png")
+        let iconRect = CGRect(x: 110, y: 60, width: 180, height: 180)
+        overlay.present(image: icon, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(icon.width) / 2, height: CGFloat(icon.height) / 2), displayID: nil)
+        mouse(.leftMouseDown, iconRect.origin)
+        mouse(.leftMouseDragged, CGPoint(x: iconRect.maxX, y: iconRect.maxY))
+        mouse(.leftMouseUp, CGPoint(x: iconRect.maxX, y: iconRect.maxY))
+        require(overlay.selection?.rect == iconRect, "with snap off a drag selects the icon's rect exactly: \(String(describing: overlay.selection?.rect))")
+        let beforeCutout = footprint()
+        let iconCut = await cutOut()
+        let afterCutout = footprint()
+        require(!overlay.window.isVisible && iconCut != nil, "K on a selection closes the overlay and copies a PNG")
+        let (cut, cutWidth) = pixels(iconCut!)
+        let (source, sourceWidth) = pixels(icon)
+        let center = ((iconCut!.height / 2) * cutWidth + cutWidth / 2) * 4
+        let sourceCenter = ((Int(iconRect.midY)) * sourceWidth + Int(iconRect.midX)) * 4
+        require(abs(iconCut!.width - 180) <= 2 && abs(iconCut!.height - 180) <= 2, "the cutout is the icon's size: \(iconCut!.width)x\(iconCut!.height)")
+        require(cut[3] == 0 && cut[(cutWidth - 1) * 4 + 3] == 0, "the cutout's rounded corners are transparent (alpha \(cut[3]), \(cut[(cutWidth - 1) * 4 + 3]))")
+        require(cut[center + 3] == 255 && (0..<3).allSatisfy { abs(Int(cut[center + $0]) - Int(source[sourceCenter + $0])) <= 3 },
+                "the cutout's center is opaque and keeps the source color: \(Array(cut[center..<center + 4])) vs \(Array(source[sourceCenter..<sourceCenter + 4]))")
+        try await Task.sleep(for: .seconds(2))
+        print("Cutout footprint: \(beforeCutout) before K, \(afterCutout) after delivery, \(footprint()) 2 s after")
+
+        overlay.defaults.set(true, forKey: Pref.snap)
+        overlay.present(image: icon, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(icon.width) / 2, height: CGFloat(icon.height) / 2), displayID: nil)
+        await overlay.detectionTask?.value
+        // Geometry finds only the arch inside the tile, so the tile comes in as a window rectangle, as a live capture lists it.
+        overlay.setWindows([iconRect], names: ["Icon"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, CGPoint(x: iconRect.minX + 20, y: iconRect.maxY - 20))
+        let hovered = overlay.hoverRect
+        require(hovered == iconRect, "hovering the icon tile picks it: \(String(describing: hovered))")
+        let tileCut = await cutOut()
+        require(!overlay.window.isVisible && tileCut.map { CGFloat($0.width) <= hovered!.width && pixels($0).rgba[3] == 0 } == true,
+                "K on the hovered element copies its cutout with transparent corners: \(String(describing: tileCut.map { "\($0.width)x\($0.height)" }))")
+
+        overlay.present(image: image, frame: frame, displayID: nil)
+        key(fKey, "f")
+        require(overlay.selection?.rect == CGRect(x: 0, y: 0, width: image.width, height: image.height), "F selects the whole page")
+        let pageCut = await cutOut()
+        require(overlay.window.isVisible && pageCut == nil && overlay.selection != nil, "K on a whole page finds no subject: nothing is copied and the overlay stays open")
+        require(texts(in: overlay.chrome.status) == ["No subject found"], "a No subject found notice shows: \(texts(in: overlay.chrome.status))")
+        overlay.dismiss()
+
         print("Text UI verification passed (\(passed.count) checks):")
         passed.forEach { print("- \($0)") }
         exit(EXIT_SUCCESS)
@@ -518,6 +574,65 @@ extension DebugRun {
         print("Vision warm-up: \(String(format: "%.1f", start.duration(to: warmed).milliseconds)) ms, footprint \(before) before, "
               + "\(String(format: "%.1f", peak)) MiB peak, \(released) after, \(settled) 2 s after, \(footprint()) 10 s after")
         _ = try await OverlayController.findItems(in: itemsFixture(width: image.width, height: image.height))
+    }
+
+    /// Launch's Vision warm-up on private defaults, before anything in this process loads Vision: the first call starts a `--warm-vision`
+    /// child that records this binary's date once it exits cleanly, and a second call starts nothing. Prints the child's time and this
+    /// process's footprint before and after, which the child's compile and memory leave alone.
+    static func verifyWarmVisionChild() async throws {
+        let defaults = UserDefaults(suiteName: FileManager.default.temporaryDirectory.appending(path: "snug-warm-\(UUID().uuidString)").path)!
+        func require(_ condition: Bool, _ message: String) {
+            guard condition else {
+                FileHandle.standardError.write(Data("Vision warm-up verification failed: \(message)\n".utf8))
+                exit(EXIT_FAILURE)
+            }
+            print("- \(message)")
+        }
+        let built = try Bundle.main.executableURL!.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate!
+        let (start, before) = (ContinuousClock.now, footprint())
+        let child = OverlayController.warmVisionInChild(defaults: defaults)
+        require(child?.arguments == ["--warm-vision"] && child!.qualityOfService == .utility && defaults.object(forKey: Pref.visionWarmedBuild) == nil,
+                "launch on a binary with no warmed date starts a utility-priority --warm-vision child")
+        for _ in 0..<6000 where child!.isRunning { try await Task.sleep(for: .milliseconds(100)) }
+        // The termination handler runs on its own thread, just after the exit is visible here.
+        for _ in 0..<20 where defaults.object(forKey: Pref.visionWarmedBuild) == nil { try await Task.sleep(for: .milliseconds(50)) }
+        require(child!.terminationStatus == 0 && defaults.object(forKey: Pref.visionWarmedBuild) as? Date == built, "the child exits with status 0 and records this binary's date")
+        require(OverlayController.warmVisionInChild(defaults: defaults) == nil, "with this binary's date stored, launch starts no child")
+        print("Vision warm-up child: \(String(format: "%.1f", start.duration(to: .now).milliseconds)) ms, this process's footprint \(before) before, \(footprint()) after")
+    }
+
+    /// `--warm-vision`: runs Tab's accurate OCR and barcode requests on the warm-up page, then Shift-Return's accurate OCR on each of its
+    /// script rows alone, and exits. Vision compiles each model into the on-disk cache on a binary's first use of it: the text detector,
+    /// orientation, the barcode networks, and one recognizer per script, which automatic language detection only reaches for a row on its
+    /// own. A child process pays that once per binary and takes the requests' memory with it when it exits. Prints the time, the items
+    /// found, and the footprint before and after.
+    static func warmVisionAndExit() async throws {
+        let before = footprint()
+        let start = ContinuousClock.now
+        let (page, cells) = warmFixture()
+        let items = try await OverlayController.findItems(in: page)
+        for cell in cells { _ = try await OverlayController.recognize(page, crop: cell) }
+        print("warm-vision: \(String(format: "%.1f", start.duration(to: .now).milliseconds)) ms, \(items.count) items, footprint \(before) before, \(footprint()) after")
+        exit(EXIT_SUCCESS)
+    }
+
+    /// The found-items page at 2000 x 1100 px with an Arabic and a Devanagari row of text above it, and each row's rect (top-left origin,
+    /// pixels). Those two scripts have recognizers of their own; Cyrillic, Chinese, Japanese, Korean and Thai rows compiled nothing more.
+    static func warmFixture() -> (page: CGImage, cells: [CGRect]) {
+        let (width, height) = (2000, 1100)
+        let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.draw(itemsFixture(width: width, height: height), in: CGRect(x: 0, y: 0, width: width, height: height))
+        let rows = ["مرحبا بك في التطبيق", "नमस्ते, आप कैसे हैं"]
+        var cells: [CGRect] = []
+        for (index, text) in rows.enumerated() {
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 30), .foregroundColor: NSColor.black]))
+            let baseline = CGPoint(x: 40 + index * 640, y: 1050)
+            context.textPosition = baseline
+            CTLineDraw(line, context)
+            cells.append(CGRect(x: baseline.x - 20, y: CGFloat(height) - baseline.y - 38, width: 640, height: 50))
+        }
+        return (context.makeImage()!, cells)
     }
 
     /// A white page of `width` x `height` pixels with a link, an email address and a phone number in large text from the top left, and a
