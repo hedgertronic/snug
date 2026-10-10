@@ -24,9 +24,9 @@ extension OverlayController {
         return switch mode {
         case .text: [(["Drag"], "select text"), (["\u{21A9}"], "copy"), (["\u{21E7}", "\u{21A9}"], "rows"), (["Tab"], "links, codes"), (["\u{2325}", "\u{21A9}"], "translate"), (["F"], "all text"), (["C"], "color"), (["?"], "all keys")]
         case .capture where selection != nil:
-            // Option shows what it does: grow, and shrink with Command added; the side arrows appear in place.
+            // The resize hint follows the held modifiers: Option grows, Option-Command shrinks; the side arrows appear in place.
             (hasOtherFits ? [(["Tab"], "next snap")] : [])
-                + (optionHeld ? [(["\u{2325}"], "grow"), (["\u{2325}", "\u{2318}"], "shrink")] : [(["\u{2325}"], "resize")])
+                + [optionHeld && commandHeld ? (["\u{2325}", "\u{2318}"], "shrink") : (["\u{2325}"], optionHeld ? "grow" : "resize")]
                 + [(["\u{21E7}"], "lock ratio, axis"), (["P"], "ratio \(ratioReadout)"), (["G"], "scroll"), (["esc"], "cancel")]
         case .capture: [(["Click"], "capture"), (["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["F"], "full screen"), (["?"], "all keys")]
         }

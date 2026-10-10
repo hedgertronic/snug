@@ -573,17 +573,18 @@ extension DebugRun {
         require(chrome.sideHints.allSatisfy(\.isHidden) && keyCaps("\u{2325}", in: chrome.hints).allSatisfy { !$0.held }, "without Option no side arrows show and the Option cap is gray")
         flags(.option)
         let sides = chrome.sideHints
-        require(keyCaps("\u{2325}", in: chrome.hints).count == 2 && keyCaps("\u{2325}", in: chrome.hints).allSatisfy(\.held) && keyCaps("\u{2318}", in: chrome.hints).allSatisfy { !$0.held }
-                && texts(in: chrome.hints).contains("grow") && texts(in: chrome.hints).contains("shrink"),
-                "holding Option fills the Option caps and the strip offers grow and shrink: \(texts(in: chrome.hints))")
+        require(keyCaps("\u{2325}", in: chrome.hints).count == 1 && keyCaps("\u{2325}", in: chrome.hints).allSatisfy(\.held) && keyCaps("\u{2318}", in: chrome.hints).isEmpty
+                && texts(in: chrome.hints).contains("grow") && !texts(in: chrome.hints).contains("resize"),
+                "holding Option fills the Option cap and the resize hint reads grow: \(texts(in: chrome.hints))")
         require(sides.map { texts(in: $0) } == [["\u{2190}"], ["\u{2192}"], ["\u{2191}"], ["\u{2193}"]] && sides.allSatisfy { !$0.isHidden }
                 && sides[0].frame.maxX <= selected.minX && sides[1].frame.minX >= selected.maxX && sides[2].frame.minY >= selected.maxY
                 && abs(sides[0].frame.midY - selected.midY) < 1 && abs(sides[2].frame.midX - selected.midX) < 1
                 && !sides[3].frame.intersects(chrome.actionBar.frame),
                 "holding Option puts an arrow cap outside each side's midpoint, clear of the action bar: \(sides.map(\.frame)) \(selected)")
         flags([.option, .command])
-        require(keyCaps("\u{2318}", in: chrome.hints).count == 1 && keyCaps("\u{2318}", in: chrome.hints).allSatisfy(\.held) && sides.allSatisfy { !$0.isHidden },
-                "holding Option-Command fills the Command cap too and keeps the side arrows")
+        require(keyCaps("\u{2318}", in: chrome.hints).count == 1 && (keyCaps("\u{2318}", in: chrome.hints) + keyCaps("\u{2325}", in: chrome.hints)).allSatisfy(\.held)
+                && texts(in: chrome.hints).contains("shrink") && !texts(in: chrome.hints).contains("grow") && sides.allSatisfy { !$0.isHidden },
+                "holding Option-Command makes the hint shrink with both caps filled and keeps the side arrows: \(texts(in: chrome.hints))")
         flags(.shift)
         require(keyCaps("\u{21E7}", in: chrome.hints).count == 1 && keyCaps("\u{21E7}", in: chrome.hints).allSatisfy(\.held) && sides.allSatisfy(\.isHidden) && texts(in: chrome.hints).contains("resize"),
                 "holding Shift fills the Shift cap, and without Option the side arrows go and the strip reads resize")
