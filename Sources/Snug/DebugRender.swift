@@ -239,40 +239,7 @@ extension DebugRun {
         try snapshot("area-idle-notch")
         overlay.dismiss()
 
-        // The menu bar icon on light and dark menu bars: real pixel size (1x, 2x) above, magnified to 144 px below.
-        let icon = SnugApp.menuBarIcon()
-        let sheet = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 640, pixelsHigh: 200, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
-                                     isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: sheet)
-        NSGraphicsContext.current!.imageInterpolation = .none
-        for (index, (scale, dark)) in [(1, false), (2, false), (1, true), (2, true)].enumerated() {
-            let x = CGFloat(index * 160)
-            let pixels = CGFloat(18 * scale)
-            let small = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 18 * scale, pixelsHigh: 18 * scale, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
-                                         isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
-            NSGraphicsContext.saveGraphicsState()
-            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: small)
-            NSColor(white: dark ? 0.12 : 0.93, alpha: 1).setFill()
-            CGRect(x: 0, y: 0, width: pixels, height: pixels).fill()
-            let tinted = NSImage(size: icon.size, flipped: false) { rect in
-                icon.draw(in: rect)
-                (dark ? NSColor.white : NSColor.black).set()
-                rect.fill(using: .sourceIn)
-                return true
-            }
-            tinted.draw(in: CGRect(x: 0, y: 0, width: pixels, height: pixels))
-            NSGraphicsContext.restoreGraphicsState()
-            NSColor(white: dark ? 0.12 : 0.93, alpha: 1).setFill()
-            CGRect(x: x, y: 0, width: 160, height: 200).fill()
-            let image = NSImage(size: CGSize(width: pixels, height: pixels))
-            image.addRepresentation(small)
-            image.draw(in: CGRect(x: x + 8, y: 176, width: pixels, height: pixels))
-            image.draw(in: CGRect(x: x + 8, y: 8, width: 144, height: 144))
-        }
-        NSGraphicsContext.restoreGraphicsState()
-        try sheet.representation(using: .png, properties: [:])!.write(to: directory.appending(path: "menubar-icon.png"))
-        print(directory.appending(path: "menubar-icon.png").path)
+        try await renderMenuBarIcons(into: directory)
 
         /// A toast's content on a mid-gray backdrop, since its panel is transparent.
         func renderToast(_ name: String, _ toast: Toast) throws {
@@ -344,5 +311,65 @@ extension DebugRun {
             print(file.path, host.fittingSize)
         }
         precondition(tabs.tabViewItems.map(\.label) == ["General", "Appearance", "Keys"], "Settings tabs: \(tabs.tabViewItems.map(\.label))")
+    }
+
+    /// `--render-menubar-icons DIR`: every menu bar icon variant drawn from `SnugApp.menuBarIcon` the way the status item draws it (an 18 pt
+    /// template image picking its 1x or 2x representation), tinted for a light (#F6F6F6) and a dark (#1E1E1E) menu bar, at true size above
+    /// an 8x nearest-neighbor zoom, one row per variant in `menubar-icons.png`. Then checks that the status item's observer switches icons
+    /// when another process writes `SnugMenuBarIcon`.
+    static func renderMenuBarIcons(into directory: URL) async throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let variants = ["a", "d"]
+        let cells: [(scale: Int, dark: Bool)] = [(1, false), (2, false), (1, true), (2, true)]
+        let sheet = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 40 + 304 * cells.count, pixelsHigh: 348 * variants.count, bitsPerSample: 8,
+                                     samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: sheet)
+        NSGraphicsContext.current!.imageInterpolation = .none
+        NSColor.white.setFill()
+        CGRect(x: 0, y: 0, width: sheet.pixelsWide, height: sheet.pixelsHigh).fill()
+        for (row, variant) in variants.enumerated() {
+            let top = CGFloat(sheet.pixelsHigh - 348 * row)
+            variant.draw(at: CGPoint(x: 14, y: top - 30), withAttributes: [.font: NSFont.boldSystemFont(ofSize: 18)])
+            let icon = SnugApp.menuBarIcon(variant)
+            for (column, cell) in cells.enumerated() {
+                let pixels = 18 * cell.scale
+                let small = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels, bitsPerSample: 8, samplesPerPixel: 4,
+                                             hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+                small.size = icon.size
+                NSGraphicsContext.saveGraphicsState()
+                NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: small)
+                icon.draw(in: CGRect(origin: .zero, size: icon.size))
+                (cell.dark ? NSColor.white : NSColor.black).set()
+                CGRect(origin: .zero, size: icon.size).fill(using: .sourceIn)
+                NSGraphicsContext.restoreGraphicsState()
+                let tinted = NSImage(size: CGSize(width: pixels, height: pixels))
+                tinted.addRepresentation(small)
+                let x = CGFloat(40 + 304 * column)
+                NSColor(srgbRed: cell.dark ? 0x1E / 255 : 0xF6 / 255, green: cell.dark ? 0x1E / 255 : 0xF6 / 255, blue: cell.dark ? 0x1E / 255 : 0xF6 / 255, alpha: 1).setFill()
+                CGRect(x: x, y: top - 344, width: 300, height: 340).fill()
+                tinted.draw(in: CGRect(x: x + 8, y: top - 12 - CGFloat(pixels), width: CGFloat(pixels), height: CGFloat(pixels)))
+                tinted.draw(in: CGRect(x: x + 8, y: top - 340, width: CGFloat(pixels * 8), height: CGFloat(pixels * 8)))
+            }
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        let file = directory.appending(path: "menubar-icons.png")
+        try sheet.representation(using: .png, properties: [:])!.write(to: file)
+        print(file.path)
+
+        let suite = FileManager.default.temporaryDirectory.appending(path: "snug-icon-\(UUID().uuidString)").path
+        let defaults = UserDefaults(suiteName: suite)!
+        Pref.register(in: defaults)
+        let button = NSButton()
+        let observation = SnugApp.observeMenuBarIcon(on: button, defaults: defaults)
+        for variant in variants {
+            let writer = try Process.run(URL(fileURLWithPath: "/usr/bin/defaults"), arguments: ["write", suite, Pref.menuBarIcon, variant])
+            writer.waitUntilExit()
+            let expected = SnugApp.menuBarIcon(variant).tiffRepresentation
+            for _ in 0..<500 where button.image?.tiffRepresentation != expected { try await Task.sleep(for: .milliseconds(10)) }
+            precondition(button.image?.tiffRepresentation == expected, "`defaults write \(Pref.menuBarIcon) \(variant)` from another process switches the icon")
+            print("defaults write \(Pref.menuBarIcon) \(variant): the status item shows variant \(variant)")
+        }
+        observation.invalidate()
     }
 }
