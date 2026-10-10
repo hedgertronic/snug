@@ -85,8 +85,11 @@ extension DebugRun {
         try await waitFor("E carries the hovered corner radii as edited ones") { overlay.editedRadii[a] == CornerRadii(radius) }
         require(overlay.view.overlays.showsHandles && overlay.view.overlays.radii == CornerRadii(radius), "the selection shows handles and the carried radii")
         key(right, "", .shift)
-        require(overlay.selection?.rect == a.offsetBy(dx: 10 * scale, dy: 0) && overlay.view.overlays.radii == CornerRadii(radius), "a nudged E selection keeps its radii")
+        require(overlay.selection?.rect == a.offsetBy(dx: 10, dy: 0) && overlay.view.overlays.radii == CornerRadii(radius), "Shift-Right moves 10 px, and a nudged E selection keeps its radii")
         key(left, "", .shift)
+        key(down)
+        require(overlay.selection?.rect == a.offsetBy(dx: 0, dy: 1), "an arrow moves the selection 1 device pixel, not 1 pt")
+        key(up)
         require(["frame", "next snap", "grow", "shrink", "scroll"].allSatisfy(texts(in: overlay.chrome.hints).contains) && !texts(in: overlay.chrome.hints).contains("corners"),
                 "the selection hint row offers frame, next snap, grow and shrink, and no corners hint")
 
@@ -187,21 +190,21 @@ extension DebugRun {
         require(overlay.editedRadii[a.union(b)] == CornerRadii(radius), "the union keeps the selection's edited corners")
         overlay.dismiss()
 
-        // Option-arrow grows one side; Option-Command-arrow shrinks it; Shift is 10 pt; the extent and the minimum size hold.
+        // Option-arrow grows one side; Option-Command-arrow shrinks it; 1 px a press, Shift 10 px; the extent and the minimum size hold.
         open()
         click(insideA, .shift)
         key(right, "", .option)
-        require(overlay.selection?.rect == CGRect(x: a.minX, y: a.minY, width: a.width + scale, height: a.height), "Option-Right grows the right side 1 pt")
+        require(overlay.selection?.rect == CGRect(x: a.minX, y: a.minY, width: a.width + 1, height: a.height), "Option-Right grows the right side 1 px")
         key(left, "", .option)
-        require(overlay.selection?.rect == CGRect(x: a.minX - scale, y: a.minY, width: a.width + 2 * scale, height: a.height), "Option-Left grows the left side 1 pt")
+        require(overlay.selection?.rect == CGRect(x: a.minX - 1, y: a.minY, width: a.width + 2, height: a.height), "Option-Left grows the left side 1 px")
         key(up, "", [.option, .shift])
-        require(overlay.selection?.rect.minY == a.minY - 10 * scale, "Shift-Option-Up grows the top side 10 pt")
+        require(overlay.selection?.rect.minY == a.minY - 10, "Shift-Option-Up grows the top side 10 px")
         key(down, "", [.option, .command])
         key(down, "", [.option, .command])
-        require(overlay.selection?.rect.maxY == a.maxY - 2 * scale, "Option-Command-Down shrinks the bottom side 1 pt each press")
+        require(overlay.selection?.rect.maxY == a.maxY - 2, "Option-Command-Down shrinks the bottom side 1 px each press")
         key(left, "", [.option, .command, .shift])
-        require(overlay.selection?.rect.minX == a.minX - scale + 10 * scale, "Shift-Option-Command-Left shrinks the left side 10 pt")
-        for _ in 0..<200 { key(right, "", [.option, .command, .shift]) }
+        require(overlay.selection?.rect.minX == a.minX - 1 + 10, "Shift-Option-Command-Left shrinks the left side 10 px")
+        for _ in 0..<400 { key(right, "", [.option, .command, .shift]) }
         require(overlay.selection!.rect.width == AreaSelection.minimumSize, "shrinking stops at the minimum size")
         key(3, "f")
         key(right, "", .option)
@@ -278,7 +281,7 @@ extension DebugRun {
         drag(from: CGPoint(x: 1000, y: 600), by: CGPoint(x: 400, y: 300))
         let drawn = overlay.selection!.rect
         key(right, "", [.option, .command])
-        require(overlay.selection?.rect == CGRect(x: drawn.minX, y: drawn.minY, width: drawn.width - scale, height: drawn.height), "Option-Command-Right shrinks a drawn selection's right side")
+        require(overlay.selection?.rect == CGRect(x: drawn.minX, y: drawn.minY, width: drawn.width - 1, height: drawn.height), "Option-Command-Right shrinks a drawn selection's right side")
         overlay.dismiss()
 
         // Cmd-Shift-S: Save As writes where the panel (here the seam) says, with the usual name offered, and closes the overlay.
@@ -304,7 +307,7 @@ extension DebugRun {
         try FileManager.default.removeItem(at: chosen)
         key(1, "S", [.command, .shift])
         await overlay.commitTask?.value
-        require(pngSize(try? Data(contentsOf: chosen)) == CGSize(width: a.width + scale, height: a.height), "Save As on a selection writes the selection")
+        require(pngSize(try? Data(contentsOf: chosen)) == CGSize(width: a.width + 1, height: a.height), "Save As on a selection writes the selection")
         overlay.chooseSaveURL = { _ in nil }
         try FileManager.default.removeItem(at: chosen)
         open()

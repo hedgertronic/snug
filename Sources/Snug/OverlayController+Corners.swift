@@ -98,8 +98,8 @@ extension OverlayController {
         carryRadii(from: old)
     }
 
-    /// Option-arrow moves only the side facing the arrow, outward; Option-Command-arrow moves it inward.
-    func nudgeSide(keyCode: UInt16, outward: Bool, by points: CGFloat) {
+    /// Option-arrow moves only the side facing the arrow, outward; Option-Command-arrow moves it inward, by `pixels` image pixels.
+    func nudgeSide(keyCode: UInt16, outward: Bool, by pixels: CGFloat) {
         let (side, direction): (Handle, CGPoint) = switch keyCode {
         case 123: (.left, CGPoint(x: -1, y: 0))
         case 124: (.right, CGPoint(x: 1, y: 0))
@@ -108,7 +108,7 @@ extension OverlayController {
         }
         let old = selection!.rect
         let from = side.position(on: old)
-        let distance = (outward ? points : -points) * scale
+        let distance = outward ? pixels : -pixels
         selection!.resize(side, to: CGPoint(x: from.x + direction.x * distance, y: from.y + direction.y * distance))
         carryRadii(from: old)
     }

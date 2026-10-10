@@ -121,10 +121,10 @@ enum DebugRun {
         // Arrow nudges.
         let before = overlay.selection!.rect
         key(right)
-        require(overlay.selection?.rect == before.offsetBy(dx: scale, dy: 0), "Right nudges 1 pt")
+        require(overlay.selection?.rect == before.offsetBy(dx: 1, dy: 0), "Right nudges 1 px")
         require(overlay.view.overlays.radii == .zero, "a nudged selection has square corners")
         key(down, "", .shift)
-        require(overlay.selection?.rect == before.offsetBy(dx: scale, dy: 10 * scale), "Shift-Down nudges 10 pt")
+        require(overlay.selection?.rect == before.offsetBy(dx: 1, dy: 10), "Shift-Down nudges 10 px")
         key(left)
         key(up, "", .shift)
         require(overlay.selection?.rect == before, "Left and Shift-Up undo the nudges")

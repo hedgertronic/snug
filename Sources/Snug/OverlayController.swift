@@ -606,6 +606,7 @@ final class OverlayController {
         let command = event.modifierFlags.contains(.command)
         let shift = event.modifierFlags.contains(.shift)
         let option = event.modifierFlags.contains(.option)
+        // Arrow steps are device pixels: selections are in the capture's pixels, one per device pixel.
         let step: CGFloat = shift ? 10 : 1
         let character = event.charactersIgnoringModifiers ?? ""
         let hovering = selection == nil
@@ -628,10 +629,10 @@ final class OverlayController {
         case (_, false, "1"..."5") where hovering && defaults.bool(forKey: Pref.candidates): session?.pick(Int(character)! - 1)
         case (48, _, _): cycleFit(backward: shift)
         case (49, _, _): spaceHeld = true
-        case (123, _, _): nudge(CGPoint(x: -step * scale, y: 0))
-        case (124, _, _): nudge(CGPoint(x: step * scale, y: 0))
-        case (125, _, _): nudge(CGPoint(x: 0, y: step * scale))
-        case (126, _, _): nudge(CGPoint(x: 0, y: -step * scale))
+        case (123, _, _): nudge(CGPoint(x: -step, y: 0))
+        case (124, _, _): nudge(CGPoint(x: step, y: 0))
+        case (125, _, _): nudge(CGPoint(x: 0, y: step))
+        case (126, _, _): nudge(CGPoint(x: 0, y: -step))
         case (_, true, "s"): save()
         case (_, false, "]"), (_, false, "}"): adjustRadii(by: shift ? 4 : 1)
         case (_, false, "["), (_, false, "{"): adjustRadii(by: shift ? -4 : -1)
