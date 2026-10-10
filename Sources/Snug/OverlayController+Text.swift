@@ -92,27 +92,33 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
                 view.liveText.analysis = analysis
                 text.reading = nil
                 refresh()
-                warmVision(image)
             } catch {
                 report(error)
             }
         }
     }
 
-    /// The first Text mode of a newly built binary runs Tab's accurate OCR and barcode requests on the frozen image at utility priority,
-    /// so Vision compiles its models on device (35-90 s) while the user selects, not in the first Shift-Return or Tab. Text mode, not
-    /// launch: the process keeps 35-75 MiB after the requests are released. `defaults` keeps the binary's modification date.
-    private func warmVision(_ image: CGImage) {
-        let built = try! Bundle.main.executableURL!.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate!
-        guard visionWarm == nil, defaults.object(forKey: Pref.visionWarmedBuild) as? Date != built else { return }
-        visionWarm = Task(priority: .utility) {
-            do {
-                _ = try await Self.findItems(in: image)
-                defaults.set(built, forKey: Pref.visionWarmedBuild)
-            } catch {
-                report(error)
-            }
+    /// Once per newly built binary, runs this binary with `--warm-vision` as a child process at utility priority, so Vision compiles the
+    /// accurate OCR and barcode models that Tab and Shift-Return use into the on-disk cache (35-90 s) before their first use, and the
+    /// 50-90 MiB the requests leave behind goes away when the child exits. `defaults` keeps the binary's modification date once the child
+    /// exits with status 0. Returns the child, or nil when this binary is already warmed.
+    static func warmVisionInChild(defaults: UserDefaults) -> Process? {
+        let executable = Bundle.main.executableURL!
+        let built = try! executable.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate!
+        guard defaults.object(forKey: Pref.visionWarmedBuild) as? Date != built else { return nil }
+        let child = Process()
+        child.executableURL = executable
+        child.arguments = ["--warm-vision"]
+        child.qualityOfService = .utility
+        child.standardOutput = FileHandle.nullDevice
+        // UserDefaults is thread-safe; the termination handler runs on a background thread.
+        nonisolated(unsafe) let defaults = defaults
+        child.terminationHandler = { child in
+            guard child.terminationReason == .exit, child.terminationStatus == 0 else { return }
+            defaults.set(built, forKey: Pref.visionWarmedBuild)
         }
+        try! child.run()
+        return child
     }
 
     /// A click on a highlighted item does not open it behind the overlay; Cmd-Return opens the picked one.

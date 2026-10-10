@@ -7,6 +7,7 @@ import Vision
 extension DebugRun {
     /// `--verify-text-ui`: drives Live Text in Text mode and Capture's Shift-Return through synthesized events on form-test.png.
     static func verifyText(image: CGImage, frame: CGRect, overlay: OverlayController) async throws {
+        try await verifyWarmVisionChild()
         try await warmVision(image)
         _ = privateSetup(overlay)
         let pasteboard = overlay.pasteboard
@@ -85,10 +86,6 @@ extension DebugRun {
         try await waitFor("the Live Text analysis attaches") { liveText.analysis != nil }
         print("Live Text analysis: \(String(format: "%.1f", overlay.lastLiveTextMilliseconds)) ms (first in this process)")
         require(overlay.chrome.reading.isHidden, "the Reading text... pill goes away when the analysis attaches")
-        let built = try Bundle.main.executableURL!.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate!
-        require(overlay.visionWarm != nil && overlay.defaults.object(forKey: Pref.visionWarmedBuild) == nil, "the first Text mode of a new binary starts the Vision warm-up")
-        await overlay.visionWarm!.value
-        require(overlay.defaults.object(forKey: Pref.visionWarmedBuild) as? Date == built, "the warm-up records the binary's date when it finishes")
         require(liveText.frame == overlay.view.bounds && liveText.superview === overlay.view, "Live Text covers the frozen image exactly")
         require(liveText.isSupplementaryInterfaceHidden, "no Live Text button sits in the corner")
         require(liveText.text.contains("Product name") && liveText.text.contains("Billing address"), "the analysis reads the screen's text")
@@ -109,10 +106,6 @@ extension DebugRun {
         require(overlay.window.isVisible && pasteboard.string(forType: .string) == nil, "Return with nothing selected copies nothing and keeps the overlay open")
         overlay.dismiss()
         require(liveText.analysis == nil, "closing drops the analysis")
-        overlay.visionWarm = nil
-        try await open()
-        require(overlay.visionWarm == nil, "with this binary's date stored, Text mode does not warm Vision again")
-        overlay.dismiss()
 
         // Every drag and click case runs twice: with the press reaching Live Text at once, and held back as real pointer input is.
         for held in [false, true] {
@@ -518,6 +511,65 @@ extension DebugRun {
         print("Vision warm-up: \(String(format: "%.1f", start.duration(to: warmed).milliseconds)) ms, footprint \(before) before, "
               + "\(String(format: "%.1f", peak)) MiB peak, \(released) after, \(settled) 2 s after, \(footprint()) 10 s after")
         _ = try await OverlayController.findItems(in: itemsFixture(width: image.width, height: image.height))
+    }
+
+    /// Launch's Vision warm-up on private defaults, before anything in this process loads Vision: the first call starts a `--warm-vision`
+    /// child that records this binary's date once it exits cleanly, and a second call starts nothing. Prints the child's time and this
+    /// process's footprint before and after, which the child's compile and memory leave alone.
+    static func verifyWarmVisionChild() async throws {
+        let defaults = UserDefaults(suiteName: FileManager.default.temporaryDirectory.appending(path: "snug-warm-\(UUID().uuidString)").path)!
+        func require(_ condition: Bool, _ message: String) {
+            guard condition else {
+                FileHandle.standardError.write(Data("Vision warm-up verification failed: \(message)\n".utf8))
+                exit(EXIT_FAILURE)
+            }
+            print("- \(message)")
+        }
+        let built = try Bundle.main.executableURL!.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate!
+        let (start, before) = (ContinuousClock.now, footprint())
+        let child = OverlayController.warmVisionInChild(defaults: defaults)
+        require(child?.arguments == ["--warm-vision"] && child!.qualityOfService == .utility && defaults.object(forKey: Pref.visionWarmedBuild) == nil,
+                "launch on a binary with no warmed date starts a utility-priority --warm-vision child")
+        for _ in 0..<6000 where child!.isRunning { try await Task.sleep(for: .milliseconds(100)) }
+        // The termination handler runs on its own thread, just after the exit is visible here.
+        for _ in 0..<20 where defaults.object(forKey: Pref.visionWarmedBuild) == nil { try await Task.sleep(for: .milliseconds(50)) }
+        require(child!.terminationStatus == 0 && defaults.object(forKey: Pref.visionWarmedBuild) as? Date == built, "the child exits with status 0 and records this binary's date")
+        require(OverlayController.warmVisionInChild(defaults: defaults) == nil, "with this binary's date stored, launch starts no child")
+        print("Vision warm-up child: \(String(format: "%.1f", start.duration(to: .now).milliseconds)) ms, this process's footprint \(before) before, \(footprint()) after")
+    }
+
+    /// `--warm-vision`: runs Tab's accurate OCR and barcode requests on the warm-up page, then Shift-Return's accurate OCR on each of its
+    /// script rows alone, and exits. Vision compiles each model into the on-disk cache on a binary's first use of it: the text detector,
+    /// orientation, the barcode networks, and one recognizer per script, which automatic language detection only reaches for a row on its
+    /// own. A child process pays that once per binary and takes the requests' memory with it when it exits. Prints the time, the items
+    /// found, and the footprint before and after.
+    static func warmVisionAndExit() async throws {
+        let before = footprint()
+        let start = ContinuousClock.now
+        let (page, cells) = warmFixture()
+        let items = try await OverlayController.findItems(in: page)
+        for cell in cells { _ = try await OverlayController.recognize(page, crop: cell) }
+        print("warm-vision: \(String(format: "%.1f", start.duration(to: .now).milliseconds)) ms, \(items.count) items, footprint \(before) before, \(footprint()) after")
+        exit(EXIT_SUCCESS)
+    }
+
+    /// The found-items page at 2000 x 1100 px with a row of text above it in each of Cyrillic, Arabic, Devanagari, Chinese, Japanese, Korean
+    /// and Thai, and each row's rect (top-left origin, pixels). Of these, the Arabic and Devanagari rows compile recognizers of their own.
+    static func warmFixture() -> (page: CGImage, cells: [CGRect]) {
+        let (width, height) = (2000, 1100)
+        let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.draw(itemsFixture(width: width, height: height), in: CGRect(x: 0, y: 0, width: width, height: height))
+        let rows = ["Привет, как дела сегодня", "مرحبا بك في التطبيق", "नमस्ते, आप कैसे हैं", "今天天气很好，我们去公园", "今日はいい天気ですね", "안녕하세요, 반갑습니다", "สวัสดีครับ ยินดีต้อนรับ"]
+        var cells: [CGRect] = []
+        for (index, text) in rows.enumerated() {
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 30), .foregroundColor: NSColor.black]))
+            let baseline = CGPoint(x: 40 + (index % 2) * 640, y: 1050 - (index / 2) * 50)
+            context.textPosition = baseline
+            CTLineDraw(line, context)
+            cells.append(CGRect(x: baseline.x - 20, y: CGFloat(height) - baseline.y - 38, width: 640, height: 50))
+        }
+        return (context.makeImage()!, cells)
     }
 
     /// A white page of `width` x `height` pixels with a link, an email address and a phone number in large text from the top left, and a

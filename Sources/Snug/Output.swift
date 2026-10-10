@@ -42,7 +42,7 @@ enum Pref {
     /// Off unless set with `defaults write local.snug SnugLogText -bool true`: each Text mode press, drag event and release appends
     /// Live Text's selection before and after Snug's fix to ~/Library/Logs/Snug/text.log.
     static let logText = "SnugLogText"
-    /// The modification date of the Snug binary whose first Text mode warmed Vision's accurate OCR models.
+    /// The modification date of the Snug binary whose `--warm-vision` child process warmed Vision's accurate OCR models.
     static let visionWarmedBuild = "SnugVisionWarmedBuild"
 
     static func logHoverLine(_ line: String, key: String = logHover, file name: String = "hover.log") {

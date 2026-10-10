@@ -37,6 +37,10 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             }
             return
         }
+        if arguments.contains("--warm-vision") {
+            Task { try! await DebugRun.warmVisionAndExit() }
+            return
+        }
         if let index = arguments.firstIndex(of: "--render-settings") {
             try! DebugRun.renderSettings(into: URL(fileURLWithPath: arguments[index + 1]))
             exit(EXIT_SUCCESS)
@@ -70,6 +74,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         installStatusItem()
         hotKey = HotKey { [unowned self] in capture() }
         registerHotKey()
+        _ = OverlayController.warmVisionInChild(defaults: .standard)
         Task {
             for await _ in NotificationCenter.default.notifications(named: UserDefaults.didChangeNotification) { registerHotKey() }
         }
