@@ -99,10 +99,10 @@ public struct AreaSelection: Sendable {
         fitIndex = suggestions.count
     }
 
-    /// Whether a snap suggestion (any fit but the exact drag) differs from the current rectangle by more than `tolerance` on some side,
-    /// so Tab would move to a different snap.
+    /// Whether a fit (a snap suggestion or the exact drag) differs from the current rectangle by more than `tolerance` on some side,
+    /// so Tab would visibly move the selection.
     public func hasOtherFits(tolerance: CGFloat) -> Bool {
-        fits.dropLast().contains { !$0.isNear(rect, within: tolerance) }
+        fits.contains { !$0.isNear(rect, within: tolerance) }
     }
 
     /// Selects the exact drag.

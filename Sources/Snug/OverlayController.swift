@@ -57,8 +57,8 @@ final class OverlayController {
         default: nil
         }
     }
-    /// Tab has another snap for the selection (more than 1 pt from it). False for a selection with a single fit (opened from a hover,
-    /// or edited), although Tab then computes fits on demand: measured on the public suite's targets, those found none that differ.
+    /// Tab has another fit for the selection, a snap or the exact drag, more than 1 pt from it. False for a selection with a single fit
+    /// (opened from a hover, or edited), although Tab then computes fits on demand: on the public suite's targets those found none that differ.
     var hasOtherFits: Bool { selection?.hasOtherFits(tolerance: scale) ?? false }
     private(set) var snapPreview: CGRect?
     private(set) var image: CGImage?

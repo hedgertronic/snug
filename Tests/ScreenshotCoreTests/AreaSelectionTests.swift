@@ -126,10 +126,10 @@ struct AreaSelectionTests {
         for (size, expected) in cases { #expect(RatioLock.readout(for: size) == expected, "\(size)") }
     }
 
-    @Test func otherFitsAreSnapsThatDifferFromTheCurrentRectangle() {
+    @Test func otherFitsAreFitsThatDifferFromTheCurrentRectangle() {
         let nearlyExact = exact.offsetBy(dx: 1, dy: 0)
         #expect(!AreaSelection(extent: extent, exact: exact).hasOtherFits(tolerance: 2))
-        #expect(!AreaSelection(extent: extent, exact: exact, suggestions: [snapped], takingFirst: true).hasOtherFits(tolerance: 2))
+        #expect(AreaSelection(extent: extent, exact: exact, suggestions: [snapped], takingFirst: true).hasOtherFits(tolerance: 2))
         #expect(!AreaSelection(extent: extent, exact: exact, suggestions: [nearlyExact]).hasOtherFits(tolerance: 2))
         #expect(AreaSelection(extent: extent, exact: exact, suggestions: [snapped]).hasOtherFits(tolerance: 2))
         var two = AreaSelection(extent: extent, exact: exact, suggestions: [snapped, CGRect(x: 50, y: 50, width: 400, height: 300)], takingFirst: true)

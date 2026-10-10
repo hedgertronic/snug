@@ -261,12 +261,12 @@ extension DebugRun {
         overlay.dismiss()
         require(overlay.ratioLock == nil, "the lock does not outlive the capture")
 
-        // hasOtherFits: Tab has a snap to go to that differs from the selection by more than 1 pt; the exact drag does not count.
+        // hasOtherFits: Tab has a fit (a snap or the exact drag) that differs from the selection by more than 1 pt.
         open()
         overlay.selection = AreaSelection(extent: overlay.extent, exact: a, suggestions: [a.insetBy(dx: -4, dy: -4)], takingFirst: true)
-        require(!overlay.hasOtherFits, "a released snap whose only other fit is the exact drag has no other fits")
-        overlay.selection = AreaSelection(extent: overlay.extent, exact: a, suggestions: [a.insetBy(dx: -4, dy: -4), a.insetBy(dx: 1, dy: 1), a.insetBy(dx: 20, dy: 20)], takingFirst: true)
-        require(overlay.hasOtherFits, "a second snap counts as another fit")
+        require(overlay.hasOtherFits, "a released snap has the exact drag as another fit")
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: a.insetBy(dx: -5, dy: -5), suggestions: [a.insetBy(dx: -4, dy: -4)], takingFirst: true)
+        require(!overlay.hasOtherFits, "an exact drag within 1 pt of the snap does not count")
         overlay.selection = AreaSelection(extent: overlay.extent, exact: a, suggestions: [a.insetBy(dx: 1, dy: 1)])
         require(!overlay.hasOtherFits, "a snap within 1 pt of the selection does not count")
         overlay.dismiss()
