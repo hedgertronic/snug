@@ -386,6 +386,8 @@ final class OverlayController {
         if let selection {
             if let corner = cornerDot(at: point) {
                 interaction = .rounding(corner, start: point, from: cornerRadii(of: selection.rect))
+                measureRadius(selection.rect)
+                measureRadius(container(of: selection.rect))
                 return updateCursor()
             }
             if let handle = selection.handle(at: point, tolerance: 8 * scale) {
@@ -442,7 +444,11 @@ final class OverlayController {
             interaction = .moving(last: target, origin: origin, moved: true)
         case .rounding(let corner, let start, let from):
             let rect = selection!.rect
-            let delta = CornerRadii.inwardDistance(of: CGPoint(x: point.x - start.x, y: point.y - start.y), from: corner)
+            var delta = CornerRadii.inwardDistance(of: CGPoint(x: point.x - start.x, y: point.y - start.y), from: corner)
+            // With Snap on, the dragged corner snaps to the radius detected under it when it ends within 3 pt of that radius.
+            if snapEnabled, let detected = detectedRadius(corner, of: rect), abs(from[corner] + delta - detected) <= 3 * scale {
+                delta = detected - from[corner]
+            }
             let radii = from.moving(corner, by: delta, alone: event.modifierFlags.contains(.option), in: rect.size)
             editedRadii[rect] = radii
             lastEditedCorner = corner

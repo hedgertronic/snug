@@ -148,6 +148,25 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: a.minX, y: a.minY))
         require(overlay.view.cursor === OverlayController.resizeCursors[.topLeft], "a square corner's handle keeps its resize cursor")
 
+        // A dot drag snaps the radius to the one detected under that corner (window A's 20 pt) within 3 pt, unless Snap is off.
+        func dragInward(_ corner: Handle, _ points: CGFloat, _ flags: NSEvent.ModifierFlags = []) {
+            let along = points * scale / 2.0.squareRoot()
+            drag(from: dot(corner), by: CGPoint(x: corner.movesLeft ? along : -along, y: corner.movesTop ? along : -along), flags)
+        }
+        overlay.editedRadii[a] = CornerRadii(radius - 8 * scale)
+        dragInward(.topLeft, 2)
+        require(near(radii().topLeft, radius - 6 * scale), "a dot drag ending 6 pt from the detected radius does not snap: \(radii().topLeft / scale) pt")
+        dragInward(.topLeft, 3.5)
+        require(equal(radii(), CornerRadii(radius)), "a dot drag ending within 3 pt of the detected radius snaps to it: \(radii().topLeft / scale) pt")
+        overlay.editedRadii[a] = CornerRadii(radius - 8 * scale)
+        dragInward(.bottomRight, 6, .option)
+        require(near(radii().bottomRight, radius) && near(radii().topLeft, radius - 8 * scale), "an Option dot drag snaps only its corner")
+        defaults.set(false, forKey: Pref.snap)
+        overlay.editedRadii[a] = CornerRadii(radius - 8 * scale)
+        dragInward(.topLeft, 6)
+        require(equal(radii(), CornerRadii(radius - 2 * scale)), "with Snap off a dot drag does not snap: \(radii().topLeft / scale) pt")
+        defaults.set(true, forKey: Pref.snap)
+
         // Corner dots and copies: the PNG follows the edited radii.
         drag(from: dot(.topLeft), by: CGPoint(x: 20 * scale, y: 20 * scale))
         pasteboard.clearContents()
