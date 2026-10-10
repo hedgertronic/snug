@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import ImageIO
 import Testing
 @testable import ScreenshotCore
 
@@ -169,8 +170,8 @@ struct DockRectTests {
         }
     }
 
-    /// A 2x Dock panel (rounded, 2 px light rim, icon tiles along its length) on a dark gradient, with a lighter window whose edge sits 25 px past the panel.
-    private func rimmedDock(size: CGSize, panel: CGRect, window: CGRect) -> CGImage {
+    /// A 2x Dock panel (rounded, 2 px light rim, icon tiles along its length) on a dark gradient, with a lighter window (`windowGray`) beside it.
+    private func rimmedDock(size: CGSize, panel: CGRect, window: CGRect, windowGray: CGFloat = 0.3) -> CGImage {
         let context = CGContext(data: nil, width: Int(size.width), height: Int(size.height), bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         context.drawLinearGradient(CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [CGColor(red: 0.1, green: 0.08, blue: 0.2, alpha: 1),
@@ -178,7 +179,7 @@ struct DockRectTests {
                                    start: .zero, end: CGPoint(x: size.width, y: size.height), options: [])
         context.translateBy(x: 0, y: size.height)
         context.scaleBy(x: 1, y: -1)
-        context.setFillColor(CGColor(gray: 0.3, alpha: 1))
+        context.setFillColor(CGColor(gray: windowGray, alpha: 1))
         context.fill(window)
         context.addPath(CGPath(roundedRect: panel.insetBy(dx: 1, dy: 1), cornerWidth: 30, cornerHeight: 30, transform: nil))
         context.setStrokeColor(CGColor(gray: 0.55, alpha: 1))
@@ -205,6 +206,29 @@ struct DockRectTests {
         }
         // A union that stops short of the panel's ends finds the same panel.
         #expect(DockTiles.panel(in: image, near: CGRect(x: 4, y: 200, width: 150, height: 1700), scale: 2) == found)
+    }
+
+    @Test func aBrightWindowJustPastTheDockDoesNotTakeItsSide() throws {
+        // A white window 11 pt right of the panel: its edge is inside the side search and far stronger than the rim.
+        let panel = CGRect(x: 10, y: 140, width: 136, height: 1751)
+        let image = rimmedDock(size: CGSize(width: 400, height: 1964), panel: panel, window: CGRect(x: 168, y: 88, width: 232, height: 1852), windowGray: 1)
+        let found = try #require(DockTiles.panel(in: image, near: CGRect(x: 20, y: 140, width: 134, height: 1750), scale: 2))
+        for (a, b) in [(found.minX, panel.minX), (found.maxX, panel.maxX), (found.minY, panel.minY), (found.maxY, panel.maxY)] {
+            #expect(abs(a - b) <= 3, "found \(found), panel \(panel)")
+        }
+    }
+
+    @Test func theUsersLeftDockBesideSafariComesFromItsRim() throws {
+        // The user's left Dock with Safari 12 pt to its right: their 2000 px wide screenshot resampled to the display's 3024 px (2x) and cut
+        // to its left 400 px. The panel's rims in those pixels run x 9 to 145 and y 139 to 1891. The union is this Dock's live one (hover.log).
+        let url = try #require(Bundle.module.url(forResource: "DockBesideSafari", withExtension: "png", subdirectory: "Fixtures"))
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        let found = try #require(DockTiles.panel(in: image, near: CGRect(x: 20, y: 140, width: 134, height: 1750), scale: 2))
+        for (a, b) in [(found.minX, 9), (found.maxX, 145), (found.minY, 139), (found.maxY, 1891)] as [(CGFloat, CGFloat)] {
+            #expect(abs(a - b) <= 4, "found \(found)")
+        }
+        #expect(DockTiles.tiles(in: image, panel: found, scale: 2).count == 16)
     }
 
     @Test func aHorizontalDockPanelComesFromItsRim() throws {

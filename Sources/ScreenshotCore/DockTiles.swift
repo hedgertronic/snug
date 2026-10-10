@@ -12,8 +12,8 @@ public enum DockTiles {
 
     /// The Dock panel's rectangle (image pixels) from its rim in the frozen image, near `rough` (the Accessibility union of the Dock's lists).
     /// The union is the magnified Dock, so it runs tens of points past the panel along the Dock's long axis and a few points off across it.
-    /// Across: the rim is the column near each side of `rough` whose edge persists on 80% of the rows in the middle of `rough` (icon edges
-    /// and the blurred wallpaper do not); the outermost column at half the peak is the panel's side. Along: the rims run straight until the
+    /// Across: the rim is the innermost column near each side of `rough` whose edge persists on 80% of the rows in the middle of `rough` (icon
+    /// edges and the blurred wallpaper do not); within a rim's width of it, the outermost column at half the peak is the panel's side. Along: the rims run straight until the
     /// corner arcs start; the panel's end is the outermost row between the side rims, near where they stop, that carries a rim across.
     /// Nil when no rim is found near a side.
     public static func panel(in image: CGImage, near rough: CGRect, scale: CGFloat) -> CGRect? {
@@ -49,9 +49,12 @@ public enum DockTiles {
         let middle = Array(roughAlong.lowerBound + roughAlong.count / 5..<roughAlong.upperBound - roughAlong.count / 5).filter { (1..<length - 1).contains($0) }
         let reach = Int(12 * scale)
         func sideStrength(_ column: Int) -> Int { persistent(middle) { difference($0, column - 1, $0, column + 1) } }
+        // A window's edge can sit within reach outside the panel and outshine the rim, so the side is the innermost persistent edge
+        // (icon edges do not persist) and what lies within a rim's width of it.
         func side(near column: Int, outward: Int) -> Int? {
             let window = (column - reach...column + reach).filter { (1..<depth - 1).contains($0) }
-            return outermost(in: outward < 0 ? window : window.reversed(), strength: sideStrength)
+            guard let inner = (outward < 0 ? window.reversed() : window).first(where: { sideStrength($0) > edgeThreshold }) else { return nil }
+            return outermost(in: (outward < 0 ? window : window.reversed()).filter { abs($0 - inner) <= Int(2 * scale) }, strength: sideStrength)
         }
         guard let low = side(near: roughAcross.lowerBound, outward: -1), let high = side(near: roughAcross.upperBound, outward: 1), high - low > 8 else { return nil }
 
