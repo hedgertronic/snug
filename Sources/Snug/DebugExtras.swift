@@ -346,19 +346,85 @@ extension DebugRun {
             return Toast(png: capture, message: "Copied", detail: "1200 x 400", file: nil, color: nil, defaults: toastDefaults)
         }
         let withPreview = toast(), without = toast { $0.set(false, forKey: Pref.toastPreview) }
-        let thumbnail = withPreview.contentView!.subviews.last!.frame.size
-        require(withPreview.contentView!.subviews.count == 2 && without.contentView!.subviews.count == 1, "the preview setting adds or removes the thumbnail")
+        let thumbnail = withPreview.card.subviews[1].frame.size
+        require(withPreview.card.subviews.count == 3 && without.card.subviews.count == 2, "the preview setting adds or removes the thumbnail")
         require(thumbnail.width <= 240 && thumbnail.height <= 160 && abs(thumbnail.width / thumbnail.height - 3) < 0.02, "the thumbnail is aspect-fit within 240 x 160: \(thumbnail)")
-        require(withPreview.frame.height - without.frame.height >= thumbnail.height && withPreview.lifetime == .seconds(4) && without.lifetime == .seconds(2), "the thumbnail sits above the pill and lasts 4 s")
-        let card = withPreview.contentView!, thumbnailFrame = card.subviews.last!.frame
-        require(thumbnailFrame.maxY == card.bounds.height && thumbnailFrame.minY == card.subviews.first!.frame.maxY && thumbnailFrame.width <= card.bounds.width,
-                "the thumbnail sits flush on the pill inside one card: \(thumbnailFrame) \(card.subviews.first!.frame) \(card.bounds)")
-        require(card.layer!.cornerRadius == 20 && card.layer!.borderWidth == 1 && card.layer!.masksToBounds && card.subviews.allSatisfy { $0.layer?.cornerRadius ?? 0 == 0 && $0.layer?.borderWidth ?? 0 == 0 },
+        require(withPreview.card.frame.height - without.card.frame.height >= thumbnail.height && withPreview.lifetime == .seconds(4) && without.lifetime == .seconds(2), "the thumbnail sits above the pill and lasts 4 s")
+        let card = withPreview.card, thumbnailFrame = card.subviews[1].frame
+        require(thumbnailFrame.maxY == card.bounds.height && thumbnailFrame.minY == card.subviews[0].frame.maxY && thumbnailFrame.width <= card.bounds.width,
+                "the thumbnail sits flush on the pill inside one card: \(thumbnailFrame) \(card.subviews[0].frame) \(card.bounds)")
+        require(card.layer!.cornerRadius == 20 && card.layer!.borderWidth == 1 && card.layer!.masksToBounds && card.subviews.prefix(2).allSatisfy { $0.layer?.cornerRadius ?? 0 == 0 && $0.layer?.borderWidth ?? 0 == 0 },
                 "one rounded, outlined clip covers the card, so the thumbnail has only its top corners and the pill only its bottom ones")
-        require(without.contentView!.layer!.cornerRadius * 2 >= without.frame.height, "the preview-off toast is a fully rounded pill: \(without.frame.height)")
+        require(without.card.layer!.cornerRadius * 2 >= without.card.frame.height, "the preview-off toast is a fully rounded pill: \(without.frame.height)")
         let bottomRight = toast { $0.set("bottomRight", forKey: Pref.toastPosition) }, topRight = toast { $0.set("topRight", forKey: Pref.toastPosition) }
         require(bottomRight.frame.minX > withPreview.frame.minX && bottomRight.frame.minY == withPreview.frame.minY && topRight.frame.minX == bottomRight.frame.minX && topRight.frame.minY > bottomRight.frame.minY,
                 "the position setting moves the toast: \(withPreview.frame) \(bottomRight.frame) \(topRight.frame)")
+        // The card's blur is masked to its rounded shape, so no square edges show behind it: the mask is transparent in the corners outside
+        // the radius and opaque inside, and a rendered corner pixel just inside the card's square is clear.
+        for shown in [withPreview, without] {
+            let mask = shown.card.maskImage!.cgImage(forProposedRect: nil, context: nil, hints: nil)!
+            let maskRep = NSBitmapImageRep(cgImage: mask)
+            let last = (maskRep.pixelsWide - 1, maskRep.pixelsHigh - 1)
+            require([(0, 0), (last.0, 0), (0, last.1), (last.0, last.1)].allSatisfy { maskRep.colorAt(x: $0, y: $1)!.alphaComponent == 0 }
+                        && maskRep.colorAt(x: maskRep.pixelsWide / 2, y: maskRep.pixelsHigh / 2)!.alphaComponent == 1,
+                    "the card's mask clears all four corner pixels and keeps the middle: \(shown.card.frame)")
+            let root = shown.contentView!
+            let rep = root.bitmapImageRepForCachingDisplay(in: root.bounds)!
+            root.cacheDisplay(in: root.bounds, to: rep)
+            let inset = Int(shown.card.frame.minX * CGFloat(rep.pixelsWide) / root.bounds.width) + 1
+            require(rep.colorAt(x: inset, y: inset)!.alphaComponent == 0 && rep.colorAt(x: 1, y: 1)!.alphaComponent == 0 && rep.colorAt(x: rep.pixelsWide - 1 - inset, y: rep.pixelsHigh - 1 - inset)!.alphaComponent == 0,
+                    "a render of the toast is transparent at the corners outside the radius and in the margin")
+        }
+        require(!withPreview.isOpaque && withPreview.backgroundColor == .clear && withPreview.hasShadow, "the toast window is transparent with a shadow")
+
+        // Hovering shows the close button, and with a capture the actions; leaving hides them again.
+        let hoverEvent = NSEvent.enterExitEvent(with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: withPreview.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil)!
+        require(withPreview.closeButton.isHidden && withPreview.openInPreview.superview!.isHidden, "the close button and actions are hidden until the pointer is over the toast")
+        withPreview.mouseEntered(with: hoverEvent)
+        require(!withPreview.closeButton.isHidden && !withPreview.openInPreview.superview!.isHidden && !withPreview.saveButton.isHidden, "hovering shows the close button, Open in Preview and Save")
+        let corner = withPreview.closeButton.frame
+        require(corner.midX < withPreview.card.frame.minX + 12 && corner.midY > withPreview.card.frame.maxY - 12, "the close button sits on the card's top-left corner: \(corner) \(withPreview.card.frame)")
+        withPreview.mouseExited(with: hoverEvent)
+        require(withPreview.closeButton.isHidden && withPreview.openInPreview.superview!.isHidden, "leaving hides the close button and actions")
+        withPreview.dismissal?.cancel()
+        let pillOnly = toast { $0.set(false, forKey: Pref.toastPreview) }
+        pillOnly.mouseEntered(with: hoverEvent)
+        require(!pillOnly.openInPreview.superview!.isHidden && pillOnly.openInPreview.superview!.frame.width <= pillOnly.card.frame.width, "a toast without a thumbnail shows the actions in its pill")
+        pillOnly.dismissal?.cancel()
+
+        // Open in Preview writes a temporary PNG when the capture was not saved (the debug run suppresses the launch); Save writes to the save
+        // folder and shows the saved state.
+        let saveFolder = FileManager.default.temporaryDirectory.appending(path: "snug-toast-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: saveFolder, withIntermediateDirectories: true)
+        let saving = toast { $0.set(saveFolder.path, forKey: Pref.saveFolder) }
+        require(saving.file == nil, "an unsaved capture has no file")
+        saving.openInPreview.performClick(nil)
+        let previewFile = try Data(contentsOf: saving.file!)
+        require(previewFile == capture, "Open in Preview writes the capture to a temporary PNG")
+        let fresh = toast { $0.set(saveFolder.path, forKey: Pref.saveFolder) }
+        fresh.saveButton.performClick(nil)
+        let saved = try FileManager.default.contentsOfDirectory(atPath: saveFolder.path)
+        let savedData = try Data(contentsOf: saveFolder.appending(path: saved[0]))
+        require(saved.count == 1 && savedData == capture, "Save writes the capture to the save location: \(saved)")
+        require(fresh.message.stringValue == "Saved to \(saveFolder.lastPathComponent)" && fresh.saveButton.isHidden && fresh.file?.lastPathComponent == saved[0], "Save shows the saved state: \(fresh.message.stringValue)")
+        fresh.dismissal?.cancel()
+
+        // The capture is held only while the toast is visible: closing releases the PNG, the thumbnail, and the toast itself.
+        weak var weakToast: Toast?
+        weak var weakThumbnail: NSView?
+        do {
+            let closing = toast()
+            weakToast = closing
+            weakThumbnail = closing.card.subviews[1]
+            closing.scheduleDismissal()
+            require(closing.png != nil && closing.card.subviews[1].layer!.contents != nil, "a visible toast holds the capture and its thumbnail")
+            closing.closeButton.performClick(nil)
+            require(closing.png == nil && closing.card.subviews[1].layer!.contents == nil, "the close button releases the capture and the thumbnail image")
+        }
+        try await Task.sleep(for: .milliseconds(200))
+        print("toast after close: toast released \(weakToast == nil), thumbnail view released \(weakThumbnail == nil)")
+        require(weakToast == nil, "the toast is freed once closed")
+
         withPreview.scheduleDismissal()
         let enter = NSEvent.enterExitEvent(with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: withPreview.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil)!
         withPreview.mouseEntered(with: enter)
