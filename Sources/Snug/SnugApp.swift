@@ -14,6 +14,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow?
     private var firstRunWindow: NSWindow?
     private var registeredShortcut: [Int] = []
+    /// The running screen recording, the status item's menu and icon it replaces, and the loop updating its elapsed time.
+    private var recording: (session: ScreenRecording, menu: NSMenu?, icon: NSImage?, ticker: Task<Void, any Error>)?
 
     static func main() {
         let app = NSApplication.shared
@@ -72,6 +74,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             return
         }
         installStatusItem()
+        ScreenRecording.requested = { [unowned self] in startRecording(displayID: $0, area: $1) }
         hotKey = HotKey { [unowned self] in capture() }
         registerHotKey()
         Task {
@@ -185,6 +188,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     }
 
     private func capture(text: Bool = false) {
+        if recording != nil { return stopRecording() }
         guard !overlay.window.isVisible else { return }
         guard CGPreflightScreenCaptureAccess() else { return showFirstRun() }
         let (screen, id) = screenUnderPointer()
@@ -224,6 +228,74 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 signposter.endInterval("windows", listing)
                 if overlay.image === image { overlay.setWindows(windows.map(\.rect), names: windows.map(\.name), ids: windows.map(\.id), frozen: windows.map(\.frozen), pointer: NSEvent.mouseLocation) }
             } catch is CancellationError {
+            } catch {
+                NSApp.presentError(error)
+            }
+        }
+    }
+
+    // MARK: Recording
+
+    private func startRecording(displayID: CGDirectDisplayID, area: CGRect) {
+        let file = Output.defaultFile(defaults: .standard).deletingPathExtension().appendingPathExtension("mov")
+        Task {
+            do {
+                let session = try await ScreenRecording.start(displayID: displayID, area: area, file: file, showsOutline: true)
+                session.onFailure = { [self] error in
+                    endRecording()
+                    NSApp.presentError(error)
+                }
+                showRecording(session)
+            } catch {
+                NSApp.presentError(error)
+            }
+        }
+    }
+
+    /// While recording, the status item is a stop button showing a stop glyph and the elapsed time.
+    private func showRecording(_ session: ScreenRecording) {
+        let item = statusItem!, button = item.button!
+        let ticker = Task {
+            while true {
+                let seconds = Int(session.started.duration(to: .now).components.seconds)
+                button.title = String(format: " %d:%02d", seconds / 60, seconds % 60)
+                try await Task.sleep(for: .seconds(1))
+            }
+        }
+        recording = (session, item.menu, button.image, ticker)
+        item.menu = nil
+        item.length = NSStatusItem.variableLength
+        button.image = NSImage(systemSymbolName: "stop.circle.fill", accessibilityDescription: "Stop Recording")
+        button.imagePosition = .imageLeading
+        button.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        button.target = self
+        button.action = #selector(stopRecordingFromMenu)
+    }
+
+    @objc private func stopRecordingFromMenu() { stopRecording() }
+
+    /// Puts the status item back and returns the recording, if one was running.
+    @discardableResult
+    private func endRecording() -> ScreenRecording? {
+        guard let recording else { return nil }
+        self.recording = nil
+        recording.ticker.cancel()
+        let item = statusItem!, button = item.button!
+        button.action = nil
+        button.title = ""
+        button.image = recording.icon
+        item.length = NSStatusItem.squareLength
+        item.menu = recording.menu
+        return recording.session
+    }
+
+    /// Stops the recording, then copies the saved file's URL and shows the toast with its first frame.
+    private func stopRecording() {
+        guard let session = endRecording() else { return }
+        Task {
+            do {
+                try await session.stop()
+                _ = try await ScreenRecording.deliver(session.file, pasteboard: .general, defaults: .standard)
             } catch {
                 NSApp.presentError(error)
             }
