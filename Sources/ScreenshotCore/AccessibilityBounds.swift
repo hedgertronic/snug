@@ -43,9 +43,12 @@ public enum AccessibilityBounds {
     public static let minimumHoverSide: CGFloat = 16
 
     /// The frames a hover can land on: not the window (its rectangle comes from the window list, where a click captures it as a window),
-    /// not static text, and nothing under 16 pt on a side. Roles, not role descriptions: those are localized.
+    /// not static text, not Stage Manager's strip list (it would win in the gaps between thumbnails and around their tilted pictures), and
+    /// nothing under 16 pt on a side. Roles, not role descriptions: those are localized.
     public static func hoverLevel(_ frames: [AXFrame]) -> [AXFrame] {
-        frames.filter { $0.role != "AXWindow" && $0.role != "AXStaticText" && $0.rect.width >= minimumHoverSide && $0.rect.height >= minimumHoverSide }
+        let stageManager = StageManager.owns(frames)
+        return frames.filter { $0.role != "AXWindow" && $0.role != "AXStaticText" && !(stageManager && $0.role == "AXList")
+            && $0.rect.width >= minimumHoverSide && $0.rect.height >= minimumHoverSide }
     }
 
     /// Whether hover looks up accessibility frames in a window: not in the frozen Dock (named "Dock" by the window listing), whose live

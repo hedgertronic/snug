@@ -305,11 +305,44 @@ struct SystemSurfaceHoverTests {
                       AXFrame(roleDescription: "group", rect: CGRect(x: 0, y: 0, width: 1512, height: 982), role: "AXGroup"),
                       AXFrame(roleDescription: "application", rect: .zero, role: "AXApplication", title: "WindowManager")]
         let found = try await lookup(frames, inWindowNamed: "WindowManager", frozen: false)
-        #expect(found.map(\.label) == ["Button", "List"])
+        #expect(found.map(\.label) == ["Button"], "the strip's list is never a candidate")
         let window = Candidate(id: "window-1", label: "Window", bounds: CGRect(x: 200, y: 100, width: 2000, height: 1500), score: -1, kind: .window)
         var session = SelectionSession(candidates: [window] + found, extent: extent, anchor: CGPoint(x: 2838, y: 847))
         #expect(session.selected?.bounds == CGRect(x: 2589, y: 684, width: 403, height: 301))
         session.hover(at: CGPoint(x: 1000, y: 800))
         #expect(session.selected?.id == window.id, "the window behind is hovered, not \(String(describing: session.selected))")
+        session.hover(at: CGPoint(x: 2838, y: 1100))
+        #expect(session.selected?.kind == .display, "the gap below the thumbnail hovers what is behind the strip, not \(String(describing: session.selected))")
+    }
+
+    @Test func stageManagerThumbnailsAreTheirVisiblePicturesNotTheirPaddedButtons() async throws {
+        // The user's capture of the strip's list (2586, 378, 406, 1274 px; hover.log), put back where it was on a 2x display, and the
+        // lookups' button frames. Each tilted picture's left edge is at x 146 in the capture; the frames start at x 3.
+        let url = try #require(Bundle.module.url(forResource: "StageManagerStrip", withExtension: "png", subdirectory: "Fixtures"))
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let strip = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        let context = try #require(CGContext(data: nil, width: 3024, height: 1964, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.draw(strip, in: CGRect(x: 2586, y: 1964 - 378 - 1274, width: 406, height: 1274))
+        let image = try #require(context.makeImage())
+        let window = Candidate(id: "window-1", label: "Window", bounds: CGRect(x: 168, y: 88, width: 2484, height: 1854), score: -1, kind: .window)
+        for index in 0..<3 {
+            let frames = [AXFrame(roleDescription: "button", rect: CGRect(x: 1294.71, y: 189.15 + 180.23 * Double(index), width: 201.29, height: 150.23), role: "AXButton"),
+                          AXFrame(roleDescription: "list", rect: CGRect(x: 1293.43, y: 189.15, width: 202.57, height: 636.7), role: "AXList"),
+                          AXFrame(roleDescription: "group", rect: CGRect(x: 0, y: 0, width: 1512, height: 982), role: "AXGroup"),
+                          AXFrame(roleDescription: "application", rect: .zero, role: "AXApplication", title: "WindowManager")]
+            let button = try #require(try await lookup(frames, inWindowNamed: "WindowManager", frozen: false).first)
+            let found = StageManager.visibleThumbnails([button], frames: frames, in: image, scale: 2)
+            let thumbnail = try #require(found.first).bounds
+            #expect(abs(thumbnail.minX - (2586 + 146)) <= 2 && thumbnail.maxX == button.bounds.maxX
+                    && thumbnail.minY == button.bounds.minY && thumbnail.maxY == button.bounds.maxY, "button \(button.bounds), found \(thumbnail)")
+            var session = SelectionSession(candidates: [window] + found, extent: extent, anchor: CGPoint(x: 2800, y: button.bounds.midY))
+            #expect(session.selected?.bounds == thumbnail)
+            session.hover(at: CGPoint(x: 2620, y: button.bounds.midY))
+            #expect(session.selected?.id == window.id, "the padding left of the picture hovers the window behind, not \(String(describing: session.selected))")
+        }
+        // Frames from any other app stay as they are.
+        let other = Candidate(id: "ax", label: "Button", bounds: CGRect(x: 2589, y: 378, width: 403, height: 301), score: 2, kind: .element)
+        #expect(StageManager.visibleThumbnails([other], frames: [AXFrame(roleDescription: "application", rect: .zero, role: "AXApplication", title: "Finder")], in: image, scale: 2) == [other])
     }
 }
