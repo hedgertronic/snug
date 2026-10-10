@@ -16,16 +16,15 @@ final class ScreenRecording: NSObject, SCRecordingOutputDelegate {
     var onFailure: (any Error) -> Void = { _ in }
     private let stream: SCStream
     private var output: SCRecordingOutput!
-    private let outline: NSPanel?
+    private var outline: NSPanel?
     /// The recording output's end: nil once the file is finished, or the error that ended it.
     private let ended: AsyncStream<(any Error)?>
     private let end: AsyncStream<(any Error)?>.Continuation
     private var stopping = false
 
-    private init(file: URL, stream: SCStream, configuration: SCRecordingOutputConfiguration, outline: NSPanel?) throws {
+    private init(file: URL, stream: SCStream, configuration: SCRecordingOutputConfiguration) throws {
         self.file = file
         self.stream = stream
-        self.outline = outline
         (ended, end) = AsyncStream.makeStream()
         super.init()
         output = SCRecordingOutput(configuration: configuration, delegate: self)
@@ -50,10 +49,11 @@ final class ScreenRecording: NSObject, SCRecordingOutputDelegate {
         recordingConfiguration.outputURL = file
         recordingConfiguration.outputFileType = .mov
         recordingConfiguration.videoCodecType = .h264
-        let outline = showsOutline ? makeOutline(around: area, on: displayID) : nil
         let stream = SCStream(filter: filter, configuration: configuration, delegate: nil)
-        let recording = try ScreenRecording(file: file, stream: stream, configuration: recordingConfiguration, outline: outline)
+        let recording = try ScreenRecording(file: file, stream: stream, configuration: recordingConfiguration)
         try await stream.startCapture()
+        // Shown only once capture runs, so a failed start leaves nothing on screen; the app-wide exclusion keeps it out of the video.
+        if showsOutline { recording.outline = makeOutline(around: area, on: displayID) }
         return recording
     }
 
