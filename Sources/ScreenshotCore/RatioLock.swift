@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 
 /// A fixed aspect ratio for new drags and handle drags, cycled with P. Free is `nil`.
 public enum RatioLock: CaseIterable, Sendable {
@@ -23,6 +24,21 @@ public enum RatioLock: CaseIterable, Sendable {
         case .sixteenNine: 16.0 / 9
         }
         return portrait ? 1 / landscape : landscape
+    }
+
+    /// A rectangle's aspect ratio as the size badge shows it: the standard ratio when `size` (rounded to whole pixels) is exactly one,
+    /// e.g. "16:9"; the live ratio and the nearest standard within 3%, e.g. "1.62 ≈ 16:10"; else the live ratio alone, e.g. "2.00".
+    /// The standards are 1:1, 5:4, 4:3, 3:2, 16:10, 16:9 and 21:9, and their portrait forms.
+    public static func readout(for size: CGSize) -> String {
+        let (width, height) = (Int(size.width.rounded()), Int(size.height.rounded()))
+        guard width > 0, height > 0 else { return "" }
+        let landscape = [(1, 1), (5, 4), (4, 3), (3, 2), (16, 10), (16, 9), (21, 9)]
+        let standards = landscape + landscape.dropFirst().map { ($0.1, $0.0) }
+        let live = Double(width) / Double(height)
+        let nearest = standards.min { abs(log(live * Double($0.1) / Double($0.0))) < abs(log(live * Double($1.1) / Double($1.0))) }!
+        if width * nearest.1 == height * nearest.0 { return "\(nearest.0):\(nearest.1)" }
+        let formatted = String(format: "%.2f", live)
+        return abs(log(live * Double(nearest.1) / Double(nearest.0))) <= 0.03 ? "\(formatted) ≈ \(nearest.0):\(nearest.1)" : formatted
     }
 
     /// The lock after `current` when P is pressed: Free, 1:1, 4:3, 3:2, 16:9, then Free.

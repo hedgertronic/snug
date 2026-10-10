@@ -114,6 +114,15 @@ final class OverlayController {
     let cornerChip = BarButton("All corners", key: "=", height: 23, size: 11)
     /// The aspect ratio P locks for new drags and handle drags; nil is free. It lasts one capture.
     var ratioLock: RatioLock?
+    /// The selection before a run of P presses and the rectangle the last press conformed it to: each press in the run conforms the
+    /// rectangle from before the run, so cycling through 1:1 does not shrink the 16:9 that follows.
+    private var ratioBase: (base: CGRect, conformed: CGRect)?
+    /// The size badge's ratio: the lock, e.g. "4:3 locked", else the ratio of the rectangle being dragged or selected (see
+    /// `RatioLock.readout`); empty with neither.
+    var ratioReadout: String {
+        if let ratioLock { return "\(ratioLock.label) locked" }
+        return (draggedRect ?? selection?.rect).map { RatioLock.readout(for: $0.size) } ?? ""
+    }
     /// Shift is down: with a selection open, the element under the pointer is outlined for a union.
     var shiftHeld = false
     /// Save As: the file to write, given the usual name in the save folder; nil cancels. Debug runs answer without a panel.
@@ -275,6 +284,7 @@ final class OverlayController {
         lastEditedCorner = nil
         hoveredCorner = nil
         ratioLock = nil
+        ratioBase = nil
         selection = nil
         interaction = .none
         spaceHeld = false
@@ -617,7 +627,7 @@ final class OverlayController {
             if hovering { clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true, saveAs: true) } else { save(saveAs: true) }
         case (_, false, "e") where hovering && hoverRect != nil: openAsSelection(hoverRect!)
         case (_, false, "o"): defaults.set(!defaults.bool(forKey: Pref.roundCorners), forKey: Pref.roundCorners)
-        case (_, false, "p"): ratioLock = RatioLock.next(after: ratioLock)
+        case (_, false, "p"): cycleRatioLock()
         case (_, false, "="): applyRadiusToAll()
         case (123...126, _, _) where option && !hovering: nudgeSide(keyCode: event.keyCode, outward: !command, by: step)
         case (_, true, "s") where hovering: clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true)
@@ -645,6 +655,17 @@ final class OverlayController {
         default: return false
         }
         return true
+    }
+
+    /// P: the next ratio lock. An open selection conforms at once: it becomes the largest rectangle of the lock's ratio (portrait when
+    /// taller than wide) that fits inside it and keeps its center, in whole pixels, clamped to the display. Free leaves it alone.
+    private func cycleRatioLock() {
+        ratioLock = RatioLock.next(after: ratioLock)
+        guard let ratioLock, let old = selection?.rect else { return }
+        let base = ratioBase?.conformed == old ? ratioBase!.base : old
+        selection!.conform(base, to: ratioLock.ratio(portrait: base.height > base.width))
+        ratioBase = (base, selection!.rect)
+        carryRadii(from: old)
     }
 
     // MARK: Output

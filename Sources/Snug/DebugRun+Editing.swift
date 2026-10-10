@@ -242,6 +242,29 @@ extension DebugRun {
         overlay.dismiss()
         require(overlay.ratioLock == nil, "the lock does not outlive the capture")
 
+        // P conforms an open selection at once: the largest rectangle of the lock's ratio inside the rectangle from before this run of
+        // P presses, on its center, in whole pixels. Free leaves the rectangle alone.
+        open()
+        key(14, "e")
+        require(overlay.ratioReadout == "2.00", "a free 2:1 selection reads its live ratio: \(overlay.ratioReadout)")
+        key(35, "p")
+        require(overlay.selection?.rect == CGRect(x: 400, y: 300, width: 200, height: 200), "P to 1:1 conforms the selection about its center: \(String(describing: overlay.selection?.rect))")
+        require(overlay.ratioReadout == "1:1 locked", "a lock reads as the lock: \(overlay.ratioReadout)")
+        key(35, "p")
+        require(overlay.selection?.rect == CGRect(x: 367, y: 300, width: 267, height: 200), "P to 4:3 fits the rectangle from before the P presses, not the square: \(String(describing: overlay.selection?.rect))")
+        key(35, "p")
+        require(overlay.selection?.rect == CGRect(x: 350, y: 300, width: 300, height: 200), "P to 3:2 conforms: \(String(describing: overlay.selection?.rect))")
+        key(35, "p")
+        let sixteenNine = CGRect(x: 322, y: 300, width: 356, height: 200)
+        require(overlay.selection?.rect == sixteenNine, "P to 16:9 conforms: \(String(describing: overlay.selection?.rect))")
+        key(35, "p")
+        require(overlay.ratioLock == nil && overlay.selection?.rect == sixteenNine, "P to Free leaves the rectangle alone")
+        require(overlay.ratioReadout == "1.78 ≈ 16:9", "356 x 200 px reads as near 16:9: \(overlay.ratioReadout)")
+        key(right)
+        key(35, "p")
+        require(overlay.selection?.rect == CGRect(x: 401, y: 300, width: 200, height: 200), "after a nudge, P conforms the nudged rectangle: \(String(describing: overlay.selection?.rect))")
+        overlay.dismiss()
+
         // Shift on a handle keeps the ratio the selection had when the drag started.
         open()
         key(14, "e")

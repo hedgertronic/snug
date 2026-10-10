@@ -180,6 +180,16 @@ public struct AreaSelection: Sendable {
         edit(rect.offsetBy(dx: dx, dy: dy))
     }
 
+    /// Takes the largest rectangle of `ratio` (width over height) that fits inside `base` and shares its center, rounded to whole
+    /// pixels, then clamps it to the extent.
+    public mutating func conform(_ base: CGRect, to ratio: CGFloat) {
+        let width = min(base.width, base.height * ratio)
+        let size = CGSize(width: width.rounded(), height: (width / ratio).rounded())
+        let x = min(max((base.midX - size.width / 2).rounded(), extent.minX), extent.maxX - size.width)
+        let y = min(max((base.midY - size.height / 2).rounded(), extent.minY), extent.maxY - size.height)
+        edit(CGRect(origin: CGPoint(x: x, y: y), size: size))
+    }
+
     private mutating func edit(_ edited: CGRect) {
         rect = edited
         fits = [edited]

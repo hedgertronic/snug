@@ -104,6 +104,28 @@ struct AreaSelectionTests {
         #expect(drag.rect == CGRect(x: 500, y: 100, width: 300, height: 400))
     }
 
+    @Test func conformFitsTheRatioInsideTheBaseOnItsCenterInWholePixels() {
+        var selection = AreaSelection(extent: extent, exact: CGRect(x: 100, y: 100, width: 400, height: 200))
+        selection.conform(selection.rect, to: 1)
+        #expect(selection.rect == CGRect(x: 200, y: 100, width: 200, height: 200) && selection.isEdited && selection.fits.count == 1)
+        selection.conform(CGRect(x: 100, y: 100, width: 400, height: 200), to: 4.0 / 3)
+        #expect(selection.rect == CGRect(x: 167, y: 100, width: 267, height: 200))
+        selection.conform(CGRect(x: 100, y: 100, width: 200, height: 400), to: 0.75)
+        #expect(selection.rect == CGRect(x: 100, y: 167, width: 200, height: 267))
+        selection.conform(CGRect(x: 500.5, y: 0, width: 499.5, height: 800), to: 1)
+        #expect(selection.rect == CGRect(x: 500, y: 150, width: 500, height: 500) && extent.contains(selection.rect))
+    }
+
+    @Test func ratioReadoutNamesExactAndNearStandards() {
+        let cases: [(CGSize, String)] = [
+            (CGSize(width: 1600, height: 1000), "16:10"), (CGSize(width: 1620, height: 1000), "1.62 ≈ 16:10"),
+            (CGSize(width: 1000, height: 1000), "1:1"), (CGSize(width: 750, height: 1000), "3:4"), (CGSize(width: 1000, height: 1600), "10:16"),
+            (CGSize(width: 1001, height: 563), "1.78 ≈ 16:9"), (CGSize(width: 1920, height: 1080), "16:9"), (CGSize(width: 1919.6, height: 1080.2), "16:9"),
+            (CGSize(width: 2560, height: 1080), "2.37 ≈ 21:9"), (CGSize(width: 2000, height: 1000), "2.00"), (CGSize(width: 1250, height: 1000), "5:4")
+        ]
+        for (size, expected) in cases { #expect(RatioLock.readout(for: size) == expected, "\(size)") }
+    }
+
     @Test func axisLockedMoveStaysOnTheLargerTravel() {
         var drag = AreaDrag(extent: extent, origin: CGPoint(x: 100, y: 100))
         drag.update(to: CGPoint(x: 300, y: 200), moving: false)
