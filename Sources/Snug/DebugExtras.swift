@@ -555,7 +555,7 @@ extension DebugRun {
         require(texts(in: chrome.hints).contains("snap on") && !texts(in: chrome.hints).contains("snap off"), "with snap off the strip offers S as snap on: \(texts(in: chrome.hints))")
         defaults.set(true, forKey: Pref.snap)
         overlay.refresh()
-        require(texts(in: chrome.actionBar) == ["Frame", "M", "Text", "\u{21E7}\u{21A9}", "Save", "\u{2318}S", "Copy", "\u{21A9}"], "the action bar shows Frame, Text, Save, and Copy with key caps: \(texts(in: chrome.actionBar))")
+        require(texts(in: chrome.actionBar) == ["Frame", "M", "Record", "V", "Text", "\u{21E7}\u{21A9}", "Save", "\u{2318}S", "Copy", "\u{21A9}"], "the action bar shows Frame, Record, Text, Save, and Copy with key caps: \(texts(in: chrome.actionBar))")
         let released = overlay.view.viewRect(overlay.selection!.rect)
         require(chrome.actionBar.frame.maxY == released.minY - 8 && chrome.actionBar.frame.minX == min(max(released.minX, 8), overlay.view.bounds.width - chrome.actionBar.frame.width - 8),
                 "the action bar is attached under the selection: \(chrome.actionBar.frame) \(released)")
@@ -673,6 +673,7 @@ extension DebugRun {
         require(guides2.bands.path!.boundingBox.maxY == overlay.view.bounds.height, "without an inset the top ruler sits at the top edge")
         overlay.dismiss()
         for key in [Pref.rulers, Pref.loupe] { defaults.set(false, forKey: key) }
+        try await verifyRecording(image: image, frame: frame, overlay: overlay, require: require)
 
         print("Extras UI verification passed (\(passed.count) checks)")
         passed.forEach { print("  ok: \($0)") }

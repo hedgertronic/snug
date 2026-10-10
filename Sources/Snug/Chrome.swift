@@ -302,7 +302,7 @@ final class BottomBar: Capsule {
     func click(_ mode: OverlayController.Mode) { modeButtons[mode]!.onClick() }
 }
 
-/// The bar attached to a released selection: Frame, Text, Save, and Copy.
+/// The bar attached to a released selection: Frame, Record, Text, Save, and Copy.
 @MainActor
 final class ActionBar: Capsule {
     var onFrame: () -> Void = {}
@@ -313,6 +313,7 @@ final class ActionBar: Capsule {
     let text = BarButton("Text", key: "\u{21E7}\u{21A9}", height: 28, size: 12)
     let save = BarButton("Save", key: "\u{2318}S", height: 28, size: 12)
     let copy = BarButton("Copy", key: "\u{21A9}", height: 28, size: 12)
+    let record = BarButton("Record", key: "V", height: 28, size: 12)
 
     var framed = false {
         didSet { frameButton.style(fill: framed ? NSColor.white.withAlphaComponent(0.16) : nil, text: .labelColor, bold: framed) }
@@ -321,13 +322,14 @@ final class ActionBar: Capsule {
     init() {
         super.init(spacing: 4, inset: 4, radius: 11)
         frameButton.onClick = { [unowned self] in onFrame() }
+        record.style(fill: nil, text: .labelColor)
         text.style(fill: nil, text: .labelColor)
         save.style(fill: nil, text: .labelColor)
         copy.style(fill: .controlAccentColor, text: .white, bold: true, prominent: true)
         text.onClick = { [unowned self] in onText() }
         save.onClick = { [unowned self] in onSave() }
         copy.onClick = { [unowned self] in onCopy() }
-        setItems([frameButton, Capsule.divider(height: 18), text, save, copy])
+        setItems([frameButton, Capsule.divider(height: 18), record, text, save, copy])
         framed = false
     }
 

@@ -180,6 +180,7 @@ final class OverlayController {
         chrome.actionBar.onText = { [unowned self] in copySelectionText(translating: false) }
         chrome.actionBar.onSave = { [unowned self] in save() }
         chrome.actionBar.onCopy = { [unowned self] in copy() }
+        chrome.actionBar.record.onClick = { [unowned self] in startRecording() }
     }
 
     static let resizeCursors: [Handle: NSCursor] = [
@@ -638,6 +639,7 @@ final class OverlayController {
         case (_, false, "m"): toggleFrame()
         case (_, false, "s"): toggleSnap()
         case (_, false, "g"): startScroll()
+        case (_, false, "v"): startRecording()
         case (_, false, "f"):
             cancelWork()
             selection = AreaSelection(extent: extent, exact: extent)
