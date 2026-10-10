@@ -16,6 +16,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     private var registeredShortcut: [Int] = []
     /// The running screen recording, the status item's menu and icon it replaces, and the loop updating its elapsed time.
     private var recording: (session: ScreenRecording, menu: NSMenu?, icon: NSImage?, ticker: Task<Void, any Error>)?
+    private var iconObservation: NSKeyValueObservation?
 
     static func main() {
         let app = NSApplication.shared
@@ -36,6 +37,13 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     FileHandle.standardError.write(Data("Cutout failed: \(error)\n".utf8))
                     exit(EXIT_FAILURE)
                 }
+            }
+            return
+        }
+        if let index = arguments.firstIndex(of: "--render-menubar-icons") {
+            Task {
+                try! await DebugRun.renderMenuBarIcons(into: URL(fileURLWithPath: arguments[index + 1]))
+                exit(EXIT_SUCCESS)
             }
             return
         }
@@ -114,42 +122,92 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     private func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button!.image = Self.menuBarIcon()
+        iconObservation = Self.observeMenuBarIcon(on: item.button!, defaults: .standard)
         let menu = Self.makeMenu(defaults: .standard)
         captureItem = menu.items[0]
         item.menu = menu
         statusItem = item
     }
 
-    /// The logo as a template image: the app tile as a solid rounded square with the dashed arch and the band cut out of it.
-    /// Drawn in an 18 pt space with the tile edges and arch strokes on whole points and scaled to whatever rectangle it is asked for,
-    /// so it is sharp at 1x and 2x.
-    static func menuBarIcon() -> NSImage {
-        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
-            let transform = NSAffineTransform()
-            transform.scale(by: rect.width / 18)
-            transform.concat()
-            NSBezierPath(roundedRect: CGRect(x: 1, y: 1, width: 16, height: 16), xRadius: 4, yRadius: 4).fill()
-            NSGraphicsContext.current!.compositingOperation = .clear
-            let arch = NSBezierPath()
-            arch.move(to: CGPoint(x: 5, y: 9))
-            arch.line(to: CGPoint(x: 5, y: 11))
-            arch.appendArc(withCenter: CGPoint(x: 8, y: 11), radius: 3, startAngle: 180, endAngle: 90, clockwise: true)
-            arch.line(to: CGPoint(x: 10, y: 14))
-            arch.appendArc(withCenter: CGPoint(x: 10, y: 11), radius: 3, startAngle: 90, endAngle: 0, clockwise: true)
-            arch.line(to: CGPoint(x: 13, y: 9))
-            arch.lineWidth = 2
-            arch.lineCapStyle = .round
-            // Five round dots, one at each end and three between, spaced evenly along the path's 6 + 3 pi pt.
-            let spacing = (6 + 3 * CGFloat.pi) / 4
-            arch.setLineDash([0.01, spacing - 0.01], count: 2, phase: 0)
-            arch.stroke()
-            let band = NSBezierPath()
-            band.move(to: CGPoint(x: 0, y: 6))
-            band.curve(to: CGPoint(x: 18, y: 6), controlPoint1: CGPoint(x: 5.4, y: 8.25), controlPoint2: CGPoint(x: 12.6, y: 8.25))
-            band.lineWidth = 1.5
-            band.stroke()
-            return true
+    /// Keeps `button` showing the icon variant in `SnugMenuBarIcon`, redrawn as soon as the default changes, including from `defaults write`
+    /// in another process.
+    static func observeMenuBarIcon(on button: NSButton, defaults: UserDefaults) -> NSKeyValueObservation {
+        defaults.observe(\.SnugMenuBarIcon, options: [.initial]) { defaults, _ in
+            let variant = defaults.string(forKey: Pref.menuBarIcon)!
+            Task { @MainActor in button.image = menuBarIcon(variant) }
+        }
+    }
+
+    /// The menu bar logo as a template image, drawn in an 18 pt space into a 1x and a 2x bitmap so each display scale gets pixels placed for it.
+    /// "a": the app tile, solid, with five arch dots and the band cut out. The dots sit on whole points, 2 x 2 squares at 1x and circles at 2x,
+    /// and the band's curve is a 1 px step at 1x.
+    /// "d": no tile. A solid band with rounded bottom corners under a dashed arch that stands open on the band's curved top. At 2x the dashes
+    /// are round-capped and mirror around one centered on top; at 1x they are 2 px blocks with 2 px gaps that stop short of the band.
+    static func menuBarIcon(_ variant: String) -> NSImage {
+        let image = NSImage(size: NSSize(width: 18, height: 18))
+        for scale in [1, 2] {
+            let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 18 * scale, pixelsHigh: 18 * scale, bitsPerSample: 8, samplesPerPixel: 4,
+                                       hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+            rep.size = NSSize(width: 18, height: 18)
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+            switch variant {
+            case "a":
+                NSBezierPath(roundedRect: CGRect(x: 1, y: 1, width: 16, height: 16), xRadius: 4, yRadius: 4).fill()
+                NSGraphicsContext.current!.compositingOperation = .clear
+                for center in [CGPoint(x: 5, y: 9), CGPoint(x: 5, y: 13), CGPoint(x: 9, y: 14), CGPoint(x: 13, y: 13), CGPoint(x: 13, y: 9)] {
+                    let dot = CGRect(x: center.x - 1, y: center.y - 1, width: 2, height: 2)
+                    if scale == 1 { dot.fill() } else { NSBezierPath(ovalIn: dot).fill() }
+                }
+                if scale == 1 {
+                    // The band's curve as a 1 px step.
+                    CGRect(x: 1, y: 5, width: 3, height: 1).fill()
+                    CGRect(x: 4, y: 6, width: 10, height: 1).fill()
+                    CGRect(x: 14, y: 5, width: 3, height: 1).fill()
+                } else {
+                    // Low enough that the bottom dots keep a pixel of tile between them and the cut.
+                    let band = NSBezierPath()
+                    band.move(to: CGPoint(x: 0, y: 5))
+                    band.curve(to: CGPoint(x: 18, y: 5), controlPoint1: CGPoint(x: 5.4, y: 7.25), controlPoint2: CGPoint(x: 12.6, y: 7.25))
+                    band.lineWidth = 1.5
+                    band.stroke()
+                }
+            case "d":
+                let band = NSBezierPath()
+                band.move(to: CGPoint(x: 1, y: 5.5))
+                band.line(to: CGPoint(x: 1, y: 5))
+                band.appendArc(withCenter: CGPoint(x: 5, y: 5), radius: 4, startAngle: 180, endAngle: 270)
+                band.line(to: CGPoint(x: 13, y: 1))
+                band.appendArc(withCenter: CGPoint(x: 13, y: 5), radius: 4, startAngle: 270, endAngle: 360)
+                band.line(to: CGPoint(x: 17, y: 5.5))
+                band.curve(to: CGPoint(x: 1, y: 5.5), controlPoint1: CGPoint(x: 12, y: 7.5), controlPoint2: CGPoint(x: 6, y: 7.5))
+                band.fill()
+                if scale == 1 {
+                    // A solid middle for the band's top row, which the curve only partly covers, and no stubs.
+                    CGRect(x: 4, y: 6, width: 10, height: 1).fill()
+                    for x: CGFloat in [3, 13] { CGRect(x: x, y: 9, width: 2, height: 2).fill() }
+                    for x: CGFloat in [4, 8, 12] { CGRect(x: x, y: x == 8 ? 15 : 13, width: 2, height: 2).fill() }
+                } else {
+                    // Each half runs from the top center down a leg into the band: 2.25 pt of top, a 3 pt radius corner, then the leg.
+                    // Visible dashes (caps included) are 3 pt with 1.25 pt gaps: half of the top one, one on the corner, one on the leg,
+                    // then a stub that rises out of the band.
+                    for side: CGFloat in [-1, 1] {
+                        let half = NSBezierPath()
+                        half.move(to: CGPoint(x: 9, y: 16.25))
+                        half.line(to: CGPoint(x: 9 + 2.25 * side, y: 16.25))
+                        half.appendArc(withCenter: CGPoint(x: 9 + 2.25 * side, y: 13.25), radius: 3, startAngle: 90, endAngle: side < 0 ? 180 : 0, clockwise: side > 0)
+                        half.line(to: CGPoint(x: 9 + 5.25 * side, y: 4))
+                        half.lineWidth = 1.5
+                        half.lineCapStyle = .round
+                        half.setLineDash([0.75, 2.75, 1.5, 2.75, 1.5, 2.75, 10, 1], count: 8, phase: 0)
+                        half.stroke()
+                    }
+                }
+            default:
+                preconditionFailure("SnugMenuBarIcon is a or d: \(variant)")
+            }
+            NSGraphicsContext.restoreGraphicsState()
+            image.addRepresentation(rep)
         }
         image.isTemplate = true
         image.accessibilityDescription = "Snug"
@@ -355,6 +413,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         firstRunWindow!.center()
         firstRunWindow!.makeKeyAndOrderFront(nil)
     }
+}
+
+extension UserDefaults {
+    /// `Pref.menuBarIcon` for key-value observing, which needs a property named like the defaults key.
+    @objc dynamic var SnugMenuBarIcon: String? { string(forKey: Pref.menuBarIcon) }
 }
 
 extension NSMenuItem {

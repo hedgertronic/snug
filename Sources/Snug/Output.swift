@@ -44,6 +44,9 @@ enum Pref {
     static let logText = "SnugLogText"
     /// The modification date of the Snug binary whose first Text mode warmed Vision's accurate OCR models.
     static let visionWarmedBuild = "SnugVisionWarmedBuild"
+    /// The menu bar icon variant, "a" or "d" (see `SnugApp.menuBarIcon`). The status item redraws as soon as it changes, so
+    /// `defaults write local.snug SnugMenuBarIcon d` switches the icon live.
+    static let menuBarIcon = "SnugMenuBarIcon"
 
     static func logHoverLine(_ line: String, key: String = logHover, file name: String = "hover.log") {
         guard UserDefaults.standard.bool(forKey: key) else { return }
@@ -78,7 +81,8 @@ enum Pref {
             highlightGlow: 0.5,
             toastPreview: true,
             toastPosition: "bottomCenter",
-            roundCorners: true
+            roundCorners: true,
+            menuBarIcon: "a"
         ])
     }
 }
