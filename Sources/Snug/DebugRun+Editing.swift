@@ -87,8 +87,8 @@ extension DebugRun {
         key(right, "", .shift)
         require(overlay.selection?.rect == a.offsetBy(dx: 10 * scale, dy: 0) && overlay.view.overlays.radii == CornerRadii(radius), "a nudged E selection keeps its radii")
         key(left, "", .shift)
-        require(["frame", "next snap", "grow", "shrink", "scroll"].allSatisfy(texts(in: overlay.chrome.hints).contains) && !texts(in: overlay.chrome.hints).contains("corners"),
-                "the selection hint row offers frame, next snap, grow and shrink, and no corners hint")
+        require(["resize", "scroll"].allSatisfy(texts(in: overlay.chrome.hints).contains) && !["frame", "corners"].contains(where: texts(in: overlay.chrome.hints).contains),
+                "the selection hint row offers resize and scroll, and no frame or corners hint")
 
         // Corner dots: cursor, drag all, Option-drag one, clamp.
         mouse(.mouseMoved, dot(.topLeft))

@@ -99,6 +99,8 @@ final class OverlayController {
     var windowFrozen: [Bool] = []
     /// Option is held: a window click inverts the shadow preference.
     var optionHeld = false
+    /// Command is held: the hint key caps for it fill with the accent.
+    var commandHeld = false
     /// Corner radius in pixels of each snap fit, Tab fit, and hovered rectangle, measured once per rectangle.
     /// A rectangle that is not here (an exact drag, a nudged or resized selection) has square corners.
     var radii: [CGRect: CGFloat] = [:]
@@ -177,6 +179,7 @@ final class OverlayController {
             refresh()
         }
         chrome.actionBar.onFrame = { [unowned self] in toggleFrame() }
+        chrome.actionBar.onSnap = { [unowned self] in toggleSnap() }
         chrome.actionBar.onText = { [unowned self] in copySelectionText(translating: false) }
         chrome.actionBar.onSave = { [unowned self] in save() }
         chrome.actionBar.onCopy = { [unowned self] in copy() }
@@ -299,6 +302,7 @@ final class OverlayController {
 
     func flagsChanged(_ event: NSEvent) {
         optionHeld = event.modifierFlags.contains(.option)
+        commandHeld = event.modifierFlags.contains(.command)
         let shift = event.modifierFlags.contains(.shift)
         if shift != shiftHeld, image != nil {
             shiftHeld = shift
@@ -310,6 +314,7 @@ final class OverlayController {
     func mouseMoved(_ event: NSEvent) {
         guard image != nil else { return }
         optionHeld = event.modifierFlags.contains(.option)
+        commandHeld = event.modifierFlags.contains(.command)
         shiftHeld = event.modifierFlags.contains(.shift)
         pointer = view.pixelPoint(event)
         updateHoveredCorner()

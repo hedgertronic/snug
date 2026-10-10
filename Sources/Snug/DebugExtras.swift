@@ -191,6 +191,9 @@ extension DebugRun {
         let sheet = texts(in: help)
         require(!help.isHidden && sheet.contains("Keys") && sheet.contains("Option-drag") && sheet.contains("Up / Down") && sheet.contains("Shift-Return") && sheet.contains("Text: drag") && sheet.contains("Modes and view"),
                 "? shows the keys sheet with every column: \(sheet.count) texts")
+        let helpRows = HelpSheet.columns.flatMap(\.rows)
+        require(["[ ]", "Shift-[ ]", "=", "Option-drag dot", "V", "K"].allSatisfy(helpRows.map(\.keys).contains) && helpRows.contains { $0.keys == "Arrows" && $0.action.contains("1 px") && $0.action.contains("10 px") },
+                "the sheet lists the corner radius keys, V, K, and arrows in pixels")
         require(sheet.contains("Esc or ? closes this.") || sheet.contains { $0.hasSuffix("Esc or ? closes this.") }, "the sheet says how to close it")
         let panel = help.panel.frame
         require(panel.width == 900 && help.bounds.insetBy(dx: 1, dy: 1).contains(panel), "the sheet panel is 900 pt wide and inside the screen \(panel)")
@@ -230,7 +233,7 @@ extension DebugRun {
         mouse(.mouseMoved, aim)
         let hovered = overlay.view.overlays.hover!
         require(hovered != screenWindow && ![CandidateKind.window, .display].contains(overlay.session!.selected!.kind), "hover over geometry selects it, not the window \(hovered)")
-        require(Array(texts(in: overlay.chrome.hover).dropFirst()) == ["\(Int(hovered.width)) x \(Int(hovered.height))", "\u{21A9}", "copy", "\u{2318}S", "save"],
+        require(Array(texts(in: overlay.chrome.hover).dropFirst()) == ["\(Int(hovered.width)) x \(Int(hovered.height))", "copy", "\u{21A9}", "save", "\u{2318}S"],
                 "the hover label shows the name, the size, and the Return and Cmd-S keys: \(texts(in: overlay.chrome.hover))")
         let hoverBox = overlay.view.viewRect(hovered)
         require(overlay.chrome.hover.frame.maxY == hoverBox.minY - 8 || overlay.chrome.hover.frame.minY == hoverBox.maxY + 8 || hoverBox.contains(overlay.chrome.hover.frame),
@@ -520,7 +523,7 @@ extension DebugRun {
         require(defaults.bool(forKey: Pref.shadow) && overlay.windowShadow(option: false) && !overlay.windowShadow(option: true), "the Shadow button turns it back on, and Option-click then drops it")
         overlay.setWindows([CGRect(x: 300, y: 300, width: 400, height: 200)], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
-        require(texts(in: chrome.hover) == ["Browser", "400 x 200  +  shadow", "\u{21A9}", "copy", "\u{2318}S", "save"], "hovering a window shows its title, size, and shadow: \(texts(in: chrome.hover))")
+        require(texts(in: chrome.hover) == ["Browser", "400 x 200  +  shadow", "copy", "\u{21A9}", "save", "\u{2318}S"], "hovering a window shows its title, size, and shadow: \(texts(in: chrome.hover))")
         overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: .option, timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
         require(texts(in: chrome.hover)[1] == "400 x 200", "holding Option drops the shadow from the hover size line: \(texts(in: chrome.hover))")
@@ -547,15 +550,62 @@ extension DebugRun {
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.status) == ["Snapped"], "after release on a fit: Snapped")
         require(chrome.bottomBar.isHidden && !chrome.actionBar.isHidden && texts(in: chrome.hints)
-                    == ["M", "frame", "Tab", "next snap", "S", "snap off", "\u{2325}", "arrows", "grow", "\u{2325}\u{2318}", "shrink", "P", "ratio free", "G", "scroll", "esc", "cancel"],
-                "the action bar replaces the bottom bar, with the released hints: \(texts(in: chrome.hints))")
+                    == ["next snap", "Tab", "resize", "\u{2325}", "lock ratio, axis", "\u{21E7}", "ratio \(overlay.ratioReadout)", "P", "scroll", "G", "cancel", "esc"],
+                "the action bar replaces the bottom bar, with the released hints, each label before its keys: \(texts(in: chrome.hints))")
         require(chrome.hints.frame.height < 40 && chrome.hints.frame.width <= overlay.view.bounds.width - 16, "the released hint strip is one line and fits: \(chrome.hints.frame) in \(overlay.view.bounds.width)")
-        defaults.set(false, forKey: Pref.snap)
+        require(texts(in: chrome.actionBar) == ["Frame", "M", "Snap", "S", "Text", "\u{21E7}\u{21A9}", "Save", "\u{2318}S", "Copy", "\u{21A9}"],
+                "the action bar shows Frame, Snap, Text, Save, and Copy with key caps: \(texts(in: chrome.actionBar))")
+        let snapButton = chrome.actionBar.snapButton
+        require(snapButton.layer!.backgroundColor != nil, "with snap on the action bar's Snap is highlighted")
+        snapButton.onClick()
+        require(!defaults.bool(forKey: Pref.snap) && snapButton.layer!.backgroundColor == nil, "clicking the action bar's Snap turns snap off and unhighlights it")
+        key(1, "s")
+        require(defaults.bool(forKey: Pref.snap) && snapButton.layer!.backgroundColor != nil, "S turns snap back on and the Snap button follows")
+        /// The key caps under `view` whose glyph is `text`.
+        func keyCaps(_ text: String, in view: NSView) -> [KeyCap] {
+            ((view as? KeyCap).map { cap in texts(in: cap) == [text] ? [cap] : [] } ?? []) + view.subviews.flatMap { keyCaps(text, in: $0) }
+        }
+        func flags(_ modifiers: NSEvent.ModifierFlags) {
+            overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
+        }
+        let selected = overlay.view.viewRect(overlay.selection!.rect)
+        require(chrome.sideHints.allSatisfy(\.isHidden) && keyCaps("\u{2325}", in: chrome.hints).allSatisfy { !$0.held }, "without Option no side arrows show and the Option cap is gray")
+        flags(.option)
+        let sides = chrome.sideHints
+        require(keyCaps("\u{2325}", in: chrome.hints).count == 2 && keyCaps("\u{2325}", in: chrome.hints).allSatisfy(\.held) && keyCaps("\u{2318}", in: chrome.hints).allSatisfy { !$0.held }
+                && texts(in: chrome.hints).contains("grow") && texts(in: chrome.hints).contains("shrink"),
+                "holding Option fills the Option caps and the strip offers grow and shrink: \(texts(in: chrome.hints))")
+        require(sides.map { texts(in: $0) } == [["\u{2190}"], ["\u{2192}"], ["\u{2191}"], ["\u{2193}"]] && sides.allSatisfy { !$0.isHidden }
+                && sides[0].frame.maxX <= selected.minX && sides[1].frame.minX >= selected.maxX && sides[2].frame.minY >= selected.maxY
+                && abs(sides[0].frame.midY - selected.midY) < 1 && abs(sides[2].frame.midX - selected.midX) < 1
+                && !sides[3].frame.intersects(chrome.actionBar.frame),
+                "holding Option puts an arrow cap outside each side's midpoint, clear of the action bar: \(sides.map(\.frame)) \(selected)")
+        flags([.option, .command])
+        require(keyCaps("\u{2318}", in: chrome.hints).count == 1 && keyCaps("\u{2318}", in: chrome.hints).allSatisfy(\.held) && sides.allSatisfy { !$0.isHidden },
+                "holding Option-Command fills the Command cap too and keeps the side arrows")
+        flags(.shift)
+        require(keyCaps("\u{21E7}", in: chrome.hints).count == 1 && keyCaps("\u{21E7}", in: chrome.hints).allSatisfy(\.held) && sides.allSatisfy(\.isHidden) && texts(in: chrome.hints).contains("resize"),
+                "holding Shift fills the Shift cap, and without Option the side arrows go and the strip reads resize")
+        flags([])
+        require(keyCaps("\u{21E7}", in: chrome.hints).count == 1 && keyCaps("\u{21E7}", in: chrome.hints).allSatisfy { !$0.held }, "releasing Shift turns its cap gray")
+        let snapped = overlay.selection!
+        overlay.selection = AreaSelection(extent: extent, exact: snapped.exact)
         overlay.refresh()
-        require(texts(in: chrome.hints).contains("snap on") && !texts(in: chrome.hints).contains("snap off"), "with snap off the strip offers S as snap on: \(texts(in: chrome.hints))")
-        defaults.set(true, forKey: Pref.snap)
+        require(!overlay.hasOtherFits && !texts(in: chrome.hints).contains("next snap"), "a selection with no other fits hides Tab next snap: \(texts(in: chrome.hints))")
+        overlay.selection = snapped
         overlay.refresh()
-        require(texts(in: chrome.actionBar) == ["Frame", "M", "Text", "\u{21E7}\u{21A9}", "Save", "\u{2318}S", "Copy", "\u{21A9}"], "the action bar shows Frame, Text, Save, and Copy with key caps: \(texts(in: chrome.actionBar))")
+        overlay.editedRadii[snapped.rect] = CornerRadii(12 * overlay.scale)
+        mouse(.mouseMoved, overlay.cornerRadii(of: snapped.rect).dot(of: .topLeft, in: snapped.rect, minimumInset: 8 * overlay.scale))
+        let cornerKeys = chrome.cornerKeys, cornerChip = overlay.cornerChip
+        require(!cornerChip.isHidden && texts(in: cornerKeys) == ["radius", "[", "]", "one corner", "\u{2325}"]
+                && cornerKeys.frame.maxY <= cornerChip.frame.minY && abs(cornerKeys.frame.maxX - cornerChip.frame.maxX) < 0.5,
+                "hovering a corner dot shows radius [ ] and Option for one corner under the All corners chip: \(texts(in: cornerKeys)) \(cornerKeys.frame) \(cornerChip.frame)")
+        flags(.option)
+        require(keyCaps("\u{2325}", in: cornerKeys).allSatisfy(\.held) && !keyCaps("\u{2325}", in: cornerKeys).isEmpty, "holding Option fills the in-place Option cap by the corner")
+        flags([])
+        mouse(.mouseMoved, CGPoint(x: snapped.rect.midX, y: snapped.rect.midY))
+        require(cornerKeys.isHidden, "leaving the corner dot hides its keys")
         let released = overlay.view.viewRect(overlay.selection!.rect)
         require(chrome.actionBar.frame.maxY == released.minY - 8 && chrome.actionBar.frame.minX == min(max(released.minX, 8), overlay.view.bounds.width - chrome.actionBar.frame.width - 8),
                 "the action bar is attached under the selection: \(chrome.actionBar.frame) \(released)")
@@ -583,7 +633,7 @@ extension DebugRun {
         require(overlay.scrollArea == page && overlay.selection == nil && overlay.view.image == nil && overlay.window.ignoresMouseEvents && chrome.bottomBar.isHidden,
                 "G starts scrolling capture: the frozen image goes away and the pointer reaches the app below")
         for _ in 0..<3000 where overlay.scrollHeight < 900 { try await Task.sleep(for: .milliseconds(10)) }
-        require(overlay.scrollHeight == 900 && texts(in: chrome.hints) == ["Scroll to capture more: 900 px", "\u{21A9}", "done", "esc", "cancel"],
+        require(overlay.scrollHeight == 900 && texts(in: chrome.hints) == ["Scroll to capture more: 900 px", "done", "\u{21A9}", "cancel", "esc"],
                 "frames stitch as the area scrolls, and the hint strip counts the height: \(overlay.scrollHeight) \(texts(in: chrome.hints))")
         key(5, "g")
         require(overlay.scrollArea == page, "other keys do nothing while scrolling")
@@ -614,7 +664,7 @@ extension DebugRun {
         overlay.view.setFrameSize(CGSize(width: 520, height: overlay.view.bounds.height))
         overlay.refresh()
         let narrowHints = texts(in: chrome.hints)
-        require(chrome.hints.frame.width <= 520 - 16 && narrowHints.count < fullHints.count && narrowHints.first == fullHints.first && narrowHints.last == "all keys", "a 520 pt screen drops hints from the end and keeps all keys last: \(narrowHints)")
+        require(chrome.hints.frame.width <= 520 - 16 && narrowHints.count < fullHints.count && narrowHints.first == fullHints.first && narrowHints.suffix(2) == ["all keys", "?"], "a 520 pt screen drops hints from the end and keeps all keys last: \(narrowHints)")
         overlay.view.setFrameSize(CGSize(width: width0, height: overlay.view.bounds.height))
         overlay.dismiss()
 

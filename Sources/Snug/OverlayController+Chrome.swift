@@ -6,7 +6,16 @@ extension OverlayController {
     /// Whether a window click captures the shadow: the remembered preference, inverted while Option is down.
     func windowShadow(option: Bool) -> Bool { defaults.bool(forKey: Pref.shadow) != option }
 
-    /// The hint row: each hint is its key caps and a label.
+    // Stubs for Order A's selection readouts: Tab has another fit to go to, and the ratio for the strip.
+    var hasOtherFits: Bool { selection?.fits.count ?? 0 > 1 }
+    var ratioReadout: String { ratioLock.map { "\($0.label) locked" } ?? "free" }
+
+    /// The glyphs of the modifiers held now; hint key caps made of them fill with the accent.
+    private var heldGlyphs: Set<Character> {
+        Set([(optionHeld, "\u{2325}"), (commandHeld, "\u{2318}"), (shiftHeld, "\u{21E7}")].compactMap { $0.0 ? Character($0.1) : nil })
+    }
+
+    /// The hint row: each hint is a label and its key caps, shown in that order.
     private var hints: [(keys: [String], label: String)] {
         if scrollArea != nil {
             let height = scrollHeight >= ScrollStitcher.maximumHeight ? "\(ScrollStitcher.maximumHeight) px, the limit" : "\(scrollHeight) px"
@@ -15,9 +24,11 @@ extension OverlayController {
         return switch mode {
         case .text: [(["Drag"], "select text"), (["\u{21A9}"], "copy"), (["\u{21E7}", "\u{21A9}"], "rows"), (["Tab"], "links, codes"), (["\u{2325}", "\u{21A9}"], "translate"), (["F"], "all text"), (["C"], "color"), (["?"], "all keys")]
         case .capture where selection != nil:
-            [(["M"], "frame"), (["Tab"], "next snap"), (["S"], snapEnabled ? "snap off" : "snap on"), (["\u{2325}", "arrows"], "grow"),
-             (["\u{2325}\u{2318}"], "shrink"), (["P"], "ratio \(ratioLock?.label ?? "free")"), (["G"], "scroll"), (["esc"], "cancel")]
-        case .capture: [(["Click"], "capture"), (["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["\u{2325}"], "drag exact"), (["F"], "full screen"), (["?"], "all keys")]
+            // Option shows what it does: grow, and shrink with Command added; the side arrows appear in place.
+            (hasOtherFits ? [(["Tab"], "next snap")] : [])
+                + (optionHeld ? [(["\u{2325}"], "grow"), (["\u{2325}", "\u{2318}"], "shrink")] : [(["\u{2325}"], "resize")])
+                + [(["\u{21E7}"], "lock ratio, axis"), (["P"], "ratio \(ratioReadout)"), (["G"], "scroll"), (["esc"], "cancel")]
+        case .capture: [(["Click"], "capture"), (["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["F"], "full screen"), (["?"], "all keys")]
         }
     }
 
@@ -35,12 +46,14 @@ extension OverlayController {
         c.bottomBar.update(mode: mode, defaults: defaults)
         c.bottomBar.isHidden = released || scrollArea != nil || !defaults.bool(forKey: Pref.modeBar)
         c.actionBar.framed = framed
+        c.actionBar.snapped = snapEnabled
         c.actionBar.isHidden = !released
         // Hints that do not fit drop from the end, keeping the first and "all keys".
         var items = hints
+        let held = heldGlyphs
         let kept = items.last?.label == "all keys" ? 1 : 0
         while true {
-            c.hints.show(items.map { $0.keys.joined() + $0.label }.joined(separator: "|")) { items.map { Pill.chip($0.keys, $0.label) } }
+            c.hints.show(items.map { $0.label + $0.keys.joined() }.joined(separator: "|") + String(held.sorted())) { items.map { Pill.chip($0.keys, $0.label, held: held) } }
             guard c.hints.frame.width > bounds.width - 16, items.count > kept + 1 else { break }
             items.remove(at: items.count - 1 - kept)
         }
@@ -133,6 +146,43 @@ extension OverlayController {
                 pills.append(c.status)
             }
             place(pills, near: anchor ?? view.viewRect(rect), above: released)
+        }
+
+        // While Option is held on a released selection, each side's arrow key sits just outside the side's midpoint, pushed further
+        // out past the action bar or a badge in the way, and inside the side when that leaves the screen.
+        for (index, pill) in c.sideHints.enumerated() {
+            pill.isHidden = true
+            guard released, optionHeld, let rect = overlays.selection else { continue }
+            let arrow = ["\u{2190}", "\u{2192}", "\u{2191}", "\u{2193}"][index]
+            pill.show(arrow) { [KeyCap(arrow, color: .white)] }
+            let box = view.viewRect(rect), size = pill.frame.size, gap: CGFloat = 6
+            let midX = (box.midX - size.width / 2).rounded(), midY = (box.midY - size.height / 2).rounded()
+            var outside: CGRect
+            let inside: CGPoint
+            switch index {
+            case 0: (outside, inside) = (CGRect(origin: CGPoint(x: box.minX - gap - size.width, y: midY), size: size), CGPoint(x: box.minX + gap, y: midY))
+            case 1: (outside, inside) = (CGRect(origin: CGPoint(x: box.maxX + gap, y: midY), size: size), CGPoint(x: box.maxX - gap - size.width, y: midY))
+            case 2: (outside, inside) = (CGRect(origin: CGPoint(x: midX, y: box.maxY + gap), size: size), CGPoint(x: midX, y: box.maxY - gap - size.height))
+            default: (outside, inside) = (CGRect(origin: CGPoint(x: midX, y: box.minY - gap - size.height), size: size), CGPoint(x: midX, y: box.minY + gap))
+            }
+            for obstacle in [c.actionBar, c.size, c.status] where !obstacle.isHidden && obstacle.frame.intersects(outside) {
+                switch index {
+                case 0: outside.origin.x = obstacle.frame.minX - gap - size.width
+                case 1: outside.origin.x = obstacle.frame.maxX + gap
+                case 2: outside.origin.y = obstacle.frame.maxY + gap
+                default: outside.origin.y = obstacle.frame.minY - gap - size.height
+                }
+            }
+            pill.frame.origin = CGRect(x: 4, y: 4, width: bounds.width - 8, height: top - 8).contains(outside) ? outside.origin : inside
+        }
+
+        // The keys of a hovered corner dot stack under its "All corners" chip (over it at the bottom corners), flush with the chip's outer side.
+        c.cornerKeys.isHidden = cornerChip.isHidden
+        if !cornerChip.isHidden, let corner = hoveredCorner {
+            c.cornerKeys.show("corner" + String(held.sorted())) { [Pill.chip(["[", "]"], "radius"), Pill.chip(["\u{2325}"], "one corner", held: held)] }
+            let chip = cornerChip.frame, size = c.cornerKeys.frame.size
+            c.cornerKeys.frame.origin = CGPoint(x: min(max(corner.movesLeft ? chip.maxX - size.width : chip.minX, 8), bounds.width - size.width - 8),
+                                                y: corner.movesTop ? chip.minY - 4 - size.height : chip.maxY + 4)
         }
 
         if mode == .capture, selection == nil, let rect = overlays.hover {
