@@ -535,10 +535,13 @@ extension DebugRun {
         key(escape)
         require(!overlay.window.isVisible, "Esc again closes")
 
-        // K cuts the selection or the hovered element out with Vision's foreground mask and previews it in place: a checkerboard where
-        // the cutout is transparent, Return copies, Cmd-S saves, K or Esc go back. With no subject the overlay stays open with a notice.
-        // The fixtures are the background removal spike's (notes/cutout/fixtures).
+        // K cuts the selection or the hovered element out with Vision's foreground mask and previews it in place: the area outside the
+        // subject dimmed and the subject outlined in the highlight color, C crops to the subject, Return copies, Cmd-S saves, K or Esc go
+        // back. With no subject the overlay stays open with a notice. The fixtures are the background removal spike's (notes/cutout/fixtures).
+        // Shadow and Frame start off, so the output is the area's size until a check turns them on.
         suffix = ""
+        for key in [Pref.shadow, Pref.frame, Pref.cutoutCrop] { overlay.defaults.set(false, forKey: key) }
+        overlay.defaults.set("#E5484D", forKey: Pref.highlightColor)
         let kKey: UInt16 = 40, sKey: UInt16 = 1, tab: UInt16 = 48
         func spikeFixture(_ name: String) -> CGImage { fixtureImage("notes/cutout/fixtures/\(name)") }
         func pixels(_ image: CGImage) -> (rgba: [UInt8], width: Int) {
@@ -573,25 +576,44 @@ extension DebugRun {
         let preview = overlay.cutout
         require(overlay.window.isVisible && preview != nil && pasteboard.data(forType: .png) == nil, "K on a selection opens the preview and copies nothing")
         require(preview?.rect == iconRect && preview?.subjects.count == 1 && preview!.view.superview === overlay.view
-                && preview!.view.checker.frame == overlay.view.viewRect(iconRect) && preview!.view.subject.frame == preview!.view.checker.frame
-                && (preview!.view.subject.contents as! CGImage).width == Int(iconRect.width),
-                "the preview shows the full-size cutout over a checkerboard in place of the selection")
+                && preview!.view.dim.frame == overlay.view.viewRect(iconRect) && preview!.view.subject.frame == preview!.view.dim.frame
+                && preview!.view.outline.frame == preview!.view.dim.frame && (preview!.view.subject.contents as! CGImage).width == Int(iconRect.width)
+                && preview!.view.outline.mask!.contents as! CGImage === preview!.subjects[0].outline,
+                "the preview dims the area under the subject's own pixels and outlines the subject, with no checkerboard")
+        require(preview!.view.outline.backgroundColor == Highlight.color(hex: "#E5484D").cgColor && preview!.view.dim.backgroundColor?.alpha == 0.42,
+                "the outline is the highlight color and the dim matches the fade: \(String(describing: preview!.view.outline.backgroundColor)), \(String(describing: preview!.view.dim.backgroundColor))")
+        let ring = preview!.subjects[0].outline
+        let ringData = ring.dataProvider!.data!
+        let ringAlpha = CFDataGetBytePtr(ringData)!
+        let ringPixels = (0..<ring.height).reduce(0) { sum, y in sum + (0..<ring.width).count { ringAlpha[y * ring.bytesPerRow + $0 * 2 + 1] > 0 } }
+        require(ringAlpha[(ring.height / 2) * ring.bytesPerRow + ring.width / 2 * 2 + 1] == 0 && ringPixels > 0 && ringPixels < ring.width * ring.height / 10,
+                "the outline is a thin ring outside the subject: \(ringPixels) of \(ring.width * ring.height) pixels, center clear")
         require(overlay.selection == nil && overlay.chrome.actionBar.isHidden && overlay.chrome.bottomBar.isHidden && overlay.view.overlays.selection == iconRect
                 && !overlay.view.overlays.showsHandles, "while previewing, the action bar, mode bar and handles stay hidden and the area stays outlined")
         // The icon page is 200 pt wide, so the hint row drops what does not fit from the end.
-        require(texts(in: overlay.chrome.hints).prefix(3) == ["Subject", "copy", "\u{21A9}"], "the hint row names the preview: \(texts(in: overlay.chrome.hints))")
-        let (previewPixels, previewWidth) = pixels(preview!.subjects[0].preview)
+        require(texts(in: overlay.chrome.hints).prefix(3) == ["Subject", "crop off", "C"], "the hint row names the preview: \(texts(in: overlay.chrome.hints))")
+        let (previewPixels, previewWidth) = pixels(preview!.subjects[0].image)
         require(previewPixels[3] == 0 && previewPixels[(previewWidth / 2 + previewWidth * previewWidth / 2) * 4 + 3] == 255, "the preview is transparent at the corner and opaque at the center")
         mouse(.leftMouseDown, CGPoint(x: iconRect.midX, y: iconRect.midY))
         mouse(.leftMouseDragged, CGPoint(x: iconRect.midX + 40, y: iconRect.midY + 40))
         mouse(.leftMouseUp, CGPoint(x: iconRect.midX + 40, y: iconRect.midY + 40))
         key(fKey, "f")
         require(overlay.cutout != nil && overlay.selection == nil && overlay.view.overlays.selection == iconRect, "the pointer and other keys do nothing while previewing")
+        // C crops to the subject's box: the outlined frame and the dim move to it, and the choice is remembered.
+        let box = preview!.subjects[0].bounds.offsetBy(dx: iconRect.minX, dy: iconRect.minY)
+        key(cKey, "c")
+        require(overlay.cutout?.cropped == true && overlay.defaults.bool(forKey: Pref.cutoutCrop) && overlay.view.overlays.selection == box
+                && overlay.cutout!.view.dim.frame == overlay.view.viewRect(box) && texts(in: overlay.chrome.hints).prefix(3) == ["Subject", "crop on", "C"],
+                "C crops to the subject's box \(box): outlined \(String(describing: overlay.view.overlays.selection)), hints \(texts(in: overlay.chrome.hints))")
         key(kKey, "k")
         require(overlay.cutout == nil && preview!.view.superview == nil && overlay.selection?.rect == iconRect && !overlay.chrome.actionBar.isHidden,
                 "K again goes back to the selection: preview \(overlay.cutout != nil), view in overlay \(preview!.view.superview != nil), selection \(String(describing: overlay.selection?.rect)), action bar hidden \(overlay.chrome.actionBar.isHidden)")
         let secondK = await previewCutout()
         require(overlay.cutout != nil, "K opens the preview again")
+        require(overlay.cutout!.cropped && overlay.view.overlays.selection == box, "the preview opens cropped as last chosen")
+        key(cKey, "c")
+        require(overlay.cutout?.cropped == false && !overlay.defaults.bool(forKey: Pref.cutoutCrop) && overlay.view.overlays.selection == iconRect,
+                "C again shows the whole area: \(String(describing: overlay.view.overlays.selection))")
         key(escape)
         // A second K while the mask runs replaces the first run: one preview, and K goes back to the selection.
         key(kKey, "k")
@@ -622,6 +644,29 @@ extension DebugRun {
                 "the cutout's center is opaque and keeps the source color: \(Array(cut[center..<center + 4])) vs \(Array(source[sourceCenter..<sourceCenter + 4]))")
         try await Task.sleep(for: .seconds(2))
         print("Cutout footprint: \(footprint()) 2 s after delivery")
+
+        // D and M apply to the cutout as to a capture: the window shadow grows the canvas 52 pt to the sides, 35 above and 70 below and
+        // falls under the subject; a frame adds 24 pt all round. The canvas takes the area's corner radii, here edited with ].
+        for (setting, grown, below) in [(Pref.shadow, (208, 210), 140), (Pref.frame, (96, 96), 48)] {
+            overlay.defaults.set(true, forKey: setting)
+            overlay.present(image: icon, frame: iconFrame, displayID: nil)
+            mouse(.leftMouseDown, iconRect.origin)
+            mouse(.leftMouseDragged, CGPoint(x: iconRect.maxX, y: iconRect.maxY))
+            mouse(.leftMouseUp, CGPoint(x: iconRect.maxX, y: iconRect.maxY))
+            key(30, "]")
+            _ = await previewCutout()
+            require(overlay.cutout?.radii == overlay.cornerRadii(of: iconRect) && overlay.cutout?.radii.isSquare == false,
+                    "the preview keeps the area's corner radii for the output: \(String(describing: overlay.cutout?.radii))")
+            pasteboard.clearContents()
+            key(returnKey, "\r")
+            let grownCut = await copiedPNG()
+            require(grownCut.map { ($0.width, $0.height) == (180 + grown.0, 180 + grown.1) } == true,
+                    "\(setting) on grows the cutout by \(grown): \(String(describing: grownCut.map { "\($0.width)x\($0.height)" }))")
+            let (grownPixels, grownWidth) = pixels(grownCut!)
+            let shade = grownPixels[((grownCut!.height - below + 20) * grownWidth + grownWidth / 2) * 4 + 3]
+            require(shade > 0 && shade < 255, "\(setting) on: a soft shadow falls 20 px under the area (alpha \(shade))")
+            overlay.defaults.set(false, forKey: setting)
+        }
 
         // Cmd-S in the preview saves the cutout and leaves the clipboard alone.
         overlay.present(image: icon, frame: iconFrame, displayID: nil)
@@ -669,16 +714,20 @@ extension DebugRun {
         require(texts(in: overlay.chrome.hints).prefix(3) == ["All \(count) subjects", "next subject", "Tab"], "the hint row says all subjects are shown and names Tab: \(texts(in: overlay.chrome.hints))")
         key(tab, "\t")
         require(overlay.cutout?.shown == 1 && texts(in: overlay.chrome.hints).first == "Subject 1 of \(count)"
-                && overlay.cutout!.view.subject.contents as! CGImage === overlay.cutout!.subjects[1].preview, "Tab shows the first subject alone: \(texts(in: overlay.chrome.hints))")
+                && overlay.cutout!.view.subject.contents as! CGImage === overlay.cutout!.subjects[1].image, "Tab shows the first subject alone: \(texts(in: overlay.chrome.hints))")
+        key(cKey, "c")
         key(tab, "\t", .shift)
         key(tab, "\t", .shift)
         require(overlay.cutout?.shown == count && texts(in: overlay.chrome.hints).first == "Subject \(count) of \(count)", "Shift-Tab steps back and wraps to the last subject")
-        let alone = overlay.cutout!.subjects[count].output
+        let alone = overlay.cutout!.subjects[count].bounds
+        require(overlay.view.overlays.selection == alone && alone.width < CGFloat(group.width) / 2,
+                "cropped, the outlined frame follows the shown subject's box \(alone): \(String(describing: overlay.view.overlays.selection))")
         pasteboard.clearContents()
         key(returnKey, "\r")
         let one = await copiedPNG()
-        require(one.map { $0.width == alone.width && $0.height == alone.height && $0.width < group.width / 2 } == true,
-                "Return copies only the shown subject, cropped to it: \(String(describing: one.map { "\($0.width)x\($0.height)" }))")
+        require(one.map { CGFloat($0.width) == alone.width && CGFloat($0.height) == alone.height } == true,
+                "Return copies only the shown subject, cropped to its box: \(String(describing: one.map { "\($0.width)x\($0.height)" }))")
+        overlay.defaults.set(false, forKey: Pref.cutoutCrop)
 
         overlay.present(image: image, frame: frame, displayID: nil)
         key(fKey, "f")

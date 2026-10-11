@@ -85,6 +85,7 @@ enum Pref {
             toastPosition: "bottomCenter",
             roundCorners: true,
             menuBarIcon: "a",
+            cutoutCrop: false,
             recordCountIn: 3,
             recordCursor: true
         ])
@@ -107,6 +108,14 @@ enum Output {
     @concurrent
     static func encode(_ image: CGImage, crop: CGRect, framed: Bool, scale: CGFloat, cornerRadii: CornerRadii = .zero) async throws -> (png: Data, width: Int, height: Int) {
         let rendered = try OutputFrame.render(image, crop: crop, scale: scale, framed: framed, cornerRadii: cornerRadii)
+        return (try await png(rendered), rendered.width, rendered.height)
+    }
+
+    /// Renders a cutout (`OutputFrame.renderCutout`) and encodes a PNG off the main thread.
+    @concurrent
+    static func encodeCutout(_ subject: CGImage, bounds: CGRect?, cornerRadii: CornerRadii, framed: Bool, shadow: Bool, scale: CGFloat) async throws
+        -> (png: Data, width: Int, height: Int) {
+        let rendered = try OutputFrame.renderCutout(subject, bounds: bounds, cornerRadii: cornerRadii, framed: framed, shadow: shadow, scale: scale)
         return (try await png(rendered), rendered.width, rendered.height)
     }
 

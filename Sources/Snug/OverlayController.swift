@@ -882,7 +882,7 @@ final class OverlayController {
             overlays.downHint = level(session.child)
         }
         if let scrollArea { overlays.selection = scrollArea; overlays.showsHandles = false; overlays.hover = nil }
-        if let cutout { overlays.selection = cutout.rect; overlays.showsHandles = false; overlays.hover = nil }
+        if let cutout { overlays.selection = cutout.frame; overlays.showsHandles = false; overlays.hover = nil }
         let fit = selection.flatMap { $0.rect == $0.exact ? nil : $0.rect }
         let shown = selection?.rect ?? snapPreview
         for rect in [snapPreview, fit, overlays.hover, overlays.upHint, overlays.downHint] { measureRadius(rect) }
