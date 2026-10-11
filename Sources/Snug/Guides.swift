@@ -344,9 +344,10 @@ final class Guides {
             coordinates.string = "x \(column)  y \(row)"
             let origin = Self.loupeOrigin(point: point, bounds: bounds, topInset: topInset, scale: scale, avoiding: avoiding)
             let offset = CGPoint(x: origin.x - point.x, y: origin.y - point.y)
-            // A new placement (a flip past a bar or a screen edge) slides from the old offset to the new one. Only the offset animates, additively,
-            // so the loupe still tracks the pointer at once, and a flip during a slide adds to it. Mid-slide frames sit between device pixels.
-            if slidesPlacement, let previous = loupeOffset, hypot(previous.x - offset.x, previous.y - offset.y) > 2 {
+            // A flip to the pointer's other side (past a bar or a screen edge) slides from the old offset to the new one. Only the offset animates,
+            // additively, so the loupe still tracks the pointer at once, and a flip during a slide adds to it. A loupe pushed inside the view keeps
+            // its side, so following the pointer there never slides. Mid-slide frames sit between device pixels.
+            if slidesPlacement, let previous = loupeOffset, (previous.x < 0) != (offset.x < 0) || (previous.y < 0) != (offset.y < 0) {
                 let slide = CABasicAnimation(keyPath: "position")
                 slide.isAdditive = true
                 slide.fromValue = NSValue(point: CGPoint(x: previous.x - offset.x, y: previous.y - offset.y))

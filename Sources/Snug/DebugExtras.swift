@@ -77,8 +77,7 @@ extension DebugRun {
         require(overlay.chrome.bottomBar.modeButtons.count == 2 && !texts(in: overlay.chrome.bottomBar).contains("Element"), "the bottom bar has two modes, Capture and Text")
         overlay.dismiss()
 
-        // Opening draws at once: no layer under the view animates implicitly. The frozen image used to fade in over the black window for
-        // 0.25 s on every open.
+        // Opening draws at once: no layer under the view animates implicitly, so the frozen image replaces the black window in one frame.
         func animations(_ layer: CALayer) -> [String] { (layer.animationKeys() ?? []).map { "\(type(of: layer)) \($0)" } + (layer.sublayers ?? []).flatMap(animations) }
         open()
         require(animations(overlay.view.layer!).isEmpty, "opening animates no layer: \(animations(overlay.view.layer!))")
@@ -141,8 +140,7 @@ extension DebugRun {
         require(!(guides.numbers.sublayers!.contains { !$0.isHidden && $0.frame.intersects(guides.widthLabel.frame) }) && guides.numbers.sublayers!.contains { $0.isHidden },
                 "no tick number shows under the span's width")
         // Sub-pixel pointer moves mid-drag, through whole, half and other fractions of a pixel: the outline's right and bottom edges stay on
-        // the center cell's far side (they flipped a whole cell at every half pixel when the edges rounded to nearest), the rulers flag the same
-        // sides, and the loupe sits on whole device pixels.
+        // the center cell's far side, the rulers flag the same sides, and the loupe sits on whole device pixels.
         for step in 1...12 {
             let offset = CGFloat(step) * [0.5, 0.17, 0.33][step % 3]
             let tip = CGPoint(x: rough.maxX + offset, y: rough.maxY + offset / 2)
@@ -219,6 +217,11 @@ extension DebugRun {
         require(abs(guides.loupe.frame.minX - 410) <= 0.5, "the loupe's model position follows the pointer at once: \(guides.loupe.frame)")
         place(CGPoint(x: 401, y: 301))
         require(slides().count == 1, "a move that keeps the placement adds no slide")
+        // With no free placement the loupe is pushed inside the view and pinned on one axis; following the pointer there is no flip.
+        guides.loupe.removeAllAnimations()
+        guides.update(point: CGPoint(x: 400, y: 60), pixel: CGPoint(x: 800, y: 600), image: image, bounds: viewBounds, scale: overlay.scale, topInset: 0, selected: nil, dragging: false, avoiding: [viewBounds])
+        guides.update(point: CGPoint(x: 400, y: 70), pixel: CGPoint(x: 800, y: 600), image: image, bounds: viewBounds, scale: overlay.scale, topInset: 0, selected: nil, dragging: false, avoiding: [viewBounds])
+        require(guides.loupe.frame.minY == 0 && slides().isEmpty, "a loupe pinned at the bottom edge follows the pointer without sliding: \(guides.loupe.frame) \(slides().count)")
         guides.slidesPlacement = false
         guides.loupe.removeAllAnimations()
         overlay.dismiss()

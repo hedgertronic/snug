@@ -54,7 +54,7 @@ final class OverlayView: NSView {
     weak var controller: OverlayController?
     /// Image pixels per point.
     var scale: CGFloat = 1
-    /// Set with implicit actions off, so the frozen image replaces the black window at once instead of fading in.
+    /// Set with implicit actions off, so the frozen image replaces the black window at once.
     var image: CGImage? {
         didSet {
             CATransaction.begin()
