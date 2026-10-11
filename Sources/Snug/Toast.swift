@@ -1,40 +1,49 @@
 import AppKit
 
-/// A small non-activating confirmation, with a thumbnail of the capture joined to the top of it when the preview is on. It goes away after 2 s
-/// (4 s with a thumbnail) while the pointer is elsewhere, and stays while it is over the toast. Over it, a close button sits on the top-left
-/// corner and, when it holds a capture, "Open in Preview" and "Save" appear. Drag it to drop the image; a saved toast reveals the file when clicked.
+/// A small non-activating confirmation: a pill with the message and size, and, when the preview is on, a separate rounded card with a
+/// thumbnail of the capture a gap away (above the pill, or below it at the top right). Each piece has its own shadow. It goes away after
+/// 2 s (4 s with a thumbnail) while the pointer is elsewhere, and stays while it is over the toast. Over it, a close button sits on the
+/// top-left corner and, when it holds a capture, icon buttons replace the pill's text: Share, Trash (a saved file), Save (an unsaved
+/// capture), and Open (Preview, or QuickTime Player for a recording). Drag it to drop the image; a saved toast reveals the file when clicked.
 /// The capture is held only while the toast is visible: `dismiss` releases it.
 @MainActor
 final class Toast: NSPanel, NSDraggingSource {
     private static var current: Toast?
     /// Debug runs set this so scripted copies never put a toast on screen or open Preview.
     static var isSuppressed = false
-    /// Transparent margin around the card, so the close button can hang off its corner.
+    /// Transparent margin around the pieces, so the close button can hang off a corner.
     private static let margin: CGFloat = 10
+    /// The space between the pill and the preview card.
+    private static let gap: CGFloat = 8
     private(set) var png: Data?
     private(set) var file: URL?
     private var reveals: Bool
     private(set) var dismissal: Task<Void, any Error>?
     private var dragStart: NSPoint?
+    private var sharing = false
     let lifetime: Duration
-    private var preview: NSView?
+    private(set) var preview: NSView?
     private let defaults: UserDefaults
+    private let pasteboard: NSPasteboard
     private let screenArea: CGRect
     private let position: String
+    /// The pill.
     let card: NSVisualEffectView
     private let row: NSStackView
     let message: NSTextField
     private let detail: NSTextField
     let closeButton: NSButton
     private let actions: NSStackView?
+    let shareButton: NSButton
+    let trashButton: NSButton
     let saveButton: NSButton
     let openInPreview: NSButton
 
-    /// A color toast passes `color` instead of a PNG and shows a swatch in place of the thumbnail.
-    static func show(png: Data? = nil, message: String, detail: String = "", file: URL? = nil, color: NSColor? = nil, defaults: UserDefaults = .standard) {
+    /// A color toast passes `color` instead of a PNG and shows a swatch in place of the thumbnail. `pasteboard` is where Trash looks for the capture.
+    static func show(png: Data? = nil, message: String, detail: String = "", file: URL? = nil, color: NSColor? = nil, defaults: UserDefaults = .standard, pasteboard: NSPasteboard = .general) {
         guard !isSuppressed else { return }
         current?.dismiss()
-        let toast = Toast(png: png, message: message, detail: detail, file: file, color: color, defaults: defaults)
+        let toast = Toast(png: png, message: message, detail: detail, file: file, color: color, defaults: defaults, pasteboard: pasteboard)
         current = toast
         toast.orderFrontRegardless()
         toast.scheduleDismissal()
@@ -58,10 +67,11 @@ final class Toast: NSPanel, NSDraggingSource {
         preview = nil
     }
 
-    init(png: Data?, message messageText: String, detail detailText: String, file: URL?, color: NSColor?, defaults: UserDefaults) {
+    init(png: Data?, message messageText: String, detail detailText: String, file: URL?, color: NSColor?, defaults: UserDefaults, pasteboard: NSPasteboard = .general) {
         self.png = png
         self.file = file
         self.defaults = defaults
+        self.pasteboard = pasteboard
         reveals = file != nil
         let thumbnail = png.flatMap { defaults.bool(forKey: Pref.toastPreview) ? NSImage(data: $0) : nil }
         lifetime = thumbnail == nil ? .seconds(2) : .seconds(4)
@@ -72,6 +82,10 @@ final class Toast: NSPanel, NSDraggingSource {
             view.wantsLayer = true
             view.layer!.contents = $0
             view.layer!.contentsGravity = .resizeAspect
+            view.layer!.masksToBounds = true
+            view.layer!.cornerRadius = 12
+            view.layer!.borderWidth = 1
+            view.layer!.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
             return view
         }
         position = defaults.string(forKey: Pref.toastPosition)!
@@ -106,27 +120,27 @@ final class Toast: NSPanel, NSDraggingSource {
         closeButton.isBordered = false
         closeButton.frame.size = CGSize(width: 22, height: 22)
         closeButton.isHidden = true
-        openInPreview = NSButton(title: "Open in Preview", target: nil, action: nil)
-        saveButton = NSButton(title: "Save", target: nil, action: nil)
-        for button in [openInPreview, saveButton] {
-            button.bezelStyle = .rounded
-            button.controlSize = .small
+        let isMovie = file?.pathExtension == "mov"
+        shareButton = NSButton(image: NSImage(systemSymbolName: "square.and.arrow.up", accessibilityDescription: "Share")!, target: nil, action: nil)
+        trashButton = NSButton(image: NSImage(systemSymbolName: "trash", accessibilityDescription: "Move to Trash")!, target: nil, action: nil)
+        saveButton = NSButton(image: NSImage(systemSymbolName: "square.and.arrow.down", accessibilityDescription: "Save")!, target: nil, action: nil)
+        openInPreview = NSButton(image: NSImage(systemSymbolName: "arrow.up.forward.app", accessibilityDescription: isMovie ? "Open in QuickTime Player" : "Open in Preview")!, target: nil, action: nil)
+        for (button, tip) in [(shareButton, "Share"), (trashButton, "Move to Trash"), (saveButton, "Save"), (openInPreview, isMovie ? "Open in QuickTime Player" : "Open in Preview")] {
+            button.isBordered = false
+            button.toolTip = tip
+            button.contentTintColor = .labelColor
+            button.symbolConfiguration = .init(pointSize: 14, weight: .medium)
+            button.widthAnchor.constraint(equalToConstant: 28).isActive = true
+            button.heightAnchor.constraint(equalToConstant: 24).isActive = true
         }
         saveButton.isHidden = file != nil
-        actions = png == nil ? nil : NSStackView(views: [openInPreview, saveButton])
-        actions?.spacing = 8
-        if preview != nil {
-            // A scrim keeps the buttons legible over the thumbnail.
-            actions?.edgeInsets = NSEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
-            actions?.wantsLayer = true
-            actions?.layer!.backgroundColor = NSColor.black.withAlphaComponent(0.55).cgColor
-            actions?.layer!.cornerRadius = 10
-        }
+        trashButton.isHidden = file == nil
+        actions = png == nil ? nil : NSStackView(views: [shareButton, trashButton, saveButton, openInPreview])
+        actions?.spacing = 6
         actions?.isHidden = true
 
-        // One card: the thumbnail sits flush on top of the pill, and a single rounded, outlined clip gives the thumbnail its top corners and
-        // the pill its bottom corners (a pill alone is fully rounded). NSVisualEffectView ignores its layer's corner mask for the blur, so
-        // `maskImage` (set in `layoutCard`) rounds the blur and with it the window's shadow.
+        // The pill is a blur clipped to a capsule: NSVisualEffectView ignores its layer's corner mask for the blur, so `maskImage` (set in
+        // `layoutCard`) rounds the blur and with it the window's shadow. The preview card is a plain layer clipped by its corner radius.
         card = NSVisualEffectView()
         card.material = .hudWindow
         card.state = .active
@@ -135,10 +149,10 @@ final class Toast: NSPanel, NSDraggingSource {
         card.layer!.borderWidth = 1
         card.layer!.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
         card.addSubview(row)
-        if let preview { card.addSubview(preview) }
         if let actions { card.addSubview(actions) }
         let root = NSView()
         root.addSubview(card)
+        if let preview { root.addSubview(preview) }
         root.addSubview(closeButton)
 
         super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -150,36 +164,36 @@ final class Toast: NSPanel, NSDraggingSource {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         root.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
         contentView = root
-        closeButton.target = self
-        closeButton.action = #selector(closeClicked)
-        openInPreview.target = self
-        openInPreview.action = #selector(openInPreviewClicked)
-        saveButton.target = self
-        saveButton.action = #selector(saveClicked)
+        for (button, action) in [(closeButton, #selector(closeClicked)), (shareButton, #selector(shareClicked)), (trashButton, #selector(trashClicked)),
+                                 (saveButton, #selector(saveClicked)), (openInPreview, #selector(openClicked))] {
+            button.target = self
+            button.action = action
+        }
         layoutCard()
     }
 
-    /// Sizes the card to its content and puts the window where the position setting says; run again after the text changes.
+    /// Sizes the pieces to their content and puts the window where the position setting says; run again after the text changes. The preview
+    /// card sits above the pill, or below it at the top right.
     private func layoutCard() {
         let margin = Toast.margin
         row.frame.size = row.fittingSize
-        let pill = row.frame.size
-        let previewSize = preview?.frame.size ?? .zero
         let actionsSize = actions?.fittingSize ?? .zero
-        let size = CGSize(width: max(pill.width, previewSize.width, actionsSize.width == 0 ? 0 : actionsSize.width + 16), height: pill.height + previewSize.height)
-        card.frame = CGRect(origin: CGPoint(x: margin, y: margin), size: size)
-        card.layer!.cornerRadius = min(20, size.height / 2)
-        card.maskImage = NSImage(size: size, flipped: false) { rect in
-            let radius = min(20, rect.height / 2)
-            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+        let pill = CGSize(width: max(row.frame.width, actionsSize.width + 16), height: row.frame.height)
+        let previewSize = preview?.frame.size ?? .zero
+        let stacked = preview == nil ? 0 : previewSize.height + Toast.gap
+        let size = CGSize(width: max(pill.width, previewSize.width), height: pill.height + stacked)
+        let below = position == "topRight"
+        card.frame = CGRect(origin: CGPoint(x: margin + ((size.width - pill.width) / 2).rounded(), y: margin + (below ? stacked : 0)), size: pill)
+        card.layer!.cornerRadius = pill.height / 2
+        card.maskImage = NSImage(size: pill, flipped: false) { rect in
+            NSBezierPath(roundedRect: rect, xRadius: rect.height / 2, yRadius: rect.height / 2).fill()
             return true
         }
-        row.frame.origin = CGPoint(x: ((size.width - pill.width) / 2).rounded(), y: 0)
-        preview?.frame.origin = CGPoint(x: ((size.width - previewSize.width) / 2).rounded(), y: pill.height)
-        // Over a thumbnail the actions float near its bottom edge; on a pill they replace the text while the pointer is over it.
-        actions?.frame = CGRect(origin: CGPoint(x: ((size.width - actionsSize.width) / 2).rounded(), y: preview == nil ? ((pill.height - actionsSize.height) / 2).rounded() : pill.height + 8),
-                                size: actionsSize)
-        closeButton.frame.origin = CGPoint(x: margin - closeButton.frame.width / 2 + 4, y: margin + size.height - closeButton.frame.height / 2 - 4)
+        row.frame.origin = CGPoint(x: ((pill.width - row.frame.width) / 2).rounded(), y: 0)
+        actions?.frame = CGRect(origin: CGPoint(x: ((pill.width - actionsSize.width) / 2).rounded(), y: ((pill.height - actionsSize.height) / 2).rounded()), size: actionsSize)
+        preview?.frame.origin = CGPoint(x: margin + ((size.width - previewSize.width) / 2).rounded(), y: margin + (below ? 0 : pill.height + Toast.gap))
+        let top = below ? card.frame : preview?.frame ?? card.frame
+        closeButton.frame.origin = CGPoint(x: top.minX - closeButton.frame.width / 2 + 4, y: top.maxY - closeButton.frame.height / 2 - 4)
         let origin = switch position {
         case "bottomRight": NSPoint(x: screenArea.maxX - size.width - 20, y: screenArea.minY + 48)
         case "topRight": NSPoint(x: screenArea.maxX - size.width - 20, y: screenArea.maxY - size.height - 20)
@@ -192,7 +206,7 @@ final class Toast: NSPanel, NSDraggingSource {
     private func setHovering(_ hovering: Bool) {
         closeButton.isHidden = !hovering
         actions?.isHidden = !hovering
-        if preview == nil, actions != nil { row.isHidden = hovering }
+        if actions != nil { row.isHidden = hovering }
         invalidateShadow()
     }
 
@@ -207,10 +221,31 @@ final class Toast: NSPanel, NSDraggingSource {
         return file!
     }
 
-    @objc private func openInPreviewClicked() {
+    /// Opens the file in Preview, or in QuickTime Player for a recording.
+    @objc private func openClicked() {
         let url = fileOnDisk()
         guard !Toast.isSuppressed else { return }
-        NSWorkspace.shared.open([url], withApplicationAt: NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Preview")!, configuration: NSWorkspace.OpenConfiguration())
+        let app = url.pathExtension == "mov" ? "com.apple.QuickTimePlayerX" : "com.apple.Preview"
+        NSWorkspace.shared.open([url], withApplicationAt: NSWorkspace.shared.urlForApplication(withBundleIdentifier: app)!, configuration: NSWorkspace.OpenConfiguration())
+        dismiss()
+    }
+
+    /// Shows the share menu from the button. The toast stays up while it is open, and closes once a service is chosen.
+    @objc private func shareClicked() {
+        let url = fileOnDisk()
+        guard !Toast.isSuppressed else { return }
+        sharing = true
+        dismissal?.cancel()
+        let picker = NSSharingServicePicker(items: [url])
+        picker.delegate = self
+        picker.show(relativeTo: shareButton.bounds, of: shareButton, preferredEdge: .minY)
+    }
+
+    /// Moves the saved file to the Trash, clears the pasteboard if it still holds this capture, and closes the toast.
+    @objc private func trashClicked() {
+        let holdsCapture = pasteboard.data(forType: .png) == png || (pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL])?.first == file
+        if holdsCapture { pasteboard.clearContents() }
+        try! FileManager.default.trashItem(at: file!, resultingItemURL: nil)
         dismiss()
     }
 
@@ -226,6 +261,7 @@ final class Toast: NSPanel, NSDraggingSource {
         message.sizeToFit()
         detail.sizeToFit()
         saveButton.isHidden = true
+        trashButton.isHidden = false
         layoutCard()
     }
 
@@ -235,6 +271,7 @@ final class Toast: NSPanel, NSDraggingSource {
     }
 
     override func mouseExited(with event: NSEvent) {
+        guard !sharing else { return }
         scheduleDismissal()
         setHovering(false)
     }
@@ -254,7 +291,7 @@ final class Toast: NSPanel, NSDraggingSource {
         reveals = false
         dismissal?.cancel()
         let item = NSDraggingItem(pasteboardWriter: fileOnDisk() as NSURL)
-        item.setDraggingFrame(preview.map { card.convert($0.frame, to: contentView!) } ?? card.frame, contents: NSImage(data: png))
+        item.setDraggingFrame((preview ?? card).frame, contents: NSImage(data: png))
         contentView!.beginDraggingSession(with: [item], event: event, source: self)
     }
 
@@ -262,5 +299,15 @@ final class Toast: NSPanel, NSDraggingSource {
 
     nonisolated func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
         MainActor.assumeIsolated { dismiss() }
+    }
+}
+
+extension Toast: NSSharingServicePickerDelegate {
+    nonisolated func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker, didChoose service: NSSharingService?) {
+        let chosen = service != nil
+        MainActor.assumeIsolated {
+            sharing = false
+            if chosen { dismiss() } else { scheduleDismissal() }
+        }
     }
 }

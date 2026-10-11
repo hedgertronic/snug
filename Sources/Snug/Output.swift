@@ -147,6 +147,6 @@ enum Output {
         case (true, false): ("Copied", detail)
         default: ("Saved to \(folder)", file!.lastPathComponent)
         }
-        Toast.show(png: png, message: message, detail: detail, file: file, defaults: defaults)
+        Toast.show(png: png, message: message, detail: detail, file: file, defaults: defaults, pasteboard: pasteboard)
     }
 }

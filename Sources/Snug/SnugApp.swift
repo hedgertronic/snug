@@ -63,7 +63,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: arguments[index + 1]) as CFURL, nil)!
             return CGImageSourceCreateImageAtIndex(source, 0, nil)!
         }
-        if let image, arguments.contains("--verify-area-ui") || arguments.contains("--verify-extras-ui") || arguments.contains("--verify-text-ui") || arguments.contains("--measure") || arguments.contains("--render-states") {
+        if let image, arguments.contains("--verify-area-ui") || arguments.contains("--verify-extras-ui") || arguments.contains("--verify-toast-trash") || arguments.contains("--verify-text-ui") || arguments.contains("--measure") || arguments.contains("--render-states") {
             let frame = imageFrame(for: image)
             Task {
                 do {
@@ -73,6 +73,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                         try await DebugRun.measure(image: image, frame: frame, overlay: overlay)
                     } else if arguments.contains("--verify-text-ui") {
                         try await DebugRun.verifyText(image: image, frame: frame, overlay: overlay)
+                    } else if arguments.contains("--verify-toast-trash") {
+                        try await DebugRun.verifyToastTrash(image: image)
                     } else if arguments.contains("--verify-extras-ui") {
                         try await DebugRun.verifyExtras(image: image, frame: frame, overlay: overlay)
                     } else {

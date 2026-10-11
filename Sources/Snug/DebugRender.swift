@@ -291,6 +291,12 @@ extension DebugRun {
         let roundedPNG = try await Output.png(roundedCapture.makeImage()!)
         try renderToast("toast-preview", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: defaults))
         try renderToast("toast-preview-hover", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: defaults), hovered: true)
+        let topRight = UserDefaults(suiteName: "snug-render-toast-\(UUID().uuidString)")!
+        Pref.register(in: topRight)
+        topRight.set("topRight", forKey: Pref.toastPosition)
+        try renderToast("toast-preview-top-right", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: topRight))
+        try renderToast("toast-preview-top-right-hover", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: topRight), hovered: true)
+        try renderToast("toast-saved-hover", Toast(png: roundedPNG, message: "Copied, saved to Desktop", detail: "Snug 2026-10-10 at 12.00.00.png", file: URL(fileURLWithPath: "/tmp/Snug.png"), color: nil, defaults: defaults), hovered: true)
         let noPreview = UserDefaults(suiteName: "snug-render-toast-\(UUID().uuidString)")!
         Pref.register(in: noPreview)
         noPreview.set(false, forKey: Pref.toastPreview)
