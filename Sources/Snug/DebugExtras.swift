@@ -290,10 +290,12 @@ extension DebugRun {
                 "the sheet lists the corner radius keys, V, K, and arrows in pixels")
         let helpActions = Dictionary(helpRows.map { ($0.keys, $0.action) }, uniquingKeysWith: { $1 })
         require(helpActions["P"] == "Ratio menu" && helpActions["Shift-P"] == "Lock the ratio" && helpActions["W"] == "Capture the window"
-                    && helpActions["K"] == "Cut-out preview" && helpActions["Cut-out: Tab"] == "Next subject (Shift: back)" && helpActions["V"] == "Arm recording"
-                    && helpActions["Armed: Return / V"] == "Start recording" && helpActions["Armed: H"] == "Cursor on / off" && helpActions["Capture hotkey"] == "Stop recording"
+                    && helpActions["K"] == "Cut-out preview" && helpActions["Cut-out: Tab"] == "Next subject (Shift: back)" && helpActions["V"] == "Arm recording, hover or selection"
+                    && helpActions["Armed: Return / V"] == "Start recording" && helpActions["Armed: H"] == "Cursor on / off" && helpActions["Armed: C"] == "Count-in off, 3 s, 5 s"
+                    && helpActions["Capture hotkey"] == "Stop recording" && helpActions["G"] == "Scrolling capture, hover or selection" && helpActions["Cut-out: C"] == "Crop to subject"
+                    && helpActions["Tab"] == "Walk out (Shift: in)"
                     && !helpRows.contains { $0.action.contains("Aspect ratio lock") },
-                "the sheet lists the ratio menu and lock, W, the cut-out preview, and the recording keys, and no P cycle")
+                "the sheet lists the ratio menu and lock, W, the cut-out keys, G and V on a hover, the recording keys, Tab without other fits, and no P cycle")
         require(sheet.contains("Esc or ? closes this.") || sheet.contains { $0.hasSuffix("Esc or ? closes this.") }, "the sheet says how to close it")
         let panel = help.panel.frame
         require(panel.width == 900 && help.bounds.insetBy(dx: 1, dy: 1).contains(panel), "the sheet panel is 900 pt wide and inside the screen \(panel)")
@@ -748,32 +750,92 @@ extension DebugRun {
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.status) == ["Snapped"], "after release on a fit: Snapped")
         require(chrome.bottomBar.isHidden && !chrome.actionBar.isHidden && texts(in: chrome.hints)
-                    == ["next snap", "Tab", "resize", "\u{2325}", "keep ratio, axis", "\u{21E7}", "ratio \(overlay.ratioReadout)", "P", "\u{21E7}P", "cancel", "esc"],
+                    == ["resize", "\u{2325}", "keep ratio, axis", "\u{21E7}", "cancel", "esc"],
                 "the action bar replaces the bottom bar, with the released hints, each label before its keys: \(texts(in: chrome.hints))")
         require(chrome.hints.frame.height < 40 && chrome.hints.frame.width <= overlay.view.bounds.width - 16, "the released hint strip is one line and fits: \(chrome.hints.frame) in \(overlay.view.bounds.width)")
-        require(texts(in: chrome.actionBar) == ["Frame", "M", "Snap", "S", "Scroll", "G", "Record", "V", "Cut out", "K", "Text", "\u{21E7}\u{21A9}", "Save", "\u{2318}S", "Copy", "\u{21A9}"],
-                "the action bar shows Frame, Snap, Scroll, Record, Cut out, Text, Save, and Copy with key caps: \(texts(in: chrome.actionBar))")
-        require(chrome.actionBar.text.symbol?.image?.accessibilityDescription == "Live Text", "the action bar's Text button shows the Live Text glyph")
-        // The ratio chip in the strip: the readout with P opens the ratio menu, the lock with Shift-P toggles the lock. Both take clicks
-        // through the otherwise click-through strip.
-        func ratioButtons() -> [BarButton] { chrome.hints.subviews.flatMap { $0.subviews.compactMap { $0 as? BarButton } } }
+        require(texts(in: chrome.actionBar) == ["Frame", "M", "Snap", "S", "Rounded", "O", "Shadow", "D", "Scroll", "G", "Record", "V", "Cut out", "K", "Save", "\u{2318}S", "Copy", "\u{21A9}"],
+                "the action bar shows Frame, Snap, Rounded, Shadow, Scroll, Record, Cut out, Save, and Copy with key caps: \(texts(in: chrome.actionBar))")
+        // Rounded and Shadow on the action bar are toggles like Frame and Snap: they follow O and D, and clicks flip the preferences.
+        let roundedButton = chrome.actionBar.roundedButton, shadowButton = chrome.actionBar.shadowButton
+        require(defaults.bool(forKey: Pref.roundCorners) && roundedButton.layer!.backgroundColor != nil && defaults.bool(forKey: Pref.shadow) && shadowButton.layer!.backgroundColor != nil,
+                "with rounded corners and the shadow on, the action bar's Rounded and Shadow are highlighted")
+        key(31, "o")
+        require(!defaults.bool(forKey: Pref.roundCorners) && roundedButton.layer!.backgroundColor == nil, "O turns rounded corners off and the action bar's Rounded follows")
+        roundedButton.onClick()
+        require(defaults.bool(forKey: Pref.roundCorners) && roundedButton.layer!.backgroundColor != nil, "clicking the action bar's Rounded turns rounded corners back on")
+        key(2, "d")
+        require(!defaults.bool(forKey: Pref.shadow) && shadowButton.layer!.backgroundColor == nil, "D turns the shadow off and the action bar's Shadow follows")
+        shadowButton.onClick()
+        require(defaults.bool(forKey: Pref.shadow) && shadowButton.layer!.backgroundColor != nil, "clicking the action bar's Shadow turns the shadow back on")
+        // The ratio chip above the selection's top-right corner: the readout with P opens the ratio menu, the lock with Shift-P toggles
+        // the lock. Both take clicks through the otherwise click-through chip.
+        func ratioButtons() -> [BarButton] { chrome.ratio.subviews.compactMap { $0 as? BarButton } }
         let lockedBefore = overlay.ratioLocked, rectBefore = overlay.selection!.rect
-        require(ratioButtons().count == 2 && ratioButtons()[0].title.stringValue == "ratio \(overlay.ratioReadout)"
+        let roughBox = overlay.view.viewRect(overlay.selection!.rect)
+        require(!chrome.ratio.isHidden && ratioButtons().count == 2 && ratioButtons()[0].title.stringValue == "ratio \(overlay.ratioReadout)"
                     && ratioButtons()[1].symbol?.image?.accessibilityDescription == (lockedBefore ? "Ratio locked" : "Ratio unlocked"),
-                "the strip's ratio chip shows the readout, then a lock that follows ratioLocked: \(ratioButtons().map { texts(in: $0) })")
+                "the ratio chip shows the readout, then a lock that follows ratioLocked: \(ratioButtons().map { texts(in: $0) })")
+        require(chrome.ratio.frame.minY > roughBox.maxY && abs(chrome.ratio.frame.midY - chrome.size.frame.midY) < 1 && !chrome.ratio.frame.intersects(chrome.size.frame) && !chrome.ratio.frame.intersects(chrome.status.frame),
+                "the ratio chip sits above the selection on the badges' row, clear of them: \(chrome.ratio.frame) \(roughBox) \(chrome.size.frame) \(chrome.status.frame)")
         for button in ratioButtons() {
             let center = button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: overlay.view)
-            require(chrome.hints.hitTest(center) === button, "a click on the ratio chip's \(texts(in: button)) reaches it")
+            require(overlay.view.hitTest(center) === button, "a click on the ratio chip's \(texts(in: button)) reaches it")
         }
-        let cancelLabel = chrome.hints.subviews.last!
-        require(chrome.hints.hitTest(cancelLabel.convert(CGPoint(x: cancelLabel.bounds.midX, y: cancelLabel.bounds.midY), to: overlay.view)) == nil,
-                "the rest of the strip stays click-through")
         ratioButtons()[1].onClick()
         require(overlay.ratioLocked != lockedBefore && overlay.selection!.rect == rectBefore
                     && ratioButtons()[1].symbol?.image?.accessibilityDescription == (lockedBefore ? "Ratio unlocked" : "Ratio locked"),
                 "clicking the lock toggles the lock, keeps the selection, and swaps the icon")
         ratioButtons()[1].onClick()
         require(overlay.ratioLocked == lockedBefore && overlay.selection!.rect == rectBefore, "clicking the lock again puts it back")
+        // The ratio menu: a panel under the chip, right edges aligned, taking the keys and the pointer while open.
+        let menu = chrome.ratioMenu, beforeMenu = overlay.selection!
+        func viewPixel(_ point: CGPoint) -> CGPoint { CGPoint(x: point.x * overlay.scale, y: (overlay.view.bounds.height - point.y) * overlay.scale) }
+        func rowCenter(_ title: String) -> CGPoint {
+            let row = menu.rows[menu.items.firstIndex { $0.title == title }!]
+            return row.convert(CGPoint(x: row.bounds.midX, y: row.bounds.midY), to: overlay.view)
+        }
+        ratioButtons()[0].onClick()
+        require(!menu.isHidden && overlay.window.firstResponder === menu && menu.panel.frame.maxX == chrome.ratio.frame.maxX && menu.panel.frame.maxY <= chrome.ratio.frame.minY,
+                "clicking the readout opens the ratio panel under the chip, right edges aligned: \(menu.panel.frame) \(chrome.ratio.frame)")
+        require(menu.items.map(\.title) == ["Free", "Original", "1:1", "4:3", "3:2", "16:10", "16:9", "21:9", "", "Portrait"] && menu.items.filter(\.on).map(\.title) == (overlay.ratioLocked ? [] : ["Free"]),
+                "the panel lists the presets and checks Free while unlocked: \(menu.items.map(\.title))")
+        key(53, "\u{1B}")
+        require(menu.isHidden && overlay.window.isVisible && overlay.selection?.rect == rectBefore && overlay.window.firstResponder === overlay.view,
+                "Esc closes the panel and leaves the selection and the overlay")
+        key(35, "p")
+        key(down, "")
+        key(down, "")
+        key(up, "")
+        key(up, "")
+        require(menu.highlighted == menu.items.count - 1 && overlay.selection?.rect == rectBefore, "Up and Down move the highlight, wrapping and skipping the separator, without nudging")
+        key(down, "")
+        key(down, "")
+        key(down, "")
+        require(menu.highlighted == 2, "Down steps to 1:1")
+        pasteboard.clearContents()
+        key(returnKey, "\r")
+        require(menu.isHidden && overlay.ratioLocked && overlay.selection!.rect.width == overlay.selection!.rect.height && pasteboard.data(forType: .png) == nil && overlay.window.isVisible,
+                "Return picks the highlighted 1:1, which conforms and locks, without copying: \(overlay.selection!.rect)")
+        key(35, "p")
+        require(menu.items.filter(\.on).map(\.title) == ["1:1"], "the panel checks the lock it applied")
+        mouse(.mouseMoved, viewPixel(rowCenter("Free")))
+        require(menu.highlighted == 0, "the pointer highlights the row under it: \(String(describing: menu.highlighted))")
+        mouse(.leftMouseDown, viewPixel(rowCenter("Free")))
+        mouse(.leftMouseUp, viewPixel(rowCenter("Free")))
+        require(menu.isHidden && !overlay.ratioLocked, "a click on Free picks it and closes the panel: hidden \(menu.isHidden) locked \(overlay.ratioLocked) hit \(String(describing: overlay.view.hitTest(rowCenter("Free"))))")
+        let squared = overlay.selection!.rect
+        key(35, "p")
+        mouse(.leftMouseDown, CGPoint(x: 40, y: 40))
+        mouse(.leftMouseUp, CGPoint(x: 40, y: 40))
+        require(menu.isHidden && overlay.selection?.rect == squared, "a click outside the panel closes it and leaves the selection")
+        key(35, "p")
+        key(124, "")
+        require(menu.isHidden && overlay.selection?.rect == squared.offsetBy(dx: 1, dy: 0), "another key closes the panel and goes on to the overlay: Right nudges")
+        overlay.selection = beforeMenu
+        overlay.lockedRatio = nil
+        overlay.ratioBase = nil
+        overlay.refresh()
+        require(overlay.selection?.rect == rectBefore && texts(in: chrome.status) == ["Snapped"], "the snapped selection is back for the next checks")
         let snapButton = chrome.actionBar.snapButton
         require(snapButton.layer!.backgroundColor != nil, "with snap on the action bar's Snap is highlighted")
         snapButton.onClick()
@@ -788,6 +850,16 @@ extension DebugRun {
             overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
                 windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
         }
+        // The edge keys: the side arrows and the radius keys show while the pointer rests inside the selection, and go when it leaves.
+        let insideSelection = CGPoint(x: overlay.selection!.rect.midX, y: overlay.selection!.rect.midY)
+        mouse(.mouseMoved, CGPoint(x: 40, y: 40))
+        require(chrome.sideHints.allSatisfy(\.isHidden) && chrome.radiusHint.isHidden, "with the pointer outside the selection no edge keys show")
+        mouse(.mouseMoved, insideSelection)
+        require(chrome.sideHints.map { texts(in: $0) } == [["\u{2190}"], ["\u{2192}"], ["\u{2191}"], ["\u{2193}"]] && chrome.sideHints.allSatisfy { !$0.isHidden }
+                    && texts(in: chrome.radiusHint) == ["radius", "[", "]"] && !chrome.radiusHint.isHidden,
+                "with the pointer inside the selection the side arrows and the radius keys show: \(chrome.sideHints.map(\.isHidden)) \(chrome.radiusHint.isHidden)")
+        mouse(.mouseMoved, CGPoint(x: 40, y: 40))
+        require(chrome.sideHints.allSatisfy(\.isHidden) && chrome.radiusHint.isHidden, "moving the pointer out of the selection hides the edge keys")
         let selected = overlay.view.viewRect(overlay.selection!.rect)
         require(chrome.sideHints.allSatisfy(\.isHidden) && keyCaps("\u{2325}", in: chrome.hints).allSatisfy { !$0.held }, "without Option no side arrows show and the Option cap is gray")
         flags(.option)
@@ -838,6 +910,75 @@ extension DebugRun {
         require(texts(in: chrome.status) == ["Exact"], "Tab to the exact drag shows Exact")
         key(53, "")
         require(chrome.actionBar.isHidden && chrome.size.isHidden && chrome.status.isHidden, "Esc takes the action bar and badges away")
+
+        // The Live Text button: inside a large selection's bottom-right corner, past the corner dot and clear of the edge handles. A click
+        // runs Shift-Return, queued here behind a warm-up that never ends so no text recognition runs. A small selection has none.
+        open()
+        let large = CGRect(x: 600, y: 300, width: 1000, height: 600)
+        overlay.selection = AreaSelection(extent: extent, exact: large)
+        overlay.editedRadii[large] = CornerRadii(40 * overlay.scale)
+        overlay.refresh()
+        let largeBox = overlay.view.viewRect(large), textFrame = chrome.textButton.frame
+        let dot = overlay.view.viewRect(CGRect(origin: overlay.cornerRadii(of: large).dot(of: .bottomRight, in: large, minimumInset: 8 * overlay.scale), size: .zero)).origin
+        require(!chrome.textButton.isHidden && largeBox.contains(textFrame) && textFrame.maxX <= largeBox.maxX - 8 && textFrame.minY >= largeBox.minY + 8
+                    && textFrame.maxX < dot.x - 6 && textFrame.minY > dot.y + 6,
+                "the Live Text button sits inside the bottom-right corner, past its corner dot and the edge handles: \(textFrame) \(largeBox) dot \(dot)")
+        require(texts(in: chrome.textButton) == ["\u{21E7}\u{21A9}"] && chrome.textButton.button.symbol?.image?.accessibilityDescription == "Live Text",
+                "the Live Text button shows the Live Text glyph and Shift-Return: \(texts(in: chrome.textButton))")
+        let textCenter = CGPoint(x: textFrame.midX, y: textFrame.midY)
+        require(overlay.view.hitTest(textCenter) === chrome.textButton.button, "a click on the Live Text button reaches it")
+        OverlayController.visionWarmUp = Task { try? await Task.sleep(for: .seconds(3600)) }
+        mouse(.leftMouseDown, viewPixel(textCenter))
+        mouse(.leftMouseUp, viewPixel(textCenter))
+        require(overlay.text.queued?.notice.hasPrefix("Shift-Return") == true, "clicking the Live Text button runs Shift-Return: \(String(describing: overlay.text.queued?.notice))")
+        overlay.text.queued = nil
+        OverlayController.visionWarmUp!.cancel()
+        await OverlayController.visionWarmUp!.value
+        await overlay.textTask?.value
+        OverlayController.visionWarmUp = nil
+        overlay.text.notice = nil
+        overlay.selection = AreaSelection(extent: extent, exact: CGRect(x: 600, y: 300, width: 120, height: 80))
+        overlay.refresh()
+        require(chrome.textButton.isHidden, "a selection too small for the Live Text button hides it")
+
+        // Released chrome never overlaps or leaves the screen: a large and a small selection, one at each screen edge, and the full
+        // screen with a 38 pt inset, each with the pointer inside so the edge keys show.
+        let edgeCases = [("large", large), ("small", CGRect(x: 600, y: 300, width: 120, height: 80)), ("left", CGRect(x: 0, y: 600, width: 500, height: 300)),
+                         ("right", CGRect(x: extent.width - 500, y: 600, width: 500, height: 300)), ("top", CGRect(x: 900, y: 0, width: 700, height: 300)),
+                         ("bottom", CGRect(x: 900, y: extent.height - 300, width: 700, height: 300)), ("full", extent)]
+        for (name, rect) in edgeCases {
+            overlay.topInset = name == "full" ? 38 : 0
+            overlay.selection = AreaSelection(extent: extent, exact: rect)
+            overlay.refresh()
+            mouse(.mouseMoved, CGPoint(x: 40, y: 40))
+            mouse(.mouseMoved, CGPoint(x: rect.midX, y: rect.midY))
+            let pieces: [(String, NSView)] = [("hints", chrome.hints), ("action bar", chrome.actionBar), ("text button", chrome.textButton), ("ratio", chrome.ratio),
+                                               ("size", chrome.size), ("status", chrome.status), ("radius", chrome.radiusHint)]
+                + chrome.sideHints.enumerated().map { ("side \($0.offset)", $0.element) }
+            let shown = pieces.filter { !$0.1.isHidden }
+            let overlaps = shown.indices.flatMap { i in shown.indices.filter { $0 > i && shown[i].1.frame.intersects(shown[$0].1.frame) }.map { "\(shown[i].0) x \(shown[$0].0)" } }
+            let screen = CGRect(x: 0, y: 0, width: overlay.view.bounds.width, height: overlay.view.bounds.height - overlay.topInset)
+            let outside = shown.filter { !screen.contains($0.1.frame) }.map { "\($0.0) \($0.1.frame) in \(screen)" }
+            require(overlaps.isEmpty && outside.isEmpty && !chrome.ratio.isHidden && chrome.sideHints.allSatisfy { !$0.isHidden },
+                    "the \(name) selection's chrome does not overlap or leave the screen: overlaps \(overlaps), outside \(outside)")
+        }
+        overlay.topInset = 0
+
+        // Armed to record, the selection keeps none of the editing chrome; Esc brings it back.
+        overlay.dismiss()
+        overlay.present(image: image, frame: frame, displayID: CGMainDisplayID())
+        overlay.detectionTask?.cancel()
+        overlay.selection = AreaSelection(extent: extent, exact: large)
+        overlay.refresh()
+        mouse(.mouseMoved, CGPoint(x: 40, y: 40))
+        mouse(.mouseMoved, CGPoint(x: large.midX, y: large.midY))
+        require(!chrome.textButton.isHidden && !chrome.ratio.isHidden && chrome.sideHints.allSatisfy { !$0.isHidden }, "before arming, the editing chrome shows")
+        key(9, "v")
+        require(overlay.armedRecording != nil && chrome.textButton.isHidden && chrome.ratio.isHidden && chrome.radiusHint.isHidden && chrome.sideHints.allSatisfy(\.isHidden),
+                "armed to record, the Live Text button, ratio chip, and edge keys hide")
+        key(53, "\u{1B}")
+        require(overlay.armedRecording == nil && !chrome.textButton.isHidden && !chrome.ratio.isHidden, "Esc disarms and brings the editing chrome back")
+        overlay.dismiss()
 
         // G: scrolling capture of a released selection inside a window, with frames cut from the fixture as if the page scrolled 300 px.
         let page = CGRect(x: 400, y: 200, width: 1000, height: 600)

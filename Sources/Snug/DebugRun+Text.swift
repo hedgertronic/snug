@@ -409,7 +409,7 @@ extension DebugRun {
         }
         capture(cart)
         require(overlay.selection?.rect == cart, "an Option-drag releases the exact cart selection")
-        require(texts(in: overlay.chrome.actionBar).contains("\u{21E7}\u{21A9}"), "the action bar's Text button names Shift-Return")
+        require(!overlay.chrome.textButton.isHidden && texts(in: overlay.chrome.textButton).contains("\u{21E7}\u{21A9}"), "the Live Text button in the selection names Shift-Return")
         pasteboard.clearContents()
         key(returnKey, "\r", .shift)
         require(!overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."], "a Reading text... pill shows while the selection is read")

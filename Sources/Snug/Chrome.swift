@@ -331,17 +331,17 @@ final class BottomBar: Capsule {
     func click(_ mode: OverlayController.Mode) { modeButtons[mode]!.onClick() }
 }
 
-/// The bar attached to a released selection: Frame and Snap, then Scroll, Record, Cut out, Text (with the Live Text glyph), Save, and Copy.
+/// The bar attached to a released selection: the Frame, Snap, Rounded, and Shadow toggles, then Scroll, Record, Cut out, Save, and Copy.
 @MainActor
 final class ActionBar: Capsule {
     var onFrame: () -> Void = {}
     var onSnap: () -> Void = {}
-    var onText: () -> Void = {}
     var onSave: () -> Void = {}
     var onCopy: () -> Void = {}
     let frameButton = BarButton("Frame", key: "M", height: 28, size: 12)
     let snapButton = BarButton("Snap", key: "S", height: 28, size: 12)
-    let text = BarButton("Text", key: "\u{21E7}\u{21A9}", symbol: ("text.viewfinder", "Live Text"), height: 28, size: 12)
+    let roundedButton = BarButton("Rounded", key: "O", height: 28, size: 12)
+    let shadowButton = BarButton("Shadow", key: "D", height: 28, size: 12)
     let save = BarButton("Save", key: "\u{2318}S", height: 28, size: 12)
     let copy = BarButton("Copy", key: "\u{21A9}", height: 28, size: 12)
     let record = BarButton("Record", key: "V", height: 28, size: 12)
@@ -354,21 +354,41 @@ final class ActionBar: Capsule {
     var snapped = false {
         didSet { snapButton.style(fill: snapped ? NSColor.white.withAlphaComponent(0.16) : nil, text: .labelColor, bold: snapped) }
     }
+    var rounded = false {
+        didSet { roundedButton.style(fill: rounded ? NSColor.white.withAlphaComponent(0.16) : nil, text: .labelColor, bold: rounded) }
+    }
+    var shadowed = false {
+        didSet { shadowButton.style(fill: shadowed ? NSColor.white.withAlphaComponent(0.16) : nil, text: .labelColor, bold: shadowed) }
+    }
 
     init() {
         super.init(spacing: 4, inset: 4, radius: 11)
         frameButton.onClick = { [unowned self] in onFrame() }
         for button in [scroll, record, cutout] { button.style(fill: nil, text: .labelColor) }
         snapButton.onClick = { [unowned self] in onSnap() }
-        text.style(fill: nil, text: .labelColor)
         save.style(fill: nil, text: .labelColor)
         copy.style(fill: .controlAccentColor, text: .white, bold: true, prominent: true)
-        text.onClick = { [unowned self] in onText() }
         save.onClick = { [unowned self] in onSave() }
         copy.onClick = { [unowned self] in onCopy() }
-        setItems([frameButton, snapButton, Capsule.divider(height: 18), scroll, record, cutout, text, save, copy])
+        setItems([frameButton, snapButton, roundedButton, shadowButton, Capsule.divider(height: 18), scroll, record, cutout, save, copy])
         framed = false
         snapped = false
+        rounded = false
+        shadowed = false
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+}
+
+/// The Live Text button inside a released selection's bottom-right corner: the glyph and Shift-Return on a round glass capsule.
+@MainActor
+final class TextButton: Capsule {
+    let button = BarButton("", key: "\u{21E7}\u{21A9}", symbol: ("text.viewfinder", "Live Text"), height: 24, size: 13)
+
+    init() {
+        super.init(spacing: 0, inset: 3, radius: 15)
+        button.style(fill: nil, text: .labelColor)
+        setItems([button])
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -379,6 +399,10 @@ final class ActionBar: Capsule {
 final class Chrome {
     let bottomBar = BottomBar()
     let actionBar = ActionBar()
+    let textButton = TextButton()
+    /// Above a released selection's top-right corner: the ratio readout with P, which opens `ratioMenu`, and the lock with Shift-P.
+    let ratio = Pill.dark(0.86, radius: 8, insets: NSEdgeInsets(top: 3, left: 3, bottom: 3, right: 3), spacing: 3)
+    let ratioMenu = RatioMenu()
     let hints = Pill.dark(0.9, radius: 11, insets: NSEdgeInsets(top: 8, left: 14, bottom: 8, right: 14), spacing: 18)
     /// Key caps at the top-left corners of the faint outlines of what Up and Down would select.
     let upHint = KeyCap("\u{2191}", color: .white)
@@ -389,12 +413,15 @@ final class Chrome {
     let reading = Pill.dark(0.86, radius: 6, insets: NSEdgeInsets(top: 4, left: 9, bottom: 4, right: 9))
     let list = CandidateList()
     let help = HelpSheet()
-    /// While Option is held on a released selection: the arrow keys for growing or shrinking each side (left, right, top, bottom).
+    /// On a released selection: the arrow keys outside each side (left, right, top, bottom), which move it, or grow or shrink that
+    /// side with Option or Option-Command.
     let sideHints = (0..<4).map { _ in Pill.dark(0.86, radius: 6, insets: NSEdgeInsets(top: 3, left: 3, bottom: 3, right: 3)) }
     /// Beside the "All corners" chip of a hovered corner dot: the radius keys and Option for one corner.
     let cornerKeys = Pill.dark(0.86, radius: 6, insets: NSEdgeInsets(top: 5, left: 8, bottom: 5, right: 5), spacing: 5, vertical: true)
+    /// Beside the side arrows, outside a released selection's top-right corner: the radius keys.
+    let radiusHint = Pill.dark(0.86, radius: 6, insets: NSEdgeInsets(top: 3, left: 8, bottom: 3, right: 3))
     /// The bars and hint strip sit under the menu bar or notch instead of at the bottom edge.
     var atTop = false
 
-    var all: [NSView] { [upHint, downHint, hover, size, status, reading, hints] + sideHints + [cornerKeys, list, bottomBar, actionBar, help] }
+    var all: [NSView] { [upHint, downHint, hover, size, status, reading, hints] + sideHints + [radiusHint, cornerKeys, list, bottomBar, actionBar, textButton, ratio, ratioMenu, help] }
 }
