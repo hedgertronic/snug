@@ -73,6 +73,12 @@ extension DebugRun {
         try await record("capture-hover")
         dragRelease(rough)
         try await waitFor("a released selection") { overlay.selection != nil }
+        // Option-Right grows the selection, so the size pill shows a new readout in the label it already shows.
+        let readout = overlay.chrome.size.subviews[0] as! NSTextField
+        let shown = readout.stringValue
+        key(124, "\u{F703}", .option)
+        precondition(overlay.chrome.size.subviews[0] === readout && readout.stringValue != shown,
+                     "the size pill copies a new readout into its shown label instead of adding a new label")
         try await record("selection-released")
         key(returnKey, "\r")
         await overlay.commitTask?.value
