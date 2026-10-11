@@ -33,6 +33,22 @@ struct WindowCornersTests {
         #expect(alpha(rounded, 5, 5) == 100)
     }
 
+    @Test func anAlreadyRoundedCaptureKeepsItsOwnOutline() {
+        // A white window rounded at 12 px inside a 10 px shadow (alpha 100), as ScreenCaptureKit returned the user's Finder window.
+        let context = CGContext(data: nil, width: 100, height: 80, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(gray: 0, alpha: 100 / 255)
+        context.fill(CGRect(x: 0, y: 0, width: 100, height: 80))
+        context.setBlendMode(.copy)
+        context.setFillColor(gray: 1, alpha: 1)
+        context.addPath(CGPath(roundedRect: CGRect(x: 10, y: 10, width: 80, height: 60), cornerWidth: 12, cornerHeight: 12, transform: nil))
+        context.fillPath()
+        // A larger measured radius (20 px) would cut into the window: (14, 14) is inside its 12 px arc, outside a 20 px one.
+        let kept = roundingWindowCorners(context.makeImage()!, radius: 20)
+        #expect(alpha(kept, 14, 14) == 255 && alpha(kept, 85, 65) == 255 && alpha(kept, 50, 40) == 255)
+        #expect(alpha(kept, 10, 10) == 100)
+    }
+
     @Test func withoutAShadowTheCornersBecomeTransparent() {
         let rounded = roundingWindowCorners(capture(width: 60, height: 50, border: 0), radius: 10)
         #expect(alpha(rounded, 0, 0) == 0 && alpha(rounded, 59, 49) == 0 && alpha(rounded, 30, 25) == 255)

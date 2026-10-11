@@ -2,9 +2,9 @@ import CoreGraphics
 
 /// Rounds the corners of a window capture that came back square. The window is the opaque bounding box of `image`; any
 /// transparent border around it is the window's shadow. Each corner outside a circle of `radius` pixels is replaced by the shadow
-/// just past that corner (black at the alpha found diagonally outside it), or by transparency when there is no shadow.
-/// Fully transparent margins past the shadow are cropped off: a Finder window capture came back about 200 px wider on one side
-/// than its shadow reaches.
+/// just past that corner (black at the alpha found diagonally outside it), or by transparency when there is no shadow. A capture
+/// whose corners are already cut keeps its own outline. Fully transparent margins past the shadow are cropped off: a Finder
+/// window capture came back about 200 px wider on one side than its shadow reaches.
 public func roundingWindowCorners(_ image: CGImage, radius: CGFloat) -> CGImage {
     let width = image.width, height = image.height, bytesPerRow = width * 4
     let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: bytesPerRow,
@@ -29,6 +29,10 @@ public func roundingWindowCorners(_ image: CGImage, radius: CGFloat) -> CGImage 
     let trimmed = { (output: CGImage) in visible.size == CGSize(width: width, height: height) ? output : output.cropping(to: visible)! }
     let r = Int(radius.rounded())
     guard maxX >= 0, r > 0, maxX - minX + 1 >= 2 * r, maxY - minY + 1 >= 2 * r else { return trimmed(image) }
+    // A capture that is already shaped (ScreenCaptureKit's, with the shadow on) has no opaque pixel at its window's corners; it keeps
+    // its own outline. 240, not 255: a resampled square edge reads a little under 255.
+    let corners = [(minX, minY), (maxX, minY), (minX, maxY), (maxX, maxY)]
+    guard !corners.allSatisfy({ bytes[$0.1 * bytesPerRow + $0.0 * 4 + 3] < 240 }) else { return trimmed(image) }
 
     for (cornerX, cornerY, stepX, stepY) in [(minX, minY, 1, 1), (maxX, minY, -1, 1), (minX, maxY, 1, -1), (maxX, maxY, -1, -1)] {
         let outsideX = cornerX - stepX, outsideY = cornerY - stepY
