@@ -171,6 +171,7 @@ final class OverlayView: NSView {
     private func applyAccent() {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             let accent = highlight?.color ?? .controlAccentColor
+            guides.accent = accent
             // The hover: a hairline with a 3 pt ring just outside it, an optional soft glow, and an optional fill.
             hoverLayer.strokeColor = accent.cgColor
             hoverLayer.lineWidth = 1.5

@@ -51,7 +51,7 @@ final class Guides {
     let edges = CAShapeLayer()
     private let centerHalo = CAShapeLayer()
     private let centerWhite = CAShapeLayer()
-    private let centerAccent = CAShapeLayer()
+    let centerAccent = CAShapeLayer()
     private let readout = CALayer()
     private let swatch = CALayer()
     private let hex = Guides.text(NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold), .left)
@@ -61,6 +61,8 @@ final class Guides {
     /// Whether a change of the loupe's placement slides, and the loupe's offset from the pointer at the last update (nil until it first shows).
     var slidesPlacement = false
     var loupeOffset: CGPoint?
+    /// The color of the crosshair, ruler marks, and loupe outline and center cell: the user's highlight color, set by the view.
+    var accent = NSColor.controlAccentColor
 
     private static func text(_ font: NSFont, _ alignment: CATextLayerAlignmentMode) -> CATextLayer {
         let layer = CATextLayer()
@@ -90,7 +92,6 @@ final class Guides {
         ticks.lineWidth = 1
         marks.strokeColor = NSColor.white.cgColor
         marks.lineWidth = 1
-        spans.fillColor = NSColor.controlAccentColor.withAlphaComponent(0.55).cgColor
         for flag in flags {
             flag.cornerRadius = 3
         }
@@ -215,7 +216,6 @@ final class Guides {
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         root.frame = bounds
-        let accent = NSColor.controlAccentColor
         if !crosshair.isHidden {
             crosshair.strokeColor = accent.withAlphaComponent(0.8).cgColor
             let lines = CGMutablePath()

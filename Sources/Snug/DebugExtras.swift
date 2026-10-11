@@ -153,6 +153,22 @@ extension DebugRun {
             let corner = CGPoint(x: guides.loupe.frame.minX * overlay.scale, y: guides.loupe.frame.minY * overlay.scale)
             require(abs(corner.x - corner.x.rounded()) < 0.001 && abs(corner.y - corner.y.rounded()) < 0.001, "step \(step): the loupe sits on whole device pixels: \(corner)")
         }
+        // The loupe's outline, the crosshair, and the loupe's center cell follow the highlight color pref, not the system accent.
+        defaults.set("#E5484D", forKey: Pref.highlightColor)
+        overlay.view.highlight = Highlight(defaults: defaults)
+        mouse(.leftMouseDragged, CGPoint(x: rough.maxX, y: rough.maxY))
+        let edgeContext = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8, bytesPerRow: 0,
+                                    space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        guides.edges.render(in: edgeContext)
+        let edgeBytes = NSBitmapImageRep(cgImage: edgeContext.makeImage()!)
+        let solid = (0..<size).flatMap { y in (0..<size).map { (x: $0, y: y) } }.map { edgeBytes.colorAt(x: $0.x, y: $0.y)! }.filter { $0.alphaComponent > 0.5 }
+        require(!solid.isEmpty && solid.allSatisfy { close(bytes($0), [229, 72, 77], 2) }, "the loupe's selection outline is drawn in the highlight color: \(solid.first.map(bytes) ?? [])")
+        for (name, color) in [("crosshair", guides.crosshair.strokeColor), ("loupe center cell", guides.centerAccent.strokeColor)] {
+            let shown = NSColor(cgColor: color!)!.usingColorSpace(.sRGB)!
+            require(close(bytes(shown), [229, 72, 77], 2), "the \(name) is drawn in the highlight color")
+        }
+        defaults.removeObject(forKey: Pref.highlightColor)
+        overlay.view.highlight = Highlight(defaults: defaults)
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(guides.edges.path == nil, "the loupe draws no selection edges once the drag ends")
 
