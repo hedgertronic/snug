@@ -60,6 +60,11 @@ extension DebugRun {
                 && overlay.chrome.actionBar.isHidden && !overlay.view.overlays.showsHandles,
                 "armed: a red outline on the selection, no action bar or handles")
         require(hints() == ["start", "\u{21A9}", "cursor on", "H", "count-in off", "C", "cancel", "esc"], "the armed strip: \(hints())")
+        // Armed near the right edge, the size badge stays over the selection's left edge (the hidden action bar doesn't move it).
+        select(CGRect(x: extent.width - 600, y: 400, width: 560, height: 500))
+        let badgeOffset = overlay.chrome.size.frame.minX - overlay.view.viewRect(overlay.selection!.rect).minX
+        require(abs(badgeOffset) <= 1, "armed, the size badge sits over the selection's left edge: \(badgeOffset)")
+        select(CGRect(x: 401, y: 201, width: 999, height: 601))
         // Armed, pointer moves change nothing: no open hand over the selection, no corner chip.
         let cursor = overlay.view.cursor
         func move(_ pixel: CGPoint) {

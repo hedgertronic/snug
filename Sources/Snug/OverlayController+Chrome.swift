@@ -141,7 +141,9 @@ extension OverlayController {
             let below = box.minY - 8 - bar.height, over = box.maxY + 8
             let y = below >= floor ? below : over + bar.height <= top - 8 ? over : max(box.minY + 8, floor)
             c.actionBar.frame.origin = CGPoint(x: min(max(box.minX, 8), bounds.width - bar.width - 8), y: y)
-            anchor = y == over || y == below ? box.union(c.actionBar.frame) : box
+            // The badges clear the bar vertically but stay over the selection's left edge; armed to record, the bar is hidden.
+            let union = box.union(c.actionBar.frame)
+            anchor = armedRecording == nil && (y == over || y == below) ? CGRect(x: box.minX, y: union.minY, width: box.width, height: union.height) : box
         }
 
         if mode != .text, let rect = overlays.selection ?? overlays.preview ?? overlays.ghost ?? (radiusReadout == nil ? nil : overlays.hover) {
