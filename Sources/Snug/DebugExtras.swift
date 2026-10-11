@@ -77,8 +77,12 @@ extension DebugRun {
         require(overlay.chrome.bottomBar.modeButtons.count == 2 && !texts(in: overlay.chrome.bottomBar).contains("Element"), "the bottom bar has two modes, Capture and Text")
         overlay.dismiss()
 
-        // B toggles the bottom bar and remembers it.
+        // Opening draws at once: no layer under the view animates implicitly, so the frozen image replaces the black window in one frame.
+        func animations(_ layer: CALayer) -> [String] { (layer.animationKeys() ?? []).map { "\(type(of: layer)) \($0)" } + (layer.sublayers ?? []).flatMap(animations) }
         open()
+        require(animations(overlay.view.layer!).isEmpty, "opening animates no layer: \(animations(overlay.view.layer!))")
+
+        // B toggles the bottom bar and remembers it.
         let bar = overlay.chrome.bottomBar
         require(!bar.isHidden, "the bottom bar starts visible")
         key(11, "b")
@@ -101,6 +105,9 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: text.x - 300, y: text.y - 200))
         require(guides.loupe.position != before, "the loupe follows the pointer")
         mouse(.mouseMoved, text)
+        // The loupe's readout and the rulers' text change without a cross-fade once displayed.
+        CATransaction.flush()
+        require(animations(guides.root).isEmpty, "moving the pointer animates no guide layer: \(animations(guides.root))")
 
         // The loupe shows the right magnified pixels: render it and compare cells to the source.
         // render(in:) filters slightly, so cell centers match within a few levels, not exactly.
@@ -126,18 +133,23 @@ extension DebugRun {
         mouse(.leftMouseDragged, CGPoint(x: rough.maxX, y: rough.maxY))
         let loupeCell = Guides.loupeSize / CGFloat(Guides.loupePixels), middle = loupeCell * CGFloat(Guides.loupePixels / 2)
         let edgeBox = guides.edges.path!.boundingBox
-        require(abs(edgeBox.maxX - middle) < 0.01 && abs(edgeBox.minY - (Guides.loupeSize - middle)) < 0.01, "mid-drag the selection's right and bottom edges run through the loupe's center cell: \(edgeBox)")
+        require(abs(edgeBox.maxX - middle - loupeCell) < 0.01 && abs(edgeBox.minY - (Guides.loupeSize - middle - loupeCell)) < 0.01,
+                "mid-drag the selection's right and bottom edges run along the loupe's center cell, the last pixel inside the crop: \(edgeBox)")
         require(guides.flags.map { $0.string as! String } == ["\(Int(rough.minX))", "\(Int(rough.maxX))", "\(Int(rough.minY))", "\(Int(rough.maxY))"], "the rulers flag the span's start and end")
         require(guides.widthLabel.string as? String == "\(Int(rough.width))" && !guides.widthLabel.isHidden, "the ruler shows the span's width")
         require(!(guides.numbers.sublayers!.contains { !$0.isHidden && $0.frame.intersects(guides.widthLabel.frame) }) && guides.numbers.sublayers!.contains { $0.isHidden },
                 "no tick number shows under the span's width")
-        // Sub-pixel pointer moves mid-drag: the outline's edges stay on the loupe's pixel grid, within one cell of the center's, and the loupe sits on whole device pixels.
-        for step in 1...8 {
-            let offset = CGFloat(step) * 0.17
-            mouse(.leftMouseDragged, CGPoint(x: rough.maxX + offset, y: rough.maxY + offset / 2))
+        // Sub-pixel pointer moves mid-drag, through whole, half and other fractions of a pixel: the outline's right and bottom edges stay on
+        // the center cell's far side, the rulers flag the same sides, and the loupe sits on whole device pixels.
+        for step in 1...12 {
+            let offset = CGFloat(step) * [0.5, 0.17, 0.33][step % 3]
+            let tip = CGPoint(x: rough.maxX + offset, y: rough.maxY + offset / 2)
+            mouse(.leftMouseDragged, tip)
             let box = guides.edges.path!.boundingBox
             let right = (box.maxX - middle) / loupeCell, bottom = (Guides.loupeSize - box.minY - middle) / loupeCell
-            require([right, bottom].allSatisfy { abs($0 - $0.rounded()) < 0.001 && abs($0) < 1.001 }, "step \(step): the outline's right and bottom edges sit on the loupe's grid next to the center cell: \(right) \(bottom)")
+            require([right, bottom].allSatisfy { abs($0 - 1) < 0.001 }, "step \(step): the outline's right and bottom edges run along the center cell's far side: \(right) \(bottom)")
+            require(guides.flags[1].string as? String == "\(Int(tip.x.rounded(.up)))" && guides.flags[3].string as? String == "\(Int(tip.y.rounded(.up)))",
+                    "step \(step): the rulers flag the crop's whole-pixel right and bottom sides")
             let corner = CGPoint(x: guides.loupe.frame.minX * overlay.scale, y: guides.loupe.frame.minY * overlay.scale)
             require(abs(corner.x - corner.x.rounded()) < 0.001 && abs(corner.y - corner.y.rounded()) < 0.001, "step \(step): the loupe sits on whole device pixels: \(corner)")
         }
@@ -183,6 +195,35 @@ extension DebugRun {
             let covered = [barChrome.bottomBar, barChrome.hints, barChrome.actionBar].filter { !$0.isHidden && guides.loupe.frame.intersects($0.frame) }
             require(covered.isEmpty, "the loupe with the pointer at y \(y) covers no bar: \(guides.loupe.frame) \(covered.map(\.frame))")
         }
+        // A flip at the screen's right edge slides: the model position follows the pointer at once, and an additive animation carries the
+        // loupe from its old offset to the new one. A move that keeps the placement adds no slide, and nothing slides while sliding is off.
+        func place(_ point: CGPoint) {
+            guides.update(point: point, pixel: CGPoint(x: 800, y: 600), image: image, bounds: viewBounds, scale: overlay.scale, topInset: 0, selected: nil, dragging: false, avoiding: [])
+        }
+        func slides() -> [CABasicAnimation] {
+            (guides.loupe.animationKeys() ?? []).compactMap { guides.loupe.animation(forKey: $0) as? CABasicAnimation }.filter { $0.keyPath == "position" && $0.isAdditive }
+        }
+        guides.loupe.removeAllAnimations()
+        require(!guides.slidesPlacement, "headless runs never slide the loupe")
+        place(CGPoint(x: 400, y: 300))
+        place(CGPoint(x: viewBounds.width - 20, y: 300))
+        require(slides().isEmpty, "with sliding off a flip moves the loupe at once")
+        guides.slidesPlacement = true
+        place(CGPoint(x: 400, y: 300))
+        let slid = slides()
+        let jump = (slid.first?.fromValue as? NSValue)?.pointValue ?? .zero
+        require(slid.count == 1 && abs(jump.x - (-Guides.loupeSize - 20)) <= 0.5 && abs(jump.y) <= 0.5 && (slid[0].toValue as! NSValue).pointValue == .zero,
+                "a flip back to the pointer's right slides from the old offset: \(slid.map { ($0.fromValue, $0.toValue) })")
+        require(abs(guides.loupe.frame.minX - 410) <= 0.5, "the loupe's model position follows the pointer at once: \(guides.loupe.frame)")
+        place(CGPoint(x: 401, y: 301))
+        require(slides().count == 1, "a move that keeps the placement adds no slide")
+        // With no free placement the loupe is pushed inside the view and pinned on one axis; following the pointer there is no flip.
+        guides.loupe.removeAllAnimations()
+        guides.update(point: CGPoint(x: 400, y: 60), pixel: CGPoint(x: 800, y: 600), image: image, bounds: viewBounds, scale: overlay.scale, topInset: 0, selected: nil, dragging: false, avoiding: [viewBounds])
+        guides.update(point: CGPoint(x: 400, y: 70), pixel: CGPoint(x: 800, y: 600), image: image, bounds: viewBounds, scale: overlay.scale, topInset: 0, selected: nil, dragging: false, avoiding: [viewBounds])
+        require(guides.loupe.frame.minY == 0 && slides().isEmpty, "a loupe pinned at the bottom edge follows the pointer without sliding: \(guides.loupe.frame) \(slides().count)")
+        guides.slidesPlacement = false
+        guides.loupe.removeAllAnimations()
         overlay.dismiss()
 
         // Animation variants: fade (the default) scales the loupe and fades the rulers without a slide, slide moves them in, none flips at once.

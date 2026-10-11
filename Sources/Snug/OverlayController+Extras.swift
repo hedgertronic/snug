@@ -63,6 +63,7 @@ extension OverlayController {
         detected = []
         dockTiles = []
         mode = .capture
+        view.guides.loupeOffset = nil
         chrome.help.isHidden = true
         if !isHeadless { previousApp?.activate() }
         previousApp = nil
@@ -172,8 +173,16 @@ extension OverlayController {
         let animated = !isHeadless && animation != GuidesAnimation.none
         guides.setShown(guides.rulers, defaults.bool(forKey: Pref.rulers), from: animation == .slide ? Guides.rulersHiddenTransform : CATransform3DIdentity, animated: animated)
         guides.setShown(guides.loupe, defaults.bool(forKey: Pref.loupe), from: Guides.loupeHiddenTransform, animated: animated)
+        guides.slidesPlacement = animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         guard !(guides.crosshair.isHidden && guides.rulers.isHidden && guides.loupe.isHidden) else { return }
-        guides.update(point: CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale), pixel: pointerPixel,
+        // While a drag carries a max side with the pointer, the loupe centers on the last pixel inside the crop, whose max sides round up,
+        // so the outline keeps to the center cell's far side as the pointer crosses pixel boundaries.
+        var pixel = pointerPixel
+        if let dragged = draggedRect {
+            if pointer.x == dragged.maxX { pixel.x = min(max(pointer.x.rounded(.up) - 1, 0), extent.width - 1) }
+            if pointer.y == dragged.maxY { pixel.y = min(max(pointer.y.rounded(.up) - 1, 0), extent.height - 1) }
+        }
+        guides.update(point: CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale), pixel: pixel,
                       image: image, bounds: view.bounds, scale: scale, topInset: topInset,
                       selected: draggedRect ?? selection?.rect, dragging: draggedRect != nil,
                       avoiding: [chrome.bottomBar, chrome.actionBar, chrome.hints, chrome.list].filter { !$0.isHidden }.map(\.frame))

@@ -58,6 +58,9 @@ final class Guides {
     private let hint = Guides.text(NSFont.systemFont(ofSize: 10, weight: .semibold), .right)
     private let coordinates = Guides.text(NSFont.monospacedSystemFont(ofSize: 10, weight: .medium), .left)
     private var tickKey: [CGFloat] = []
+    /// Whether a change of the loupe's placement slides, and the loupe's offset from the pointer at the last update (nil until it first shows).
+    var slidesPlacement = false
+    var loupeOffset: CGPoint?
 
     private static func text(_ font: NSFont, _ alignment: CATextLayerAlignmentMode) -> CATextLayer {
         let layer = CATextLayer()
@@ -66,6 +69,8 @@ final class Guides {
         layer.alignmentMode = alignment
         layer.foregroundColor = NSColor.white.cgColor
         layer.contentsScale = NSScreen.main!.backingScaleFactor
+        // New text shows at once, without the implicit cross-fade a redisplayed layer gets.
+        layer.actions = ["contents": NSNull()]
         return layer
     }
 
@@ -75,6 +80,8 @@ final class Guides {
             root.addSublayer(layer)
         }
         crosshair.lineWidth = 1
+        // X shows and hides the crosshair at once; only the loupe and rulers animate, per `GuidesAnimation`.
+        crosshair.actions = ["hidden": NSNull()]
         crosshair.fillColor = nil
         bands.fillColor = NSColor(srgbRed: 24 / 255, green: 24 / 255, blue: 26 / 255, alpha: 0.66).cgColor
         hairline.strokeColor = NSColor.white.withAlphaComponent(0.16).cgColor
@@ -155,6 +162,7 @@ final class Guides {
     func setShown(_ layer: CALayer, _ shown: Bool, from hidden: CATransform3D, animated: Bool) {
         let visible = !layer.isHidden && layer.opacity == 1
         guard shown != visible else { return }
+        if layer === loupe { loupeOffset = nil }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         guard animated else {
@@ -263,7 +271,8 @@ final class Guides {
                 let span = CGRect(x: selected.minX / scale, y: bounds.height - selected.maxY / scale, width: selected.width / scale, height: selected.height / scale)
                 band.addRect(CGRect(x: span.minX, y: bandBottom, width: span.width, height: thickness))
                 band.addRect(CGRect(x: 0, y: span.minY, width: thickness, height: span.height).intersection(CGRect(x: 0, y: 0, width: thickness, height: bandBottom)))
-                let values = [selected.minX, selected.maxX, selected.minY, selected.maxY].map { Int($0.rounded()) }
+                // The crop's whole-pixel sides, as the loupe's outline draws them.
+                let values = [selected.minX.rounded(.down), selected.maxX.rounded(.up), selected.minY.rounded(.down), selected.maxY.rounded(.up)].map { Int($0) }
                 func flag(_ index: Int, at origin: (CGFloat) -> CGPoint) {
                     let width = CGFloat("\(values[index])".count) * digit + 6
                     flags[index].string = "\(values[index])"
@@ -322,11 +331,11 @@ final class Guides {
             context.draw(image.cropping(to: inside)!, in: CGRect(x: inside.minX - window.minX, y: window.maxY - inside.maxY, width: inside.width, height: inside.height))
             magnified.contents = context.makeImage()
             for layer in [edges, centerAccent] { layer.strokeColor = accent.cgColor }
-            // The dragged rectangle's edges, in the loupe's cells, each on the nearest pixel boundary so none sits between cells.
-            // The disc clips whatever lies outside the window.
+            // The dragged rectangle's edges, in the loupe's cells, on the pixel boundaries the crop takes (`integral`: min sides round down,
+            // max sides up), so the outline shows the pixels the capture will hold. The disc clips whatever lies outside the window.
             let cell = Self.loupeSize / CGFloat(side)
             edges.path = dragging ? selected.map {
-                let left = $0.minX.rounded(), right = $0.maxX.rounded(), top = $0.minY.rounded(), bottom = $0.maxY.rounded()
+                let left = $0.minX.rounded(.down), right = $0.maxX.rounded(.up), top = $0.minY.rounded(.down), bottom = $0.maxY.rounded(.up)
                 return CGPath(rect: CGRect(x: (left - window.minX) * cell, y: Self.loupeSize - (bottom - window.minY) * cell, width: (right - left) * cell, height: (bottom - top) * cell), transform: nil)
             } : nil
             let color = ColorFormat.average(of: image, in: CGRect(x: column, y: row, width: 1, height: 1))
@@ -334,6 +343,20 @@ final class Guides {
             hex.string = ColorFormat.hex.string(for: color)
             coordinates.string = "x \(column)  y \(row)"
             let origin = Self.loupeOrigin(point: point, bounds: bounds, topInset: topInset, scale: scale, avoiding: avoiding)
+            let offset = CGPoint(x: origin.x - point.x, y: origin.y - point.y)
+            // A flip to the pointer's other side (past a bar or a screen edge) slides from the old offset to the new one. Only the offset animates,
+            // additively, so the loupe still tracks the pointer at once, and a flip during a slide adds to it. A loupe pushed inside the view keeps
+            // its side, so following the pointer there never slides. Mid-slide frames sit between device pixels.
+            if slidesPlacement, let previous = loupeOffset, (previous.x < 0) != (offset.x < 0) || (previous.y < 0) != (offset.y < 0) {
+                let slide = CABasicAnimation(keyPath: "position")
+                slide.isAdditive = true
+                slide.fromValue = NSValue(point: CGPoint(x: previous.x - offset.x, y: previous.y - offset.y))
+                slide.toValue = NSValue(point: .zero)
+                slide.duration = Self.transitionDuration
+                slide.timingFunction = Self.introCurve
+                loupe.add(slide, forKey: "placement \(CACurrentMediaTime())")
+            }
+            loupeOffset = offset
             loupe.position = CGPoint(x: origin.x + Self.loupeSize / 2, y: origin.y + loupe.bounds.height / 2)
         }
     }

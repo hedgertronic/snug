@@ -54,7 +54,15 @@ final class OverlayView: NSView {
     weak var controller: OverlayController?
     /// Image pixels per point.
     var scale: CGFloat = 1
-    var image: CGImage? { didSet { imageLayer.contents = image } }
+    /// Set with implicit actions off, so the frozen image replaces the black window at once.
+    var image: CGImage? {
+        didSet {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            imageLayer.contents = image
+            CATransaction.commit()
+        }
+    }
     var overlays = Overlays() { didSet { layoutOverlays() } }
     var highlight: Highlight? { didSet { applyAccent() } }
     /// The cursor over the whole overlay; the controller picks it from the pointer and the interaction.
