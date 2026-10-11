@@ -646,6 +646,10 @@ final class OverlayController {
         case (_, true, _) where shift && character.lowercased() == "s":
             if hovering { clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true, saveAs: true) } else { save(saveAs: true) }
         case (_, false, "e") where hovering && hoverRect != nil: openAsSelection(hoverRect!)
+        case (_, false, "w") where hovering:
+            // The frontmost window under the pointer, whatever element inside it is hovered, taken as Return takes a hovered window.
+            guard let index = windows.firstIndex(where: { $0.contains(pointer) }) else { return false }
+            clickWindow(index, crop: windows[index], shadow: windowShadow(option: false), copy: true, save: afterCaptureSaves)
         case (_, false, "k"): cutOut()
         case (_, false, "o"): defaults.set(!defaults.bool(forKey: Pref.roundCorners), forKey: Pref.roundCorners)
         case (_, false, "p"): cycleRatioLock()
