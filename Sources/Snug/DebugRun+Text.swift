@@ -576,8 +576,8 @@ extension DebugRun {
                 && preview!.view.checker.frame == overlay.view.viewRect(iconRect) && preview!.view.subject.frame == preview!.view.checker.frame
                 && (preview!.view.subject.contents as! CGImage).width == Int(iconRect.width),
                 "the preview shows the full-size cutout over a checkerboard in place of the selection")
-        require(overlay.selection == nil && overlay.chrome.actionBar.isHidden && overlay.view.overlays.selection == iconRect && !overlay.view.overlays.showsHandles,
-                "while previewing, the selection's action bar and handles step aside and the area stays outlined")
+        require(overlay.selection == nil && overlay.chrome.actionBar.isHidden && overlay.chrome.bottomBar.isHidden && overlay.view.overlays.selection == iconRect
+                && !overlay.view.overlays.showsHandles, "while previewing, the action bar, mode bar and handles stay hidden and the area stays outlined")
         // The icon page is 200 pt wide, so the hint row drops what does not fit from the end.
         require(texts(in: overlay.chrome.hints).prefix(3) == ["Subject", "copy", "\u{21A9}"], "the hint row names the preview: \(texts(in: overlay.chrome.hints))")
         let (previewPixels, previewWidth) = pixels(preview!.subjects[0].preview)

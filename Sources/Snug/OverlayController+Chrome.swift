@@ -44,7 +44,7 @@ extension OverlayController {
         c.help.layoutPanel()
 
         c.bottomBar.update(mode: mode, defaults: defaults)
-        c.bottomBar.isHidden = released || scrollArea != nil || !defaults.bool(forKey: Pref.modeBar)
+        c.bottomBar.isHidden = released || scrollArea != nil || cutout != nil || !defaults.bool(forKey: Pref.modeBar)
         c.actionBar.framed = framed
         c.actionBar.snapped = snapEnabled
         c.actionBar.isHidden = !released
