@@ -12,9 +12,10 @@ struct CutoutSubject {
 extension OverlayController {
     /// K: cuts the selection (or the hovered rectangle) out of the frozen image with Vision's foreground instance mask, run on that crop
     /// alone with no margin, and opens the cut-out preview over it. The overlay stays as it is while the mask runs (tens of milliseconds);
-    /// with no subject it shows "No subject found" and changes nothing else.
+    /// with no subject it shows "No subject found" and changes nothing else. A K while the mask runs replaces that run.
     func cutOut() {
         guard let rect = (selection?.rect ?? hoverRect)?.integral, let image else { return NSSound.beep() }
+        textTask?.cancel()
         textTask = Task {
             do {
                 let subjects = try await Self.cutoutSubjects(image.cropping(to: rect)!)

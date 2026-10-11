@@ -593,6 +593,18 @@ extension DebugRun {
         let secondK = await previewCutout()
         require(overlay.cutout != nil, "K opens the preview again")
         key(escape)
+        // A second K while the mask runs replaces the first run: one preview, and K goes back to the selection.
+        key(kKey, "k")
+        let firstRun = overlay.textTask
+        key(kKey, "k")
+        await firstRun?.value
+        await overlay.textTask?.value
+        require(overlay.view.subviews.count { $0 is CutoutView } == 1, "two quick K presses open one preview: \(overlay.view.subviews.count { $0 is CutoutView })")
+        key(kKey, "k")
+        require(overlay.view.subviews.allSatisfy { !($0 is CutoutView) } && overlay.selection?.rect == iconRect, "K after two quick K presses goes back to the selection")
+        key(kKey, "k")
+        await overlay.textTask?.value
+        key(escape)
         require(overlay.cutout == nil && overlay.selection?.rect == iconRect && overlay.window.isVisible, "Esc in the preview goes back to the selection")
         print("Cutout preview: first K \(String(format: "%.1f", firstK.milliseconds)) ms to the preview, footprint \(beforeCutout) before, \(firstK.footprint) after; "
               + "second K \(String(format: "%.1f", secondK.milliseconds)) ms, footprint \(secondK.footprint) after")
@@ -733,10 +745,13 @@ extension DebugRun {
         let child = OverlayController.warmVisionInChild(defaults: defaults)
         require(child?.arguments == ["--warm-vision"] && child!.qualityOfService == .utility && defaults.object(forKey: Pref.visionWarmedBuild) == nil,
                 "launch on a binary with no warmed date starts a utility-priority --warm-vision child")
+        require(OverlayController.visionWarmUp != nil, "the overlay tracks the child as Vision's warm-up")
         for _ in 0..<6000 where child!.isRunning { try await Task.sleep(for: .milliseconds(100)) }
         // The termination handler runs on its own thread, just after the exit is visible here.
         for _ in 0..<20 where defaults.object(forKey: Pref.visionWarmedBuild) == nil { try await Task.sleep(for: .milliseconds(50)) }
         require(child!.terminationStatus == 0 && defaults.object(forKey: Pref.visionWarmedBuild) as? Date == built, "the child exits with status 0 and records this binary's date")
+        await OverlayController.visionWarmUp?.value
+        require(OverlayController.visionWarmUp == nil, "the warm-up ends when the child exits")
         require(OverlayController.warmVisionInChild(defaults: defaults) == nil, "with this binary's date stored, launch starts no child")
         print("Vision warm-up child: \(String(format: "%.1f", start.duration(to: .now).milliseconds)) ms, this process's footprint \(before) before, \(footprint()) after")
     }
