@@ -58,7 +58,8 @@ public func cornerArcs(in image: CGImage, rect: CGRect) -> CornerRadii {
                 return abs(distance! - Double(radius) * (k - (k * k - 1).squareRoot()))
             }.max()!)
         }.min { $0.1 < $1.1 }!
-        return best.1 <= max(1.25, Double(best.0) * 0.1) ? best.0 : nil
+        // Within a tenth of the radius, at most 3 px: edges of a grid around the corner can fit a large circle to a tenth of it.
+        return best.1 <= max(1.25, min(3, Double(best.0) * 0.1)) ? best.0 : nil
     }
 
     return CornerRadii(topLeft: CGFloat(fit(corner: (0, 0), step: (1, 1)) ?? 0), topRight: CGFloat(fit(corner: (width - 1, 0), step: (-1, 1)) ?? 0),

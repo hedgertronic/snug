@@ -133,6 +133,15 @@ struct CornerRadiusTests {
         }
     }
 
+    @Test func aTableGridCornerFollowsNoArc() throws {
+        // A Wikipedia table's cells at a grid corner: the first edges along the rays fit a 195 px circle to within 19 px, a tenth of it.
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("notes/real-web/wiki-test.png")
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        #expect(cornerArcs(in: image, rect: CGRect(x: 990, y: 590, width: 908, height: 1010)) == .zero)
+    }
+
     @Test func aCropCornerOnSlacksContentPanelFollowsThePanelsArc() throws {
         // The user's Slack composer crop: its bottom-right corner sits on the corner of Slack's dark content panel, whose arc shows the
         // teal of Slack's frame past it. The other three corners are on plain panel or the composer's border.
