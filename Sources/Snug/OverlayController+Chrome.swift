@@ -251,12 +251,3 @@ extension OverlayController {
         }
     }
 }
-
-// ORDER A STUB (wave 8): Order A builds the real ratio lock and menu in `OverlayController.swift`. Drop this extension and
-// `ratioLockStub` at merge, and point the lock click in `ratioChip` at A's Shift-P toggle if it has another name.
-@MainActor private var ratioLockStub = false
-extension OverlayController {
-    var ratioLocked: Bool { ratioLockStub }
-    func toggleRatioLock() { ratioLockStub.toggle() }
-    func showRatioMenu(from view: NSView) {}
-}
