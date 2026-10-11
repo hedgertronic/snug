@@ -4,12 +4,14 @@ import Vision
 @preconcurrency import VisionKit
 
 /// Text state shared by both modes: where the "Reading text..." pill centers (image pixels), a dark pill that explains why
-/// Option-Return did nothing or names the picked item, and Text mode's found items (nil until the first Tab) and the picked one.
+/// Option-Return did nothing or names the picked item, Text mode's found items (nil until the first Tab) and the picked one, and a key
+/// pressed while Vision's warm-up child runs: what the notice says about it and the action that runs once the child exits.
 struct TextSession {
     var reading: CGRect?
     var notice: String?
     var items: [FoundItem]?
     var picked: Int?
+    var queued: (notice: String, run: @MainActor () -> Void)?
 }
 
 /// Live Text's own drag selection is word-granular and anchors at the start of the pressed word, so a drag that goes backward leaves
@@ -81,6 +83,13 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     func startLiveText() {
         view.liveText.preferredInteractionTypes = .textSelection
         view.liveText.selectableItemsHighlighted = false
+        if let warmUp = Self.visionWarmUp {
+            Task {
+                await warmUp.value
+                if text.notice == Self.warmUpNotice { text.notice = nil }
+                refresh()
+            }
+        }
         guard let image, view.liveText.analysis == nil else { return }
         text.reading = extent
         textTask = Task {
@@ -118,7 +127,42 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
             defaults.set(built, forKey: Pref.visionWarmedBuild)
         }
         try! child.run()
+        watchWarmUp(child)
         return child
+    }
+
+    /// Vision's warm-up while its child runs; nil once the child exits, whatever its status.
+    static var visionWarmUp: Task<Void, Never>?
+    static let warmUpNotice = "Getting text recognition ready. This runs once after each update."
+
+    /// Tracks `child` as Vision's warm-up until it exits, checking every 250 ms.
+    static func watchWarmUp(_ child: Process) {
+        visionWarmUp = Task {
+            while child.isRunning { try? await Task.sleep(for: .milliseconds(250)) }
+            visionWarmUp = nil
+        }
+    }
+
+    /// While the warm-up runs, Text mode, or a key waiting for it, shows a notice saying so when no other notice is showing.
+    func showWarmUpNotice() {
+        guard text.notice == nil, Self.visionWarmUp != nil, mode == .text || text.queued != nil else { return }
+        text.notice = text.queued?.notice ?? Self.warmUpNotice
+    }
+
+    /// While the warm-up runs, accurate OCR would wait for its compile (35-90 s): queues `action`, named by `key`, to run once the child
+    /// exits, says so, and returns true. Returns false when there is no warm-up running.
+    private func waitsForWarmUp(_ key: String, _ action: @escaping @MainActor () -> Void) -> Bool {
+        guard let warmUp = Self.visionWarmUp else { return false }
+        text.queued = ("\(key) will run when text recognition is ready.", action)
+        textTask = Task {
+            await warmUp.value
+            guard let queued = text.queued else { return }
+            text.queued = nil
+            text.notice = nil
+            queued.run()
+            refresh()
+        }
+        return true
     }
 
     /// A click on a highlighted item does not open it behind the overlay; Cmd-Return opens the picked one.
@@ -198,6 +242,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     /// columns) or its translation.
     func copySelectionText(translating: Bool) {
         guard let rect = selection?.rect, let image else { return }
+        guard !waitsForWarmUp(translating ? "Option-Return" : "Shift-Return", { self.copySelectionText(translating: translating) }) else { return }
         text.reading = rect
         textTask = Task {
             do {
@@ -237,6 +282,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     func copyTextRows() {
         let selected = view.liveText.selectedText
         guard !selected.isEmpty, text.reading == nil, let image else { return NSSound.beep() }
+        guard !waitsForWarmUp("Shift-Return", { self.copyTextRows() }) else { return }
         text.reading = extent
         textTask = Task {
             do {
@@ -256,6 +302,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     func stepItem(backward: Bool) {
         guard let items = text.items else {
             guard text.reading == nil, let image else { return NSSound.beep() }
+            guard !waitsForWarmUp("Tab", { self.stepItem(backward: backward) }) else { return }
             text.reading = extent
             textTask = Task {
                 do {

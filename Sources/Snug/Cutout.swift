@@ -2,41 +2,49 @@ import AppKit
 import CoreImage
 import Vision
 
+/// One choice in the cut-out preview: the crop with everything but the chosen instances transparent, at the crop's size to show in
+/// place, and the same image cropped to those instances' extent to copy or save.
+struct CutoutSubject {
+    var preview: CGImage
+    var output: CGImage
+}
+
 extension OverlayController {
     /// K: cuts the selection (or the hovered rectangle) out of the frozen image with Vision's foreground instance mask, run on that crop
-    /// alone with no margin, and delivers the transparent PNG through the usual copy or copy-and-save path with the toast. The overlay
-    /// stays open while the mask runs (tens of milliseconds); with no subject it shows "No subject found" and changes nothing else.
+    /// alone with no margin, and opens the cut-out preview over it. The overlay stays as it is while the mask runs (tens of milliseconds);
+    /// with no subject it shows "No subject found" and changes nothing else.
     func cutOut() {
         guard let rect = (selection?.rect ?? hoverRect)?.integral, let image else { return NSSound.beep() }
         textTask = Task {
             do {
-                let cutout = try await Self.cutout(image.cropping(to: rect)!)
+                let subjects = try await Self.cutoutSubjects(image.cropping(to: rect)!)
                 try Task.checkCancellation()
-                guard let cutout else {
+                guard !subjects.isEmpty else {
                     text.notice = "No subject found"
                     return refresh()
                 }
-                // Clearing the task first keeps `dismiss` from cancelling it, so a failed save still reports.
-                textTask = nil
-                let (pasteboard, defaults, saves) = (pasteboard, defaults, afterCaptureSaves)
-                dismiss()
-                try Output.publish(png: cutout.png, detail: "\(cutout.width) x \(cutout.height)  cut out", copy: true, save: saves,
-                                   pasteboard: pasteboard, defaults: defaults)
+                showCutout(subjects, in: rect)
             } catch {
                 report(error)
             }
         }
     }
 
-    /// Every foreground instance of `image` with the rest transparent, cropped to their extent and encoded as a PNG in the image's color
-    /// space, or nil when Vision finds no subject. The handler, observation and Core Image context are released on return.
+    /// The cut-out choices for `image`: every foreground instance together, then, when there are several, each one alone; empty when
+    /// Vision finds no subject. Images are in the image's color space. The handler, observation and Core Image context are released on
+    /// return, so the preview holds only the images.
     @concurrent
-    static func cutout(_ image: CGImage) async throws -> (png: Data, width: Int, height: Int)? {
+    static func cutoutSubjects(_ image: CGImage) async throws -> [CutoutSubject] {
         let handler = ImageRequestHandler(image)
-        guard let observation = try await handler.perform(GenerateForegroundInstanceMaskRequest()), !observation.allInstances.isEmpty else { return nil }
-        let buffer = try observation.generateMaskedImage(for: observation.allInstances, imageFrom: handler, croppedToInstancesExtent: true)
-        let masked = CIImage(cvPixelBuffer: buffer, options: [.colorSpace: image.colorSpace!])
-        let cutout = CIContext().createCGImage(masked, from: masked.extent, format: .RGBA8, colorSpace: image.colorSpace!)!
-        return (try await Output.png(cutout), cutout.width, cutout.height)
+        guard let observation = try await handler.perform(GenerateForegroundInstanceMaskRequest()), !observation.allInstances.isEmpty else { return [] }
+        let all = observation.allInstances
+        let choices = all.count > 1 ? [all] + all.map { IndexSet(integer: $0) } : [all]
+        let context = CIContext()
+        func render(_ instances: IndexSet, cropped: Bool) throws -> CGImage {
+            let buffer = try observation.generateMaskedImage(for: instances, imageFrom: handler, croppedToInstancesExtent: cropped)
+            let masked = CIImage(cvPixelBuffer: buffer, options: [.colorSpace: image.colorSpace!])
+            return context.createCGImage(masked, from: masked.extent, format: .RGBA8, colorSpace: image.colorSpace!)!
+        }
+        return try choices.map { CutoutSubject(preview: try render($0, cropped: false), output: try render($0, cropped: true)) }
     }
 }

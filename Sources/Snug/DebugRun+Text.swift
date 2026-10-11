@@ -9,7 +9,8 @@ extension DebugRun {
     static func verifyText(image: CGImage, frame: CGRect, overlay: OverlayController) async throws {
         try await verifyWarmVisionChild()
         try await warmVision(image)
-        _ = privateSetup(overlay)
+        await OverlayController.visionWarmUp?.value
+        let folder = privateSetup(overlay)
         let pasteboard = overlay.pasteboard
         let liveText = overlay.view.liveText
         var passed: [String] = []
@@ -59,6 +60,10 @@ extension DebugRun {
         let cart = CGRect(x: 1645, y: 384, width: 582, height: 557)
         let email = CGRect(x: 326, y: 800, width: 660, height: 70)
 
+        func fixtureImage(_ path: String) -> CGImage {
+            let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../\(path)").standardized
+            return CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(url as CFURL, nil)!, 0, nil)!
+        }
         func textView(in view: NSView) -> NSView? {
             view.gestureRecognizers.contains { "\(type(of: $0))" == "NSImmediateActionGestureRecognizer" } ? view : view.subviews.lazy.compactMap(textView).first
         }
@@ -106,6 +111,43 @@ extension DebugRun {
         require(overlay.window.isVisible && pasteboard.string(forType: .string) == nil, "Return with nothing selected copies nothing and keeps the overlay open")
         overlay.dismiss()
         require(liveText.analysis == nil, "closing drops the analysis")
+
+        // While Vision's warm-up child runs (a 2 s sleep stands in for it), Text mode says text recognition is getting ready, and
+        // Shift-Return and Tab say they will run when it is, then run.
+        func warmUpChild() throws {
+            let child = Process()
+            child.executableURL = URL(fileURLWithPath: "/bin/sleep")
+            child.arguments = ["2"]
+            try child.run()
+            OverlayController.watchWarmUp(child)
+        }
+        let ready = OverlayController.warmUpNotice
+        try warmUpChild()
+        try await open()
+        require(texts(in: overlay.chrome.status) == [ready], "while the warm-up child runs, Text mode says text recognition is getting ready: \(texts(in: overlay.chrome.status))")
+        key(fKey, "f")
+        require(texts(in: overlay.chrome.status) == [ready], "the getting-ready notice stays after a key: \(texts(in: overlay.chrome.status))")
+        pasteboard.clearContents()
+        key(returnKey, "\r", .shift)
+        require(texts(in: overlay.chrome.status) == ["Shift-Return will run when text recognition is ready."] && overlay.text.reading == nil && overlay.window.isVisible,
+                "Shift-Return during the warm-up says it will run when ready, and waits: \(texts(in: overlay.chrome.status))")
+        await overlay.textTask?.value
+        require(OverlayController.visionWarmUp == nil && overlay.text.reading != nil, "when the warm-up child exits, the queued Shift-Return runs")
+        await overlay.textTask?.value
+        let queuedRows = await copied() ?? ""
+        require(queuedRows.contains("Product name\t$12") && !overlay.window.isVisible, "the queued Shift-Return copies the rows: \(queuedRows.debugDescription)")
+        try warmUpChild()
+        try await open()
+        key(48, "\t")
+        require(texts(in: overlay.chrome.status) == ["Tab will run when text recognition is ready."] && overlay.text.items == nil,
+                "Tab during the warm-up says it will run when ready, and waits: \(texts(in: overlay.chrome.status))")
+        try await waitFor("the queued Tab finds the items") { overlay.text.items != nil }
+        overlay.dismiss()
+        try warmUpChild()
+        try await open()
+        require(texts(in: overlay.chrome.status) == [ready], "Text mode opened during the warm-up says it is getting ready")
+        try await waitFor("the getting-ready notice goes away when the warm-up ends") { OverlayController.visionWarmUp == nil && overlay.chrome.status.isHidden }
+        overlay.dismiss()
 
         // Every drag and click case runs twice: with the press reaching Live Text at once, and held back as real pointer input is.
         for held in [false, true] {
@@ -232,6 +274,25 @@ extension DebugRun {
                 mouse(.leftMouseUp, productWord, clicks: clicks)
             }
             require(liveText.selectedText.hasPrefix("Product name"), "a triple click selects the line: \(liveText.selectedText.debugDescription)")
+            overlay.dismiss()
+
+            // The round 8 fixture: a drag from the first row of a numbered list to the last selects every row in between, the long
+            // wrapped one too. Rows on the fixture, image pixels at 2x.
+            let rowsImage = fixtureImage("notes/fixtures/round8/text-select-row-skipped.png")
+            overlay.present(image: rowsImage, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(rowsImage.width) / 2, height: CGFloat(rowsImage.height) / 2), displayID: nil)
+            key(tKey, "t")
+            try await waitFor("the rows fixture's Live Text analysis attaches") { liveText.analysis != nil }
+            if let selectionView = textView(in: liveText), !selectionView.gestureRecognizers.contains(hold) { selectionView.addGestureRecognizer(hold) }
+            textDrag(from: CGPoint(x: 250, y: 81), to: CGPoint(x: 1455, y: 224))
+            let transcript = liveText.text
+            let selected = liveText.selectedRanges
+            for marker in ["Decisions for you", "Menu bar icon", "sharper version", "loose dots", "next snap", "almost never", "capture animation", "Cleanup"] {
+                let line = transcript.lineRange(for: transcript.range(of: marker)!)
+                let words = transcript[line].trimmingCharacters(in: .whitespacesAndNewlines)
+                let inner = transcript.range(of: words, range: line)!
+                require(selected.contains { $0.lowerBound <= inner.lowerBound && inner.upperBound <= $0.upperBound },
+                        "a drag down the list selects the row with \"\(marker)\": selected \(selected.map { transcript[$0].debugDescription }), transcript \(transcript.debugDescription)")
+            }
             overlay.dismiss()
         }
         // The rest runs with presses reaching Live Text at once: a held press in the found-items fixture started a drag session that waits
@@ -474,38 +535,70 @@ extension DebugRun {
         key(escape)
         require(!overlay.window.isVisible, "Esc again closes")
 
-        // K cuts the selection or the hovered element out to a transparent PNG with Vision's foreground mask; with no subject the overlay
-        // stays open with a notice. The fixtures are the background removal spike's (notes/cutout/fixtures).
+        // K cuts the selection or the hovered element out with Vision's foreground mask and previews it in place: a checkerboard where
+        // the cutout is transparent, Return copies, Cmd-S saves, K or Esc go back. With no subject the overlay stays open with a notice.
+        // The fixtures are the background removal spike's (notes/cutout/fixtures).
         suffix = ""
-        let kKey: UInt16 = 40
-        let fixtures = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../notes/cutout/fixtures").standardized
-        func spikeFixture(_ name: String) -> CGImage {
-            CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(fixtures.appending(path: name) as CFURL, nil)!, 0, nil)!
-        }
+        let kKey: UInt16 = 40, sKey: UInt16 = 1, tab: UInt16 = 48
+        func spikeFixture(_ name: String) -> CGImage { fixtureImage("notes/cutout/fixtures/\(name)") }
         func pixels(_ image: CGImage) -> (rgba: [UInt8], width: Int) {
             let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
                                     space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
             context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
             return (Array(UnsafeBufferPointer(start: context.data!.assumingMemoryBound(to: UInt8.self), count: image.width * image.height * 4)), image.width)
         }
-        func cutOut() async -> CGImage? {
-            pasteboard.clearContents()
+        /// K, timed from the key to the preview (or the notice), with the footprint after.
+        func previewCutout() async -> (milliseconds: Double, footprint: String) {
+            let start = ContinuousClock.now
             key(kKey, "k")
             await overlay.textTask?.value
+            return (start.duration(to: .now).milliseconds, footprint())
+        }
+        func copiedPNG() async -> CGImage? {
+            await overlay.commitTask?.value
             return pasteboard.data(forType: .png).map { CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithData($0 as CFData, nil)!, 0, nil)! }
         }
         overlay.defaults.set(false, forKey: Pref.snap)
         let icon = spikeFixture("icon-flat-composite.png")
         let iconRect = CGRect(x: 110, y: 60, width: 180, height: 180)
-        overlay.present(image: icon, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(icon.width) / 2, height: CGFloat(icon.height) / 2), displayID: nil)
+        let iconFrame = CGRect(x: frame.minX, y: frame.minY, width: CGFloat(icon.width) / 2, height: CGFloat(icon.height) / 2)
+        overlay.present(image: icon, frame: iconFrame, displayID: nil)
         mouse(.leftMouseDown, iconRect.origin)
         mouse(.leftMouseDragged, CGPoint(x: iconRect.maxX, y: iconRect.maxY))
         mouse(.leftMouseUp, CGPoint(x: iconRect.maxX, y: iconRect.maxY))
         require(overlay.selection?.rect == iconRect, "with snap off a drag selects the icon's rect exactly: \(String(describing: overlay.selection?.rect))")
+        pasteboard.clearContents()
         let beforeCutout = footprint()
-        let iconCut = await cutOut()
-        let afterCutout = footprint()
-        require(!overlay.window.isVisible && iconCut != nil, "K on a selection closes the overlay and copies a PNG")
+        let firstK = await previewCutout()
+        let preview = overlay.cutout
+        require(overlay.window.isVisible && preview != nil && pasteboard.data(forType: .png) == nil, "K on a selection opens the preview and copies nothing")
+        require(preview?.rect == iconRect && preview?.subjects.count == 1 && preview!.view.superview === overlay.view
+                && preview!.view.checker.frame == overlay.view.viewRect(iconRect) && preview!.view.subject.frame == preview!.view.checker.frame
+                && (preview!.view.subject.contents as! CGImage).width == Int(iconRect.width),
+                "the preview shows the full-size cutout over a checkerboard in place of the selection")
+        require(overlay.selection == nil && overlay.chrome.actionBar.isHidden && overlay.view.overlays.selection == iconRect && !overlay.view.overlays.showsHandles,
+                "while previewing, the selection's action bar and handles step aside and the area stays outlined")
+        require(texts(in: overlay.chrome.hints) == ["Subject", "copy", "\u{21A9}", "save", "\u{2318}S", "back", "K"], "the hint row names the preview's keys: \(texts(in: overlay.chrome.hints))")
+        let (previewPixels, previewWidth) = pixels(preview!.subjects[0].preview)
+        require(previewPixels[3] == 0 && previewPixels[(previewWidth / 2 + previewWidth * previewWidth / 2) * 4 + 3] == 255, "the preview is transparent at the corner and opaque at the center")
+        mouse(.leftMouseDown, CGPoint(x: iconRect.midX, y: iconRect.midY))
+        mouse(.leftMouseDragged, CGPoint(x: iconRect.midX + 40, y: iconRect.midY + 40))
+        mouse(.leftMouseUp, CGPoint(x: iconRect.midX + 40, y: iconRect.midY + 40))
+        key(fKey, "f")
+        require(overlay.cutout != nil && overlay.selection == nil && overlay.view.overlays.selection == iconRect, "the pointer and other keys do nothing while previewing")
+        key(kKey, "k")
+        require(overlay.cutout == nil && preview!.view.superview == nil && overlay.selection?.rect == iconRect && !overlay.chrome.actionBar.isHidden,
+                "K again goes back to the selection")
+        let secondK = await previewCutout()
+        require(overlay.cutout != nil, "K opens the preview again")
+        key(escape)
+        require(overlay.cutout == nil && overlay.selection?.rect == iconRect && overlay.window.isVisible, "Esc in the preview goes back to the selection")
+        print("Cutout preview: first K \(String(format: "%.1f", firstK.milliseconds)) ms to the preview, footprint \(beforeCutout) before, \(firstK.footprint) after; "
+              + "second K \(String(format: "%.1f", secondK.milliseconds)) ms, footprint \(secondK.footprint) after")
+        _ = await previewCutout()
+        key(returnKey, "\r")
+        let iconCut = await copiedPNG()
+        require(!overlay.window.isVisible && iconCut != nil, "Return in the preview closes the overlay and copies a PNG")
         let (cut, cutWidth) = pixels(iconCut!)
         let (source, sourceWidth) = pixels(icon)
         let center = ((iconCut!.height / 2) * cutWidth + cutWidth / 2) * 4
@@ -515,25 +608,71 @@ extension DebugRun {
         require(cut[center + 3] == 255 && (0..<3).allSatisfy { abs(Int(cut[center + $0]) - Int(source[sourceCenter + $0])) <= 3 },
                 "the cutout's center is opaque and keeps the source color: \(Array(cut[center..<center + 4])) vs \(Array(source[sourceCenter..<sourceCenter + 4]))")
         try await Task.sleep(for: .seconds(2))
-        print("Cutout footprint: \(beforeCutout) before K, \(afterCutout) after delivery, \(footprint()) 2 s after")
+        print("Cutout footprint: \(footprint()) 2 s after delivery")
+
+        // Cmd-S in the preview saves the cutout and leaves the clipboard alone.
+        overlay.present(image: icon, frame: iconFrame, displayID: nil)
+        mouse(.leftMouseDown, iconRect.origin)
+        mouse(.leftMouseDragged, CGPoint(x: iconRect.maxX, y: iconRect.maxY))
+        mouse(.leftMouseUp, CGPoint(x: iconRect.maxX, y: iconRect.maxY))
+        let savedBefore = Set(try FileManager.default.contentsOfDirectory(atPath: folder.path))
+        pasteboard.clearContents()
+        _ = await previewCutout()
+        key(sKey, "s", .command)
+        await overlay.commitTask?.value
+        let saved = Set(try FileManager.default.contentsOfDirectory(atPath: folder.path)).subtracting(savedBefore)
+        let savedSize = saved.first.flatMap { pngSize(try? Data(contentsOf: folder.appending(path: $0))) }
+        require(!overlay.window.isVisible && saved.count == 1 && savedSize.map { abs($0.width - 180) <= 2 } == true && pasteboard.data(forType: .png) == nil,
+                "Cmd-S in the preview saves the cutout and leaves the clipboard alone: \(saved), \(String(describing: savedSize))")
 
         overlay.defaults.set(true, forKey: Pref.snap)
-        overlay.present(image: icon, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(icon.width) / 2, height: CGFloat(icon.height) / 2), displayID: nil)
+        overlay.present(image: icon, frame: iconFrame, displayID: nil)
         await overlay.detectionTask?.value
         // Geometry finds only the arch inside the tile, so the tile comes in as a window rectangle, as a live capture lists it.
         overlay.setWindows([iconRect], names: ["Icon"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, CGPoint(x: iconRect.minX + 20, y: iconRect.maxY - 20))
         let hovered = overlay.hoverRect
         require(hovered == iconRect, "hovering the icon tile picks it: \(String(describing: hovered))")
-        let tileCut = await cutOut()
+        _ = await previewCutout()
+        require(overlay.cutout?.rect == iconRect && overlay.view.overlays.hover == nil, "K on the hovered element previews its cutout")
+        key(kKey, "k")
+        require(overlay.cutout == nil && overlay.selection == nil && overlay.hoverRect == iconRect, "K in a preview opened from a hover goes back to the hover")
+        _ = await previewCutout()
+        pasteboard.clearContents()
+        key(returnKey, "\r")
+        let tileCut = await copiedPNG()
         require(!overlay.window.isVisible && tileCut.map { CGFloat($0.width) <= hovered!.width && pixels($0).rgba[3] == 0 } == true,
-                "K on the hovered element copies its cutout with transparent corners: \(String(describing: tileCut.map { "\($0.width)x\($0.height)" }))")
+                "Return copies the hovered element's cutout with transparent corners: \(String(describing: tileCut.map { "\($0.width)x\($0.height)" }))")
+
+        // Several subjects: Tab and Shift-Tab step through all of them, then each one alone.
+        overlay.defaults.set(false, forKey: Pref.snap)
+        let group = subjectsFixture([icon, spikeFixture("dock-tile-composite.png"), spikeFixture("badge-real.png")])
+        overlay.present(image: group, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(group.width) / 2, height: CGFloat(group.height) / 2), displayID: nil)
+        key(fKey, "f")
+        _ = await previewCutout()
+        let count = (overlay.cutout?.subjects.count ?? 1) - 1
+        print("Subjects fixture: \(count) instances")
+        require(count > 1, "the subjects fixture has more than one instance: \(count)")
+        require(texts(in: overlay.chrome.hints).prefix(3) == ["All \(count) subjects", "next subject", "Tab"], "the hint row says all subjects are shown and names Tab: \(texts(in: overlay.chrome.hints))")
+        key(tab, "\t")
+        require(overlay.cutout?.shown == 1 && texts(in: overlay.chrome.hints).first == "Subject 1 of \(count)"
+                && overlay.cutout!.view.subject.contents as! CGImage === overlay.cutout!.subjects[1].preview, "Tab shows the first subject alone: \(texts(in: overlay.chrome.hints))")
+        key(tab, "\t", .shift)
+        key(tab, "\t", .shift)
+        require(overlay.cutout?.shown == count && texts(in: overlay.chrome.hints).first == "Subject \(count) of \(count)", "Shift-Tab steps back and wraps to the last subject")
+        let alone = overlay.cutout!.subjects[count].output
+        pasteboard.clearContents()
+        key(returnKey, "\r")
+        let one = await copiedPNG()
+        require(one.map { $0.width == alone.width && $0.height == alone.height && $0.width < group.width / 2 } == true,
+                "Return copies only the shown subject, cropped to it: \(String(describing: one.map { "\($0.width)x\($0.height)" }))")
 
         overlay.present(image: image, frame: frame, displayID: nil)
         key(fKey, "f")
-        require(overlay.selection?.rect == CGRect(x: 0, y: 0, width: image.width, height: image.height), "F selects the whole page")
-        let pageCut = await cutOut()
-        require(overlay.window.isVisible && pageCut == nil && overlay.selection != nil, "K on a whole page finds no subject: nothing is copied and the overlay stays open")
+        pasteboard.clearContents()
+        _ = await previewCutout()
+        require(overlay.window.isVisible && overlay.cutout == nil && pasteboard.data(forType: .png) == nil && overlay.selection != nil,
+                "K on a whole page finds no subject: no preview, nothing copied, and the overlay stays open")
         require(texts(in: overlay.chrome.status) == ["No subject found"], "a No subject found notice shows: \(texts(in: overlay.chrome.status))")
         overlay.dismiss()
 
@@ -633,6 +772,21 @@ extension DebugRun {
             cells.append(CGRect(x: baseline.x - 20, y: CGFloat(height) - baseline.y - 38, width: 640, height: 50))
         }
         return (context.makeImage()!, cells)
+    }
+
+    /// `images` side by side on a white page, 120 px apart and from the edges, centered vertically.
+    static func subjectsFixture(_ images: [CGImage]) -> CGImage {
+        let (width, height) = (images.reduce(120) { $0 + $1.width + 120 }, images.map(\.height).max()! + 240)
+        let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(.white)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        var x = 120
+        for image in images {
+            context.draw(image, in: CGRect(x: x, y: (height - image.height) / 2, width: image.width, height: image.height))
+            x += image.width + 120
+        }
+        return context.makeImage()!
     }
 
     /// A white page of `width` x `height` pixels with a link, an email address and a phone number in large text from the top left, and a
