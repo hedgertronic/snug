@@ -69,6 +69,8 @@ final class Guides {
         layer.alignmentMode = alignment
         layer.foregroundColor = NSColor.white.cgColor
         layer.contentsScale = NSScreen.main!.backingScaleFactor
+        // New text shows at once, without the implicit cross-fade a redisplayed layer gets.
+        layer.actions = ["contents": NSNull()]
         return layer
     }
 
@@ -78,6 +80,8 @@ final class Guides {
             root.addSublayer(layer)
         }
         crosshair.lineWidth = 1
+        // X shows and hides the crosshair at once; only the loupe and rulers animate, per `GuidesAnimation`.
+        crosshair.actions = ["hidden": NSNull()]
         crosshair.fillColor = nil
         bands.fillColor = NSColor(srgbRed: 24 / 255, green: 24 / 255, blue: 26 / 255, alpha: 0.66).cgColor
         hairline.strokeColor = NSColor.white.withAlphaComponent(0.16).cgColor

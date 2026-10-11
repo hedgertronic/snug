@@ -77,8 +77,13 @@ extension DebugRun {
         require(overlay.chrome.bottomBar.modeButtons.count == 2 && !texts(in: overlay.chrome.bottomBar).contains("Element"), "the bottom bar has two modes, Capture and Text")
         overlay.dismiss()
 
-        // B toggles the bottom bar and remembers it.
+        // Opening draws at once: no layer under the view animates implicitly. The frozen image used to fade in over the black window for
+        // 0.25 s on every open.
+        func animations(_ layer: CALayer) -> [String] { (layer.animationKeys() ?? []).map { "\(type(of: layer)) \($0)" } + (layer.sublayers ?? []).flatMap(animations) }
         open()
+        require(animations(overlay.view.layer!).isEmpty, "opening animates no layer: \(animations(overlay.view.layer!))")
+
+        // B toggles the bottom bar and remembers it.
         let bar = overlay.chrome.bottomBar
         require(!bar.isHidden, "the bottom bar starts visible")
         key(11, "b")
@@ -101,6 +106,9 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: text.x - 300, y: text.y - 200))
         require(guides.loupe.position != before, "the loupe follows the pointer")
         mouse(.mouseMoved, text)
+        // The loupe's readout and the rulers' text change without a cross-fade once displayed.
+        CATransaction.flush()
+        require(animations(guides.root).isEmpty, "moving the pointer animates no guide layer: \(animations(guides.root))")
 
         // The loupe shows the right magnified pixels: render it and compare cells to the source.
         // render(in:) filters slightly, so cell centers match within a few levels, not exactly.
