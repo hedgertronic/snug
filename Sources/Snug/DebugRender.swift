@@ -188,6 +188,21 @@ extension DebugRun {
         overlay.dismiss()
         for key in [Pref.highlightColor, Pref.highlightFill, Pref.highlightFade, Pref.highlightGlow] { defaults.removeObject(forKey: key) }
 
+        // The same rounded window hovered, then opened as a selection with E, with a user's highlight settings and with the defaults.
+        for (name, settings) in [("user", ["#A550A7", 0.053203125, 0.3011132812499999, 0.2482421875] as [Any]), ("default", [])] {
+            for (key, value) in zip([Pref.highlightColor, Pref.highlightFill, Pref.highlightFade, Pref.highlightGlow], settings) { defaults.set(value, forKey: key) }
+            open()
+            overlay.radii[rounded] = 40
+            overlay.setWindows([rounded], names: ["Rounded window"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+            mouse(.mouseMoved, CGPoint(x: 1600, y: 600))
+            try snapshot("hover-vs-selection-\(name)-hover")
+            key(14, "e")
+            try await waitFor("E to open the hover as a selection") { overlay.selection?.rect == rounded }
+            try snapshot("hover-vs-selection-\(name)-selected")
+            overlay.dismiss()
+            for key in [Pref.highlightColor, Pref.highlightFill, Pref.highlightFade, Pref.highlightGlow] { defaults.removeObject(forKey: key) }
+        }
+
         if vision {
             open()
             key(17, "t")
