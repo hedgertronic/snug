@@ -40,17 +40,19 @@ extension OverlayController {
     /// Fills the ratio chip: the readout with P, which opens the ratio menu, then the lock with Shift-P, which locks or unlocks the
     /// current ratio. Both take clicks.
     private func fillRatioChip(_ readout: String) {
-        let menu = BarButton(readout, key: "P", height: 22, size: 12)
-        let lock = BarButton("", key: "\u{21E7}P", symbol: ratioLocked ? ("lock.fill", "Ratio locked") : ("lock.open", "Ratio unlocked"), height: 22, size: 12)
-        let text = NSColor.white.withAlphaComponent(0.92)
-        menu.style(fill: NSColor.white.withAlphaComponent(0.12), text: text)
-        lock.style(fill: ratioLocked ? .controlAccentColor : NSColor.white.withAlphaComponent(0.12), text: text, bold: ratioLocked)
-        menu.onClick = { [unowned self] in showRatioMenu() }
-        lock.onClick = { [unowned self] in
-            toggleRatioLock()
-            refresh()
+        chrome.ratio.show(readout + (ratioLocked ? "|locked" : "")) {
+            let menu = BarButton(readout, key: "P", height: 22, size: 12)
+            let lock = BarButton("", key: "\u{21E7}P", symbol: ratioLocked ? ("lock.fill", "Ratio locked") : ("lock.open", "Ratio unlocked"), height: 22, size: 12)
+            let text = NSColor.white.withAlphaComponent(0.92)
+            menu.style(fill: NSColor.white.withAlphaComponent(0.12), text: text)
+            lock.style(fill: ratioLocked ? .controlAccentColor : NSColor.white.withAlphaComponent(0.12), text: text, bold: ratioLocked)
+            menu.onClick = { [unowned self] in showRatioMenu() }
+            lock.onClick = { [unowned self] in
+                toggleRatioLock()
+                refresh()
+            }
+            return [menu, lock]
         }
-        chrome.ratio.show(readout + (ratioLocked ? "|locked" : "")) { [menu, lock] }
     }
 
     func refreshChrome() {
