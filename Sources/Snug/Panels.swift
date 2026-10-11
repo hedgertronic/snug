@@ -119,9 +119,9 @@ final class ActionButton: NSButton {
 final class HelpSheet: NSView {
     static let columns: [(title: String, rows: [(keys: String, action: String)])] = [
         ("Capture", [("drag", "Select a region"), ("click", "Element or window"), ("Option-click", "Flip window shadow"), ("Option-drag", "Exact, no snap"),
-                     ("F", "Full screen, or all text"), ("Return", "Copy"), ("Shift-Return", "Copy text in the selection"), ("Cmd-S", "Save"), ("Cmd-Shift-S", "Save As"),
-                     ("E / Shift-click", "Edit as a selection"),
-                     ("G", "Scrolling capture of the selection"), ("V", "Record to video"), ("K", "Cut out the background"),
+                     ("F", "Full screen, or all text"), ("W", "Capture the window"), ("Return", "Copy"), ("Shift-Return", "Copy text in the selection"), ("Cmd-S", "Save"),
+                     ("Cmd-Shift-S", "Save As"), ("E / Shift-click", "Edit as a selection"),
+                     ("G", "Scrolling capture of the selection"), ("K", "Cut-out preview"), ("Cut-out: Tab", "Next subject"),
                      ("C", "Copy color"), ("Shift-C", "Cycle color format"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
         ("Adjust and text", [("Tab", "Walk out, other fits"), ("Arrows", "Nudge 1 px (Shift: 10 px)"), ("Option-arrow", "Grow one side 1 px"), ("Option-Cmd-arrow", "Shrink one side 1 px"),
                              ("Up / Down", "Bigger / smaller element"), ("Shift-click", "Add an element"),
@@ -129,9 +129,10 @@ final class HelpSheet: NSView {
                              ("Shift-drag handle", "Keep the aspect ratio"), ("Shift-move", "Lock to one axis"),
                              ("Text: drag", "Select text"), ("Text: Return", "Copy selected text"), ("Text: Shift-Return", "Copy as rows"),
                              ("Text: Tab", "Next link, email, phone, code"), ("Text: Cmd-Return", "Open the picked item"), ("Option-Return", "Translate text")]),
-        ("Modes and view", [("A", "Capture"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),
-                            ("X", "Crosshair"), ("D", "Window shadow"), ("O", "Rounded corners"), ("M", "Frame on / off"), ("P", "Aspect ratio lock"), ("N", "Candidate list"),
-                            ("1-5", "Pick from the list (N)"), ("B", "Bottom bar"), ("?", "This sheet")])
+        ("Modes, view, recording", [("A", "Capture"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),
+                                    ("X", "Crosshair"), ("D", "Window shadow"), ("O", "Rounded corners"), ("M", "Frame on / off"), ("P", "Ratio menu"),
+                                    ("Shift-P", "Lock the ratio"), ("N", "Candidate list"), ("1-5", "Pick from the list (N)"), ("B", "Bottom bar"), ("?", "This sheet"),
+                                    ("V", "Arm recording"), ("Armed: Return / V", "Start recording"), ("Armed: H", "Cursor on / off"), ("Capture hotkey", "Stop recording")])
     ]
     let panel = NSVisualEffectView()
 

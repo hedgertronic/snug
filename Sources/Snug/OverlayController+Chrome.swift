@@ -11,7 +11,7 @@ extension OverlayController {
         Set([(optionHeld, "\u{2325}"), (commandHeld, "\u{2318}"), (shiftHeld, "\u{21E7}")].compactMap { $0.0 ? Character($0.1) : nil })
     }
 
-    /// The hint row: each hint is a label and its key caps, shown in that order.
+    /// The hint row: each hint is a label and its key caps, shown in that order. The keys P and Shift-P make the ratio chip.
     private var hints: [(keys: [String], label: String)] {
         if scrollArea != nil {
             let height = scrollHeight >= ScrollStitcher.maximumHeight ? "\(ScrollStitcher.maximumHeight) px, the limit" : "\(scrollHeight) px"
@@ -23,9 +23,24 @@ extension OverlayController {
             // The resize hint follows the held modifiers: Option grows, Option-Command shrinks; the side arrows appear in place.
             (hasOtherFits ? [(["Tab"], "next snap")] : [])
                 + [optionHeld && commandHeld ? (["\u{2325}", "\u{2318}"], "shrink") : (["\u{2325}"], optionHeld ? "grow" : "resize")]
-                + [(["\u{21E7}"], "lock ratio, axis"), (["P"], "ratio \(ratioReadout)"), (["G"], "scroll"), (["esc"], "cancel")]
-        case .capture: [(["Click"], "capture"), (["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["F"], "full screen"), (["?"], "all keys")]
+                + [(["\u{21E7}"], "lock ratio, axis"), (["P", "\u{21E7}P"], "ratio \(ratioReadout)"), (["esc"], "cancel")]
+        case .capture: [(["Click"], "capture"), (["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["F"], "full screen"), (["W"], "window"), (["?"], "all keys")]
         }
+    }
+
+    /// The strip's ratio chip: the readout with P, which opens the ratio menu, then the lock with Shift-P, which locks or unlocks the
+    /// current ratio. Both take clicks.
+    private func ratioChip(_ readout: String) -> Pill {
+        let chip = Pill(fill: .clear, radius: 0, insets: NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0), spacing: 4)
+        let menu = BarButton(readout, key: "P", height: 22, size: 12)
+        let lock = BarButton("", key: "\u{21E7}P", symbol: ratioLocked ? ("lock.fill", "Ratio locked") : ("lock.open", "Ratio unlocked"), height: 22, size: 12)
+        let text = NSColor.white.withAlphaComponent(0.92)
+        menu.style(fill: NSColor.white.withAlphaComponent(0.12), text: text)
+        lock.style(fill: ratioLocked ? .controlAccentColor : NSColor.white.withAlphaComponent(0.12), text: text, bold: ratioLocked)
+        menu.onClick = { [unowned self, unowned menu] in showRatioMenu(from: menu) }
+        lock.onClick = { [unowned self] in toggleRatioLock() }
+        chip.show(readout + (ratioLocked ? "|locked" : "")) { [menu, lock] }
+        return chip
     }
 
     func refreshChrome() {
@@ -49,7 +64,9 @@ extension OverlayController {
         let held = heldGlyphs
         let kept = items.last?.label == "all keys" ? 1 : 0
         while true {
-            c.hints.show(items.map { $0.label + $0.keys.joined() }.joined(separator: "|") + String(held.sorted())) { items.map { Pill.chip($0.keys, $0.label, held: held) } }
+            c.hints.show(items.map { $0.label + $0.keys.joined() }.joined(separator: "|") + String(held.sorted()) + (ratioLocked ? "|locked" : "")) {
+                items.map { $0.keys == ["P", "\u{21E7}P"] ? ratioChip($0.label) : Pill.chip($0.keys, $0.label, held: held) }
+            }
             guard c.hints.frame.width > bounds.width - 16, items.count > kept + 1 else { break }
             items.remove(at: items.count - 1 - kept)
         }
@@ -230,4 +247,16 @@ extension OverlayController {
             c.list.frame.origin = CGPoint(x: x, y: min(max(box.maxY - height, 8), top - height - 8))
         }
     }
+}
+
+// ORDER A STUB (wave 8): Order A builds the real ratio lock and menu in `OverlayController.swift`. Drop this extension and
+// `ratioLockStub` at merge, and point the lock click in `ratioChip` at A's Shift-P toggle if it has another name.
+@MainActor private var ratioLockStub = false
+extension OverlayController {
+    var ratioLocked: Bool { ratioLockStub }
+    func toggleRatioLock() {
+        ratioLockStub.toggle()
+        refresh()
+    }
+    func showRatioMenu(from view: NSView) {}
 }
