@@ -13,6 +13,10 @@ extension OverlayController {
 
     /// The hint row: each hint is a label and its key caps, shown in that order. The keys P and Shift-P make the ratio chip.
     private var hints: [(keys: [String], label: String)] {
+        if let cutout {
+            return [([], cutout.label)] + (cutout.subjects.count > 1 ? [(["Tab"], "next subject")] : [])
+                + [(["\u{21A9}"], "copy"), (["\u{2318}S"], "save"), (["K"], "back")]
+        }
         if scrollArea != nil {
             let height = scrollHeight >= ScrollStitcher.maximumHeight ? "\(ScrollStitcher.maximumHeight) px, the limit" : "\(scrollHeight) px"
             return [([], "Scroll to capture more: \(height)"), (["\u{21A9}"], "done"), (["esc"], "cancel")]
@@ -64,7 +68,7 @@ extension OverlayController {
         c.help.layoutPanel()
 
         c.bottomBar.update(mode: mode, defaults: defaults)
-        c.bottomBar.isHidden = released || scrollArea != nil || !defaults.bool(forKey: Pref.modeBar)
+        c.bottomBar.isHidden = released || scrollArea != nil || cutout != nil || !defaults.bool(forKey: Pref.modeBar)
         c.actionBar.framed = framed
         c.actionBar.snapped = snapEnabled
         c.actionBar.isHidden = !released

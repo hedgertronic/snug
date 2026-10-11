@@ -178,6 +178,8 @@ final class OverlayController {
     var scrollFrames: ((CGRect) async throws -> CGImage)?
     /// V armed recording of the selection (see `OverlayController+Recording.swift`).
     var armedRecording: ArmedRecording?
+    /// K's cut-out preview while it is open.
+    var cutout: CutoutPreview?
 
     var snapEnabled: Bool { defaults.bool(forKey: Pref.snap) }
     var framed: Bool { defaults.bool(forKey: Pref.frame) }
@@ -319,6 +321,7 @@ final class OverlayController {
         textTask?.cancel()
         textTask = nil
         text = TextSession()
+        closeCutout()
         snapTask?.cancel()
         snapTask = nil
         snapPreview = nil
@@ -637,6 +640,7 @@ final class OverlayController {
         text.notice = nil
         if scrollArea != nil { return handleScrollKey(event) }
         if armedRecording != nil { return handleRecordingKey(event) }
+        if cutout != nil { return handleCutoutKey(event) }
         var handled = handleExtrasKey(event)
         if !handled {
             switch mode {
@@ -867,6 +871,7 @@ final class OverlayController {
 
     func refresh() {
         view.liveText.isHidden = mode != .text
+        showWarmUpNotice()
         var overlays = OverlayView.Overlays()
         if case .drawing(let drag) = interaction, drag.rect.width > 0 || drag.rect.height > 0 { overlays.ghost = drag.rect }
         overlays.preview = snapPreview
@@ -882,6 +887,7 @@ final class OverlayController {
             overlays.downHint = level(session.child)
         }
         if let scrollArea { overlays.selection = scrollArea; overlays.showsHandles = false; overlays.hover = nil }
+        if let cutout { overlays.selection = cutout.rect; overlays.showsHandles = false; overlays.hover = nil }
         let fit = selection.flatMap { $0.rect == $0.exact ? nil : $0.rect }
         let shown = selection?.rect ?? snapPreview
         for rect in [snapPreview, fit, overlays.hover, overlays.upHint, overlays.downHint] { measureRadius(rect) }

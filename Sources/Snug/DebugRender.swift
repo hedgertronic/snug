@@ -247,6 +247,46 @@ extension DebugRun {
             key(36, "\r", .shift)
             try snapshot("capture-text-reading")
             overlay.dismiss()
+
+            // Text mode while Vision's warm-up child runs (a sleep stands in for it), then Shift-Return queued behind it.
+            let child = Process()
+            child.executableURL = URL(fileURLWithPath: "/bin/sleep")
+            child.arguments = ["30"]
+            try child.run()
+            OverlayController.watchWarmUp(child)
+            open()
+            key(17, "t")
+            try await waitFor("Live Text") { liveText.analysis != nil }
+            try snapshot("text-warming")
+            key(3, "f")
+            key(36, "\r", .shift)
+            try snapshot("text-warming-queued")
+            overlay.dismiss()
+            child.terminate()
+            await OverlayController.visionWarmUp?.value
+
+            // The cut-out preview of one icon, then of the second of three subjects, at 1 pt per pixel so the chrome leaves room.
+            let fixtures = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../notes/cutout/fixtures").standardized
+            let spike = ["icon-flat-composite.png", "dock-tile-composite.png", "badge-real.png"].map {
+                CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(fixtures.appending(path: $0) as CFURL, nil)!, 0, nil)!
+            }
+            defaults.set(false, forKey: Pref.snap)
+            overlay.present(image: spike[0], frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(spike[0].width), height: CGFloat(spike[0].height)), displayID: nil)
+            drag(CGRect(x: 110, y: 60, width: 180, height: 180), release: true)
+            key(40, "k")
+            await overlay.textTask?.value
+            try snapshot("cutout-preview")
+            overlay.dismiss()
+            let group = subjectsFixture(spike)
+            overlay.present(image: group, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(group.width), height: CGFloat(group.height)), displayID: nil)
+            key(3, "f")
+            key(40, "k")
+            await overlay.textTask?.value
+            key(48, "\t")
+            key(48, "\t")
+            try snapshot("cutout-preview-subject")
+            overlay.dismiss()
+            defaults.removeObject(forKey: Pref.snap)
         }
 
         open()
