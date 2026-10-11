@@ -296,6 +296,17 @@ enum DebugRun {
         key(returnKey, "\r")
         require(try await copiedSize() == windowRect.size, "Return with no selection copies the hovered window")
 
+        // W takes the window under the pointer even while an element inside it is hovered.
+        open()
+        overlay.setWindows([windowRect], pointer: CGPoint(x: frame.minX + 10, y: frame.maxY - 10))
+        mouse(.mouseMoved, CGPoint(x: 350, y: 350))
+        let inner = CGRect(x: 330, y: 330, width: 60, height: 40)
+        overlay.merge([Candidate(id: "ax-test", label: "Button", bounds: inner, score: AccessibilityBounds.baseScore, kind: .element)])
+        require(overlay.view.overlays.hover == inner && overlay.session!.selected!.kind != .window, "an element inside the window is hovered")
+        pasteboard.clearContents()
+        key(13, "w")
+        require(try await copiedSize() == windowRect.size && !overlay.window.isVisible, "W copies the window under the pointer, not the hovered element")
+
         // A tight crop that reaches the window's bottom edge is transparent outside the window's rounded bottom corners; the top stays square.
         open()
         overlay.setWindows([windowRect], pointer: CGPoint(x: frame.minX + 10, y: frame.maxY - 10))

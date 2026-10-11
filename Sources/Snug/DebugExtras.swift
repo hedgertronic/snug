@@ -651,8 +651,11 @@ extension DebugRun {
         require(overlay.accessibilityTask == nil && overlay.accessibilityStarted == nil, "a headless run never starts an accessibility lookup")
         require(!overlay.session!.candidates.contains { $0.kind == .element }, "no accessibility candidates in a headless run")
         require(!texts(in: overlay.chrome.list).contains("Allow Accessibility for app elements"), "the Allow Accessibility button never shows in a headless run")
-        let axFrames = await Accessibility.frames(at: .zero, pid: getpid())
+        let dock = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first!.processIdentifier
+        let axFrames = await Accessibility.frames(at: .zero, pid: dock)
         require(AXIsProcessTrusted() || axFrames.isEmpty, "without Accessibility permission the lookup is empty and silent (trusted: \(AXIsProcessTrusted()))")
+        let overlayCenter = CGPoint(x: overlay.window.frame.midX, y: NSScreen.screens[0].frame.height - overlay.window.frame.midY)
+        require(await Accessibility.frames(at: overlayCenter, pid: getpid()).isEmpty, "Snug's own windows are never looked up (trusted: \(AXIsProcessTrusted()))")
         overlay.dismiss()
 
         // Chrome: bottom bar, hints, badges, style bar, hover title, and the safe area.

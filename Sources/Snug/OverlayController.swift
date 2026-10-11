@@ -662,6 +662,10 @@ final class OverlayController {
         case (_, true, _) where shift && character.lowercased() == "s":
             if hovering { clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true, saveAs: true) } else { save(saveAs: true) }
         case (_, false, "e") where hovering && hoverRect != nil: openAsSelection(hoverRect!)
+        case (_, false, "w") where hovering:
+            // The frontmost window under the pointer, whatever element inside it is hovered, taken as Return takes a hovered window.
+            guard let index = windows.firstIndex(where: { $0.contains(pointer) }) else { return false }
+            clickWindow(index, crop: windows[index], shadow: windowShadow(option: false), copy: true, save: afterCaptureSaves)
         case (_, false, "k"): cutOut()
         case (_, false, "o"): defaults.set(!defaults.bool(forKey: Pref.roundCorners), forKey: Pref.roundCorners)
         case (_, false, _) where shift && !hovering && character.lowercased() == "p": toggleRatioLock()
@@ -750,7 +754,7 @@ final class OverlayController {
     private func clickWindow(_ index: Int, crop rect: CGRect, shadow: Bool, copy: Bool, save: Bool, saveAs: Bool = false) {
         guard displayID != nil, !windowFrozen.indices.contains(index) || !windowFrozen[index] else { return finish(crop: rect, copy: copy, save: save, saveAs: saveAs) }
         let id = windowIDs[index]
-        // macOS 26 window captures come back with square corners; the radius is measured on the frozen screen around the window.
+        // A capture that comes back square takes the radius measured on the frozen screen around the window; a shaped one keeps its outline.
         let radius = radii[windows[index]] ?? image.map { windowCornerRadius(in: $0, rect: windows[index]) } ?? 0
         dismiss()
         commitTask = Task { [pasteboard, defaults] in

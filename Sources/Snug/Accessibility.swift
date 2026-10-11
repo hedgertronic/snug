@@ -8,10 +8,11 @@ enum Accessibility {
     private static let maxDepth = 24
 
     /// The frames of the element at `point` (global points, top-left origin) in `pid`'s app and its parents up to the window,
-    /// innermost first. Empty without permission, on a timeout, or when nothing is there.
+    /// innermost first. Empty without permission, on a timeout, when nothing is there, or for Snug's own windows: AX against
+    /// its own pid runs in this process, off main, and AppKit's hit test there trips the MainActor isolation check.
     @concurrent
     static func frames(at point: CGPoint, pid: pid_t) async -> [AXFrame] {
-        guard AXIsProcessTrusted() else { return [] }
+        guard pid != getpid(), AXIsProcessTrusted() else { return [] }
         let application = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(application, messagingTimeout)
         var hit: AXUIElement?
