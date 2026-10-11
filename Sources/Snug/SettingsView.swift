@@ -118,7 +118,7 @@ private func caption(_ text: String) -> some View {
     Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 4)
 }
 
-/// The app icon and name once, then shortcut, after capture, save folder, open at login, and the permissions.
+/// The app icon and name once, then shortcut, after capture, save folder, open at login, recording, and the permissions.
 private struct GeneralPane: View {
     @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
@@ -173,6 +173,7 @@ private struct GeneralPane: View {
                         }
                     }
                 }
+                RecordingSettings()
                 caption("Permissions")
                 // macOS sends no notification when a permission changes, so the rows re-read both every second.
                 Card {
@@ -208,6 +209,33 @@ private struct GeneralPane: View {
             detailed(name, detail)
         }
         .padding(.vertical, 4)
+    }
+}
+
+/// The Recording group: the count-in before a recording starts and whether recordings show the cursor.
+private struct RecordingSettings: View {
+    @AppStorage(Pref.recordCountIn) private var countIn = 3
+    @AppStorage(Pref.recordCursor) private var showsCursor = true
+
+    var body: some View {
+        caption("Recording")
+        Card {
+            LabeledContent("Count-in") {
+                Picker("Count-in", selection: $countIn) {
+                    Text("Off").tag(0)
+                    Text("3 s").tag(3)
+                    Text("5 s").tag(5)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+            }
+            LabeledContent {
+                Toggle("Show cursor", isOn: $showsCursor).labelsHidden().toggleStyle(.switch)
+            } label: {
+                detailed("Show cursor", "H switches it for one recording")
+            }
+        }
     }
 }
 

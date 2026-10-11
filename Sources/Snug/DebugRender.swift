@@ -258,6 +258,19 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: 1200, y: 90))
         try snapshot("area-idle-notch")
         overlay.dismiss()
+        defaults.set(false, forKey: Pref.rulers)
+        defaults.set(false, forKey: Pref.loupe)
+
+        // V arms recording only on a display, which arming never captures from.
+        overlay.present(image: image, frame: frame, displayID: CGMainDisplayID())
+        overlay.detectionTask?.cancel()
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: cart)
+        overlay.refresh()
+        key(9, "v")
+        try snapshot("recording-armed")
+        key(36, "\r")
+        try snapshot("recording-count-in")
+        overlay.dismiss()
 
         try await renderMenuBarIcons(into: directory)
 
