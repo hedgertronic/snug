@@ -34,7 +34,12 @@ extension OverlayController {
             if let lockedRatio { conformSelection(base, to: 1 / lockedRatio) }
         })
         ratioMenu = menu
-        if !isHeadless { menu.popUp(positioning: nil, at: NSPoint(x: 0, y: anchor.isFlipped ? anchor.bounds.height : 0), in: anchor) }
+        guard !isHeadless else { return }
+        // Menus draw at the pop-up menu level, below the screen-saver-level overlay; the overlay sits just under them while this one tracks.
+        let level = window.level
+        window.level = NSWindow.Level(rawValue: NSWindow.Level.popUpMenu.rawValue - 1)
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: anchor.isFlipped ? anchor.bounds.height : 0), in: anchor)
+        window.level = level
     }
 
     /// The selection becomes the largest rectangle of `ratio` that fits inside `base` on its center, in whole pixels, and `ratio` locks.

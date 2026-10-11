@@ -278,6 +278,13 @@ extension DebugRun {
         drag(from: CGPoint(x: 300, y: 1200), by: CGPoint(x: 300, y: 200))
         require(!overlay.ratioLocked, "a fresh drag drops the lock")
         key(35, "P", .shift)
+        mouse(.mouseMoved, insideB, .shift)
+        click(insideB, .shift)
+        require(overlay.selection?.rect.contains(b) == true && !overlay.ratioLocked, "a Shift-click union drops the lock")
+        key(35, "P", .shift)
+        key(3, "f")
+        require(overlay.selection?.rect == overlay.extent && !overlay.ratioLocked, "F's full-screen selection drops the lock")
+        key(35, "P", .shift)
         overlay.dismiss()
         require(!overlay.ratioLocked, "the lock does not outlive the capture")
 

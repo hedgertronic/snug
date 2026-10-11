@@ -687,6 +687,9 @@ final class OverlayController {
         case (_, false, "f"):
             cancelWork()
             selection = AreaSelection(extent: extent, exact: extent)
+            lockedRatio = nil
+            ratioBase = nil
+            ratioPortrait = nil
         default: return false
         }
         return true

@@ -22,11 +22,15 @@ extension OverlayController {
         }
     }
 
-    /// Shift-click with a selection open: the selection becomes the union of itself and `rect`, keeping its edited corners.
+    /// Shift-click with a selection open: the selection becomes the union of itself and `rect`, keeping its edited corners and
+    /// dropping a locked ratio.
     func growSelection(toInclude rect: CGRect) {
         let old = selection!.rect
         cancelWork()
         selection = AreaSelection(extent: extent, exact: old.union(rect))
+        lockedRatio = nil
+        ratioBase = nil
+        ratioPortrait = nil
         carryRadii(from: old)
         refresh()
     }
