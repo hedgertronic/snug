@@ -745,7 +745,7 @@ final class OverlayController {
     private func clickWindow(_ index: Int, crop rect: CGRect, shadow: Bool, copy: Bool, save: Bool, saveAs: Bool = false) {
         guard displayID != nil, !windowFrozen.indices.contains(index) || !windowFrozen[index] else { return finish(crop: rect, copy: copy, save: save, saveAs: saveAs) }
         let id = windowIDs[index]
-        // macOS 26 window captures come back with square corners; the radius is measured on the frozen screen around the window.
+        // A capture that comes back square takes the radius measured on the frozen screen around the window; a shaped one keeps its outline.
         let radius = radii[windows[index]] ?? image.map { windowCornerRadius(in: $0, rect: windows[index]) } ?? 0
         dismiss()
         commitTask = Task { [pasteboard, defaults] in
