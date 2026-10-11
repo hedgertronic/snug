@@ -482,29 +482,6 @@ extension DebugRun {
         require(fresh.message.stringValue == "Saved to \(saveFolder.lastPathComponent)" && fresh.saveButton.isHidden && !fresh.trashButton.isHidden && fresh.file?.lastPathComponent == saved[0], "Save shows the saved state with Trash: \(fresh.message.stringValue)")
         fresh.dismissal?.cancel()
 
-        // Trash moves the saved file to the Trash and clears the pasteboard only if it still holds this capture; the toast closes. A recording's
-        // toast opens in QuickTime Player and its pasteboard holds the file URL.
-        let trashDefaults = UserDefaults(suiteName: "snug-toast-\(UUID().uuidString)")!
-        Pref.register(in: trashDefaults)
-        func trashing(_ name: String, holding: (NSPasteboard, URL) -> Void) throws -> (toast: Toast, pasteboard: NSPasteboard) {
-            let file = saveFolder.appending(path: name)
-            try capture.write(to: file)
-            let trashBoard = NSPasteboard(name: NSPasteboard.Name("snug-toast-trash-\(UUID().uuidString)"))
-            holding(trashBoard, file)
-            let trashing = Toast(png: capture, message: "Copied, saved", detail: name, file: file, color: nil, defaults: trashDefaults, pasteboard: trashBoard)
-            require(trashing.saveButton.isHidden && !trashing.trashButton.isHidden, "a saved toast shows Trash and not Save")
-            trashing.trashButton.performClick(nil)
-            require(!FileManager.default.fileExists(atPath: file.path) && trashing.png == nil, "Trash removes the saved file and closes the toast: \(name)")
-            return (trashing, trashBoard)
-        }
-        let ownBoard = try trashing("snug-trash-own.png") { board, _ in board.setData(capture, forType: .png) }
-        require(ownBoard.pasteboard.data(forType: .png) == nil, "Trash clears a pasteboard that still holds the capture")
-        let otherBoard = try trashing("snug-trash-other.png") { board, _ in board.setString("something else", forType: .string) }
-        require(otherBoard.pasteboard.string(forType: .string) == "something else", "Trash leaves a pasteboard that holds something else")
-        let movieBoard = try trashing("snug-trash-recording.mov") { board, file in board.writeObjects([file as NSURL]) }
-        require(movieBoard.pasteboard.readObjects(forClasses: [NSURL.self])?.isEmpty == true, "Trash clears a pasteboard that holds the recording's file URL")
-        require(movieBoard.toast.openInPreview.toolTip == "Open in QuickTime Player", "a recording's toast opens in QuickTime Player")
-
         // The capture is held only while the toast is visible: closing releases the PNG, the thumbnail, and the toast itself.
         weak var weakToast: Toast?
         weak var weakThumbnail: NSView?
@@ -896,6 +873,50 @@ extension DebugRun {
         try await verifyRecording(image: image, frame: frame, overlay: overlay, require: require)
 
         print("Extras UI verification passed (\(passed.count) checks)")
+        passed.forEach { print("  ok: \($0)") }
+        exit(EXIT_SUCCESS)
+    }
+}
+
+extension DebugRun {
+    /// `--verify-toast-trash`: the toast's Trash button. Kept out of `--verify-extras-ui` because each run moves three test files into the
+    /// real Trash.
+    static func verifyToastTrash(image: CGImage) async throws {
+        var passed: [String] = []
+        func require(_ condition: Bool, _ message: String) {
+            guard condition else {
+                FileHandle.standardError.write(Data("Toast trash verification failed: \(message)\n".utf8))
+                exit(EXIT_FAILURE)
+            }
+            passed.append(message)
+        }
+        let capture = try await Output.png(image.cropping(to: CGRect(x: 0, y: 0, width: 1200, height: 400))!)
+        let saveFolder = FileManager.default.temporaryDirectory.appending(path: "snug-toast-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: saveFolder, withIntermediateDirectories: true)
+        // Trash moves the saved file to the Trash and clears the pasteboard only if it still holds this capture; the toast closes. A recording's
+        // toast opens in QuickTime Player and its pasteboard holds the file URL.
+        let trashDefaults = UserDefaults(suiteName: "snug-toast-\(UUID().uuidString)")!
+        Pref.register(in: trashDefaults)
+        func trashing(_ name: String, holding: (NSPasteboard, URL) -> Void) throws -> (toast: Toast, pasteboard: NSPasteboard) {
+            let file = saveFolder.appending(path: name)
+            try capture.write(to: file)
+            let trashBoard = NSPasteboard(name: NSPasteboard.Name("snug-toast-trash-\(UUID().uuidString)"))
+            holding(trashBoard, file)
+            let trashing = Toast(png: capture, message: "Copied, saved", detail: name, file: file, color: nil, defaults: trashDefaults, pasteboard: trashBoard)
+            require(trashing.saveButton.isHidden && !trashing.trashButton.isHidden, "a saved toast shows Trash and not Save")
+            trashing.trashButton.performClick(nil)
+            require(!FileManager.default.fileExists(atPath: file.path) && trashing.png == nil, "Trash removes the saved file and closes the toast: \(name)")
+            return (trashing, trashBoard)
+        }
+        let ownBoard = try trashing("snug-trash-own.png") { board, _ in board.setData(capture, forType: .png) }
+        require(ownBoard.pasteboard.data(forType: .png) == nil, "Trash clears a pasteboard that still holds the capture")
+        let otherBoard = try trashing("snug-trash-other.png") { board, _ in board.setString("something else", forType: .string) }
+        require(otherBoard.pasteboard.string(forType: .string) == "something else", "Trash leaves a pasteboard that holds something else")
+        let movieBoard = try trashing("snug-trash-recording.mov") { board, file in board.writeObjects([file as NSURL]) }
+        require(movieBoard.pasteboard.readObjects(forClasses: [NSURL.self])?.isEmpty == true, "Trash clears a pasteboard that holds the recording's file URL")
+        require(movieBoard.toast.openInPreview.toolTip == "Open in QuickTime Player", "a recording's toast opens in QuickTime Player")
+
+        print("Toast trash verification passed (\(passed.count) checks)")
         passed.forEach { print("  ok: \($0)") }
         exit(EXIT_SUCCESS)
     }
