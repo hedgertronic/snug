@@ -57,6 +57,15 @@ extension DebugRun {
         for y in stride(from: 60, to: 720, by: 60) { context.fill(CGRect(x: 14, y: CGFloat(y), width: 48, height: 48)) }
     }
 
+    /// A 1280 x 800 capture at 1x: a dark panel (200, 200, 800 x 400) with 20 px corners on a teal frame, like Slack's content panel.
+    static let panelCornerFixture = fixture { context in
+        context.setFillColor(red: 0.09, green: 0.21, blue: 0.26, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: 1280, height: 800))
+        context.addPath(CGPath(roundedRect: CGRect(x: 200, y: 200, width: 800, height: 400), cornerWidth: 20, cornerHeight: 20, transform: nil))
+        context.setFillColor(red: 0.1, green: 0.11, blue: 0.13, alpha: 1)
+        context.fillPath()
+    }
+
     private static func fixture(_ draw: (CGContext) -> Void) -> CGImage {
         let context = CGContext(data: nil, width: 1280, height: 800, bitsPerComponent: 8, bytesPerRow: 0,
                                 space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!

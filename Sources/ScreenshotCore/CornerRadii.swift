@@ -17,6 +17,14 @@ public struct CornerRadii: Equatable, Sendable {
 
     public var isSquare: Bool { self == .zero }
 
+    /// The radius at least 3 corners agree on (within a fifth, at least 2 px), ignoring square ones; 0 when they don't.
+    public var agreed: CGFloat {
+        let radii = Self.corners.map { Int(self[$0]) }.filter { $0 > 0 }
+        guard radii.count >= 3 else { return 0 }
+        let estimate = radii.sorted()[radii.count / 2]
+        return radii.filter({ abs($0 - estimate) <= max(2, estimate / 5) }).count >= 3 ? CGFloat(estimate) : 0
+    }
+
     private func map(_ transform: (CGFloat) -> CGFloat) -> CornerRadii {
         CornerRadii(topLeft: transform(topLeft), topRight: transform(topRight), bottomLeft: transform(bottomLeft), bottomRight: transform(bottomRight))
     }
@@ -84,15 +92,19 @@ public struct CornerRadii: Equatable, Sendable {
     }
 
     /// The corners of `crop` that lie outside the rounded corner of `window` (its `radius`), where a square corner would show what lies
-    /// outside the window: those within 2 px of the window's corner take `radius`, and those further inside take `radius` less their
-    /// inset beyond 2 px (the larger of the two sides), which keeps the corner inside the window's arc (concentric when the insets match).
-    /// The others keep their value. Both rectangles are in the same image's pixels, top-left origin.
-    public func replacingCorners(sharedWith window: CGRect, in crop: CGRect, with radius: CGFloat) -> CornerRadii {
+    /// outside the window: those within 2 px of the window's corner take `radius`. Those further inside take the arc measured at the
+    /// crop's own corner (`arcs`: a rounded element inside the window, such as a content panel, whose corner the crop sits on), or with
+    /// none, `radius` less their inset beyond 2 px (the larger of the two sides), which keeps the corner inside the window's arc
+    /// (concentric when the insets match). The others keep their value. Both rectangles are in the same image's pixels, top-left origin.
+    public func replacingCorners(sharedWith window: CGRect, in crop: CGRect, with radius: CGFloat, arcs: CornerRadii = .zero) -> CornerRadii {
         let left = crop.minX - window.minX, right = window.maxX - crop.maxX, top = crop.minY - window.minY, bottom = window.maxY - crop.maxY
         var result = self
-        for (corner, x, y) in [(Handle.topLeft, left, top), (.topRight, right, top), (.bottomLeft, left, bottom), (.bottomRight, right, bottom)]
-        where abs(x) <= 2 && abs(y) <= 2 || x >= -2 && y >= -2 && x < radius && y < radius && hypot(radius - x, radius - y) > radius {
-            result[corner] = radius - max(0, max(x, y) - 2)
+        for (corner, x, y) in [(Handle.topLeft, left, top), (.topRight, right, top), (.bottomLeft, left, bottom), (.bottomRight, right, bottom)] {
+            if abs(x) <= 2 && abs(y) <= 2 {
+                result[corner] = radius
+            } else if x >= -2 && y >= -2 && x < radius && y < radius && hypot(radius - x, radius - y) > radius {
+                result[corner] = arcs[corner] > 0 ? arcs[corner] : radius - max(0, max(x, y) - 2)
+            }
         }
         return result
     }

@@ -128,29 +128,46 @@ struct CornerRadiiTests {
                 == CornerRadii(topLeft: 3, topRight: 3, bottomLeft: 5, bottomRight: 5))
     }
 
-    @Test func aCropNearTheWindowsCornerHidesTheWallpaperPastItsArc() throws {
+    @Test func aCropCornerOnAPanelInsideTheWindowTakesThePanelsArc() throws {
         // The user's capture of the Slack composer's row (962, 1648, 1680 x 284 px, as logged), 10 px inside the bottom-right corner of the
-        // Slack window (168, 88, 2484 x 1854). The window's arc in those pixels fits a 58.5 px circle; the wallpaper past it is teal.
+        // Slack window (168, 88, 2484 x 1854), whose arc fits a 58.5 px circle. The crop's corner sits on the corner of Slack's dark content
+        // panel; the teal past the panel's arc is Slack's own frame. The corner takes the panel's arc, not the window's arc less the inset.
         let url = try #require(Bundle.module.url(forResource: "SlackComposerRow", withExtension: "png", subdirectory: "Fixtures"))
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         let crop = CGRect(x: 0, y: 0, width: 1680, height: 284), window = CGRect(x: 168 - 962, y: 88 - 1648, width: 2484, height: 1854)
-        // Only the window's corner follows a circle at the crop's corners, so the crop measures no radius of its own.
-        #expect(cornerRadius(in: image, rect: crop) == 0)
-        let radii = CornerRadii(0).replacingCorners(sharedWith: window, in: crop, with: 58)
+        let arcs = cornerArcs(in: image, rect: crop)
+        // Only one corner follows an arc, so the crop measures no radius of its own.
+        #expect(arcs.agreed == 0)
+        let radii = CornerRadii(0).replacingCorners(sharedWith: window, in: crop, with: 58, arcs: arcs)
+        #expect(radii.topLeft == 0 && radii.topRight == 0 && radii.bottomLeft == 0 && abs(radii.bottomRight - 20) <= 3, "\(radii)")
         let rounded = try OutputFrame.render(image, crop: crop, scale: 2, framed: false, cornerRadii: radii)
         let pixels = image.dataProvider!.data! as Data
-        var wallpaper = 0
+        // Clearly teal pixels are at least half cut; the arc's edge pixels blend teal and panel.
+        var frame = 0
         for y in 200..<284 {
             for x in 1580..<1680 {
                 let offset = y * image.bytesPerRow + x * 4
-                guard Int(pixels[offset + 1]) - Int(pixels[offset]) > 12 else { continue }
-                wallpaper += 1
-                #expect(alpha(rounded, x, y) == 0, "wallpaper at \(x), \(y) stays in the capture")
+                guard Int(pixels[offset + 1]) - Int(pixels[offset]) > 24 else { continue }
+                frame += 1
+                #expect(alpha(rounded, x, y) < 128, "Slack's teal frame at \(x), \(y) stays in the capture: alpha \(alpha(rounded, x, y))")
             }
         }
-        #expect(wallpaper > 50)
+        #expect(frame > 20)
+        // 11 px in from the corner on both sides: inside the panel's arc, outside the 50 px arc the window's radius less the inset gave.
+        #expect(alpha(rounded, 1668, 272) == 255)
         #expect(alpha(rounded, 0, 0) == 255 && alpha(rounded, 1679, 0) == 255 && alpha(rounded, 0, 283) == 255 && alpha(rounded, 1640, 250) == 255)
+    }
+
+    @Test func aCaptureOnTheWindowsCornerKeepsTheWindowsRadius() throws {
+        // The user's large Slack capture that came out right: its bottom-right corner is the Slack window's, already cut by its arc.
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("notes/fixtures/round8/slack-large-capture-corner-ok.png")
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        let crop = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+        let radii = CornerRadii(cornerRadius(in: image, rect: crop)).replacingCorners(sharedWith: crop, in: crop, with: 58, arcs: cornerArcs(in: image, rect: crop))
+        #expect(radii == CornerRadii(58), "\(radii)")
     }
 
     @Test func eachCornerKeepsItsOwnRadius() throws {
