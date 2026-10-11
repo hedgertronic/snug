@@ -201,6 +201,8 @@ final class OverlayController {
         chrome.actionBar.onSave = { [unowned self] in save() }
         chrome.actionBar.onCopy = { [unowned self] in copy() }
         chrome.actionBar.record.onClick = { [unowned self] in startRecording() }
+        chrome.actionBar.scroll.onClick = { [unowned self] in startScroll() }
+        chrome.actionBar.cutout.onClick = { [unowned self] in cutOut() }
     }
 
     static let resizeCursors: [Handle: NSCursor] = [

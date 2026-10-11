@@ -106,6 +106,11 @@ extension DebugRun {
         try snapshot("area-drag-snap")
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         try snapshot("area-released")
+        // The ratio chip's lock, clicked on and off.
+        func ratioLock() -> BarButton { overlay.chrome.hints.subviews.flatMap { $0.subviews.compactMap { $0 as? BarButton } }.last! }
+        ratioLock().onClick()
+        try snapshot("area-released-ratio-locked")
+        ratioLock().onClick()
         for (name, modifiers) in [("option", NSEvent.ModifierFlags.option), ("option-command", [.option, .command])] {
             overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
                 windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)

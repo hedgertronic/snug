@@ -242,11 +242,17 @@ extension DebugRun {
         let help = overlay.chrome.help
         key(44, "?", .shift)
         let sheet = texts(in: help)
-        require(!help.isHidden && sheet.contains("Keys") && sheet.contains("Option-drag") && sheet.contains("Up / Down") && sheet.contains("Shift-Return") && sheet.contains("Text: drag") && sheet.contains("Modes and view"),
+        require(!help.isHidden && sheet.contains("Keys") && sheet.contains("Option-drag") && sheet.contains("Up / Down") && sheet.contains("Shift-Return") && sheet.contains("Text: drag") && sheet.contains("Modes, view, recording"),
                 "? shows the keys sheet with every column: \(sheet.count) texts")
         let helpRows = HelpSheet.columns.flatMap(\.rows)
         require(["[ ]", "Shift-[ ]", "=", "Option-drag dot", "V", "K"].allSatisfy(helpRows.map(\.keys).contains) && helpRows.contains { $0.keys == "Arrows" && $0.action.contains("1 px") && $0.action.contains("10 px") },
                 "the sheet lists the corner radius keys, V, K, and arrows in pixels")
+        let helpActions = Dictionary(helpRows.map { ($0.keys, $0.action) }, uniquingKeysWith: { $1 })
+        require(helpActions["P"] == "Ratio menu" && helpActions["Shift-P"] == "Lock the ratio" && helpActions["W"] == "Capture the window"
+                    && helpActions["K"] == "Cut-out preview" && helpActions["Cut-out: Tab"] == "Next subject (Shift: back)" && helpActions["V"] == "Arm recording"
+                    && helpActions["Armed: Return / V"] == "Start recording" && helpActions["Armed: H"] == "Cursor on / off" && helpActions["Capture hotkey"] == "Stop recording"
+                    && !helpRows.contains { $0.action.contains("Aspect ratio lock") },
+                "the sheet lists the ratio menu and lock, W, the cut-out preview, and the recording keys, and no P cycle")
         require(sheet.contains("Esc or ? closes this.") || sheet.contains { $0.hasSuffix("Esc or ? closes this.") }, "the sheet says how to close it")
         let panel = help.panel.frame
         require(panel.width == 900 && help.bounds.insetBy(dx: 1, dy: 1).contains(panel), "the sheet panel is 900 pt wide and inside the screen \(panel)")
@@ -686,6 +692,8 @@ extension DebugRun {
         defaults.set(true, forKey: Pref.shadow)
         mouse(.mouseMoved, CGPoint(x: 40, y: 40))
         require(chrome.hover.isHidden, "the hover title goes away off the window")
+        require(texts(in: chrome.hints) == ["capture", "Click", "edit", "E", "bigger / smaller", "\u{2191}", "\u{2193}", "full screen", "F", "window", "W", "all keys", "?"],
+                "the capture strip names W window after F full screen: \(texts(in: chrome.hints))")
         mouse(.leftMouseDown, rough.origin)
         mouse(.leftMouseDragged, CGPoint(x: rough.midX, y: rough.midY))
         mouse(.leftMouseDragged, CGPoint(x: rough.maxX, y: rough.maxY))
@@ -696,11 +704,32 @@ extension DebugRun {
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.status) == ["Snapped"], "after release on a fit: Snapped")
         require(chrome.bottomBar.isHidden && !chrome.actionBar.isHidden && texts(in: chrome.hints)
-                    == ["next snap", "Tab", "resize", "\u{2325}", "lock ratio, axis", "\u{21E7}", "ratio \(overlay.ratioReadout)", "P", "scroll", "G", "cancel", "esc"],
+                    == ["next snap", "Tab", "resize", "\u{2325}", "keep ratio, axis", "\u{21E7}", "ratio \(overlay.ratioReadout)", "P", "\u{21E7}P", "cancel", "esc"],
                 "the action bar replaces the bottom bar, with the released hints, each label before its keys: \(texts(in: chrome.hints))")
         require(chrome.hints.frame.height < 40 && chrome.hints.frame.width <= overlay.view.bounds.width - 16, "the released hint strip is one line and fits: \(chrome.hints.frame) in \(overlay.view.bounds.width)")
-        require(texts(in: chrome.actionBar) == ["Frame", "M", "Snap", "S", "Record", "V", "Text", "\u{21E7}\u{21A9}", "Save", "\u{2318}S", "Copy", "\u{21A9}"],
-                "the action bar shows Frame, Snap, Record, Text, Save, and Copy with key caps: \(texts(in: chrome.actionBar))")
+        require(texts(in: chrome.actionBar) == ["Frame", "M", "Snap", "S", "Scroll", "G", "Record", "V", "Cut out", "K", "Text", "\u{21E7}\u{21A9}", "Save", "\u{2318}S", "Copy", "\u{21A9}"],
+                "the action bar shows Frame, Snap, Scroll, Record, Cut out, Text, Save, and Copy with key caps: \(texts(in: chrome.actionBar))")
+        require(chrome.actionBar.text.symbol?.image?.accessibilityDescription == "Live Text", "the action bar's Text button shows the Live Text glyph")
+        // The ratio chip in the strip: the readout with P opens the ratio menu, the lock with Shift-P toggles the lock. Both take clicks
+        // through the otherwise click-through strip.
+        func ratioButtons() -> [BarButton] { chrome.hints.subviews.flatMap { $0.subviews.compactMap { $0 as? BarButton } } }
+        let lockedBefore = overlay.ratioLocked, rectBefore = overlay.selection!.rect
+        require(ratioButtons().count == 2 && ratioButtons()[0].title.stringValue == "ratio \(overlay.ratioReadout)"
+                    && ratioButtons()[1].symbol?.image?.accessibilityDescription == (lockedBefore ? "Ratio locked" : "Ratio unlocked"),
+                "the strip's ratio chip shows the readout, then a lock that follows ratioLocked: \(ratioButtons().map { texts(in: $0) })")
+        for button in ratioButtons() {
+            let center = button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: overlay.view)
+            require(chrome.hints.hitTest(center) === button, "a click on the ratio chip's \(texts(in: button)) reaches it")
+        }
+        let cancelLabel = chrome.hints.subviews.last!
+        require(chrome.hints.hitTest(cancelLabel.convert(CGPoint(x: cancelLabel.bounds.midX, y: cancelLabel.bounds.midY), to: overlay.view)) == nil,
+                "the rest of the strip stays click-through")
+        ratioButtons()[1].onClick()
+        require(overlay.ratioLocked != lockedBefore && overlay.selection!.rect == rectBefore
+                    && ratioButtons()[1].symbol?.image?.accessibilityDescription == (lockedBefore ? "Ratio unlocked" : "Ratio locked"),
+                "clicking the lock toggles the lock, keeps the selection, and swaps the icon")
+        ratioButtons()[1].onClick()
+        require(overlay.ratioLocked == lockedBefore && overlay.selection!.rect == rectBefore, "clicking the lock again puts it back")
         let snapButton = chrome.actionBar.snapButton
         require(snapButton.layer!.backgroundColor != nil, "with snap on the action bar's Snap is highlighted")
         snapButton.onClick()
@@ -794,7 +823,9 @@ extension DebugRun {
         open()
         overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         overlay.selection = AreaSelection(extent: extent, exact: page)
-        key(5, "g")
+        overlay.refresh()
+        chrome.actionBar.scroll.onClick()
+        require(overlay.scrollArea == page, "the action bar's Scroll starts scrolling capture as G does")
         pasteboard.clearContents()
         key(53, "")
         require(!overlay.window.isVisible && overlay.scrollArea == nil && pasteboard.data(forType: .png) == nil, "Esc cancels scrolling capture with the clipboard untouched")

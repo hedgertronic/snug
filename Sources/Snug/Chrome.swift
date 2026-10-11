@@ -10,7 +10,8 @@ extension NSTextField {
     }
 }
 
-/// A rounded strip of views, sized to fit: hints, badges, the hover title. Click-through unless `isClickThrough` is off.
+/// A rounded strip of views, sized to fit: hints, badges, the hover title. Click-through, except for the `BarButton`s in it, unless
+/// `isClickThrough` is off.
 @MainActor
 final class Pill: NSView {
     var isClickThrough = true
@@ -33,7 +34,7 @@ final class Pill: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     override var intrinsicContentSize: NSSize { frame.size }
-    override func hitTest(_ point: NSPoint) -> NSView? { isClickThrough ? nil : super.hitTest(point) }
+    override func hitTest(_ point: NSPoint) -> NSView? { isClickThrough ? super.hitTest(point) as? BarButton : super.hitTest(point) }
 
     /// Shows the pill; the views (already sized) are rebuilt only when `key` changes.
     func show(_ key: String, _ views: () -> [NSView]) {
@@ -142,19 +143,22 @@ extension Pill {
     }
 }
 
-/// A clickable title with its key cap after it. The width fits the current title in semibold, so a selected title never clips and
-/// the key cap follows the text. A nil key has no cap.
+/// A clickable title with its key cap after it, and an optional SF Symbol before it. The width fits the current title in semibold, so
+/// a selected title never clips and the key cap follows the text. A nil key has no cap; an empty title shows only the symbol and cap.
 @MainActor
 final class BarButton: NSView {
     var onClick: () -> Void = {}
     let title: NSTextField
     let cap: KeyCap?
+    let symbol: NSImageView?
     private let size: CGFloat
     private let padding: CGFloat
 
-    init(_ title: String, key: String?, height: CGFloat = 32, size: CGFloat = 13) {
+    /// `symbol` is an SF Symbol name and its accessibility description.
+    init(_ title: String, key: String?, symbol: (name: String, description: String)? = nil, height: CGFloat = 32, size: CGFloat = 13) {
         self.title = NSTextField(title, size: size, weight: .medium)
         cap = key.map { KeyCap($0) }
+        self.symbol = symbol.map { NSImageView(image: NSImage(systemSymbolName: $0.name, accessibilityDescription: $0.description)!) }
         self.size = size
         padding = height > 30 ? 10 : 8
         super.init(frame: .zero)
@@ -162,7 +166,14 @@ final class BarButton: NSView {
         layer!.cornerRadius = height > 30 ? 9 : 8
         frame.size.height = height
         self.title.frame.origin.y = (height - self.title.frame.height) / 2
+        self.title.isHidden = title.isEmpty
         addSubview(self.title)
+        if let image = self.symbol {
+            image.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: size, weight: .medium)
+            image.frame.size = image.fittingSize
+            image.frame.origin.y = ((height - image.frame.height) / 2).rounded()
+            addSubview(image)
+        }
         if let cap {
             cap.frame.origin.y = (height - cap.frame.height) / 2
             addSubview(cap)
@@ -174,6 +185,7 @@ final class BarButton: NSView {
 
     override var intrinsicContentSize: NSSize { frame.size }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { isHidden || !frame.contains(point) ? nil : self }
     override func mouseDown(with event: NSEvent) { onClick() }
 
     /// Shows `text` and resizes the button to it.
@@ -183,11 +195,19 @@ final class BarButton: NSView {
     }
 
     private func fit() {
-        let width = NSTextField(title.stringValue, size: size, weight: .semibold).frame.width
-        title.frame.origin.x = padding
-        title.frame.size.width = width
-        cap?.frame.origin.x = padding + width + 7
-        frame.size.width = padding * 2 + width + (cap.map { 7 + $0.frame.width } ?? 0)
+        var x = padding
+        if let symbol {
+            symbol.frame.origin.x = x
+            x += symbol.frame.width + (title.isHidden ? 6 : 5)
+        }
+        if !title.isHidden {
+            let width = NSTextField(title.stringValue, size: size, weight: .semibold).frame.width
+            title.frame.origin.x = x
+            title.frame.size.width = width
+            x += width + 7
+        }
+        cap?.frame.origin.x = x
+        frame.size.width = cap.map { x + $0.frame.width + padding } ?? x - 7 + padding
         invalidateIntrinsicContentSize()
     }
 
@@ -196,6 +216,7 @@ final class BarButton: NSView {
         layer!.backgroundColor = fill?.cgColor
         title.textColor = text
         title.font = .systemFont(ofSize: title.font!.pointSize, weight: bold ? .semibold : .medium)
+        symbol?.contentTintColor = text
         cap?.color = text.withAlphaComponent(text == .white ? 0.94 : 0.85)
         cap?.prominent = prominent
     }
@@ -310,7 +331,7 @@ final class BottomBar: Capsule {
     func click(_ mode: OverlayController.Mode) { modeButtons[mode]!.onClick() }
 }
 
-/// The bar attached to a released selection: Frame, Snap, Record, Text, Save, and Copy.
+/// The bar attached to a released selection: Frame and Snap, then Scroll, Record, Cut out, Text (with the Live Text glyph), Save, and Copy.
 @MainActor
 final class ActionBar: Capsule {
     var onFrame: () -> Void = {}
@@ -320,10 +341,12 @@ final class ActionBar: Capsule {
     var onCopy: () -> Void = {}
     let frameButton = BarButton("Frame", key: "M", height: 28, size: 12)
     let snapButton = BarButton("Snap", key: "S", height: 28, size: 12)
-    let text = BarButton("Text", key: "\u{21E7}\u{21A9}", height: 28, size: 12)
+    let text = BarButton("Text", key: "\u{21E7}\u{21A9}", symbol: ("text.viewfinder", "Live Text"), height: 28, size: 12)
     let save = BarButton("Save", key: "\u{2318}S", height: 28, size: 12)
     let copy = BarButton("Copy", key: "\u{21A9}", height: 28, size: 12)
     let record = BarButton("Record", key: "V", height: 28, size: 12)
+    let scroll = BarButton("Scroll", key: "G", height: 28, size: 12)
+    let cutout = BarButton("Cut out", key: "K", height: 28, size: 12)
 
     var framed = false {
         didSet { frameButton.style(fill: framed ? NSColor.white.withAlphaComponent(0.16) : nil, text: .labelColor, bold: framed) }
@@ -335,7 +358,7 @@ final class ActionBar: Capsule {
     init() {
         super.init(spacing: 4, inset: 4, radius: 11)
         frameButton.onClick = { [unowned self] in onFrame() }
-        record.style(fill: nil, text: .labelColor)
+        for button in [scroll, record, cutout] { button.style(fill: nil, text: .labelColor) }
         snapButton.onClick = { [unowned self] in onSnap() }
         text.style(fill: nil, text: .labelColor)
         save.style(fill: nil, text: .labelColor)
@@ -343,7 +366,7 @@ final class ActionBar: Capsule {
         text.onClick = { [unowned self] in onText() }
         save.onClick = { [unowned self] in onSave() }
         copy.onClick = { [unowned self] in onCopy() }
-        setItems([frameButton, snapButton, Capsule.divider(height: 18), record, text, save, copy])
+        setItems([frameButton, snapButton, Capsule.divider(height: 18), scroll, record, cutout, text, save, copy])
         framed = false
         snapped = false
     }
