@@ -36,13 +36,22 @@ final class Pill: NSView {
     override var intrinsicContentSize: NSSize { frame.size }
     override func hitTest(_ point: NSPoint) -> NSView? { isClickThrough ? super.hitTest(point) as? BarButton : super.hitTest(point) }
 
-    /// Shows the pill; the views (already sized) are rebuilt only when `key` changes.
+    /// Shows the pill; the views (already sized) are rebuilt only when `key` changes. A new label at the position of a shown label is
+    /// copied into it instead: AppKit keeps about three dependency records for every text field that enters a window, after it is freed.
     func show(_ key: String, _ views: () -> [NSView]) {
         isHidden = false
         guard key != self.key else { return }
         self.key = key
-        subviews.forEach { $0.removeFromSuperview() }
-        let items = views()
+        let shown = subviews
+        let items = views().enumerated().map { index, new -> NSView in
+            guard index < shown.count, let label = shown[index] as? NSTextField, let fresh = new as? NSTextField else { return new }
+            label.stringValue = fresh.stringValue
+            label.font = fresh.font
+            label.textColor = fresh.textColor
+            label.frame.size = fresh.frame.size
+            return label
+        }
+        for view in shown where !items.contains(where: { $0 === view }) { view.removeFromSuperview() }
         let gaps = spacing * CGFloat(items.count - 1)
         let inner = vertical
             ? CGSize(width: items.map(\.frame.width).max()!, height: items.reduce(gaps) { $0 + $1.frame.height })
@@ -58,7 +67,7 @@ final class Pill: NSView {
                 item.frame.origin = CGPoint(x: offset, y: insets.bottom + (inner.height - item.frame.height) / 2)
                 offset += item.frame.width + spacing
             }
-            addSubview(item)
+            if item.superview !== self { addSubview(item) }
         }
     }
 
