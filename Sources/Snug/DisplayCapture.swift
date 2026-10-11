@@ -55,9 +55,10 @@ enum DisplayCapture {
     }
 
     /// One window as macOS captures it: real rounded corners and, unless `shadow` is false, its shadow, on a transparent
-    /// background, including parts other windows cover. Needs Screen Recording.
+    /// background, including parts other windows cover. With `interior` (the window cut from the frozen display), the window's opaque
+    /// pixels are the frozen ones, so a translucent or blurred background looks as it did on screen. Needs Screen Recording.
     @concurrent
-    static func image(ofWindow id: CGWindowID, shadow: Bool) async throws -> CGImage {
+    static func image(ofWindow id: CGWindowID, shadow: Bool, interior: CGImage?) async throws -> CGImage {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         guard let window = content.windows.first(where: { $0.windowID == id }) else { throw CocoaError(.fileNoSuchFile) }
         let filter = SCContentFilter(desktopIndependentWindow: window)
@@ -92,7 +93,10 @@ enum DisplayCapture {
         }
         Pref.logHoverLine("window \(id) frame \(window.frame) contentRect \(info.contentRect) scale \(info.pointPixelScale) shadow \(shadow) "
                           + "shrink \(shrinkX) x \(shrinkY) configured \(configuration.width)x\(configuration.height) image \(image.width)x\(image.height)")
-        return image
+        guard let interior else { return image }
+        let filled = fillingWindowInterior(image, from: interior)
+        Pref.logHoverLine("window \(id) interior \(interior.width)x\(interior.height) " + (filled == nil ? "size mismatch, captured pixels" : "frozen pixels"))
+        return filled ?? image
     }
 
     /// Window levels besides normal windows that are targets: the Dock, the menu bar, status items, and open menus.

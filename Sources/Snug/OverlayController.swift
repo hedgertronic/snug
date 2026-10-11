@@ -750,10 +750,15 @@ final class OverlayController {
         let id = windowIDs[index]
         // A capture that comes back square takes the radius measured on the frozen screen around the window; a shaped one keeps its outline.
         let radius = radii[windows[index]] ?? image.map { windowCornerRadius(in: $0, rect: windows[index]) } ?? 0
+        // The frozen display shows the window as it looked (ScreenCaptureKit drops what a translucent window shows through) unless a
+        // window in front overlaps it; then the capture's own pixels stand.
+        let overlap = windows[..<index].map { $0.intersection(windows[index]) }.reduce(0) { $0 + ($1.isNull ? 0 : $1.width * $1.height) }
+        let interior = overlap == 0 ? image?.cropping(to: windows[index]) : nil
+        Pref.logHoverLine("window \(id) rect \(windows[index]) overlap in front \(overlap) -> " + (interior == nil ? "captured pixels" : "frozen interior"))
         dismiss()
         commitTask = Task { [pasteboard, defaults] in
             do {
-                let image = roundingWindowCorners(try await DisplayCapture.image(ofWindow: id, shadow: shadow), radius: radius)
+                let image = roundingWindowCorners(try await DisplayCapture.image(ofWindow: id, shadow: shadow, interior: interior), radius: radius)
                 let png = try await Output.png(image)
                 let destination = saveAs ? chooseSaveURL(Output.defaultFile(defaults: defaults)) : nil
                 guard !saveAs || destination != nil else { return }
