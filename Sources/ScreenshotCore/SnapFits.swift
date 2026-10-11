@@ -3,7 +3,8 @@ import CoreGraphics
 /// Pure merging of accessibility frames with pixel snap results, in image pixels with a top-left origin.
 public enum SnapFits {
     /// Fits for a drag: accessibility frames whose four sides all lie within the snap band of the drag's sides (the one
-    /// with the smallest total offset first, at most three), then the pixel fits that do not repeat one of them.
+    /// with the smallest total offset first, at most three), then the pixel fits that do not repeat one of them. The best pixel fit
+    /// goes ahead of the frames further from the drag than it is (a shape drawn in an image view, whose frame is the image's bounds).
     public static func merge(frames: [CGRect], pixel: [CGRect], drag: CGRect, scale: CGFloat) -> [CGRect] {
         let bandX = CGFloat(SmartSnap.band(side: drag.width, scale: scale))
         let bandY = CGFloat(SmartSnap.band(side: drag.height, scale: scale))
@@ -17,6 +18,10 @@ public enum SnapFits {
             && !fits.contains(where: { snapOverlap($0, frame) > 0.94 }) {
             fits.append(frame)
             if fits.count == 3 { break }
+        }
+        if let best = pixel.first, !fits.contains(where: { snapOverlap($0, best) > 0.94 }),
+           let index = fits.firstIndex(where: { offset($0) > offset(best) }) {
+            fits.insert(best, at: index)
         }
         return fits + pixel.filter { candidate in !fits.contains { snapOverlap($0, candidate) > 0.94 } }
     }
