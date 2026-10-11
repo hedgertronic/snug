@@ -105,18 +105,10 @@ enum DebugRun {
         try await waitFor("the snap's corner radius is measured") { overlay.radii[preview] != nil }
         require(overlay.view.overlays.radii == CornerRadii(overlay.radii[preview]!), "the released snap keeps its measured corner radius \(overlay.view.overlays.radii)")
 
-        // Tab cycles to the exact drag and back.
-        var reachedExact = false
-        for _ in 0..<overlay.selection!.fits.count where !reachedExact {
-            key(tab)
-            reachedExact = overlay.selection?.rect == rough
-        }
-        require(reachedExact, "Tab reaches the exact drag")
+        // Tab and Shift-Tab do nothing on a released selection.
         key(tab)
-        require(overlay.selection?.rect == preview, "Tab wraps back to the snap preview")
         key(tab, "", .shift)
-        require(overlay.selection?.rect == rough, "Shift-Tab returns to the exact drag")
-        key(tab)
+        require(overlay.selection?.rect == preview, "Tab and Shift-Tab leave a released snap alone: \(String(describing: overlay.selection?.rect))")
 
         // Arrow nudges.
         let before = overlay.selection!.rect
@@ -236,17 +228,13 @@ enum DebugRun {
         let clickSize = try await copiedSize()
         require(clickSize == rough.size, "click inside the selection copies it")
 
-        // Quick drag + Tab never swaps the crop for something unrelated.
+        // A quick drag releases the exact rectangle, and Tab leaves it alone.
         open()
         pressDrag(rough)
         release(rough)
         require(overlay.selection?.rect == rough && overlay.snapPreview == nil, "a quick drag releases the exact rectangle")
         key(tab)
-        try await overlay.snapTask?.value
-        require(Detection.overlap(overlay.selection!.rect, rough) > 0.5, "Tab after a quick drag keeps a crop related to the drag: \(overlay.selection!.rect)")
-        key(tab)
-        key(tab)
-        require(overlay.selection!.fits.contains(rough), "the exact drag stays in the cycle")
+        require(overlay.selection?.rect == rough,"Tab after a quick drag keeps the exact rectangle: \(overlay.selection!.rect)")
         overlay.dismiss()
 
         // Space moves the rectangle while dragging.
@@ -466,8 +454,6 @@ enum DebugRun {
         let axPreview = try await snapped(card.insetBy(dx: -9, dy: -9), "a drag around an accessibility frame")
         require(axPreview == axFrame, "the accessibility frame ranks ahead of the pixel fit: \(axPreview)")
         require(overlay.selection!.fits.count == 3 && near(overlay.selection!.fits[1], card, 3), "the pixel fit follows it: \(overlay.selection!.fits)")
-        key(tab)
-        require(near(overlay.selection!.rect, card, 3), "Tab cycles from the accessibility fit to the pixel fit")
         overlay.snapFrameSource = nil
         overlay.dismiss()
 
