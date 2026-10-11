@@ -14,8 +14,9 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow?
     private var firstRunWindow: NSWindow?
     private var registeredShortcut: [Int] = []
-    /// The running screen recording, the status item's menu and icon it replaces, and the loop updating its elapsed time.
-    private var recording: (session: ScreenRecording, menu: NSMenu?, icon: NSImage?, ticker: Task<Void, any Error>)?
+    /// The screen recording from its request on (its start, which may still be running), the status item's menu and icon it replaces,
+    /// and the loop updating its elapsed time.
+    private var recording: (start: Task<ScreenRecording, any Error>, menu: NSMenu?, icon: NSImage?, ticker: Task<Void, any Error>)?
     private var iconObservation: NSKeyValueObservation?
 
     static func main() {
@@ -310,33 +311,42 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     // MARK: Recording
 
+    /// Starts the recording and shows it at once, so the capture hotkey stops it even while the stream is starting.
     private func startRecording(displayID: CGDirectDisplayID, area: CGRect, showsCursor: Bool) {
         let file = Output.defaultFile(defaults: .standard).deletingPathExtension().appendingPathExtension("mov")
+        let start = Task {
+            try await ScreenRecording.start(displayID: displayID, area: area, file: file, showsCursor: showsCursor, showsPanels: true, defaults: .standard)
+        }
+        showRecording(start)
         Task {
             do {
-                let session = try await ScreenRecording.start(displayID: displayID, area: area, file: file, showsCursor: showsCursor, showsOutline: true)
+                let session = try await start.value
                 session.onFailure = { [self] error in
                     endRecording()
                     NSApp.presentError(error)
                 }
-                showRecording(session)
+                session.onStop = { [self] in stopRecording() }
             } catch {
+                // After a stop during startup, `stopRecording` reports the failed start.
+                guard recording?.start == start else { return }
+                endRecording()
                 NSApp.presentError(error)
             }
         }
     }
 
     /// While recording, the status item is a stop button showing a stop glyph and the elapsed time.
-    private func showRecording(_ session: ScreenRecording) {
+    private func showRecording(_ start: Task<ScreenRecording, any Error>) {
         let item = statusItem!, button = item.button!
+        let started = ContinuousClock.now
         let ticker = Task {
             while true {
-                let seconds = Int(session.started.duration(to: .now).components.seconds)
+                let seconds = Int(started.duration(to: .now).components.seconds)
                 button.title = String(format: " %d:%02d", seconds / 60, seconds % 60)
                 try await Task.sleep(for: .seconds(1))
             }
         }
-        recording = (session, item.menu, button.image, ticker)
+        recording = (start, item.menu, button.image, ticker)
         item.menu = nil
         item.length = NSStatusItem.variableLength
         button.image = NSImage(systemSymbolName: "stop.circle.fill", accessibilityDescription: "Stop Recording")
@@ -348,9 +358,9 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     @objc private func stopRecordingFromMenu() { stopRecording() }
 
-    /// Puts the status item back and returns the recording, if one was running.
+    /// Puts the status item back and returns the recording's start, if one was running.
     @discardableResult
-    private func endRecording() -> ScreenRecording? {
+    private func endRecording() -> Task<ScreenRecording, any Error>? {
         guard let recording else { return nil }
         self.recording = nil
         recording.ticker.cancel()
@@ -360,14 +370,15 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         button.image = recording.icon
         item.length = NSStatusItem.squareLength
         item.menu = recording.menu
-        return recording.session
+        return recording.start
     }
 
-    /// Stops the recording, then copies the saved file's URL and shows the toast with its first frame.
+    /// Stops the recording once it has started, then copies the saved file's URL and shows the toast with its first frame.
     private func stopRecording() {
-        guard let session = endRecording() else { return }
+        guard let start = endRecording() else { return }
         Task {
             do {
+                let session = try await start.value
                 try await session.stop()
                 _ = try await ScreenRecording.deliver(session.file, pasteboard: .general, defaults: .standard)
             } catch {

@@ -24,8 +24,8 @@ extension OverlayController {
         if let armed = armedRecording {
             if let remaining = armed.remaining { return [([], "Recording in \(remaining)"), (["esc"], "cancel")] }
             let countIn = defaults.integer(forKey: Pref.recordCountIn)
-            return [(["\u{21A9}"], "start"), (["H"], armed.showsCursor ? "cursor on" : "cursor off"),
-                    ([], countIn > 0 ? "count-in \(countIn) s" : "count-in off"), (["esc"], "cancel")]
+            return [(["\u{21A9}"], "start"), (["H"], defaults.bool(forKey: Pref.recordCursor) ? "cursor on" : "cursor off"),
+                    (["C"], countIn > 0 ? "count-in \(countIn) s" : "count-in off"), (["esc"], "cancel")]
         }
         return switch mode {
         case .text: [(["Drag"], "select text"), (["\u{21A9}"], "copy"), (["\u{21E7}", "\u{21A9}"], "rows"), (["Tab"], "links, codes"), (["\u{2325}", "\u{21A9}"], "translate"), (["F"], "all text"), (["C"], "color"), (["?"], "all keys")]

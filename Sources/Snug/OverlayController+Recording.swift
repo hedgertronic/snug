@@ -1,18 +1,15 @@
 import AppKit
 
-/// V's armed state: the cursor choice for this recording, the running count-in and its seconds left, and the red outline and count
-/// drawn over the selection.
+/// V's armed state: the running count-in and its seconds left, and the red outline and count drawn over the selection.
 @MainActor
 final class ArmedRecording {
-    var showsCursor: Bool
     var remaining: Int?
     var countIn: Task<Void, any Error>?
     let outline = CAShapeLayer()
     let count = Pill(fill: NSColor(srgbRed: 20 / 255, green: 20 / 255, blue: 22 / 255, alpha: 0.86), radius: 22,
                      insets: NSEdgeInsets(top: 6, left: 26, bottom: 6, right: 26), spacing: 0)
 
-    init(showsCursor: Bool) {
-        self.showsCursor = showsCursor
+    init() {
         outline.fillColor = nil
         outline.strokeColor = NSColor.systemRed.cgColor
         outline.lineWidth = 2
@@ -20,13 +17,13 @@ final class ArmedRecording {
 }
 
 /// Screen recording: V on a released selection, or on the hovered element or window (which becomes the selection), arms recording.
-/// Armed, the selection has a red outline; Return or V starts after the count-in, H shows or hides the cursor, Esc disarms. The
-/// overlay closes before the app starts recording the area.
+/// Armed, the selection has a red outline; Return or V starts after the count-in, H shows or hides the cursor, C cycles the count-in,
+/// Esc disarms. H and C save their choice. The overlay closes before the app starts recording the area.
 extension OverlayController {
     func armRecording() {
         guard displayID != nil, let area = selection?.rect ?? session?.selected?.bounds else { return NSSound.beep() }
         if selection == nil { openAsSelection(area) }
-        let armed = ArmedRecording(showsCursor: defaults.bool(forKey: Pref.recordCursor))
+        let armed = ArmedRecording()
         view.layer!.addSublayer(armed.outline)
         view.addSubview(armed.count)
         armedRecording = armed
@@ -41,7 +38,8 @@ extension OverlayController {
         armedRecording = nil
     }
 
-    /// While armed: Return or V starts the count-in, H switches the cursor, Esc stops a running count-in or disarms; other keys do nothing.
+    /// While armed: Return or V starts the count-in, H switches the cursor, C cycles the count-in Off, 3 s, 5 s, Esc stops a running
+    /// count-in or disarms; other keys do nothing.
     func handleRecordingKey(_ event: NSEvent) -> Bool {
         let armed = armedRecording!
         switch (event.keyCode, event.charactersIgnoringModifiers ?? "") {
@@ -50,7 +48,9 @@ extension OverlayController {
             armed.remaining = nil
         case (53, _): disarmRecording()
         case (36, _) where armed.remaining == nil, (76, _) where armed.remaining == nil, (_, "v") where armed.remaining == nil: countIn()
-        case (_, "h") where armed.remaining == nil: armed.showsCursor.toggle()
+        case (_, "h") where armed.remaining == nil: defaults.set(!defaults.bool(forKey: Pref.recordCursor), forKey: Pref.recordCursor)
+        case (_, "c") where armed.remaining == nil:
+            defaults.set([0: 3, 3: 5][defaults.integer(forKey: Pref.recordCountIn)] ?? 0, forKey: Pref.recordCountIn)
         default: break
         }
         refresh()
@@ -78,7 +78,7 @@ extension OverlayController {
     /// Closes the overlay, then asks the app to record the selection's whole even pixels (H.264 needs even sizes) in display points.
     private func recordSelection() {
         guard let displayID, let area = selection?.rect else { return NSSound.beep() }
-        let showsCursor = armedRecording!.showsCursor
+        let showsCursor = defaults.bool(forKey: Pref.recordCursor)
         var pixels = area.integral
         pixels.size.width -= pixels.width.truncatingRemainder(dividingBy: 2)
         pixels.size.height -= pixels.height.truncatingRemainder(dividingBy: 2)

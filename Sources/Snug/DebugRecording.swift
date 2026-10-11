@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import ScreenCaptureKit
 import ScreenshotCore
 
 extension DebugRun {
@@ -58,7 +59,17 @@ extension DebugRun {
         require(armed!.outline.superlayer != nil && armed!.outline.path != nil && armed!.outline.strokeColor == NSColor.systemRed.cgColor
                 && overlay.chrome.actionBar.isHidden && !overlay.view.overlays.showsHandles,
                 "armed: a red outline on the selection, no action bar or handles")
-        require(hints() == ["start", "\u{21A9}", "cursor on", "H", "count-in off", "cancel", "esc"], "the armed strip: \(hints())")
+        require(hints() == ["start", "\u{21A9}", "cursor on", "H", "count-in off", "C", "cancel", "esc"], "the armed strip: \(hints())")
+        // Armed, pointer moves change nothing: no open hand over the selection, no corner chip.
+        let cursor = overlay.view.cursor
+        func move(_ pixel: CGPoint) {
+            overlay.window.sendEvent(NSEvent.mouseEvent(with: .mouseMoved, location: CGPoint(x: pixel.x / scale, y: overlay.view.bounds.height - pixel.y / scale),
+                modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: overlay.window.windowNumber,
+                context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!)
+        }
+        move(CGPoint(x: 900, y: 500))
+        move(CGPoint(x: 1400, y: 500))
+        require(overlay.view.cursor === cursor && overlay.hoveredCorner == nil, "pointer moves while armed leave the cursor alone: \(String(describing: overlay.view.cursor))")
         key(36, "\r")
         let expected = CGRect(x: 401 / scale, y: 201 / scale, width: 998 / scale, height: 600 / scale)
         require(!overlay.window.isVisible && requests == [expected] && cursors == [true] && overlayShown == [false] && armed!.outline.superlayer == nil,
@@ -82,9 +93,25 @@ extension DebugRun {
                 && requests.count == 2, "Esc while armed disarms and keeps the selection")
         key(9, "v")
         key(4, "h")
-        require(hints().contains("cursor off"), "H shows the cursor off: \(hints())")
+        require(hints().contains("cursor off") && !defaults.bool(forKey: Pref.recordCursor), "H shows the cursor off and saves it: \(hints())")
+        // C cycles the count-in Off, 3 s, 5 s and saves it.
+        var counts: [Int] = []
+        for _ in 0..<3 {
+            key(8, "c")
+            counts.append(defaults.integer(forKey: Pref.recordCountIn))
+            require(hints().contains(counts.last! > 0 ? "count-in \(counts.last!) s" : "count-in off"), "the strip shows the count-in C set: \(hints())")
+        }
+        require(counts == [3, 5, 0], "C cycles the count-in 3 s, 5 s, off: \(counts)")
         key(36, "\r")
-        require(cursors.last == false && defaults.bool(forKey: Pref.recordCursor), "H hides the cursor for this recording only: \(cursors)")
+        require(cursors.last == false, "H hides the cursor in the recording: \(cursors)")
+        open()
+        select(CGRect(x: 600, y: 300, width: 400, height: 200))
+        key(9, "v")
+        require(hints().contains("cursor off"), "the cursor choice sticks for the next recording: \(hints())")
+        key(4, "h")
+        key(53, "\u{1B}")
+        overlay.dismiss()
+        require(defaults.bool(forKey: Pref.recordCursor), "H again shows the cursor")
 
         // A hovered window becomes the armed selection; V again starts.
         open()
@@ -150,6 +177,36 @@ extension DebugRun {
         require(displays == [display], "every recording is requested on the overlay's display")
         ScreenRecording.requested = { _, _, _ in }
 
+        // While recording: a red outline just outside the area, and the stop reminder below it reading the capture shortcut; both are
+        // windows Snug's captures leave out, which Settings is not.
+        let recordArea = CGRect(x: 300, y: 300, width: 400, height: 200)
+        let outline = ScreenRecording.makeOutline(around: recordArea, on: display)
+        let reminder = ScreenRecording.makeReminder(around: recordArea, on: display, defaults: defaults)!
+        let settings = SettingsTabs.makeWindow()
+        require(outline.contentView!.layer!.borderColor == NSColor.systemRed.cgColor, "the recording outline is red, like the armed outline")
+        require(texts(in: reminder.contentView!) == ["\u{2303}\u{21E7}Space", "to stop"], "the reminder reads the shortcut, then to stop: \(texts(in: reminder.contentView!))")
+        require(reminder.frame.maxY == outline.frame.minY - ScreenRecording.reminderGap && abs(reminder.frame.midX - outline.frame.midX) <= 0.5,
+                "the reminder is centered under the outline, \(ScreenRecording.reminderGap) pt away: \(reminder.frame) \(outline.frame)")
+        let excluded = DisplayCapture.excludedWindowIDs()
+        let panelIDs = [outline, reminder].map { CGWindowID($0.windowNumber) }
+        require(panelIDs.allSatisfy { $0 > 0 && excluded.contains($0) } && !excluded.contains(CGWindowID(settings.windowNumber)),
+                "the outline and reminder \(panelIDs) are left out of recordings and Settings \(settings.windowNumber) is not: \(excluded.sorted())")
+        defaults.set(-1, forKey: Pref.hotKeyCode)
+        let unset = ScreenRecording.makeReminder(around: recordArea, on: display, defaults: defaults)!
+        require(texts(in: unset.contentView!) == ["Stop from the menu bar"], "with no shortcut the reminder points to the menu bar: \(texts(in: unset.contentView!))")
+        defaults.set(49, forKey: Pref.hotKeyCode)
+        // Placement in a 1512 x 945 pt visible frame under a 37 pt menu bar, for a 120 x 36 pt reminder.
+        let visible = CGRect(x: 0, y: 37, width: 1512, height: 945)
+        let size = CGSize(width: 120, height: 36)
+        let near = CGRect(x: 600, y: 700, width: 300, height: 260)
+        let placements = [recordArea, near, CGRect(x: 1450, y: 300, width: 60, height: 100), CGRect(x: 0, y: 37, width: 1512, height: 945),
+                          CGRect(x: 0, y: 60, width: 1512, height: 880)].map { ScreenRecording.reminderFrame(size: size, around: $0, within: visible) }
+        require(placements[0] == CGRect(x: 440, y: 511, width: 120, height: 36) && placements[1] == CGRect(x: 690, y: 653, width: 120, height: 36)
+                && placements[2] == CGRect(x: 1392, y: 411, width: 120, height: 36) && placements[3] == nil && placements[4] == nil,
+                "the reminder goes below, above when the area reaches the bottom, inside the screen sideways, and nowhere when neither fits: \(placements)")
+        require(placements.compactMap(\.self).allSatisfy { visible.contains($0) }
+                && zip([recordArea, near], placements).allSatisfy { !$0.0.insetBy(dx: -3, dy: -3).intersects($0.1!) }, "the reminder never covers the outlined area")
+
         // Stopping waits at most 5 s for the recording output to finish the file, then fails with an error naming it.
         let (never, unfinished) = AsyncStream<(any Error)?>.makeStream()
         let waitStart = ContinuousClock.now
@@ -210,12 +267,21 @@ extension DebugRun {
         }
         let live = FileManager.default.temporaryDirectory.appending(path: "snug-recording-\(UUID().uuidString).mov")
         let area = CGRect(x: 0, y: 0, width: 200, height: 100)
-        let recording = try await ScreenRecording.start(displayID: display, area: area, file: live, showsCursor: true, showsOutline: false)
+        let recording = try await ScreenRecording.start(displayID: display, area: area, file: live, showsCursor: true, showsPanels: false, defaults: defaults)
         try await Task.sleep(for: .seconds(1))
         try await recording.stop()
         let recorded = try await movie(live)
         let pixelScale = CGFloat(CGDisplayCopyDisplayMode(display)!.pixelWidth) / CGDisplayBounds(display).width
         require(recorded.size == CGSize(width: area.width * pixelScale, height: area.height * pixelScale) && abs(recorded.seconds - 1) < 0.3,
                 "a live 1 s recording of 200 x 100 pt is \(area.width * pixelScale) x \(area.height * pixelScale) px and about 1 s: \(recorded)")
+
+        // `start` orders the outline and reminder in while still transparent, before it reads the shareable content: ScreenCaptureKit
+        // lists them then, so the filter's window-ID exclusion finds them. (A display filter's `includedWindows` is empty, so it can't
+        // show the exclusion itself.)
+        [outline, reminder].forEach { $0.orderFrontRegardless() }
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+        [outline, reminder].forEach { $0.orderOut(nil) }
+        let listed = Set(content.windows.map(\.windowID))
+        require(panelIDs.allSatisfy(listed.contains), "the transparent outline and reminder \(panelIDs) are in the shareable content")
     }
 }
