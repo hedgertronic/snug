@@ -244,8 +244,6 @@ extension DebugRun {
         key(35, "P", .shift)
         require(!overlay.ratioLocked && overlay.selection?.rect == odd, "Shift-P again unlocks and moves no edge: \(String(describing: overlay.selection?.rect))")
         key(35, "P", .shift)
-        key(48)
-        require(overlay.selection?.rect == odd, "Tab takes no other fit while the ratio is locked: \(String(describing: overlay.selection?.rect))")
         let locked = odd.width / odd.height
         func keepsRatio(_ message: String) {
             let rect = overlay.selection!.rect
@@ -287,16 +285,6 @@ extension DebugRun {
         key(35, "P", .shift)
         overlay.dismiss()
         require(!overlay.ratioLocked, "the lock does not outlive the capture")
-
-        // hasOtherFits: Tab has a fit (a snap or the exact drag) that differs from the selection by more than 1 pt.
-        open()
-        overlay.selection = AreaSelection(extent: overlay.extent, exact: a, suggestions: [a.insetBy(dx: -4, dy: -4)], takingFirst: true)
-        require(overlay.hasOtherFits, "a released snap has the exact drag as another fit")
-        overlay.selection = AreaSelection(extent: overlay.extent, exact: a.insetBy(dx: -5, dy: -5), suggestions: [a.insetBy(dx: -4, dy: -4)], takingFirst: true)
-        require(!overlay.hasOtherFits, "an exact drag within 1 pt of the snap does not count")
-        overlay.selection = AreaSelection(extent: overlay.extent, exact: a, suggestions: [a.insetBy(dx: 1, dy: 1)])
-        require(!overlay.hasOtherFits, "a snap within 1 pt of the selection does not count")
-        overlay.dismiss()
 
         // P opens the ratio menu. A preset conforms the selection once and locks: the largest rectangle of its ratio inside the selection
         // from before the first pick (so picks do not compound), on its center, in whole pixels. Free unlocks and leaves the rectangle

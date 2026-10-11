@@ -98,6 +98,14 @@ extension DebugRun {
         require(!overlay.window.isVisible && requests.last == CGRect(x: hovered!.minX / scale, y: hovered!.minY / scale, width: hovered!.width / scale, height: hovered!.height / scale),
                 "V twice on a hovered element records it: \(String(describing: requests.last)) \(hovered!)")
 
+        // A hovered display (the pointer outside every window) arms the whole display.
+        open()
+        overlay.setWindows([window], names: ["Window"], pointer: CGPoint(x: frame.minX + 50 / scale, y: frame.maxY - 50 / scale))
+        require(overlay.session?.selected?.kind == .display && overlay.hoverRect == nil, "the pointer outside every window hovers the display")
+        key(9, "v")
+        require(overlay.window.isVisible && overlay.armedRecording != nil && overlay.selection?.rect == overlay.extent, "V on a hovered display arms the full display: \(String(describing: overlay.selection?.rect))")
+        overlay.dismiss()
+
         let count = requests.count
         open()
         key(17, "t")

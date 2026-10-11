@@ -826,11 +826,9 @@ extension DebugRun {
         flags([])
         require(keyCaps("\u{21E7}", in: chrome.hints).count == 1 && keyCaps("\u{21E7}", in: chrome.hints).allSatisfy { !$0.held }, "releasing Shift turns its cap gray")
         let snapped = overlay.selection!
-        overlay.selection = AreaSelection(extent: extent, exact: snapped.exact)
-        overlay.refresh()
-        require(!overlay.hasOtherFits && !texts(in: chrome.hints).contains("next snap"), "a selection with no other fits hides Tab next snap: \(texts(in: chrome.hints))")
-        overlay.selection = snapped
-        overlay.refresh()
+        require(!texts(in: chrome.hints).contains("next snap"), "a released selection has no Tab next snap hint: \(texts(in: chrome.hints))")
+        key(48, "\t")
+        require(overlay.selection?.rect == snapped.rect,"Tab on a released selection does nothing")
         overlay.editedRadii[snapped.rect] = CornerRadii(12 * overlay.scale)
         mouse(.mouseMoved, overlay.cornerRadii(of: snapped.rect).dot(of: .topLeft, in: snapped.rect, minimumInset: 8 * overlay.scale))
         let cornerKeys = chrome.cornerKeys, cornerChip = overlay.cornerChip
@@ -850,8 +848,6 @@ extension DebugRun {
         require(overlay.framed && chrome.actionBar.frameButton.layer!.backgroundColor != nil, "clicking the action bar's Frame turns Frame on and highlights it")
         key(46, "m")
         require(!overlay.framed && chrome.actionBar.frameButton.layer!.backgroundColor == nil, "M turns Frame off on a released selection")
-        for _ in 0..<overlay.selection!.fits.count where texts(in: chrome.status) != ["Exact"] { key(48, "") }
-        require(texts(in: chrome.status) == ["Exact"], "Tab to the exact drag shows Exact")
         key(53, "")
         require(chrome.actionBar.isHidden && chrome.size.isHidden && chrome.status.isHidden, "Esc takes the action bar and badges away")
 
@@ -879,6 +875,16 @@ extension DebugRun {
         let stitched = NSBitmapImageRep(data: pasteboard.data(forType: .png)!)!
         require(!overlay.window.isVisible && stitched.pixelsWide == 1000 && stitched.pixelsHigh == 900 && overlay.window.isOpaque,
                 "Return copies the stitched image and closes: \(stitched.pixelsWide) x \(stitched.pixelsHigh)")
+        // G on a hovered element starts scrolling capture of it, as E then G does.
+        offsets = [0]
+        open()
+        let browser = CGRect(x: 100, y: 100, width: 1500, height: 1200)
+        overlay.setWindows([browser], names: ["Browser"], pointer: CGPoint(x: frame.minX + 800 / overlay.scale, y: frame.maxY - 700 / overlay.scale))
+        let hoveredArea = overlay.hoverRect
+        require(hoveredArea != nil && overlay.selection == nil, "a window is hovered with no selection")
+        key(5, "g")
+        require(overlay.scrollArea == hoveredArea && overlay.selection == nil && overlay.window.ignoresMouseEvents, "G while hovering starts scrolling capture of the hovered rectangle: \(String(describing: overlay.scrollArea))")
+        key(53, "")
         offsets = [0]
         open()
         overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))

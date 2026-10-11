@@ -57,9 +57,6 @@ final class OverlayController {
         default: nil
         }
     }
-    /// Tab has another fit for the selection, a snap or the exact drag, more than 1 pt from it. False for a selection with a single fit
-    /// (opened from a hover, or edited), although Tab then computes fits on demand: on the public suite's targets those found none that differ.
-    var hasOtherFits: Bool { selection?.hasOtherFits(tolerance: scale) ?? false }
     private(set) var snapPreview: CGRect?
     private(set) var image: CGImage?
     private(set) var scale: CGFloat = 1
@@ -602,21 +599,15 @@ final class OverlayController {
                 current.selectBest()
                 selection = current
             } else {
-                cycleFit(backward: false, toBest: true)
+                selectBestFit()
             }
         }
         refresh()
     }
 
-    /// Tab: the next fit. After a quick drag with no suggestions, computes them for the current rectangle first;
-    /// `toBest` then takes the best fit instead of stepping. A locked ratio takes no other fit.
-    private func cycleFit(backward: Bool, toBest: Bool = false) {
-        guard lockedRatio == nil, var current = selection, let image else { return }
-        guard current.fits.count == 1 else {
-            current.cycle(backward: backward)
-            selection = current
-            return
-        }
+    /// After a quick drag with no suggestions, computes them for the current rectangle and takes the best fit. A locked ratio takes no other fit.
+    private func selectBestFit() {
+        guard lockedRatio == nil, let current = selection, let image else { return }
         let rough = current.rect
         snapTask?.cancel()
         snapTask = Task {
@@ -624,7 +615,7 @@ final class OverlayController {
             try Task.checkCancellation()
             guard selection?.rect == rough else { return }
             selection?.setSuggestions(suggestions)
-            if toBest { selection?.selectBest() } else { selection?.cycle(backward: backward) }
+            selection?.selectBest()
             refresh()
         }
     }
@@ -685,7 +676,6 @@ final class OverlayController {
         case (_, false, "1"..."5") where hovering && defaults.bool(forKey: Pref.candidates):
             session?.pick(Int(character)! - 1)
             walkedLevel = false
-        case (48, _, _): cycleFit(backward: shift)
         case (49, _, _): spaceHeld = true
         case (123, _, _): nudge(CGPoint(x: -step, y: 0))
         case (124, _, _): nudge(CGPoint(x: step, y: 0))

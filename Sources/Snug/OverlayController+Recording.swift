@@ -24,7 +24,7 @@ final class ArmedRecording {
 /// overlay closes before the app starts recording the area.
 extension OverlayController {
     func armRecording() {
-        guard displayID != nil, let area = selection?.rect ?? hoverRect else { return NSSound.beep() }
+        guard displayID != nil, let area = selection?.rect ?? session?.selected?.bounds else { return NSSound.beep() }
         if selection == nil { openAsSelection(area) }
         let armed = ArmedRecording(showsCursor: defaults.bool(forKey: Pref.recordCursor))
         view.layer!.addSublayer(armed.outline)
