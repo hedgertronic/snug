@@ -2,14 +2,15 @@ import AppKit
 
 extension DebugRun {
     /// `--memory-steps DIR [--no-vision]`: walks the overlay through a capture, a copy with its toast, Text mode, accurate OCR rows, a
-    /// cutout and ten open/close cycles. After each step settles it prints the footprint and runs `bash DIR/inspect.sh PID LABEL`, which
-    /// takes `footprint` and `heap` of this process (run it with `MallocStackLogging=1` for `malloc_history`). `--no-vision` skips
-    /// Live Text, OCR and the cutout, and leaves Text mode out of the cycles.
+    /// cutout and ten open/close cycles. After each step settles it prints the footprint and runs `scripts/memory-inspect.sh PID LABEL
+    /// DIR`, which writes this process's `footprint`, `vmmap` and `heap` into DIR, and with `MallocStackLogging=1` set the stacks of its
+    /// large blocks. `--no-vision` skips Live Text, OCR and the cutout, and leaves Text mode out of the cycles.
     static func memorySteps(into folder: URL, image: CGImage, frame: CGRect, overlay: OverlayController) async throws {
         _ = privateSetup(overlay, timeout: .seconds(1800))
         let vision = !CommandLine.arguments.contains("--no-vision")
         let pid = ProcessInfo.processInfo.processIdentifier
         var index = 0
+        let script = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../scripts/memory-inspect.sh").standardized
 
         func record(_ label: String, settle: Duration = .seconds(2)) async throws {
             try await Task.sleep(for: settle)
@@ -18,10 +19,10 @@ extension DebugRun {
             print("\(name): footprint \(footprint())")
             let inspect = Process()
             inspect.executableURL = URL(fileURLWithPath: "/bin/bash")
-            inspect.arguments = [folder.appending(path: "inspect.sh").path, "\(pid)", name]
+            inspect.arguments = [script.path, "\(pid)", name, folder.path]
             try inspect.run()
             inspect.waitUntilExit()
-            precondition(inspect.terminationStatus == 0, "inspect.sh failed for \(name)")
+            precondition(inspect.terminationStatus == 0, "memory-inspect.sh failed for \(name)")
         }
         func windowPoint(_ pixel: CGPoint) -> CGPoint {
             CGPoint(x: pixel.x / overlay.scale, y: overlay.view.bounds.height - pixel.y / overlay.scale)
@@ -51,10 +52,13 @@ extension DebugRun {
                 mouse(.mouseMoved, CGPoint(x: CGFloat(image.width) * (0.1 + 0.04 * CGFloat(step)), y: CGFloat(image.height) * (0.8 - 0.03 * CGFloat(step))))
             }
         }
+        /// A press, 100 drag steps (each a new size readout, as a pointer drag makes), and a release.
         func dragRelease(_ rect: CGRect) {
             mouse(.leftMouseDown, CGPoint(x: rect.minX, y: rect.minY))
-            mouse(.leftMouseDragged, CGPoint(x: rect.midX, y: rect.midY))
-            mouse(.leftMouseDragged, CGPoint(x: rect.maxX, y: rect.maxY))
+            for step in 1...100 {
+                let t = CGFloat(step) / 100
+                mouse(.leftMouseDragged, CGPoint(x: rect.minX + rect.width * t, y: rect.minY + rect.height * t))
+            }
             mouse(.leftMouseUp, CGPoint(x: rect.maxX, y: rect.maxY))
         }
         func enterText() async throws {
