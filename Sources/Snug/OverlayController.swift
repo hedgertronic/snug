@@ -176,6 +176,8 @@ final class OverlayController {
     var stitcher: ScrollStitcher?
     var scrollTask: Task<Void, Never>?
     var scrollFrames: ((CGRect) async throws -> CGImage)?
+    /// V armed recording of the selection (see `OverlayController+Recording.swift`).
+    var armedRecording: ArmedRecording?
 
     var snapEnabled: Bool { defaults.bool(forKey: Pref.snap) }
     var framed: Bool { defaults.bool(forKey: Pref.frame) }
@@ -200,7 +202,7 @@ final class OverlayController {
         chrome.actionBar.onText = { [unowned self] in copySelectionText(translating: false) }
         chrome.actionBar.onSave = { [unowned self] in save() }
         chrome.actionBar.onCopy = { [unowned self] in copy() }
-        chrome.actionBar.record.onClick = { [unowned self] in startRecording() }
+        chrome.actionBar.record.onClick = { [unowned self] in armRecording() }
         chrome.actionBar.scroll.onClick = { [unowned self] in startScroll() }
         chrome.actionBar.cutout.onClick = { [unowned self] in cutOut() }
     }
@@ -273,6 +275,7 @@ final class OverlayController {
     /// Closes the overlay, cancels pending work, and releases the frozen image.
     func dismiss() {
         cancelWork()
+        disarmRecording()
         scrollTask?.cancel()
         scrollTask = nil
         scrollArea = nil
@@ -400,7 +403,7 @@ final class OverlayController {
     }
 
     func mouseDown(_ event: NSEvent) {
-        guard mode == .capture else { return }
+        guard mode == .capture, armedRecording == nil else { return }
         let point = view.pixelPoint(event)
         pointer = point
         if cornerDot(at: point) == nil { hoveredCorner = nil }
@@ -633,6 +636,7 @@ final class OverlayController {
     func handleKey(_ event: NSEvent) -> Bool {
         text.notice = nil
         if scrollArea != nil { return handleScrollKey(event) }
+        if armedRecording != nil { return handleRecordingKey(event) }
         var handled = handleExtrasKey(event)
         if !handled {
             switch mode {
@@ -685,7 +689,7 @@ final class OverlayController {
         case (_, false, "m"): toggleFrame()
         case (_, false, "s"): toggleSnap()
         case (_, false, "g"): startScroll()
-        case (_, false, "v"): startRecording()
+        case (_, false, "v"): armRecording()
         case (_, false, "f"):
             cancelWork()
             selection = AreaSelection(extent: extent, exact: extent)
@@ -886,6 +890,7 @@ final class OverlayController {
         if let rect = selection?.rect, framed { overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, framed: true) }
         view.overlays = overlays
         refreshExtras()
+        refreshRecording()
     }
 }
 

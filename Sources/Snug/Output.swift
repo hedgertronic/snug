@@ -84,7 +84,9 @@ enum Pref {
             toastPreview: true,
             toastPosition: "bottomCenter",
             roundCorners: true,
-            menuBarIcon: "a"
+            menuBarIcon: "a",
+            recordCountIn: 3,
+            recordCursor: true
         ])
     }
 }

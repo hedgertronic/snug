@@ -88,7 +88,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             return
         }
         installStatusItem()
-        ScreenRecording.requested = { [unowned self] in startRecording(displayID: $0, area: $1) }
+        ScreenRecording.requested = { [unowned self] in startRecording(displayID: $0, area: $1, showsCursor: $2) }
         hotKey = HotKey { [unowned self] in capture() }
         registerHotKey()
         _ = OverlayController.warmVisionInChild(defaults: .standard)
@@ -304,11 +304,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     // MARK: Recording
 
-    private func startRecording(displayID: CGDirectDisplayID, area: CGRect) {
+    private func startRecording(displayID: CGDirectDisplayID, area: CGRect, showsCursor: Bool) {
         let file = Output.defaultFile(defaults: .standard).deletingPathExtension().appendingPathExtension("mov")
         Task {
             do {
-                let session = try await ScreenRecording.start(displayID: displayID, area: area, file: file, showsOutline: true)
+                let session = try await ScreenRecording.start(displayID: displayID, area: area, file: file, showsCursor: showsCursor, showsOutline: true)
                 session.onFailure = { [self] error in
                     endRecording()
                     NSApp.presentError(error)

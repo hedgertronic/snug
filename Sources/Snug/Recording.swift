@@ -2,13 +2,22 @@ import AppKit
 import AVFoundation
 import ScreenCaptureKit
 
-/// A screen recording of one area of a display: H.264 at up to 60 fps with the cursor and no audio, written to a .mov by
+extension Pref {
+    /// Seconds of the count shown over the area before a recording starts: 0 (off), 3 or 5.
+    static let recordCountIn = "SnugRecordCountIn"
+    /// Whether recordings show the cursor; H switches it for one recording.
+    static let recordCursor = "SnugRecordCursor"
+}
+
+/// A screen recording of one area of a display: H.264 at up to 60 fps, with or without the cursor, and no audio, written to a .mov by
 /// `SCRecordingOutput`. Every Snug window, including ones opened while recording, is left out of the video.
 @MainActor
 final class ScreenRecording: NSObject, SCRecordingOutputDelegate {
-    /// V hands the display and its area (display points, top-left origin, whole even pixels) here; the app starts the recording.
-    /// Debug runs replace it.
-    static var requested: (CGDirectDisplayID, CGRect) -> Void = { _, _ in }
+    /// The armed overlay hands the display, its area (display points, top-left origin, whole even pixels) and whether the cursor
+    /// shows here once the count-in ends; the app starts the recording. Debug runs replace it.
+    static var requested: (CGDirectDisplayID, CGRect, Bool) -> Void = { _, _, _ in }
+    /// How long `stop` waits for the recording output to finish the file before it fails.
+    nonisolated static let finishTimeout = Duration.seconds(5)
 
     let file: URL
     let started = ContinuousClock.now
@@ -31,8 +40,9 @@ final class ScreenRecording: NSObject, SCRecordingOutputDelegate {
         try stream.addRecordingOutput(output)
     }
 
-    /// Starts recording `area` of the display into `file`, with a thin accent outline just outside the area unless `showsOutline` is off.
-    static func start(displayID: CGDirectDisplayID, area: CGRect, file: URL, showsOutline: Bool) async throws -> ScreenRecording {
+    /// Starts recording `area` of the display into `file`, with a thin accent outline just outside the area that pulses once as
+    /// capture starts, unless `showsOutline` is off.
+    static func start(displayID: CGDirectDisplayID, area: CGRect, file: URL, showsCursor: Bool, showsOutline: Bool) async throws -> ScreenRecording {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
         let display = content.displays.first { $0.displayID == displayID }!
         let snug = content.applications.first { $0.processID == getpid() }!
@@ -43,7 +53,7 @@ final class ScreenRecording: NSObject, SCRecordingOutputDelegate {
         configuration.width = Int((area.width * scale).rounded())
         configuration.height = Int((area.height * scale).rounded())
         configuration.minimumFrameInterval = CMTime(value: 1, timescale: 60)
-        configuration.showsCursor = true
+        configuration.showsCursor = showsCursor
         configuration.capturesAudio = false
         let recordingConfiguration = SCRecordingOutputConfiguration()
         recordingConfiguration.outputURL = file
@@ -57,14 +67,35 @@ final class ScreenRecording: NSObject, SCRecordingOutputDelegate {
         return recording
     }
 
-    /// Ends the recording and waits until the file is written.
+    /// Ends the recording and waits until the file is written, or fails after `finishTimeout`.
     func stop() async throws {
         stopping = true
         outline?.orderOut(nil)
-        try await stream.stopCapture()
-        for await error in ended {
-            if let error { throw error }
-            return
+        // A failed stop ends the wait with its error; a stop that never returns is caught by the timeout.
+        Task { [stream, end] in
+            do { try await stream.stopCapture() } catch { end.yield(error) }
+        }
+        try await Self.waitForEnd(ended, file: file)
+    }
+
+    /// Waits for the first end in `ended`: returns on nil, throws the error it carries, or throws a write error naming `file` after
+    /// `finishTimeout`.
+    static func waitForEnd(_ ended: AsyncStream<(any Error)?>, file: URL) async throws {
+        try await withThrowingTaskGroup { group in
+            group.addTask {
+                // The stream never finishes; the loop ends without an element only when the timeout wins and cancels it.
+                for await error in ended {
+                    if let error { throw error }
+                    return
+                }
+            }
+            group.addTask {
+                try await Task.sleep(for: finishTimeout)
+                throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: file.path,
+                    NSLocalizedDescriptionKey: "The recording didn't finish writing \(file.lastPathComponent) within \(finishTimeout.components.seconds) seconds."])
+            }
+            try await group.next()
+            group.cancelAll()
         }
     }
 
@@ -84,7 +115,7 @@ final class ScreenRecording: NSObject, SCRecordingOutputDelegate {
         }
     }
 
-    /// A click-through, borderless window with a 2 pt accent border drawn outside `area`.
+    /// A click-through, borderless window with a 2 pt accent border drawn outside `area`, flashing once as it appears.
     private static func makeOutline(around area: CGRect, on displayID: CGDirectDisplayID) -> NSPanel {
         let bounds = CGDisplayBounds(displayID)
         let primaryHeight = CGDisplayBounds(CGMainDisplayID()).height
@@ -106,6 +137,11 @@ final class ScreenRecording: NSObject, SCRecordingOutputDelegate {
         border.layer!.cornerRadius = 4
         panel.contentView = border
         panel.orderFrontRegardless()
+        // The start cue: the outline flashes once.
+        let pulse = CAKeyframeAnimation(keyPath: "opacity")
+        pulse.values = [0, 1, 0.25, 1]
+        pulse.duration = 0.5
+        border.layer!.add(pulse, forKey: "pulse")
         return panel
     }
 
