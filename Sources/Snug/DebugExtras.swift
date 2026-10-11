@@ -189,6 +189,30 @@ extension DebugRun {
             let covered = [barChrome.bottomBar, barChrome.hints, barChrome.actionBar].filter { !$0.isHidden && guides.loupe.frame.intersects($0.frame) }
             require(covered.isEmpty, "the loupe with the pointer at y \(y) covers no bar: \(guides.loupe.frame) \(covered.map(\.frame))")
         }
+        // A flip at the screen's right edge slides: the model position follows the pointer at once, and an additive animation carries the
+        // loupe from its old offset to the new one. A move that keeps the placement adds no slide, and nothing slides while sliding is off.
+        func place(_ point: CGPoint) {
+            guides.update(point: point, pixel: CGPoint(x: 800, y: 600), image: image, bounds: viewBounds, scale: overlay.scale, topInset: 0, selected: nil, dragging: false, avoiding: [])
+        }
+        func slides() -> [CABasicAnimation] {
+            (guides.loupe.animationKeys() ?? []).compactMap { guides.loupe.animation(forKey: $0) as? CABasicAnimation }.filter { $0.keyPath == "position" && $0.isAdditive }
+        }
+        guides.loupe.removeAllAnimations()
+        require(!guides.slidesPlacement, "headless runs never slide the loupe")
+        place(CGPoint(x: 400, y: 300))
+        place(CGPoint(x: viewBounds.width - 20, y: 300))
+        require(slides().isEmpty, "with sliding off a flip moves the loupe at once")
+        guides.slidesPlacement = true
+        place(CGPoint(x: 400, y: 300))
+        let slid = slides()
+        let jump = (slid.first?.fromValue as? NSValue)?.pointValue ?? .zero
+        require(slid.count == 1 && abs(jump.x - (-Guides.loupeSize - 20)) <= 0.5 && abs(jump.y) <= 0.5 && (slid[0].toValue as! NSValue).pointValue == .zero,
+                "a flip back to the pointer's right slides from the old offset: \(slid.map { ($0.fromValue, $0.toValue) })")
+        require(abs(guides.loupe.frame.minX - 410) <= 0.5, "the loupe's model position follows the pointer at once: \(guides.loupe.frame)")
+        place(CGPoint(x: 401, y: 301))
+        require(slides().count == 1, "a move that keeps the placement adds no slide")
+        guides.slidesPlacement = false
+        guides.loupe.removeAllAnimations()
         overlay.dismiss()
 
         // Animation variants: fade (the default) scales the loupe and fades the rulers without a slide, slide moves them in, none flips at once.

@@ -58,6 +58,9 @@ final class Guides {
     private let hint = Guides.text(NSFont.systemFont(ofSize: 10, weight: .semibold), .right)
     private let coordinates = Guides.text(NSFont.monospacedSystemFont(ofSize: 10, weight: .medium), .left)
     private var tickKey: [CGFloat] = []
+    /// Whether a change of the loupe's placement slides, and the loupe's offset from the pointer at the last update (nil until it first shows).
+    var slidesPlacement = false
+    var loupeOffset: CGPoint?
 
     private static func text(_ font: NSFont, _ alignment: CATextLayerAlignmentMode) -> CATextLayer {
         let layer = CATextLayer()
@@ -155,6 +158,7 @@ final class Guides {
     func setShown(_ layer: CALayer, _ shown: Bool, from hidden: CATransform3D, animated: Bool) {
         let visible = !layer.isHidden && layer.opacity == 1
         guard shown != visible else { return }
+        if layer === loupe { loupeOffset = nil }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         guard animated else {
@@ -335,6 +339,19 @@ final class Guides {
             hex.string = ColorFormat.hex.string(for: color)
             coordinates.string = "x \(column)  y \(row)"
             let origin = Self.loupeOrigin(point: point, bounds: bounds, topInset: topInset, scale: scale, avoiding: avoiding)
+            let offset = CGPoint(x: origin.x - point.x, y: origin.y - point.y)
+            // A new placement (a flip past a bar or a screen edge) slides from the old offset to the new one. Only the offset animates, additively,
+            // so the loupe still tracks the pointer at once, and a flip during a slide adds to it. Mid-slide frames sit between device pixels.
+            if slidesPlacement, let previous = loupeOffset, hypot(previous.x - offset.x, previous.y - offset.y) > 2 {
+                let slide = CABasicAnimation(keyPath: "position")
+                slide.isAdditive = true
+                slide.fromValue = NSValue(point: CGPoint(x: previous.x - offset.x, y: previous.y - offset.y))
+                slide.toValue = NSValue(point: .zero)
+                slide.duration = Self.transitionDuration
+                slide.timingFunction = Self.introCurve
+                loupe.add(slide, forKey: "placement \(CACurrentMediaTime())")
+            }
+            loupeOffset = offset
             loupe.position = CGPoint(x: origin.x + Self.loupeSize / 2, y: origin.y + loupe.bounds.height / 2)
         }
     }

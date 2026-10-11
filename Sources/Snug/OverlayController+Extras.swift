@@ -63,6 +63,7 @@ extension OverlayController {
         detected = []
         dockTiles = []
         mode = .capture
+        view.guides.loupeOffset = nil
         chrome.help.isHidden = true
         if !isHeadless { previousApp?.activate() }
         previousApp = nil
@@ -172,6 +173,7 @@ extension OverlayController {
         let animated = !isHeadless && animation != GuidesAnimation.none
         guides.setShown(guides.rulers, defaults.bool(forKey: Pref.rulers), from: animation == .slide ? Guides.rulersHiddenTransform : CATransform3DIdentity, animated: animated)
         guides.setShown(guides.loupe, defaults.bool(forKey: Pref.loupe), from: Guides.loupeHiddenTransform, animated: animated)
+        guides.slidesPlacement = animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         guard !(guides.crosshair.isHidden && guides.rulers.isHidden && guides.loupe.isHidden) else { return }
         // While a drag carries a max side with the pointer, the loupe centers on the last pixel inside the crop, whose max sides round up,
         // so the outline keeps to the center cell's far side as the pointer crosses pixel boundaries.
