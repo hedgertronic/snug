@@ -23,7 +23,7 @@ extension OverlayController {
     /// alone with no margin, and opens the cut-out preview over it. The overlay stays as it is while the mask runs (tens of milliseconds);
     /// with no subject it shows "No subject found" and changes nothing else. A K while the mask runs replaces that run.
     func cutOut() {
-        guard let area = selection?.rect ?? hoverRect, let image else { return NSSound.beep() }
+        guard let area = selection?.rect ?? hoverRect, let image else { return beep() }
         let (rect, outline) = (area.integral, (1.5 * scale).rounded())
         textTask?.cancel()
         textTask = Task {

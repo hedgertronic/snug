@@ -193,7 +193,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
 
     /// Puts text on the pasteboard, closes the overlay, and toasts, with a thumbnail of `rect` when there is one.
     private func deliverText(_ copied: String, message: String, detail: String = "", rect: CGRect?) {
-        guard !copied.isEmpty, let image else { return NSSound.beep() }
+        guard !copied.isEmpty, let image else { return beep() }
         pasteboard.clearContents()
         pasteboard.setString(copied, forType: .string)
         guard let rect else {
@@ -281,7 +281,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     /// matched to the Live Text selection.
     func copyTextRows() {
         let selected = view.liveText.selectedText
-        guard !selected.isEmpty, text.reading == nil, let image else { return NSSound.beep() }
+        guard !selected.isEmpty, text.reading == nil, let image else { return beep() }
         guard !waitsForWarmUp("Shift-Return", { self.copyTextRows() }) else { return }
         text.reading = extent
         textTask = Task {
@@ -301,7 +301,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     /// from text selection to its data detectors and highlights them (links, email addresses, phone numbers, codes).
     func stepItem(backward: Bool) {
         guard let items = text.items else {
-            guard text.reading == nil, let image else { return NSSound.beep() }
+            guard text.reading == nil, let image else { return beep() }
             guard !waitsForWarmUp("Tab", { self.stepItem(backward: backward) }) else { return }
             text.reading = extent
             textTask = Task {
@@ -368,7 +368,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
                 liveText.preferredInteractionTypes = .textSelection
                 liveText.selectableItemsHighlighted = false
             case (_, true):
-                guard let url = item.url else { NSSound.beep(); break }
+                guard let url = item.url else { beep(); break }
                 dismiss()
                 openURL(url)
             default:
@@ -387,7 +387,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
             copyTextRows()
         case (36, _, _), (76, _, _), (_, true, "c"):
             let selected = liveText.selectedText
-            guard !selected.isEmpty else { NSSound.beep(); break }
+            guard !selected.isEmpty else { beep(); break }
             let lines = selected.split(whereSeparator: \.isNewline).count
             copyText(selected, message: "Copied \(lines) \(lines == 1 ? "line" : "lines")", translating: flags.contains(.option), rect: nil)
         default:

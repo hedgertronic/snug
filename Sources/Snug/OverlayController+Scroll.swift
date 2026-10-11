@@ -10,7 +10,7 @@ extension OverlayController {
             try await DisplayCapture.image(of: id, area: CGRect(x: area.minX / scale, y: area.minY / scale, width: area.width / scale, height: area.height / scale))
         } }
         guard let area = selection?.rect ?? hoverRect, let source = scrollFrames ?? live,
-              windows.contains(where: { $0.insetBy(dx: -2, dy: -2).contains(area) }), area != extent else { return NSSound.beep() }
+              windows.contains(where: { $0.insetBy(dx: -2, dy: -2).contains(area) }), area != extent else { return beep() }
         cancelWork()
         detectionTask?.cancel()
         detectionTask = nil

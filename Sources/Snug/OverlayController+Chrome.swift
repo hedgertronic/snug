@@ -156,7 +156,7 @@ extension OverlayController {
                         : (snapEnabled ? ("Exact", .white) : ("Exact, snap off", .white))
                 } else if overlays.ghost != nil {
                     if snapPreview != nil {
-                        status = ("Snap ready: release to take it, Tab for others", .controlAccentColor)
+                        status = ("Snap ready: release to take it", .controlAccentColor)
                     } else if !snapEnabled || bypassSnap {
                         status = ("Snap off: exact drag", .white)
                     }

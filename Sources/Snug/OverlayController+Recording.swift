@@ -21,7 +21,7 @@ final class ArmedRecording {
 /// Esc disarms. H and C save their choice. The overlay closes before the app starts recording the area.
 extension OverlayController {
     func armRecording() {
-        guard displayID != nil, let area = selection?.rect ?? session?.selected?.bounds else { return NSSound.beep() }
+        guard displayID != nil, let area = selection?.rect ?? session?.selected?.bounds else { return beep() }
         if selection == nil { openAsSelection(area) }
         let armed = ArmedRecording()
         view.layer!.addSublayer(armed.outline)
@@ -77,7 +77,7 @@ extension OverlayController {
 
     /// Closes the overlay, then asks the app to record the selection's whole even pixels (H.264 needs even sizes) in display points.
     private func recordSelection() {
-        guard let displayID, let area = selection?.rect else { return NSSound.beep() }
+        guard let displayID, let area = selection?.rect else { return beep() }
         let showsCursor = defaults.bool(forKey: Pref.recordCursor)
         var pixels = area.integral
         pixels.size.width -= pixels.width.truncatingRemainder(dividingBy: 2)

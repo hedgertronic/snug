@@ -161,7 +161,7 @@ final class OverlayView: NSView {
     override func mouseDragged(with event: NSEvent) { controller?.mouseDragged(event) }
     override func mouseUp(with event: NSEvent) { controller?.mouseUp(event) }
     override func flagsChanged(with event: NSEvent) { controller?.flagsChanged(event) }
-    override func keyDown(with event: NSEvent) { if controller?.handleKey(event) != true { super.keyDown(with: event) } }
+    override func keyDown(with event: NSEvent) { if controller?.handleKey(event) == false, controller?.isHeadless == false { super.keyDown(with: event) } }
     override func keyUp(with event: NSEvent) { controller?.keyUp(event) }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {

@@ -762,7 +762,7 @@ extension DebugRun {
         require(texts(in: chrome.status).isEmpty && !chrome.size.isHidden, "a quick drag shows only the size badge")
         for _ in 0..<9000 where overlay.snapPreview == nil { try await Task.sleep(for: .milliseconds(10)) }
         let fit = overlay.snapPreview!
-        require(texts(in: chrome.size) == ["\(Int(fit.width)) x \(Int(fit.height))"] && texts(in: chrome.status) == ["Snap ready: release to take it, Tab for others"], "a snap preview shows its size and Snap ready")
+        require(texts(in: chrome.size) == ["\(Int(fit.width)) x \(Int(fit.height))"] && texts(in: chrome.status) == ["Snap ready: release to take it"], "a snap preview shows its size and Snap ready")
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.status) == ["Snapped"], "after release on a fit: Snapped")
         require(chrome.bottomBar.isHidden && !chrome.actionBar.isHidden && texts(in: chrome.hints)

@@ -48,6 +48,9 @@ final class OverlayController {
     /// Debug runs drive the window with synthesized events; it stays transparent, below other apps' windows' level, and never takes focus.
     var isHeadless = false
 
+    /// The system alert for a key that can't act here; silent in debug runs, which hit these paths on purpose.
+    func beep() { if !isHeadless { NSSound.beep() } }
+
     var selection: AreaSelection?
     /// The rectangle a drag is changing right now: the one being drawn, or the selection being resized or moved.
     var draggedRect: CGRect? {

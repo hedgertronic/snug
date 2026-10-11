@@ -13,14 +13,13 @@ Open `build/Smart Screenshot Lab.app`. A bundled synthetic table provides an imm
 | Input | Action |
 | --- | --- |
 | Hover | Text under the pointer, cell interiors, or whole tables at grid lines/borders |
-| Tab / Shift–Tab | Cycle alternatives |
+| Tab / Shift–Tab | Walk out / in |
 | Up / Down | Expand / shrink |
 | Space | Lock / unlock |
 | F | Full image or display |
 | W | Containing window when using live capture |
 | Drag, then pause briefly | Preview a nearby boundary; release accepts the visible snap |
 | Option–drag | Keep the exact rectangle |
-| Tab / Shift–Tab after a drag | Cycle snap alternatives and the original rectangle |
 | Arrow keys in manual mode | Move crop; Shift increases the step |
 | Return or click | Copy selected crop |
 | Command–S | Save PNG |
