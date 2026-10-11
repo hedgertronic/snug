@@ -1,13 +1,18 @@
 import CoreGraphics
 import Foundation
 
-/// Estimates the corner radius of a shape in image pixels, using top-left image coordinates.
-/// From each corner it casts rays at several angles and takes the first edge along each. A rounded corner puts those edges on a circle
-/// of one radius tangent to both sides; anything else (square corners, busy content) leaves no consistent radius. At least 3 corners must agree.
+/// Estimates the corner radius of a shape in image pixels, using top-left image coordinates: the radius its corners' arcs agree on.
 public func cornerRadius(in image: CGImage, rect: CGRect) -> CGFloat {
+    cornerArcs(in: image, rect: rect).agreed
+}
+
+/// The radius of the arc each corner of `rect` follows, in image pixels with top-left image coordinates; 0 where a corner follows none.
+/// From each corner it casts rays at several angles and takes the first edge along each. A rounded corner puts those edges on a circle
+/// of one radius tangent to both sides; anything else (square corners, busy content) leaves no consistent radius.
+public func cornerArcs(in image: CGImage, rect: CGRect) -> CornerRadii {
     let bounds = rect.integral.intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
     let width = Int(bounds.width), height = Int(bounds.height)
-    guard min(width, height) >= 16 else { return 0 } // the smallest radius tried is 8, half the short side
+    guard min(width, height) >= 16 else { return .zero } // the smallest radius tried is 8, half the short side
 
     let bytesPerRow = width * 4
     var bytes = [UInt8](repeating: 0, count: bytesPerRow * height)
@@ -53,15 +58,13 @@ public func cornerRadius(in image: CGImage, rect: CGRect) -> CGFloat {
                 return abs(distance! - Double(radius) * (k - (k * k - 1).squareRoot()))
             }.max()!)
         }.min { $0.1 < $1.1 }!
-        return best.1 <= max(1.25, Double(best.0) * 0.1) ? best.0 : nil
+        // Within a tenth of the radius, at most 3 px: edges of a grid around the corner can fit a large circle to a tenth of it.
+        return best.1 <= max(1.25, min(3, Double(best.0) * 0.1)) ? best.0 : nil
     }
 
-    let radii = [fit(corner: (0, 0), step: (1, 1)), fit(corner: (width - 1, 0), step: (-1, 1)),
-                 fit(corner: (0, height - 1), step: (1, -1)), fit(corner: (width - 1, height - 1), step: (-1, -1))].compactMap { $0 }
-    guard radii.count >= 3 else { return 0 }
-    let estimate = radii.sorted()[radii.count / 2]
-    guard radii.filter({ abs($0 - estimate) <= max(2, estimate / 5) }).count >= 3 else { return 0 }
-    return CGFloat(min(estimate, min(width, height) / 2))
+    return CornerRadii(topLeft: CGFloat(fit(corner: (0, 0), step: (1, 1)) ?? 0), topRight: CGFloat(fit(corner: (width - 1, 0), step: (-1, 1)) ?? 0),
+                       bottomLeft: CGFloat(fit(corner: (0, height - 1), step: (1, -1)) ?? 0),
+                       bottomRight: CGFloat(fit(corner: (width - 1, height - 1), step: (-1, -1)) ?? 0))
 }
 
 /// The corner radius of a window whose frame is `rect` (image pixels, top-left origin): at each corner, the circle tangent to both

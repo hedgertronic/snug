@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import ImageIO
 import XCTest
 @testable import ScreenshotCore
 
@@ -206,6 +207,21 @@ final class SmartSnapTests: XCTestCase {
 
         let toolbar = try await SmartSnap().suggest(in: image, roughBounds: CGRect(x: 5, y: 54, width: 390, height: 52))
         XCTAssertTrue(near(try XCTUnwrap(toolbar.first).bounds, strip, tolerance: 2), "got \(toolbar.map(\.bounds))")
+    }
+
+    func testSnapsToTheRoundedSquareInsideALogo() async throws {
+        // The user's logo fixture: a gray rounded square (39...360 px, its corners curving over about 80 px of each side) on a near-black
+        // 400 x 400 image. A drag about 12 px outside the square takes the square; one hugging the image's border takes the border.
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("notes/fixtures/round9/logo-inner-squircle-snap.png")
+        let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(try XCTUnwrap(CGImageSourceCreateWithURL(url as CFURL, nil)), 0, nil))
+        let square = CGRect(x: 40, y: 40, width: 320, height: 320)
+        for rough in [CGRect(x: 28, y: 28, width: 344, height: 344), CGRect(x: 30, y: 25, width: 340, height: 350)] {
+            let suggestions = try await SmartSnap().suggest(in: image, roughBounds: rough)
+            XCTAssertTrue(near(try XCTUnwrap(suggestions.first).bounds, square, tolerance: 2), "\(rough) got \(suggestions.map(\.bounds))")
+        }
+        let border = try await SmartSnap().suggest(in: image, roughBounds: CGRect(x: 8, y: 8, width: 384, height: 384))
+        XCTAssertEqual(try XCTUnwrap(border.first).bounds, CGRect(x: 0, y: 0, width: 400, height: 400))
     }
 
     func testEdgesFindsOneSideNearThePointer() throws {

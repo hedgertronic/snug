@@ -41,11 +41,15 @@ extension OverlayController {
         editedRadii[new] = radii.offset(by: 0, in: new.size)
     }
 
-    /// The radius Rounded detects at `corner` of `rect`: the radius measured for `rect`, or its window's where the corner sits on the
-    /// window's corner. Nil until measured, or when it is 0 (square, or nothing consistent found).
+    /// The radius Rounded detects at `corner` of `rect`: the radius measured for `rect` (the corner's own arc when its corners agree on
+    /// none), or its window's where the corner sits on the window's corner. Nil until measured, or when it is 0 (square, or nothing
+    /// consistent found).
     func detectedRadius(_ corner: Handle, of rect: CGRect) -> CGFloat? {
-        var detected = CornerRadii(radii[rect] ?? 0)
-        if let window = container(of: rect), let radius = radii[window] { detected = detected.replacingCorners(sharedWith: window, in: rect, with: radius) }
+        let radius = radii[rect] ?? 0, arcs = arcs[rect] ?? .zero
+        var detected = radius > 0 ? CornerRadii(radius) : arcs
+        if let window = container(of: rect), let windowRadius = radii[window] {
+            detected = detected.replacingCorners(sharedWith: window, in: rect, with: windowRadius, arcs: arcs)
+        }
         return detected[corner] > 0 ? detected[corner] : nil
     }
 

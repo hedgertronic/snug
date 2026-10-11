@@ -457,6 +457,17 @@ enum DebugRun {
         overlay.snapFrameSource = nil
         overlay.dismiss()
 
+        // An exact drag whose bottom-right corner sits on a rounded panel's corner takes the panel's arc there; the others stay square.
+        openFixture(panelCornerFixture)
+        let onPanelCorner = CGRect(x: 600, y: 400, width: 400, height: 200)
+        pressDrag(onPanelCorner, .option)
+        release(onPanelCorner)
+        try await waitFor("the settled selection's corners are measured") { overlay.arcs[onPanelCorner] != nil }
+        let panelRadii = overlay.view.overlays.radii
+        require(panelRadii.topLeft == 0 && panelRadii.topRight == 0 && panelRadii.bottomLeft == 0 && abs(panelRadii.bottomRight - 20) <= 3,
+                "only the corner on the panel's corner takes its 20 px arc: \(panelRadii)")
+        overlay.dismiss()
+
         openFixture(pillFixture)
         let area = CGRect(x: 300, y: 500, width: 400, height: 200)
         pressDrag(area, .option)

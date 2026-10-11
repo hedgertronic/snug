@@ -12,6 +12,17 @@ struct SnapFitsTests {
         #expect(merged == [ax, pixel[1]])
     }
 
+    @Test func aPixelFitNearerTheDragThanAFrameGoesFirst() {
+        // The logo fixture shown in an image view: the view's frame is the image's bounds, 28 px outside the drag on every side; the
+        // rounded square drawn in it is 12 px inside.
+        let image = CGRect(x: 0, y: 0, width: 400, height: 400), square = CGRect(x: 40, y: 40, width: 320, height: 320)
+        let drag = CGRect(x: 28, y: 28, width: 344, height: 344)
+        #expect(SnapFits.merge(frames: [image], pixel: [square, image], drag: drag, scale: 1) == [square, image])
+        // A drag nearer the image's bounds keeps the frame first.
+        let hugging = CGRect(x: 10, y: 10, width: 380, height: 380)
+        #expect(SnapFits.merge(frames: [image], pixel: [square], drag: hugging, scale: 1) == [image, square])
+    }
+
     @Test func framesWithAnySideOutsideTheBandAreIgnored() {
         let nearOnThreeSides = CGRect(x: 100, y: 100, width: 300, height: 260)
         let tooSmall = CGRect(x: 100, y: 100, width: 40, height: 40)

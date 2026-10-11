@@ -1,4 +1,6 @@
 import CoreGraphics
+import Foundation
+import ImageIO
 import Testing
 @testable import ScreenshotCore
 
@@ -123,6 +125,43 @@ struct CornerRadiusTests {
             let estimate = cornerRadius(in: context.makeImage()!, rect: shapeRect)
             #expect(abs(estimate - radius) <= max(2, radius * 0.1), "radius \(radius) estimated \(estimate)")
         }
+    }
+
+    @Test func noCornerFollowsAnArcOverBusyOrSquareContent() {
+        for (background, rim): (Int, CGFloat) in [(1, 0), (5, 0), (5, 1), (4, 1), (4, 2), (0, 2), (0, 0)] {
+            #expect(cornerArcs(in: image(radius: 0, background: background, rim: rim), rect: shapeRect) == .zero, "background \(background) rim \(rim)")
+        }
+    }
+
+    @Test func aTableGridCornerFollowsNoArc() throws {
+        // A Wikipedia table's cells at a grid corner: the first edges along the rays fit a 195 px circle to within 19 px, a tenth of it.
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("notes/real-web/wiki-test.png")
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        #expect(cornerArcs(in: image, rect: CGRect(x: 990, y: 590, width: 908, height: 1010)) == .zero)
+    }
+
+    @Test func aCropCornerOnSlacksContentPanelFollowsThePanelsArc() throws {
+        // The user's Slack composer crop: its bottom-right corner sits on the corner of Slack's dark content panel, whose arc shows the
+        // teal of Slack's frame past it. The other three corners are on plain panel or the composer's border.
+        let url = try #require(Bundle.module.url(forResource: "SlackComposerRow", withExtension: "png", subdirectory: "Fixtures"))
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        let arcs = cornerArcs(in: image, rect: CGRect(x: 0, y: 0, width: 1680, height: 284))
+        #expect(arcs.topLeft == 0 && arcs.topRight == 0 && arcs.bottomLeft == 0, "\(arcs)")
+        #expect(abs(arcs.bottomRight - 20) <= 3, "\(arcs)")
+    }
+
+    @Test func measuresTheLogosRoundedSquare() throws {
+        // The rounded square that a snap finds in the user's logo fixture (see SmartSnapTests).
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("notes/fixtures/round9/logo-inner-squircle-snap.png")
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        let radius = cornerRadius(in: image, rect: CGRect(x: 40, y: 40, width: 320, height: 320))
+        // Its corners are Apple's continuous curve; the circle that fits them spans the same 80 px of each side.
+        #expect(abs(radius - 79) <= 3, "measured \(radius)")
     }
 
     @Test func aWindowRadiusFollowsWhereTheWindowColorStarts() {
