@@ -23,7 +23,7 @@ extension OverlayController {
             // The resize hint follows the held modifiers: Option grows, Option-Command shrinks; the side arrows appear in place.
             (hasOtherFits ? [(["Tab"], "next snap")] : [])
                 + [optionHeld && commandHeld ? (["\u{2325}", "\u{2318}"], "shrink") : (["\u{2325}"], optionHeld ? "grow" : "resize")]
-                + [(["\u{21E7}"], "lock ratio, axis"), (["P", "\u{21E7}P"], "ratio \(ratioReadout)"), (["esc"], "cancel")]
+                + [(["\u{21E7}"], "keep ratio, axis"), (["P", "\u{21E7}P"], "ratio \(ratioReadout)"), (["esc"], "cancel")]
         case .capture: [(["Click"], "capture"), (["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["F"], "full screen"), (["W"], "window"), (["?"], "all keys")]
         }
     }
@@ -38,7 +38,10 @@ extension OverlayController {
         menu.style(fill: NSColor.white.withAlphaComponent(0.12), text: text)
         lock.style(fill: ratioLocked ? .controlAccentColor : NSColor.white.withAlphaComponent(0.12), text: text, bold: ratioLocked)
         menu.onClick = { [unowned self, unowned menu] in showRatioMenu(from: menu) }
-        lock.onClick = { [unowned self] in toggleRatioLock() }
+        lock.onClick = { [unowned self] in
+            toggleRatioLock()
+            refresh()
+        }
         chip.show(readout + (ratioLocked ? "|locked" : "")) { [menu, lock] }
         return chip
     }
@@ -254,9 +257,6 @@ extension OverlayController {
 @MainActor private var ratioLockStub = false
 extension OverlayController {
     var ratioLocked: Bool { ratioLockStub }
-    func toggleRatioLock() {
-        ratioLockStub.toggle()
-        refresh()
-    }
+    func toggleRatioLock() { ratioLockStub.toggle() }
     func showRatioMenu(from view: NSView) {}
 }

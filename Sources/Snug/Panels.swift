@@ -121,7 +121,7 @@ final class HelpSheet: NSView {
         ("Capture", [("drag", "Select a region"), ("click", "Element or window"), ("Option-click", "Flip window shadow"), ("Option-drag", "Exact, no snap"),
                      ("F", "Full screen, or all text"), ("W", "Capture the window"), ("Return", "Copy"), ("Shift-Return", "Copy text in the selection"), ("Cmd-S", "Save"),
                      ("Cmd-Shift-S", "Save As"), ("E / Shift-click", "Edit as a selection"),
-                     ("G", "Scrolling capture of the selection"), ("K", "Cut-out preview"), ("Cut-out: Tab", "Next subject"),
+                     ("G", "Scrolling capture of the selection"), ("K", "Cut-out preview"), ("Cut-out: Tab", "Next subject (Shift: back)"),
                      ("C", "Copy color"), ("Shift-C", "Cycle color format"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
         ("Adjust and text", [("Tab", "Walk out, other fits"), ("Arrows", "Nudge 1 px (Shift: 10 px)"), ("Option-arrow", "Grow one side 1 px"), ("Option-Cmd-arrow", "Shrink one side 1 px"),
                              ("Up / Down", "Bigger / smaller element"), ("Shift-click", "Add an element"),

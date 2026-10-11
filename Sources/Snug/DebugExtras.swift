@@ -249,7 +249,7 @@ extension DebugRun {
                 "the sheet lists the corner radius keys, V, K, and arrows in pixels")
         let helpActions = Dictionary(helpRows.map { ($0.keys, $0.action) }, uniquingKeysWith: { $1 })
         require(helpActions["P"] == "Ratio menu" && helpActions["Shift-P"] == "Lock the ratio" && helpActions["W"] == "Capture the window"
-                    && helpActions["K"] == "Cut-out preview" && helpActions["Cut-out: Tab"] == "Next subject" && helpActions["V"] == "Arm recording"
+                    && helpActions["K"] == "Cut-out preview" && helpActions["Cut-out: Tab"] == "Next subject (Shift: back)" && helpActions["V"] == "Arm recording"
                     && helpActions["Armed: Return / V"] == "Start recording" && helpActions["Armed: H"] == "Cursor on / off" && helpActions["Capture hotkey"] == "Stop recording"
                     && !helpRows.contains { $0.action.contains("Aspect ratio lock") },
                 "the sheet lists the ratio menu and lock, W, the cut-out preview, and the recording keys, and no P cycle")
@@ -686,7 +686,7 @@ extension DebugRun {
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.status) == ["Snapped"], "after release on a fit: Snapped")
         require(chrome.bottomBar.isHidden && !chrome.actionBar.isHidden && texts(in: chrome.hints)
-                    == ["next snap", "Tab", "resize", "\u{2325}", "lock ratio, axis", "\u{21E7}", "ratio \(overlay.ratioReadout)", "P", "\u{21E7}P", "cancel", "esc"],
+                    == ["next snap", "Tab", "resize", "\u{2325}", "keep ratio, axis", "\u{21E7}", "ratio \(overlay.ratioReadout)", "P", "\u{21E7}P", "cancel", "esc"],
                 "the action bar replaces the bottom bar, with the released hints, each label before its keys: \(texts(in: chrome.hints))")
         require(chrome.hints.frame.height < 40 && chrome.hints.frame.width <= overlay.view.bounds.width - 16, "the released hint strip is one line and fits: \(chrome.hints.frame) in \(overlay.view.bounds.width)")
         require(texts(in: chrome.actionBar) == ["Frame", "M", "Snap", "S", "Scroll", "G", "Record", "V", "Cut out", "K", "Text", "\u{21E7}\u{21A9}", "Save", "\u{2318}S", "Copy", "\u{21A9}"],
