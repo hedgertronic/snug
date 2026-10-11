@@ -43,12 +43,17 @@ public enum AccessibilityBounds {
     public static let minimumHoverSide: CGFloat = 16
 
     /// The frames a hover can land on: not the window (its rectangle comes from the window list, where a click captures it as a window),
-    /// not static text, not Stage Manager's strip list (it would win in the gaps between thumbnails and around their tilted pictures), and
-    /// nothing under 16 pt on a side. Roles, not role descriptions: those are localized.
+    /// nor an element within `paddingTolerance` of the window's frame on every side (Finder's column view AXBrowser spans its window a few
+    /// points past each edge), not static text, not Stage Manager's strip list (it would win in the gaps between thumbnails and around their
+    /// tilted pictures), and nothing under 16 pt on a side. Roles, not role descriptions: those are localized.
     public static func hoverLevel(_ frames: [AXFrame]) -> [AXFrame] {
         let stageManager = StageManager.owns(frames)
-        return frames.filter { $0.role != "AXWindow" && $0.role != "AXStaticText" && !(stageManager && $0.role == "AXList")
-            && $0.rect.width >= minimumHoverSide && $0.rect.height >= minimumHoverSide }
+        let window = frames.first { $0.role == "AXWindow" }?.rect
+        return frames.filter { frame in
+            frame.role != "AXWindow" && frame.role != "AXStaticText" && !(stageManager && frame.role == "AXList")
+                && frame.rect.width >= minimumHoverSide && frame.rect.height >= minimumHoverSide
+                && !(window.map { frame.rect.isNear($0, within: paddingTolerance) } ?? false)
+        }
     }
 
     /// Whether hover looks up accessibility frames in a window: not in the frozen Dock (named "Dock" by the window listing), whose live

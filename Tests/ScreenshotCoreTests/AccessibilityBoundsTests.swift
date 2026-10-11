@@ -92,6 +92,20 @@ struct AccessibilityBoundsTests {
         #expect(AccessibilityBounds.hoverLevel(frames).map(\.roleDescription) == ["button"])
         #expect(AccessibilityBounds.hoverLevel([AXFrame(roleDescription: "edge", rect: CGRect(x: 0, y: 0, width: 16, height: 16), role: "AXButton")]).count == 1)
     }
+
+    /// Finder's column view: its AXBrowser spans the window a few points past it on each side, so it would be a second target ("Browser")
+    /// beside the window ("Recents", the window title). The window target stays; an element inset well inside it still counts.
+    @Test func hoverLevelSkipsElementsThatAreTheWindowsOwnFrame() {
+        let window = AXFrame(roleDescription: "standard window", rect: CGRect(x: 55, y: 37, width: 890, height: 422), role: "AXWindow", title: "Recents")
+        let frames = [
+            AXFrame(roleDescription: "row", rect: CGRect(x: 220, y: 95, width: 225, height: 21), role: "AXRow"),
+            AXFrame(roleDescription: "browser", rect: CGRect(x: 52, y: 34, width: 896, height: 428), role: "AXBrowser"),
+            window
+        ]
+        #expect(AccessibilityBounds.hoverLevel(frames).map(\.roleDescription) == ["row"])
+        let content = AXFrame(roleDescription: "browser", rect: CGRect(x: 208, y: 37, width: 737, height: 422), role: "AXBrowser")
+        #expect(AccessibilityBounds.hoverLevel([content, window]).map(\.roleDescription) == ["browser"])
+    }
 }
 
 struct DockRectTests {
