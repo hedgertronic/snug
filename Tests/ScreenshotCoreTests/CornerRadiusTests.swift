@@ -1,4 +1,6 @@
 import CoreGraphics
+import Foundation
+import ImageIO
 import Testing
 @testable import ScreenshotCore
 
@@ -123,6 +125,17 @@ struct CornerRadiusTests {
             let estimate = cornerRadius(in: context.makeImage()!, rect: shapeRect)
             #expect(abs(estimate - radius) <= max(2, radius * 0.1), "radius \(radius) estimated \(estimate)")
         }
+    }
+
+    @Test func measuresTheLogosRoundedSquare() throws {
+        // The rounded square that a snap finds in the user's logo fixture (see SmartSnapTests).
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("notes/fixtures/round9/logo-inner-squircle-snap.png")
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        let radius = cornerRadius(in: image, rect: CGRect(x: 40, y: 40, width: 320, height: 320))
+        // Its corners are Apple's continuous curve; the circle that fits them spans the same 80 px of each side.
+        #expect(abs(radius - 79) <= 3, "measured \(radius)")
     }
 
     @Test func aWindowRadiusFollowsWhereTheWindowColorStarts() {

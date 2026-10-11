@@ -97,9 +97,11 @@ public struct SmartSnap {
             }
         }
 
+        // Distance from the drag, as a fraction of the band, weighs a tenth: of two strong fits the nearer wins, so a drag just
+        // outside a shape inside an image takes the shape rather than the image's border.
         let ranked = scored.sorted {
-            let a = $0.confidence - $0.displacement * 0.035
-            let b = $1.confidence - $1.displacement * 0.035
+            let a = $0.confidence - $0.displacement * 0.1
+            let b = $1.confidence - $1.displacement * 0.1
             if a != b { return a > b }
             return abs($0.rect.width - rough.width) + abs($0.rect.height - rough.height)
                 < abs($1.rect.width - rough.width) + abs($1.rect.height - rough.height)
@@ -228,8 +230,9 @@ private func snapColorDistance(_ raster: SnapRaster, _ ax: Int, _ ay: Int, _ bx:
 private func snapCornerSupport(_ raster: SnapRaster, rect: CGRect) -> Double {
     let x0 = Int(rect.minX), x1 = Int(rect.maxX) - 1
     let y0 = Int(rect.minY), y1 = Int(rect.maxY) - 1
-    // Up to half the short side, so a pill whose rounded ends span the whole height still finds its straight edges.
-    let window = min(40, max(10, Int(min(rect.width, rect.height) * 0.5) + 2))
+    // Up to half the short side, so a pill whose rounded ends span the whole height, or a large rounded square whose corners curve
+    // over 80 px of each side, still finds its straight edges.
+    let window = max(10, Int(min(rect.width, rect.height) * 0.5) + 2)
     let matchingTolerance = max(5, window / 3)
     let corners = [
         (horizontal: (position: y0, start: x0, direction: 1), vertical: (position: x0, start: y0, direction: 1)),
