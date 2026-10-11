@@ -21,6 +21,7 @@ enum Shortcut {
     ]
 
     static func label(code: Int, modifiers: Int) -> String {
+        guard code >= 0 else { return "None" }
         let flags = NSEvent.ModifierFlags(rawValue: UInt(modifiers))
         return (flags.contains(.control) ? "\u{2303}" : "") + (flags.contains(.option) ? "\u{2325}" : "")
             + (flags.contains(.shift) ? "\u{21E7}" : "") + (flags.contains(.command) ? "\u{2318}" : "") + (functionKeys[code]?.name ?? keyNames[code]!)
@@ -133,21 +134,21 @@ private struct GeneralPane: View {
                     Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 60, height: 60)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Snug").font(.system(size: 28, weight: .heavy, design: .rounded))
-                        Text("Press \(Shortcut.label(code: hotKeyCode, modifiers: hotKeyModifiers)) to capture.\nPress ? in the overlay for every key.")
+                        Text("\(hotKeyCode < 0 ? "Set a shortcut to capture." : "Press \(Shortcut.label(code: hotKeyCode, modifiers: hotKeyModifiers)) to capture.")\nPress ? in the overlay for every key.")
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                     }
                 }
                 Card {
                     LabeledContent("Shortcut") {
-                        ShortcutRecorder(label: Shortcut.label(code: hotKeyCode, modifiers: hotKeyModifiers)).fixedSize()
+                        ShortcutRecorder(code: hotKeyCode, modifiers: hotKeyModifiers).fixedSize()
                     }
                     LabeledContent("After capture") {
                         Picker("After capture", selection: $afterCapture) {
                             Text("Copy").tag("copy")
                             Text("Copy and save").tag("copyAndSave")
                         }
-                        .pickerStyle(.segmented)
+                        .pickerStyle(.menu)
                         .labelsHidden()
                         .fixedSize()
                     }
@@ -439,60 +440,94 @@ struct HighlightPreview: View {
     }
 }
 
-/// A key cap that records a shortcut: click, then press one with at least one of Control, Option, or Command. Styled like the overlay's key caps.
-private struct ShortcutRecorder: NSViewRepresentable {
-    let label: String
+/// A field that records a shortcut: click, then press one with at least one of Control, Option, or Command (or a function key).
+/// It shows the shortcut as key caps with a clear button, and while recording an accent ring around a "Type shortcut" placeholder.
+struct ShortcutRecorder: NSViewRepresentable {
+    let code: Int
+    let modifiers: Int
 
-    func makeNSView(context: Context) -> RecorderButton { RecorderButton() }
-    func updateNSView(_ button: RecorderButton, context: Context) { button.show(label, recording: false) }
+    func makeNSView(context: Context) -> Field { Field() }
+    func updateNSView(_ field: Field, context: Context) { field.show(code: code, modifiers: modifiers, recording: false) }
 
-    final class RecorderButton: NSButton {
-        private var recording = false
+    final class Field: NSView {
+        static let height: CGFloat = 24
+        private(set) var recording = false
+        private var code = 0
+        private var modifiers = 0
+        private let caps = NSStackView()
+        private let placeholder = NSTextField("Type shortcut", size: 12, weight: .regular, color: .secondaryLabelColor)
+        private let clear = NSButton(image: NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Remove shortcut")!, target: nil, action: nil)
         override var acceptsFirstResponder: Bool { true }
 
         init() {
             super.init(frame: .zero)
-            isBordered = false
             wantsLayer = true
-            layer!.cornerRadius = 5
-            layer!.shadowOffset = CGSize(width: 0, height: -1)
-            layer!.shadowRadius = 0
-            target = self
-            action = #selector(beginRecording)
+            layer!.cornerRadius = 6
+            layer!.shadowColor = NSColor.controlAccentColor.cgColor
+            layer!.shadowOffset = .zero
+            layer!.shadowRadius = 3
+            caps.spacing = 3
+            clear.isBordered = false
+            clear.contentTintColor = .tertiaryLabelColor
+            clear.toolTip = "Remove shortcut"
+            clear.target = self
+            clear.action = #selector(removeShortcut)
+            let row = NSStackView(views: [caps, placeholder, clear])
+            row.spacing = 6
+            row.edgeInsets = NSEdgeInsets(top: 0, left: 6, bottom: 0, right: 6)
+            row.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(row)
+            NSLayoutConstraint.activate([
+                row.leadingAnchor.constraint(equalTo: leadingAnchor), row.trailingAnchor.constraint(equalTo: trailingAnchor),
+                row.topAnchor.constraint(equalTo: topAnchor), row.bottomAnchor.constraint(equalTo: bottomAnchor),
+                widthAnchor.constraint(greaterThanOrEqualToConstant: 130), heightAnchor.constraint(equalToConstant: Self.height)
+            ])
         }
 
         required init?(coder: NSCoder) { fatalError() }
 
-        /// The cap's text, or while `recording` a dashed accent outline with a prompt.
-        func show(_ text: String, recording: Bool) {
+        /// The shortcut as one cap per modifier and one for the key, or the placeholder while `recording`. A negative `code` is no shortcut.
+        func show(code: Int, modifiers: Int, recording: Bool) {
+            self.code = code
+            self.modifiers = modifiers
             self.recording = recording
-            attributedTitle = NSAttributedString(string: text, attributes: [
-                .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .semibold),
-                .foregroundColor: recording ? NSColor.controlAccentColor : NSColor.labelColor
-            ])
-            effectiveAppearance.performAsCurrentDrawingAppearance {
-                layer!.backgroundColor = recording ? NSColor.clear.cgColor : NSColor.secondaryLabelColor.withAlphaComponent(0.2).cgColor
-                layer!.borderColor = (recording ? NSColor.controlAccentColor : NSColor.black.withAlphaComponent(0.45)).cgColor
-            }
+            let label = Shortcut.label(code: code, modifiers: modifiers)
+            let glyphs = code < 0 ? "" : String(label.prefix { "\u{2303}\u{2325}\u{21E7}\u{2318}".contains($0) })
+            caps.setViews((code < 0 ? [] : glyphs.map(String.init) + [String(label.dropFirst(glyphs.count))]).map { KeyCap($0) }, in: .leading)
+            caps.isHidden = recording
+            placeholder.isHidden = !recording
+            clear.isHidden = recording || code < 0
             layer!.borderWidth = recording ? 1.5 : 0.5
-            layer!.shadowColor = NSColor.black.cgColor
-            layer!.shadowOpacity = recording ? 0 : 0.55
-            invalidateIntrinsicContentSize()
+            layer!.shadowOpacity = recording ? 0.6 : 0
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                layer!.backgroundColor = NSColor.textBackgroundColor.cgColor
+                layer!.borderColor = (recording ? NSColor.controlAccentColor : NSColor.separatorColor).cgColor
+                layer!.shadowColor = NSColor.controlAccentColor.cgColor
+            }
         }
 
-        override var intrinsicContentSize: NSSize { NSSize(width: max(80, attributedTitle.size().width + 24), height: 26) }
+        override func viewDidChangeEffectiveAppearance() { show(code: code, modifiers: modifiers, recording: recording) }
 
-        @objc private func beginRecording() {
+        override func mouseDown(with event: NSEvent) { beginRecording() }
+
+        func beginRecording() {
             window?.makeFirstResponder(self)
-            show("Type shortcut", recording: true)
+            show(code: code, modifiers: modifiers, recording: true)
         }
+
+        @objc private func removeShortcut() { UserDefaults.standard.set(-1, forKey: Pref.hotKeyCode) }
 
         override func resignFirstResponder() -> Bool {
-            show(Shortcut.label(from: .standard), recording: false)
+            show(code: code, modifiers: modifiers, recording: false)
             return super.resignFirstResponder()
         }
 
-        override func viewDidChangeEffectiveAppearance() { show(attributedTitle.string, recording: recording) }
+        /// While recording, command shortcuts reach `keyDown` instead of the menu.
+        override func performKeyEquivalent(with event: NSEvent) -> Bool {
+            guard recording else { return false }
+            keyDown(with: event)
+            return true
+        }
 
         override func keyDown(with event: NSEvent) {
             let modifiers = event.modifierFlags.intersection([.control, .option, .command, .shift])

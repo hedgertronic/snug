@@ -116,8 +116,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         let current = [defaults.integer(forKey: Pref.hotKeyCode), defaults.integer(forKey: Pref.hotKeyModifiers)]
         guard current != registeredShortcut else { return }
         do {
-            try hotKey!.register(keyCode: UInt32(defaults.integer(forKey: Pref.hotKeyCode)),
-                                 modifiers: NSEvent.ModifierFlags(rawValue: UInt(defaults.integer(forKey: Pref.hotKeyModifiers))))
+            if current[0] < 0 {
+                hotKey!.unregister()
+            } else {
+                try hotKey!.register(keyCode: UInt32(current[0]), modifiers: NSEvent.ModifierFlags(rawValue: UInt(current[1])))
+            }
             registeredShortcut = current
             captureItem?.setShortcut(from: defaults)
         } catch {
@@ -429,6 +432,10 @@ extension NSMenuItem {
     /// Shows the recorded hot key as this item's right-aligned key equivalent.
     func setShortcut(from defaults: UserDefaults) {
         let code = defaults.integer(forKey: Pref.hotKeyCode)
+        if code < 0 {
+            keyEquivalent = ""
+            return
+        }
         if let function = Shortcut.functionKeys[code] {
             keyEquivalent = String(Character(UnicodeScalar(function.character)!))
         } else {

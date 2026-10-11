@@ -19,10 +19,14 @@ final class HotKey {
         precondition(status == noErr, "InstallEventHandler failed: \(status)")
     }
 
-    /// Replaces the registered shortcut. Throws when another app already owns it.
-    func register(keyCode: UInt32, modifiers: NSEvent.ModifierFlags) throws {
+    func unregister() {
         if let ref { UnregisterEventHotKey(ref) }
         ref = nil
+    }
+
+    /// Replaces the registered shortcut. Throws when another app already owns it.
+    func register(keyCode: UInt32, modifiers: NSEvent.ModifierFlags) throws {
+        unregister()
         var carbon = 0
         if modifiers.contains(.command) { carbon |= cmdKey }
         if modifiers.contains(.shift) { carbon |= shiftKey }

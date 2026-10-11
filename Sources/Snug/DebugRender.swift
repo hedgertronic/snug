@@ -369,6 +369,23 @@ extension DebugRun {
             let file = directory.appending(path: "settings-\(item.label.lowercased()).png")
             try rep.representation(using: .png, properties: [:])!.write(to: file)
             print(file.path, host.fittingSize)
+            guard item.label == "General" else { continue }
+            func descendants<T: NSView>(of view: NSView, _ type: T.Type) -> [T] { view.subviews.flatMap { (($0 as? T).map { [$0] } ?? []) + descendants(of: $0, type) } }
+            let field = descendants(of: host, ShortcutRecorder.Field.self).first!
+            let controls = descendants(of: host, NSView.self).filter { "\(type(of: $0))".contains("FocusRingView") }
+            print("shortcut field", host.convert(field.frame, from: field.superview), "pop-up and button frames", controls.map { host.convert($0.frame, from: $0.superview) })
+            precondition(controls.count == 4 && controls.allSatisfy { $0.frame.height == field.frame.height }, "the shortcut field is as tall as the pop-ups and buttons: \(controls.map(\.frame)) \(field.frame)")
+            field.beginRecording()
+            precondition(field.recording, "a click starts recording")
+            host.layoutSubtreeIfNeeded()
+            host.cacheDisplay(in: host.bounds, to: rep)
+            let recordingFile = directory.appending(path: "settings-general-recording.png")
+            try rep.representation(using: .png, properties: [:])!.write(to: recordingFile)
+            print(recordingFile.path)
+            let escape = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: offscreen.windowNumber, context: nil, characters: "\u{1B}", charactersIgnoringModifiers: "\u{1B}", isARepeat: false, keyCode: 53)!
+            let hotKeyCode = UserDefaults.standard.integer(forKey: Pref.hotKeyCode)
+            field.keyDown(with: escape)
+            precondition(!field.recording && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode, "Esc stops recording and keeps the shortcut")
         }
         precondition(tabs.tabViewItems.map(\.label) == ["General", "Appearance", "Keys"], "Settings tabs: \(tabs.tabViewItems.map(\.label))")
         let window = SettingsTabs.makeWindow()
