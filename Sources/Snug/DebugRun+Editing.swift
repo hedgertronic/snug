@@ -291,17 +291,16 @@ extension DebugRun {
         // alone; Original takes the ratio at release; Portrait flips the presets and the lock.
         open()
         key(35, "p")
-        require(overlay.ratioMenu == nil, "P with no selection opens no menu")
+        require(overlay.chrome.ratioMenu.isHidden, "P with no selection opens no menu")
         key(14, "e")
         require(overlay.ratioReadout == "2.00", "a free 2:1 selection reads its live ratio: \(overlay.ratioReadout)")
         key(35, "p")
-        require(overlay.ratioMenu?.items.map(\.title) == ["Free", "Original", "1:1", "4:3", "3:2", "16:10", "16:9", "21:9", "", "Portrait"],
-                "P opens the presets: \(String(describing: overlay.ratioMenu?.items.map(\.title)))")
+        let menu = overlay.chrome.ratioMenu
+        require(!menu.isHidden && menu.items.map(\.title) == ["Free", "Original", "1:1", "4:3", "3:2", "16:10", "16:9", "21:9", "", "Portrait"],
+                "P opens the presets: \(menu.items.map(\.title))")
         func pick(_ title: String) {
-            overlay.ratioMenu = nil
-            key(35, "p")
-            let menu = overlay.ratioMenu!
-            menu.performActionForItem(at: menu.indexOfItem(withTitle: title))
+            if menu.isHidden { key(35, "p") }
+            menu.pick(menu.items.firstIndex { $0.title == title }!)
         }
         pick("1:1")
         require(overlay.ratioLocked && overlay.selection?.rect == CGRect(x: 400, y: 300, width: 200, height: 200),
@@ -315,7 +314,7 @@ extension DebugRun {
         require(overlay.selection?.rect == sixteenNine, "16:9 conforms: \(String(describing: overlay.selection?.rect))")
         require(overlay.ratioReadout == "1.78 ≈ 16:9", "356 x 200 px reads as near 16:9: \(overlay.ratioReadout)")
         key(35, "p")
-        require(overlay.ratioMenu?.items.filter { $0.state == .on }.map(\.title) == ["16:9"], "the menu checks the lock it applied")
+        require(menu.items.filter(\.on).map(\.title) == ["16:9"], "the menu checks the lock it applied")
         pick("Free")
         require(!overlay.ratioLocked && overlay.selection?.rect == sixteenNine, "Free unlocks and leaves the rectangle alone")
         pick("21:9")
@@ -329,8 +328,8 @@ extension DebugRun {
         require(overlay.selection?.rect == CGRect(x: 438, y: 300, width: 125, height: 200),
                 "Portrait flips the lock to 10:16 from the same selection: \(String(describing: overlay.selection?.rect))")
         key(35, "p")
-        require(overlay.ratioMenu.map { menu in ["3:4", "2:3", "10:16", "9:16", "9:21"].allSatisfy { menu.indexOfItem(withTitle: $0) >= 0 } } == true
-                && overlay.ratioMenu?.item(withTitle: "Portrait")?.state == .on, "with Portrait on the presets read tall")
+        require(["3:4", "2:3", "10:16", "9:16", "9:21"].allSatisfy { title in menu.items.contains { $0.title == title } }
+                && menu.items.last?.title == "Portrait" && menu.items.last?.on == true, "with Portrait on the presets read tall")
         pick("Portrait")
         require(overlay.selection?.rect == CGRect(x: 340, y: 300, width: 320, height: 200), "Portrait off flips the lock back: \(String(describing: overlay.selection?.rect))")
         key(right)

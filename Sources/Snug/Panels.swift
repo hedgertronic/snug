@@ -121,9 +121,9 @@ final class HelpSheet: NSView {
         ("Capture", [("drag", "Select a region"), ("click", "Element or window"), ("Option-click", "Flip window shadow"), ("Option-drag", "Exact, no snap"),
                      ("F", "Full screen, or all text"), ("W", "Capture the window"), ("Return", "Copy"), ("Shift-Return", "Copy text in the selection"), ("Cmd-S", "Save"),
                      ("Cmd-Shift-S", "Save As"), ("E / Shift-click", "Edit as a selection"),
-                     ("G", "Scrolling capture of the selection"), ("K", "Cut-out preview"), ("Cut-out: Tab", "Next subject (Shift: back)"),
+                     ("G", "Scrolling capture, hover or selection"), ("K", "Cut-out preview"), ("Cut-out: Tab", "Next subject (Shift: back)"), ("Cut-out: C", "Crop to subject"),
                      ("C", "Copy color"), ("Shift-C", "Cycle color format"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
-        ("Adjust and text", [("Tab", "Walk out, other fits"), ("Arrows", "Nudge 1 px (Shift: 10 px)"), ("Option-arrow", "Grow one side 1 px"), ("Option-Cmd-arrow", "Shrink one side 1 px"),
+        ("Adjust and text", [("Tab", "Walk out (Shift: in)"), ("Arrows", "Nudge 1 px (Shift: 10 px)"), ("Option-arrow", "Grow one side 1 px"), ("Option-Cmd-arrow", "Shrink one side 1 px"),
                              ("Up / Down", "Bigger / smaller element"), ("Shift-click", "Add an element"),
                              ("[ ]", "Corner radius"), ("Shift-[ ]", "Corner radius by 4 pt"), ("=", "Same radius on all corners"), ("Option-drag dot", "One corner's radius"),
                              ("Shift-drag handle", "Keep the aspect ratio"), ("Shift-move", "Lock to one axis"),
@@ -132,7 +132,7 @@ final class HelpSheet: NSView {
         ("Modes, view, recording", [("A", "Capture"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),
                                     ("X", "Crosshair"), ("D", "Window shadow"), ("O", "Rounded corners"), ("M", "Frame on / off"), ("P", "Ratio menu"),
                                     ("Shift-P", "Lock the ratio"), ("N", "Candidate list"), ("1-5", "Pick from the list (N)"), ("B", "Bottom bar"), ("?", "This sheet"),
-                                    ("V", "Arm recording"), ("Armed: Return / V", "Start recording"), ("Armed: H", "Cursor on / off"), ("Capture hotkey", "Stop recording")])
+                                    ("V", "Arm recording, hover or selection"), ("Armed: Return / V", "Start recording"), ("Armed: H", "Cursor on / off"), ("Armed: C", "Count-in off, 3 s, 5 s"), ("Capture hotkey", "Stop recording")])
     ]
     let panel = NSVisualEffectView()
 
@@ -188,5 +188,133 @@ final class HelpSheet: NSView {
     /// Fills `bounds` with the scrim and centers the panel.
     func layoutPanel() {
         panel.frame.origin = CGPoint(x: ((bounds.width - panel.frame.width) / 2).rounded(), y: ((bounds.height - panel.frame.height) / 2).rounded())
+    }
+}
+
+/// The ratio chip's menu: rows on a dark panel like the chips, over a clear layer that covers the overlay and closes the menu on a
+/// click outside it. While open it is the first responder: Up and Down move the highlight, Return picks, Esc or P closes; the pointer
+/// highlights the row under it and a click picks. Any other key closes it and goes on to the overlay.
+@MainActor
+final class RatioMenu: NSView {
+    /// A row; an empty title is a separator.
+    struct Item {
+        let title: String
+        let on: Bool
+        let pick: () -> Void
+    }
+
+    private(set) var items: [Item] = []
+    private(set) var highlighted: Int?
+    let panel = NSView()
+    private(set) var rows: [NSView] = []
+    private static let rowHeight: CGFloat = 22, separatorHeight: CGFloat = 9, width: CGFloat = 120, inset: CGFloat = 4
+
+    init() {
+        super.init(frame: .zero)
+        isHidden = true
+        panel.wantsLayer = true
+        panel.layer!.backgroundColor = NSColor(srgbRed: 20 / 255, green: 20 / 255, blue: 22 / 255, alpha: 0.94).cgColor
+        panel.layer!.cornerRadius = 8
+        panel.layer!.borderWidth = 0.5
+        panel.layer!.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
+        addSubview(panel)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var acceptsFirstResponder: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { isHidden || !frame.contains(point) ? nil : self }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func updateTrackingAreas() {
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeAlways, .inVisibleRect], owner: self))
+    }
+
+    /// Opens over the whole superview with `items`, the panel under `anchor` (superview points) with right edges aligned, or over it
+    /// when there is no room below.
+    func open(_ items: [Item], under anchor: CGRect) {
+        self.items = items
+        highlighted = nil
+        frame = superview!.bounds
+        rows.forEach { $0.removeFromSuperview() }
+        let heights = items.map { $0.title.isEmpty ? Self.separatorHeight : Self.rowHeight }
+        let size = CGSize(width: Self.width, height: heights.reduce(Self.inset * 2, +))
+        var top = size.height - Self.inset
+        rows = zip(items, heights).map { item, height in
+            top -= height
+            let row = NSView(frame: CGRect(x: Self.inset, y: top, width: size.width - Self.inset * 2, height: height))
+            row.wantsLayer = true
+            row.layer!.cornerRadius = 5
+            if item.title.isEmpty {
+                let line = NSView(frame: CGRect(x: 6, y: (height / 2).rounded(), width: row.frame.width - 12, height: 1))
+                line.wantsLayer = true
+                line.layer!.backgroundColor = NSColor.white.withAlphaComponent(0.16).cgColor
+                row.addSubview(line)
+            } else {
+                let title = NSTextField(item.title, size: 12, weight: .medium, color: NSColor.white.withAlphaComponent(0.92))
+                title.frame.origin = CGPoint(x: 22, y: ((height - title.frame.height) / 2).rounded())
+                row.addSubview(title)
+                if item.on {
+                    let check = NSImageView(image: NSImage(systemSymbolName: "checkmark", accessibilityDescription: "Current")!)
+                    check.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 10, weight: .semibold)
+                    check.contentTintColor = .white
+                    check.frame.size = check.fittingSize
+                    check.frame.origin = CGPoint(x: 6, y: ((height - check.frame.height) / 2).rounded())
+                    row.addSubview(check)
+                }
+            }
+            panel.addSubview(row)
+            return row
+        }
+        let below = anchor.minY - 4 - size.height
+        panel.frame = CGRect(x: min(max(anchor.maxX - size.width, 8), bounds.width - size.width - 8),
+                             y: below >= 8 ? below : min(anchor.maxY + 4, bounds.height - size.height - 8), width: size.width, height: size.height)
+        isHidden = false
+        window!.makeFirstResponder(self)
+    }
+
+    func close() {
+        isHidden = true
+        window!.makeFirstResponder(superview)
+    }
+
+    /// Closes the menu, then runs the item at `index`.
+    func pick(_ index: Int) {
+        close()
+        items[index].pick()
+    }
+
+    private func highlight(_ index: Int?) {
+        highlighted = index
+        for (row, item) in rows.enumerated() { item.layer!.backgroundColor = row == index ? NSColor.controlAccentColor.cgColor : nil }
+    }
+
+    /// The item row under a point in this view's coordinates, skipping separators.
+    private func row(at point: CGPoint) -> Int? {
+        let local = panel.convert(point, from: self)
+        return rows.indices.first { rows[$0].frame.contains(local) && !items[$0].title.isEmpty }
+    }
+
+    override func keyDown(with event: NSEvent) {
+        let choices = items.indices.filter { !items[$0].title.isEmpty }
+        switch event.keyCode {
+        case 125, 126:
+            let position = highlighted.flatMap(choices.firstIndex) ?? (event.keyCode == 125 ? -1 : choices.count)
+            highlight(choices[(position + (event.keyCode == 125 ? 1 : -1) + choices.count) % choices.count])
+        case 36, 76:
+            if let highlighted { pick(highlighted) }
+        case 53: close()
+        case _ where event.charactersIgnoringModifiers == "p": close()
+        default:
+            close()
+            super.keyDown(with: event)
+        }
+    }
+
+    override func mouseMoved(with event: NSEvent) { highlight(row(at: convert(event.locationInWindow, from: nil))) }
+
+    override func mouseDown(with event: NSEvent) {
+        if let index = row(at: convert(event.locationInWindow, from: nil)) { pick(index) } else { close() }
     }
 }

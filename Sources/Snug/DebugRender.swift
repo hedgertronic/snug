@@ -107,7 +107,7 @@ extension DebugRun {
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         try snapshot("area-released")
         // The ratio chip's lock, clicked on and off.
-        func ratioLock() -> BarButton { overlay.chrome.hints.subviews.flatMap { $0.subviews.compactMap { $0 as? BarButton } }.last! }
+        func ratioLock() -> BarButton { overlay.chrome.ratio.subviews.compactMap { $0 as? BarButton }.last! }
         ratioLock().onClick()
         try snapshot("area-released-ratio-locked")
         ratioLock().onClick()
@@ -122,6 +122,32 @@ extension DebugRun {
         try snapshot("area-frame")
         overlay.dismiss()
         defaults.set(false, forKey: Pref.frame)
+        // Edit-mode chrome on a large selection: the ratio chip and the Live Text button, then the edge keys with the pointer inside,
+        // the ratio menu open, and a small selection, one at each screen edge, and the full screen, each with the pointer inside.
+        open()
+        let editExtent = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+        let editRect = CGRect(x: 600, y: 300, width: 1000, height: 600)
+        overlay.selection = AreaSelection(extent: editExtent, exact: editRect)
+        overlay.refresh()
+        mouse(.mouseMoved, CGPoint(x: 40, y: 40))
+        try snapshot("edit-chrome")
+        mouse(.mouseMoved, CGPoint(x: editRect.midX, y: editRect.midY))
+        try snapshot("edit-chrome-pointer-inside")
+        key(35, "p")
+        for _ in 0..<3 { key(125, "") }
+        try snapshot("edit-ratio-menu")
+        key(53, "\u{1B}")
+        let edgeRects = [("small", CGRect(x: 600, y: 300, width: 120, height: 80)), ("left", CGRect(x: 0, y: 600, width: 500, height: 300)),
+                         ("right", CGRect(x: editExtent.width - 500, y: 600, width: 500, height: 300)), ("top", CGRect(x: 900, y: 0, width: 700, height: 300)),
+                         ("bottom", CGRect(x: 900, y: editExtent.height - 300, width: 700, height: 300)), ("full", editExtent)]
+        for (name, rect) in edgeRects {
+            overlay.selection = AreaSelection(extent: editExtent, exact: rect)
+            overlay.refresh()
+            mouse(.mouseMoved, CGPoint(x: 40, y: 40))
+            mouse(.mouseMoved, CGPoint(x: rect.midX, y: rect.midY))
+            try snapshot("edit-chrome-\(name)")
+        }
+        overlay.dismiss()
 
         open()
         overlay.setWindows([CGRect(x: 300, y: 300, width: 1300, height: 1000)], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))

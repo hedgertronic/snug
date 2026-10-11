@@ -122,8 +122,6 @@ final class OverlayController {
     var ratioBase: (base: CGRect, conformed: CGRect)?
     /// The menu's Portrait item: tall presets. Nil follows the selection's shape.
     var ratioPortrait: Bool?
-    /// The ratio menu last built; debug runs pick from it instead of tracking it on screen.
-    var ratioMenu: NSMenu?
     /// The hovered level was walked to with Up, Down or Tab (not picked from the list); it lets go after 4 pt of pointer travel.
     private var walkedLevel = false
     /// The ratio of the rectangle being dragged or selected, with the nearest standard (see `RatioLock.readout`); empty with neither.
@@ -198,7 +196,9 @@ final class OverlayController {
         }
         chrome.actionBar.onFrame = { [unowned self] in toggleFrame() }
         chrome.actionBar.onSnap = { [unowned self] in toggleSnap() }
-        chrome.actionBar.onText = { [unowned self] in copySelectionText(translating: false) }
+        chrome.actionBar.roundedButton.onClick = { [unowned self] in chrome.bottomBar.onToggle(Pref.roundCorners) }
+        chrome.actionBar.shadowButton.onClick = { [unowned self] in chrome.bottomBar.onToggle(Pref.shadow) }
+        chrome.textButton.button.onClick = { [unowned self] in copySelectionText(translating: false) }
         chrome.actionBar.onSave = { [unowned self] in save() }
         chrome.actionBar.onCopy = { [unowned self] in copy() }
         chrome.actionBar.record.onClick = { [unowned self] in armRecording() }
@@ -302,7 +302,7 @@ final class OverlayController {
         lockedRatio = nil
         ratioBase = nil
         ratioPortrait = nil
-        ratioMenu = nil
+        chrome.ratioMenu.isHidden = true
         walkedLevel = false
         selection = nil
         interaction = .none
@@ -343,7 +343,10 @@ final class OverlayController {
         optionHeld = event.modifierFlags.contains(.option)
         commandHeld = event.modifierFlags.contains(.command)
         shiftHeld = event.modifierFlags.contains(.shift)
+        let wasInside = selection?.rect.contains(pointer)
         pointer = view.pixelPoint(event)
+        // The edge keys show while the pointer is inside a released selection.
+        if selection?.rect.contains(pointer) != wasInside { refresh() }
         updateHoveredCorner()
         updateHover(pixel: pointer)
         updateGuides()
@@ -664,7 +667,7 @@ final class OverlayController {
         case (_, false, "k"): cutOut()
         case (_, false, "o"): defaults.set(!defaults.bool(forKey: Pref.roundCorners), forKey: Pref.roundCorners)
         case (_, false, _) where shift && !hovering && character.lowercased() == "p": toggleRatioLock()
-        case (_, false, "p") where !hovering: showRatioMenu(from: chrome.hints)
+        case (_, false, "p") where !hovering: showRatioMenu()
         case (_, false, "="): applyRadiusToAll()
         case (123...126, _, _) where option && !hovering: nudgeSide(keyCode: event.keyCode, outward: !command, by: step)
         case (_, true, "s") where hovering: clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true)
