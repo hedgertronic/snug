@@ -342,7 +342,7 @@ final class OverlayController {
     }
 
     func mouseMoved(_ event: NSEvent) {
-        guard image != nil else { return }
+        guard image != nil, armedRecording == nil else { return }
         optionHeld = event.modifierFlags.contains(.option)
         commandHeld = event.modifierFlags.contains(.command)
         shiftHeld = event.modifierFlags.contains(.shift)

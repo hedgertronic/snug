@@ -455,7 +455,7 @@ extension DebugRun {
             let field = descendants(of: host, ShortcutRecorder.Field.self).first!
             let controls = descendants(of: host, NSView.self).filter { "\(type(of: $0))".contains("FocusRingView") }
             print("shortcut field", host.convert(field.frame, from: field.superview), "pop-up and button frames", controls.map { host.convert($0.frame, from: $0.superview) })
-            precondition(controls.count == 4 && controls.allSatisfy { $0.frame.height == field.frame.height }, "the shortcut field is as tall as the pop-ups and buttons: \(controls.map(\.frame)) \(field.frame)")
+            precondition(controls.count == 3 && controls.allSatisfy { $0.frame.height == field.frame.height }, "the shortcut field is as tall as the pop-ups and buttons: \(controls.map(\.frame)) \(field.frame)")
             field.beginRecording()
             precondition(field.recording, "a click starts recording")
             host.layoutSubtreeIfNeeded()

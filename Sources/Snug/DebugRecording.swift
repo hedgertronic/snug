@@ -58,7 +58,17 @@ extension DebugRun {
         require(armed!.outline.superlayer != nil && armed!.outline.path != nil && armed!.outline.strokeColor == NSColor.systemRed.cgColor
                 && overlay.chrome.actionBar.isHidden && !overlay.view.overlays.showsHandles,
                 "armed: a red outline on the selection, no action bar or handles")
-        require(hints() == ["start", "\u{21A9}", "cursor on", "H", "count-in off", "cancel", "esc"], "the armed strip: \(hints())")
+        require(hints() == ["start", "\u{21A9}", "cursor on", "H", "count-in off", "C", "cancel", "esc"], "the armed strip: \(hints())")
+        // Armed, pointer moves change nothing: no open hand over the selection, no corner chip.
+        let cursor = overlay.view.cursor
+        func move(_ pixel: CGPoint) {
+            overlay.window.sendEvent(NSEvent.mouseEvent(with: .mouseMoved, location: CGPoint(x: pixel.x / scale, y: overlay.view.bounds.height - pixel.y / scale),
+                modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: overlay.window.windowNumber,
+                context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!)
+        }
+        move(CGPoint(x: 900, y: 500))
+        move(CGPoint(x: 1400, y: 500))
+        require(overlay.view.cursor === cursor && overlay.hoveredCorner == nil, "pointer moves while armed leave the cursor alone: \(String(describing: overlay.view.cursor))")
         key(36, "\r")
         let expected = CGRect(x: 401 / scale, y: 201 / scale, width: 998 / scale, height: 600 / scale)
         require(!overlay.window.isVisible && requests == [expected] && cursors == [true] && overlayShown == [false] && armed!.outline.superlayer == nil,
@@ -82,9 +92,25 @@ extension DebugRun {
                 && requests.count == 2, "Esc while armed disarms and keeps the selection")
         key(9, "v")
         key(4, "h")
-        require(hints().contains("cursor off"), "H shows the cursor off: \(hints())")
+        require(hints().contains("cursor off") && !defaults.bool(forKey: Pref.recordCursor), "H shows the cursor off and saves it: \(hints())")
+        // C cycles the count-in Off, 3 s, 5 s and saves it.
+        var counts: [Int] = []
+        for _ in 0..<3 {
+            key(8, "c")
+            counts.append(defaults.integer(forKey: Pref.recordCountIn))
+            require(hints().contains(counts.last! > 0 ? "count-in \(counts.last!) s" : "count-in off"), "the strip shows the count-in C set: \(hints())")
+        }
+        require(counts == [3, 5, 0], "C cycles the count-in 3 s, 5 s, off: \(counts)")
         key(36, "\r")
-        require(cursors.last == false && defaults.bool(forKey: Pref.recordCursor), "H hides the cursor for this recording only: \(cursors)")
+        require(cursors.last == false, "H hides the cursor in the recording: \(cursors)")
+        open()
+        select(CGRect(x: 600, y: 300, width: 400, height: 200))
+        key(9, "v")
+        require(hints().contains("cursor off"), "the cursor choice sticks for the next recording: \(hints())")
+        key(4, "h")
+        key(53, "\u{1B}")
+        overlay.dismiss()
+        require(defaults.bool(forKey: Pref.recordCursor), "H again shows the cursor")
 
         // A hovered window becomes the armed selection; V again starts.
         open()
