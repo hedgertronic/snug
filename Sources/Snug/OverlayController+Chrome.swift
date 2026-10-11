@@ -131,8 +131,8 @@ extension OverlayController {
                     }
                 }
             }
-            if let ratioLock {
-                status = (status.map { "\($0.text), Ratio \(ratioLock.label)" } ?? "Ratio \(ratioLock.label)", status?.dot ?? .white)
+            if ratioLocked {
+                status = (status.map { "\($0.text), Ratio locked" } ?? "Ratio locked", status?.dot ?? .white)
             }
             if let status {
                 c.status.show(status.text) {

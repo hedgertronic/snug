@@ -149,13 +149,15 @@ extension DebugRun {
         overlay.dismiss()
 
         open()
-        key(35, "p")
-        key(35, "p")
         mouse(.leftMouseDown, CGPoint(x: 900, y: 500))
         mouse(.leftMouseDragged, CGPoint(x: 1700, y: 800))
-        try snapshot("ratio-lock-drag")
         mouse(.leftMouseUp, CGPoint(x: 1700, y: 800))
+        key(35, "P", .shift)
         try snapshot("ratio-lock-released")
+        mouse(.leftMouseDown, CGPoint(x: 1700, y: 800))
+        mouse(.leftMouseDragged, CGPoint(x: 1900, y: 820))
+        try snapshot("ratio-lock-drag")
+        mouse(.leftMouseUp, CGPoint(x: 1900, y: 820))
         overlay.dismiss()
 
         // Up and Down outlines around a rounded hover.

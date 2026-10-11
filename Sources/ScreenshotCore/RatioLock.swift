@@ -1,28 +1,29 @@
 import CoreGraphics
 import Foundation
 
-/// A fixed aspect ratio for new drags and handle drags, cycled with P. Free is `nil`.
+/// The preset aspect ratios of P's menu, in menu order.
 public enum RatioLock: CaseIterable, Sendable {
-    case square, fourThree, threeTwo, sixteenNine
+    case square, fourThree, threeTwo, sixteenTen, sixteenNine, twentyOneNine
 
-    /// "1:1", "4:3", "3:2", "16:9".
-    public var label: String {
+    private var sides: (Int, Int) {
         switch self {
-        case .square: "1:1"
-        case .fourThree: "4:3"
-        case .threeTwo: "3:2"
-        case .sixteenNine: "16:9"
+        case .square: (1, 1)
+        case .fourThree: (4, 3)
+        case .threeTwo: (3, 2)
+        case .sixteenTen: (16, 10)
+        case .sixteenNine: (16, 9)
+        case .twentyOneNine: (21, 9)
         }
+    }
+
+    /// "16:9" when landscape, "9:16" when portrait.
+    public func label(portrait: Bool) -> String {
+        portrait ? "\(sides.1):\(sides.0)" : "\(sides.0):\(sides.1)"
     }
 
     /// Width over height: the label's order when landscape, reversed when portrait.
     public func ratio(portrait: Bool) -> CGFloat {
-        let landscape: CGFloat = switch self {
-        case .square: 1
-        case .fourThree: 4.0 / 3
-        case .threeTwo: 3.0 / 2
-        case .sixteenNine: 16.0 / 9
-        }
+        let landscape = CGFloat(sides.0) / CGFloat(sides.1)
         return portrait ? 1 / landscape : landscape
     }
 
@@ -39,12 +40,5 @@ public enum RatioLock: CaseIterable, Sendable {
         if width * nearest.1 == height * nearest.0 { return "\(nearest.0):\(nearest.1)" }
         let formatted = String(format: "%.2f", live)
         return abs(log(live * Double(nearest.1) / Double(nearest.0))) <= 0.03 ? "\(formatted) ≈ \(nearest.0):\(nearest.1)" : formatted
-    }
-
-    /// The lock after `current` when P is pressed: Free, 1:1, 4:3, 3:2, 16:9, then Free.
-    public static func next(after current: RatioLock?) -> RatioLock? {
-        guard let current else { return allCases[0] }
-        let index = allCases.firstIndex(of: current)! + 1
-        return index < allCases.count ? allCases[index] : nil
     }
 }
