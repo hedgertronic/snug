@@ -6,12 +6,12 @@ import ScreenshotCore
 /// Headless checks driven by `--image PATH`: `--verify-area-ui` and `--measure`.
 @MainActor
 enum DebugRun {
-    static func privateSetup(_ overlay: OverlayController) -> URL {
+    static func privateSetup(_ overlay: OverlayController, timeout: Duration = .seconds(120)) -> URL {
         overlay.isHeadless = true
         Toast.isSuppressed = true
         Task {
-            try? await Task.sleep(for: .seconds(120))
-            FileHandle.standardError.write(Data("Debug run timed out after 120 s\n".utf8))
+            try? await Task.sleep(for: timeout)
+            FileHandle.standardError.write(Data("Debug run timed out after \(timeout)\n".utf8))
             exit(EXIT_FAILURE)
         }
         // Parallel debug runs share nothing: a fixed suite or pasteboard name lets one run's settings and clipboard leak into another's.

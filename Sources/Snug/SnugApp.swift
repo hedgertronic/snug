@@ -63,11 +63,15 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: arguments[index + 1]) as CFURL, nil)!
             return CGImageSourceCreateImageAtIndex(source, 0, nil)!
         }
-        if let image, arguments.contains("--verify-area-ui") || arguments.contains("--verify-extras-ui") || arguments.contains("--verify-toast-trash") || arguments.contains("--verify-text-ui") || arguments.contains("--measure") || arguments.contains("--render-states") || arguments.contains("--loupe-frames") {
+        let imageRuns = ["--verify-area-ui", "--verify-extras-ui", "--verify-toast-trash", "--verify-text-ui", "--measure", "--render-states",
+                         "--loupe-frames", "--memory-steps"]
+        if let image, imageRuns.contains(where: arguments.contains) {
             let frame = imageFrame(for: image)
             Task {
                 do {
-                    if let index = arguments.firstIndex(of: "--render-states") {
+                    if let index = arguments.firstIndex(of: "--memory-steps") {
+                        try await DebugRun.memorySteps(into: URL(fileURLWithPath: arguments[index + 1]), image: image, frame: frame, overlay: overlay)
+                    } else if let index = arguments.firstIndex(of: "--render-states") {
                         try await DebugRun.renderStates(into: URL(fileURLWithPath: arguments[index + 1]), image: image, frame: frame, overlay: overlay)
                     } else if let index = arguments.firstIndex(of: "--loupe-frames") {
                         try await DebugRun.loupeFrames(into: URL(fileURLWithPath: arguments[index + 1]), image: image, frame: frame, overlay: overlay)

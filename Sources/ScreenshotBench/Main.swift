@@ -102,7 +102,7 @@ struct ScreenshotBench {
             try await OCRProbe.run(image: try PNG.read(URL(fileURLWithPath: input)), steps: steps.split(separator: ",").map(String.init),
                                    fast: option("--level") == "fast", correction: option("--correction") != "off",
                                    detectLanguage: option("--detect-language") != "off",
-                                   languages: option("--languages")?.split(separator: ",").map(String.init) ?? [], width: option("--width").flatMap { Int($0) }, device: option("--device"))
+                                   languages: option("--languages")?.split(separator: ",").map(String.init) ?? [], width: option("--width").flatMap { Int($0) }, device: option("--device"), dump: args.contains("--dump"))
             return
         }
         if args.first == "evaluate", let labels = option("--labels"),
