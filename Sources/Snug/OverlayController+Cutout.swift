@@ -93,6 +93,7 @@ extension OverlayController {
         case (_, true, "s"): deliverCutout(copy: false, save: true)
         default: break
         }
+        refresh()
         return true
     }
 
