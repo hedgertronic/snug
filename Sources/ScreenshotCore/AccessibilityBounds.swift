@@ -43,8 +43,8 @@ public enum AccessibilityBounds {
     public static let minimumHoverSide: CGFloat = 16
 
     /// The frames a hover can land on: not the window (its rectangle comes from the window list, where a click captures it as a window),
-    /// nor an element within `paddingTolerance` of the window's frame on every side (the user reports Finder's column view AXBrowser as
-    /// a near copy of its window, a few pixels larger on each side; not measured), not static text, not Stage Manager's strip list (it would win in the gaps between thumbnails and around their
+    /// nor an element within `paddingTolerance` of the window's frame on every side (Finder's column view AXBrowser is
+    /// 1 pt larger than its window on every side, measured on macOS 26), not static text, not Stage Manager's strip list (it would win in the gaps between thumbnails and around their
     /// tilted pictures), and nothing under 16 pt on a side. Roles, not role descriptions: those are localized.
     public static func hoverLevel(_ frames: [AXFrame]) -> [AXFrame] {
         let stageManager = StageManager.owns(frames)
