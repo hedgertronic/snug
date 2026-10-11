@@ -133,7 +133,7 @@ extension DebugRun {
         key(9, "v")
         key(36, "\r")
         require(hints().contains("Recording in 3"), "the count-in strip: \(hints())")
-        try await Task.sleep(for: .seconds(1))
+        try await Task.sleep(for: .milliseconds(1500))
         key(53, "\u{1B}")
         try await Task.sleep(for: .milliseconds(2600))
         require(overlay.window.isVisible && overlay.armedRecording?.remaining == nil && overlay.armedRecording?.count.isHidden == true

@@ -66,6 +66,8 @@ extension OverlayController {
         armed.countIn = Task {
             while true {
                 try await Task.sleep(for: .seconds(1))
+                // Esc or a dismiss can cancel after the sleep returned but before this resumes.
+                try Task.checkCancellation()
                 armed.remaining! -= 1
                 if armed.remaining == 0 { return recordSelection() }
                 refresh()
