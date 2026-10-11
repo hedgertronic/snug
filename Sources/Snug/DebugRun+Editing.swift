@@ -230,36 +230,56 @@ extension DebugRun {
         require(overlay.selection?.rect == overlay.extent, "growing stops at the extent")
         overlay.dismiss()
 
-        // P cycles the ratio lock: Free, 1:1, 4:3, 3:2, 16:9, then Free; it lasts one capture and shows in the status line.
+        // Shift-P locks the selection's ratio as it is, or unlocks it, without moving an edge. While it is locked, handle drags, grow and
+        // shrink keep that ratio within 1 px in whole pixels and Tab takes no other fit; a fresh drag or closing the overlay drops the lock.
         open()
-        func lock() -> String { overlay.ratioLock?.label ?? "free" }
-        var cycle: [String] = []
-        for _ in 0..<5 { key(35, "p"); cycle.append(lock()) }
-        require(cycle == ["1:1", "4:3", "3:2", "16:9", "free"], "P cycles the ratio lock: \(cycle)")
-        key(35, "p"); key(35, "p")
         func same(_ rect: CGRect?, _ expected: CGRect) -> Bool {
             guard let rect else { return false }
             return near(rect.minX, expected.minX) && near(rect.minY, expected.minY) && near(rect.width, expected.width) && near(rect.height, expected.height)
         }
-        func ratio() -> CGFloat { overlay.selection!.rect.width / overlay.selection!.rect.height }
-        mouse(.leftMouseDown, CGPoint(x: 1000, y: 600))
-        mouse(.leftMouseDragged, CGPoint(x: 1800, y: 900))
-        require(same(overlay.view.overlays.ghost, CGRect(x: 1000, y: 600, width: 800, height: 600)), "the ghost of a fresh drag keeps the lock while dragging: \(String(describing: overlay.view.overlays.ghost))")
-        mouse(.leftMouseUp, CGPoint(x: 1800, y: 900))
-        require(same(overlay.selection?.rect, CGRect(x: 1000, y: 600, width: 800, height: 600)), "a fresh drag with 4:3 locked is 4:3: \(String(describing: overlay.selection?.rect))")
-        require(texts(in: overlay.chrome.status).contains("Exact, Ratio 4:3"), "the status line reads Ratio 4:3: \(texts(in: overlay.chrome.status))")
-        require(overlay.selection?.fits.count == 1, "a locked ratio takes no snap fits")
-        drag(from: CGPoint(x: 300, y: 1200), by: CGPoint(x: 300, y: 800))
-        require(same(overlay.selection?.rect, CGRect(x: 300, y: 1200, width: 300, height: 400)), "a taller fresh drag, cut off by the extent, is 3:4: \(String(describing: overlay.selection?.rect))")
-        drag(from: CGPoint(x: 1000, y: 600), by: CGPoint(x: 800, y: 300))
-        drag(from: CGPoint(x: 1800, y: 1200), by: CGPoint(x: 200, y: 0))
-        require(same(overlay.selection?.rect, CGRect(x: 1000, y: 600, width: 1000, height: 750)), "a corner handle drag keeps the locked ratio, the opposite corner fixed: \(String(describing: overlay.selection?.rect))")
-        drag(from: CGPoint(x: 2000, y: 975), by: CGPoint(x: -400, y: 0))
-        require(same(overlay.selection?.rect, CGRect(x: 1000, y: 750, width: 600, height: 450)), "a side handle drag keeps the ratio, growing the other side about the center: \(String(describing: overlay.selection?.rect))")
-        key(35, "p"); key(35, "p"); key(35, "p")
-        require(lock() == "free" && !texts(in: overlay.chrome.status).contains { $0.contains("Ratio") }, "P back to Free drops the status text")
+        let odd = CGRect(x: 1000, y: 600, width: 400, height: 237)
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: odd, suggestions: [odd.insetBy(dx: -40, dy: -40)])
+        key(35, "P", .shift)
+        require(overlay.ratioLocked && overlay.selection?.rect == odd, "Shift-P locks the ratio and moves no edge: \(String(describing: overlay.selection?.rect))")
+        key(35, "P", .shift)
+        require(!overlay.ratioLocked && overlay.selection?.rect == odd, "Shift-P again unlocks and moves no edge: \(String(describing: overlay.selection?.rect))")
+        key(35, "P", .shift)
+        key(48)
+        require(overlay.selection?.rect == odd, "Tab takes no other fit while the ratio is locked: \(String(describing: overlay.selection?.rect))")
+        let locked = odd.width / odd.height
+        func keepsRatio(_ message: String) {
+            let rect = overlay.selection!.rect
+            require(abs(rect.height - rect.width / locked) <= 1 && rect.integral == rect, "\(message) keeps the locked ratio within 1 px, in whole pixels: \(rect)")
+        }
+        drag(from: CGPoint(x: odd.maxX, y: odd.maxY), by: CGPoint(x: 200, y: 13))
+        require(overlay.selection!.rect.width == 600, "a locked corner drag resizes: \(overlay.selection!.rect)")
+        keepsRatio("a corner handle drag")
+        var rect = overlay.selection!.rect
+        drag(from: CGPoint(x: rect.maxX, y: rect.midY), by: CGPoint(x: -150, y: 0))
+        keepsRatio("a side handle drag")
+        rect = overlay.selection!.rect
+        drag(from: CGPoint(x: rect.midX, y: rect.minY), by: CGPoint(x: 0, y: -77))
+        keepsRatio("a top handle drag")
+        for _ in 0..<3 { key(right, "", .option) }
+        keepsRatio("Option-Right grow")
+        key(up, "", [.option, .shift])
+        keepsRatio("Shift-Option-Up grow")
+        key(left, "", [.option, .command])
+        keepsRatio("Option-Command-Left shrink")
+        rect = overlay.selection!.rect
+        key(right)
+        key(down, "", .shift)
+        require(overlay.selection!.rect == rect.offsetBy(dx: 1, dy: 10), "an arrow nudge moves the locked selection without resizing it")
+        key(35, "P", .shift)
+        rect = overlay.selection!.rect
+        drag(from: CGPoint(x: rect.maxX, y: rect.midY), by: CGPoint(x: 50, y: 0), .option)
+        require(overlay.selection!.rect.height == rect.height && overlay.selection!.rect.width == rect.width + 50, "unlocked, a side handle drag changes only its side")
+        key(35, "P", .shift)
+        drag(from: CGPoint(x: 300, y: 1200), by: CGPoint(x: 300, y: 200))
+        require(!overlay.ratioLocked, "a fresh drag drops the lock")
+        key(35, "P", .shift)
         overlay.dismiss()
-        require(overlay.ratioLock == nil, "the lock does not outlive the capture")
+        require(!overlay.ratioLocked, "the lock does not outlive the capture")
 
         // hasOtherFits: Tab has a fit (a snap or the exact drag) that differs from the selection by more than 1 pt.
         open()
@@ -271,27 +291,58 @@ extension DebugRun {
         require(!overlay.hasOtherFits, "a snap within 1 pt of the selection does not count")
         overlay.dismiss()
 
-        // P conforms an open selection at once: the largest rectangle of the lock's ratio inside the rectangle from before this run of
-        // P presses, on its center, in whole pixels. Free leaves the rectangle alone.
+        // P opens the ratio menu. A preset conforms the selection once and locks: the largest rectangle of its ratio inside the selection
+        // from before the first pick (so picks do not compound), on its center, in whole pixels. Free unlocks and leaves the rectangle
+        // alone; Original takes the ratio at release; Portrait flips the presets and the lock.
         open()
+        key(35, "p")
+        require(overlay.ratioMenu == nil, "P with no selection opens no menu")
         key(14, "e")
         require(overlay.ratioReadout == "2.00", "a free 2:1 selection reads its live ratio: \(overlay.ratioReadout)")
         key(35, "p")
-        require(overlay.selection?.rect == CGRect(x: 400, y: 300, width: 200, height: 200), "P to 1:1 conforms the selection about its center: \(String(describing: overlay.selection?.rect))")
-        require(overlay.ratioReadout == "1:1 locked", "a lock reads as the lock: \(overlay.ratioReadout)")
-        key(35, "p")
-        require(overlay.selection?.rect == CGRect(x: 367, y: 300, width: 267, height: 200), "P to 4:3 fits the rectangle from before the P presses, not the square: \(String(describing: overlay.selection?.rect))")
-        key(35, "p")
-        require(overlay.selection?.rect == CGRect(x: 350, y: 300, width: 300, height: 200), "P to 3:2 conforms: \(String(describing: overlay.selection?.rect))")
-        key(35, "p")
+        require(overlay.ratioMenu?.items.map(\.title) == ["Free", "Original", "1:1", "4:3", "3:2", "16:10", "16:9", "21:9", "", "Portrait"],
+                "P opens the presets: \(String(describing: overlay.ratioMenu?.items.map(\.title)))")
+        func pick(_ title: String) {
+            overlay.ratioMenu = nil
+            key(35, "p")
+            let menu = overlay.ratioMenu!
+            menu.performActionForItem(at: menu.indexOfItem(withTitle: title))
+        }
+        pick("1:1")
+        require(overlay.ratioLocked && overlay.selection?.rect == CGRect(x: 400, y: 300, width: 200, height: 200),
+                "1:1 conforms the selection about its center and locks: \(String(describing: overlay.selection?.rect))")
+        require(overlay.ratioReadout == "1:1", "the readout shows the live ratio: \(overlay.ratioReadout)")
+        pick("4:3")
+        require(overlay.selection?.rect == CGRect(x: 367, y: 300, width: 267, height: 200),
+                "a second pick conforms the selection from before the first pick, not the square: \(String(describing: overlay.selection?.rect))")
+        pick("16:9")
         let sixteenNine = CGRect(x: 322, y: 300, width: 356, height: 200)
-        require(overlay.selection?.rect == sixteenNine, "P to 16:9 conforms: \(String(describing: overlay.selection?.rect))")
-        key(35, "p")
-        require(overlay.ratioLock == nil && overlay.selection?.rect == sixteenNine, "P to Free leaves the rectangle alone")
+        require(overlay.selection?.rect == sixteenNine, "16:9 conforms: \(String(describing: overlay.selection?.rect))")
         require(overlay.ratioReadout == "1.78 ≈ 16:9", "356 x 200 px reads as near 16:9: \(overlay.ratioReadout)")
-        key(right)
         key(35, "p")
-        require(overlay.selection?.rect == CGRect(x: 401, y: 300, width: 200, height: 200), "after a nudge, P conforms the nudged rectangle: \(String(describing: overlay.selection?.rect))")
+        require(overlay.ratioMenu?.items.filter { $0.state == .on }.map(\.title) == ["16:9"], "the menu checks the lock it applied")
+        pick("Free")
+        require(!overlay.ratioLocked && overlay.selection?.rect == sixteenNine, "Free unlocks and leaves the rectangle alone")
+        pick("21:9")
+        require(overlay.selection?.rect == CGRect(x: 300, y: 315, width: 400, height: 171),
+                "after Free a pick still starts from the selection before the first pick: \(String(describing: overlay.selection?.rect))")
+        pick("Original")
+        require(overlay.selection?.rect == a, "Original takes the ratio at release: \(String(describing: overlay.selection?.rect))")
+        pick("16:10")
+        require(overlay.selection?.rect == CGRect(x: 340, y: 300, width: 320, height: 200), "16:10 conforms: \(String(describing: overlay.selection?.rect))")
+        pick("Portrait")
+        require(overlay.selection?.rect == CGRect(x: 438, y: 300, width: 125, height: 200),
+                "Portrait flips the lock to 10:16 from the same selection: \(String(describing: overlay.selection?.rect))")
+        key(35, "p")
+        require(overlay.ratioMenu.map { menu in ["3:4", "2:3", "10:16", "9:16", "9:21"].allSatisfy { menu.indexOfItem(withTitle: $0) >= 0 } } == true
+                && overlay.ratioMenu?.item(withTitle: "Portrait")?.state == .on, "with Portrait on the presets read tall")
+        pick("Portrait")
+        require(overlay.selection?.rect == CGRect(x: 340, y: 300, width: 320, height: 200), "Portrait off flips the lock back: \(String(describing: overlay.selection?.rect))")
+        key(right)
+        pick("1:1")
+        require(overlay.selection?.rect == CGRect(x: 401, y: 300, width: 200, height: 200), "after a nudge, a pick conforms the nudged rectangle: \(String(describing: overlay.selection?.rect))")
+        drag(from: CGPoint(x: 601, y: 500), by: CGPoint(x: 100, y: 0))
+        require(overlay.selection?.rect.size == CGSize(width: 300, height: 300), "a preset's lock holds on a corner handle drag: \(String(describing: overlay.selection?.rect))")
         overlay.dismiss()
 
         // Shift on a handle keeps the ratio the selection had when the drag started.

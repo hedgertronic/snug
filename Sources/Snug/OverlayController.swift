@@ -115,18 +115,23 @@ final class OverlayController {
     /// The corner whose dot the pointer is on (or whose chip it is heading to), and its "All corners" chip.
     var hoveredCorner: Handle?
     let cornerChip = BarButton("All corners", key: "=", height: 23, size: 11)
-    /// The aspect ratio P locks for new drags and handle drags; nil is free. It lasts one capture.
-    var ratioLock: RatioLock?
-    /// The selection before a run of P presses and the rectangle the last press conformed it to: each press in the run conforms the
-    /// rectangle from before the run, so cycling through 1:1 does not shrink the 16:9 that follows.
-    private var ratioBase: (base: CGRect, conformed: CGRect)?
+    /// The selection's locked aspect ratio, width over height, set with Shift-P or a preset from P's menu; nil is free. Handle drags,
+    /// grow and shrink keep it. A fresh drag or closing the overlay drops it.
+    var lockedRatio: CGFloat?
+    /// Whether the selection's ratio is locked, for the ratio chip's lock icon.
+    var ratioLocked: Bool { lockedRatio != nil }
+    /// The selection before the first pick from P's menu and the rectangle the last pick conformed it to: each pick conforms the
+    /// rectangle from before the first, so picking 1:1 does not shrink the 16:9 that follows.
+    var ratioBase: (base: CGRect, conformed: CGRect)?
+    /// The menu's Portrait item: tall presets. Nil follows the selection's shape.
+    var ratioPortrait: Bool?
+    /// The ratio menu last built; debug runs pick from it instead of tracking it on screen.
+    var ratioMenu: NSMenu?
     /// The hovered level was walked to with Up, Down or Tab (not picked from the list); it lets go after 4 pt of pointer travel.
     private var walkedLevel = false
-    /// The size badge's ratio: the lock, e.g. "4:3 locked", else the ratio of the rectangle being dragged or selected (see
-    /// `RatioLock.readout`); empty with neither.
+    /// The ratio of the rectangle being dragged or selected, with the nearest standard (see `RatioLock.readout`); empty with neither.
     var ratioReadout: String {
-        if let ratioLock { return "\(ratioLock.label) locked" }
-        return (draggedRect ?? selection?.rect).map { RatioLock.readout(for: $0.size) } ?? ""
+        (draggedRect ?? selection?.rect).map { RatioLock.readout(for: $0.size) } ?? ""
     }
     /// Shift is down: with a selection open, the element under the pointer is outlined for a union.
     var shiftHeld = false
@@ -290,8 +295,10 @@ final class OverlayController {
         radiusReadout = nil
         lastEditedCorner = nil
         hoveredCorner = nil
-        ratioLock = nil
+        lockedRatio = nil
         ratioBase = nil
+        ratioPortrait = nil
+        ratioMenu = nil
         walkedLevel = false
         selection = nil
         interaction = .none
@@ -424,6 +431,9 @@ final class OverlayController {
             if let hovered = hoverRect { return openAsSelection(hovered) }
         }
         selection = nil
+        lockedRatio = nil
+        ratioBase = nil
+        ratioPortrait = nil
         cancelWork()
         bypassSnap = event.modifierFlags.contains(.option)
         interaction = .drawing(AreaDrag(extent: extent, origin: point))
@@ -439,12 +449,12 @@ final class OverlayController {
         case .none:
             break
         case .drawing(var drag):
-            drag.update(to: point, moving: spaceHeld, axisLocked: event.modifierFlags.contains(.shift), ratio: ratioLock)
+            drag.update(to: point, moving: spaceHeld, axisLocked: event.modifierFlags.contains(.shift))
             interaction = .drawing(drag)
             scheduleSnap(for: drag.rect)
         case .resizing(let handle, let start):
             let old = selection!.rect
-            let ratio = ratioLock?.ratio(portrait: start.height > start.width) ?? (event.modifierFlags.contains(.shift) ? start.width / start.height : nil)
+            let ratio = lockedRatio ?? (event.modifierFlags.contains(.shift) ? start.width / start.height : nil)
             snapResize(handle, to: point, exact: event.modifierFlags.contains(.option), ratio: ratio)
             carryRadii(from: old)
         case .moving(let last, let origin, _):
@@ -516,7 +526,7 @@ final class OverlayController {
                 if event.modifierFlags.contains(.shift), let hovered = hoverRect { growSelection(toInclude: hovered) } else { copy() }
             }
         case .drawing(var drag):
-            drag.update(to: point, moving: false, ratio: ratioLock)
+            drag.update(to: point, moving: false)
             let rect = drag.rect
             if rect.width < AreaSelection.minimumSize || rect.height < AreaSelection.minimumSize {
                 cancelWork()
@@ -542,7 +552,7 @@ final class OverlayController {
     /// Waits for a pause, then previews the snap. Keeps the previous preview while the drag stays in its search band.
     private func scheduleSnap(for rough: CGRect) {
         snapTask?.cancel()
-        guard snapEnabled, !bypassSnap, ratioLock == nil, let image else {
+        guard snapEnabled, !bypassSnap, let image else {
             snapPreview = nil
             snapSuggestions = []
             return
@@ -576,7 +586,7 @@ final class OverlayController {
         defaults.set(!snapEnabled, forKey: Pref.snap)
         if case .drawing(let drag) = interaction {
             scheduleSnap(for: drag.rect)
-        } else if var current = selection, !current.isEdited {
+        } else if var current = selection, !current.isEdited, lockedRatio == nil {
             if !snapEnabled {
                 current.selectExact()
                 selection = current
@@ -591,9 +601,9 @@ final class OverlayController {
     }
 
     /// Tab: the next fit. After a quick drag with no suggestions, computes them for the current rectangle first;
-    /// `toBest` then takes the best fit instead of stepping.
+    /// `toBest` then takes the best fit instead of stepping. A locked ratio takes no other fit.
     private func cycleFit(backward: Bool, toBest: Bool = false) {
-        guard var current = selection, let image else { return }
+        guard lockedRatio == nil, var current = selection, let image else { return }
         guard current.fits.count == 1 else {
             current.cycle(backward: backward)
             selection = current
@@ -648,7 +658,8 @@ final class OverlayController {
         case (_, false, "e") where hovering && hoverRect != nil: openAsSelection(hoverRect!)
         case (_, false, "k"): cutOut()
         case (_, false, "o"): defaults.set(!defaults.bool(forKey: Pref.roundCorners), forKey: Pref.roundCorners)
-        case (_, false, "p"): cycleRatioLock()
+        case (_, false, _) where shift && !hovering && character.lowercased() == "p": toggleRatioLock()
+        case (_, false, "p") where !hovering: showRatioMenu(from: chrome.hints)
         case (_, false, "="): applyRadiusToAll()
         case (123...126, _, _) where option && !hovering: nudgeSide(keyCode: event.keyCode, outward: !command, by: step)
         case (_, true, "s") where hovering: clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true)
@@ -679,17 +690,6 @@ final class OverlayController {
         default: return false
         }
         return true
-    }
-
-    /// P: the next ratio lock. An open selection conforms at once: it becomes the largest rectangle of the lock's ratio (portrait when
-    /// taller than wide) that fits inside it and keeps its center, in whole pixels, clamped to the display. Free leaves it alone.
-    private func cycleRatioLock() {
-        ratioLock = RatioLock.next(after: ratioLock)
-        guard let ratioLock, let old = selection?.rect else { return }
-        let base = ratioBase?.conformed == old ? ratioBase!.base : old
-        selection!.conform(base, to: ratioLock.ratio(portrait: base.height > base.width))
-        ratioBase = (base, selection!.rect)
-        carryRadii(from: old)
     }
 
     // MARK: Output

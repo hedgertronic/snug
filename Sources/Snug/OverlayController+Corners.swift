@@ -107,6 +107,7 @@ extension OverlayController {
     }
 
     /// Option-arrow moves only the side facing the arrow, outward; Option-Command-arrow moves it inward, by `pixels` image pixels.
+    /// A locked ratio holds: the other dimension follows about the center.
     func nudgeSide(keyCode: UInt16, outward: Bool, by pixels: CGFloat) {
         let (side, direction): (Handle, CGPoint) = switch keyCode {
         case 123: (.left, CGPoint(x: -1, y: 0))
@@ -117,7 +118,7 @@ extension OverlayController {
         let old = selection!.rect
         let from = side.position(on: old)
         let distance = outward ? pixels : -pixels
-        selection!.resize(side, to: CGPoint(x: from.x + direction.x * distance, y: from.y + direction.y * distance))
+        selection!.resize(side, to: CGPoint(x: from.x + direction.x * distance, y: from.y + direction.y * distance), ratio: lockedRatio)
         carryRadii(from: old)
     }
 }

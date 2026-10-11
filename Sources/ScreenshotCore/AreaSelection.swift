@@ -38,20 +38,13 @@ public struct AreaDrag: Sendable {
     }
 
     /// Follows the pointer. While `moving`, the whole rectangle translates instead of resizing, along only the axis with the larger
-    /// travel since the move began when `axisLocked`. A resize with a `ratio` keeps it, portrait when the drag is taller than wide.
-    public mutating func update(to point: CGPoint, moving: Bool, axisLocked: Bool = false, ratio: RatioLock? = nil) {
+    /// travel since the move began when `axisLocked`.
+    public mutating func update(to point: CGPoint, moving: Bool, axisLocked: Bool = false) {
         let clamped = CGPoint(x: min(max(point.x, extent.minX), extent.maxX),
                               y: min(max(point.y, extent.minY), extent.maxY))
         guard moving else {
             moveStart = nil
-            guard let ratio else { current = clamped; return }
-            let dx = clamped.x - origin.x, dy = clamped.y - origin.y
-            let r = ratio.ratio(portrait: abs(dy) > abs(dx))
-            let sx: CGFloat = dx >= 0 ? 1 : -1, sy: CGFloat = dy >= 0 ? 1 : -1
-            let availableWidth = sx > 0 ? extent.maxX - origin.x : origin.x - extent.minX
-            let availableHeight = sy > 0 ? extent.maxY - origin.y : origin.y - extent.minY
-            let width = min(max(abs(dx), abs(dy) * r), availableWidth, availableHeight * r)
-            current = CGPoint(x: origin.x + sx * width, y: origin.y + sy * width / r)
+            current = clamped
             return
         }
         let start = moveStart ?? current
@@ -80,6 +73,8 @@ public struct AreaSelection: Sendable {
     public private(set) var fitIndex: Int
     /// A resize, move, or nudge replaced the drag and its fits.
     public private(set) var isEdited = false
+    /// The rectangle when the selection opened (the release), kept through edits; P's Original takes its ratio.
+    public let original: CGRect
 
     /// Creates a selection from the user's drag, optionally taking the first suggestion.
     public init(extent: CGRect, exact: CGRect, suggestions: [CGRect] = [], takingFirst: Bool = false) {
@@ -87,6 +82,7 @@ public struct AreaSelection: Sendable {
         fits = suggestions + [exact]
         fitIndex = takingFirst && !suggestions.isEmpty ? 0 : suggestions.count
         rect = fits[fitIndex]
+        original = rect
     }
 
     /// The rectangle the user drew before any suggestion was applied.
@@ -141,32 +137,35 @@ public struct AreaSelection: Sendable {
 
     /// Moves the edges a handle controls to the point, keeping the minimum size inside the extent.
     /// With a `ratio` (width over height) the opposite corner or side holds still and the rectangle keeps that aspect ratio:
-    /// a corner follows the pointer's larger travel, a side sets one dimension and the other grows about the rectangle's center.
+    /// a corner follows the pointer's larger travel, a side sets one dimension and the other grows about the rectangle's center,
+    /// in whole pixels.
     public mutating func resize(_ handle: Handle, to point: CGPoint, ratio: CGFloat? = nil) {
         let x = min(max(point.x, extent.minX), extent.maxX)
         let y = min(max(point.y, extent.minY), extent.maxY)
         if let ratio {
             let sx: CGFloat = handle.movesRight ? 1 : -1, sy: CGFloat = handle.movesBottom ? 1 : -1
-            let minimumWidth = max(Self.minimumSize, Self.minimumSize * ratio)
+            let minimumWidth = max(Self.minimumSize, Self.minimumSize * ratio).rounded(.up)
             if (handle.movesLeft || handle.movesRight) && (handle.movesTop || handle.movesBottom) {
                 let anchor = CGPoint(x: handle.movesLeft ? rect.maxX : rect.minX, y: handle.movesTop ? rect.maxY : rect.minY)
                 let availableWidth = sx > 0 ? extent.maxX - anchor.x : anchor.x - extent.minX
                 let availableHeight = sy > 0 ? extent.maxY - anchor.y : anchor.y - extent.minY
                 let wanted = max(max((x - anchor.x) * sx, 0), max((y - anchor.y) * sy, 0) * ratio, minimumWidth)
-                let width = min(wanted, availableWidth, availableHeight * ratio)
-                let height = width / ratio
+                let width = min(wanted.rounded(), availableWidth.rounded(.down), (availableHeight * ratio).rounded(.down))
+                let height = (width / ratio).rounded()
                 edit(CGRect(x: sx > 0 ? anchor.x : anchor.x - width, y: sy > 0 ? anchor.y : anchor.y - height, width: width, height: height))
             } else if handle.movesLeft || handle.movesRight {
                 let available = sx > 0 ? extent.maxX - rect.minX : rect.maxX - extent.minX
-                let width = min(max(sx > 0 ? x - rect.minX : rect.maxX - x, minimumWidth), available, extent.height * ratio)
-                let height = width / ratio
-                edit(CGRect(x: sx > 0 ? rect.minX : rect.maxX - width, y: min(max(rect.midY - height / 2, extent.minY), extent.maxY - height),
+                let width = min(max((sx > 0 ? x - rect.minX : rect.maxX - x).rounded(), minimumWidth), available.rounded(.down),
+                                (extent.height * ratio).rounded(.down))
+                let height = (width / ratio).rounded()
+                edit(CGRect(x: sx > 0 ? rect.minX : rect.maxX - width, y: min(max((rect.midY - height / 2).rounded(), extent.minY), extent.maxY - height),
                             width: width, height: height))
             } else {
                 let available = sy > 0 ? extent.maxY - rect.minY : rect.maxY - extent.minY
-                let height = min(max(sy > 0 ? y - rect.minY : rect.maxY - y, minimumWidth / ratio), available, extent.width / ratio)
-                let width = height * ratio
-                edit(CGRect(x: min(max(rect.midX - width / 2, extent.minX), extent.maxX - width), y: sy > 0 ? rect.minY : rect.maxY - height,
+                let height = min(max((sy > 0 ? y - rect.minY : rect.maxY - y).rounded(), (minimumWidth / ratio).rounded(.up)), available.rounded(.down),
+                                 (extent.width / ratio).rounded(.down))
+                let width = (height * ratio).rounded()
+                edit(CGRect(x: min(max((rect.midX - width / 2).rounded(), extent.minX), extent.maxX - width), y: sy > 0 ? rect.minY : rect.maxY - height,
                             width: width, height: height))
             }
             return

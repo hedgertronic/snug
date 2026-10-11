@@ -93,15 +93,30 @@ struct AreaSelectionTests {
         #expect(selection.rect.width == 900 && selection.rect.height == 450 && selection.rect.minX == 0 && selection.rect.maxY <= 800)
     }
 
-    @Test func ratioLockCyclesThroughFreeAndFlipsForPortrait() {
-        var lock: RatioLock?
-        var labels: [String] = []
-        for _ in 0..<5 { lock = RatioLock.next(after: lock); labels.append(lock?.label ?? "free") }
-        #expect(labels == ["1:1", "4:3", "3:2", "16:9", "free"])
+    @Test func ratioPresetsListTheMenuAndFlipForPortrait() {
+        #expect(RatioLock.allCases.map { $0.label(portrait: false) } == ["1:1", "4:3", "3:2", "16:10", "16:9", "21:9"])
+        #expect(RatioLock.allCases.map { $0.label(portrait: true) } == ["1:1", "3:4", "2:3", "10:16", "9:16", "9:21"])
         #expect(RatioLock.fourThree.ratio(portrait: false) == 4.0 / 3 && RatioLock.fourThree.ratio(portrait: true) == 0.75)
-        var drag = AreaDrag(extent: extent, origin: CGPoint(x: 500, y: 100))
-        drag.update(to: CGPoint(x: 560, y: 500), moving: false, ratio: .fourThree)
-        #expect(drag.rect == CGRect(x: 500, y: 100, width: 300, height: 400))
+        #expect(RatioLock.twentyOneNine.ratio(portrait: false) == 21.0 / 9)
+    }
+
+    @Test func ratioResizeLandsOnWholePixels() {
+        var selection = AreaSelection(extent: extent, exact: CGRect(x: 100, y: 100, width: 160, height: 90))
+        selection.resize(.right, to: CGPoint(x: 261, y: 0), ratio: 16.0 / 9)
+        #expect(selection.rect == CGRect(x: 100, y: 100, width: 161, height: 91))
+        selection.resize(.bottomRight, to: CGPoint(x: 300.4, y: 120), ratio: 16.0 / 9)
+        #expect(selection.rect == CGRect(x: 100, y: 100, width: 200, height: 113))
+        selection.resize(.bottom, to: CGPoint(x: 0, y: 250), ratio: 16.0 / 9)
+        #expect(selection.rect.integral == selection.rect && selection.rect.height == 150 && abs(selection.rect.width - 150 * 16 / 9) <= 1)
+    }
+
+    @Test func originalKeepsTheRectangleAtReleaseThroughEdits() {
+        let released = CGRect(x: 100, y: 100, width: 400, height: 200)
+        var selection = AreaSelection(extent: extent, exact: released)
+        selection.conform(released, to: 1)
+        selection.move(by: CGPoint(x: 10, y: 0))
+        selection.resize(.right, to: CGPoint(x: 700, y: 0))
+        #expect(selection.original == released && selection.rect != released)
     }
 
     @Test func conformFitsTheRatioInsideTheBaseOnItsCenterInWholePixels() {
