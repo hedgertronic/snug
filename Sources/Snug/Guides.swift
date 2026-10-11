@@ -263,7 +263,8 @@ final class Guides {
                 let span = CGRect(x: selected.minX / scale, y: bounds.height - selected.maxY / scale, width: selected.width / scale, height: selected.height / scale)
                 band.addRect(CGRect(x: span.minX, y: bandBottom, width: span.width, height: thickness))
                 band.addRect(CGRect(x: 0, y: span.minY, width: thickness, height: span.height).intersection(CGRect(x: 0, y: 0, width: thickness, height: bandBottom)))
-                let values = [selected.minX, selected.maxX, selected.minY, selected.maxY].map { Int($0.rounded()) }
+                // The crop's whole-pixel sides, as the loupe's outline draws them.
+                let values = [selected.minX.rounded(.down), selected.maxX.rounded(.up), selected.minY.rounded(.down), selected.maxY.rounded(.up)].map { Int($0) }
                 func flag(_ index: Int, at origin: (CGFloat) -> CGPoint) {
                     let width = CGFloat("\(values[index])".count) * digit + 6
                     flags[index].string = "\(values[index])"
@@ -322,11 +323,11 @@ final class Guides {
             context.draw(image.cropping(to: inside)!, in: CGRect(x: inside.minX - window.minX, y: window.maxY - inside.maxY, width: inside.width, height: inside.height))
             magnified.contents = context.makeImage()
             for layer in [edges, centerAccent] { layer.strokeColor = accent.cgColor }
-            // The dragged rectangle's edges, in the loupe's cells, each on the nearest pixel boundary so none sits between cells.
-            // The disc clips whatever lies outside the window.
+            // The dragged rectangle's edges, in the loupe's cells, on the pixel boundaries the crop takes (`integral`: min sides round down,
+            // max sides up), so the outline shows the pixels the capture will hold. The disc clips whatever lies outside the window.
             let cell = Self.loupeSize / CGFloat(side)
             edges.path = dragging ? selected.map {
-                let left = $0.minX.rounded(), right = $0.maxX.rounded(), top = $0.minY.rounded(), bottom = $0.maxY.rounded()
+                let left = $0.minX.rounded(.down), right = $0.maxX.rounded(.up), top = $0.minY.rounded(.down), bottom = $0.maxY.rounded(.up)
                 return CGPath(rect: CGRect(x: (left - window.minX) * cell, y: Self.loupeSize - (bottom - window.minY) * cell, width: (right - left) * cell, height: (bottom - top) * cell), transform: nil)
             } : nil
             let color = ColorFormat.average(of: image, in: CGRect(x: column, y: row, width: 1, height: 1))

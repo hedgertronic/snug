@@ -63,12 +63,14 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: arguments[index + 1]) as CFURL, nil)!
             return CGImageSourceCreateImageAtIndex(source, 0, nil)!
         }
-        if let image, arguments.contains("--verify-area-ui") || arguments.contains("--verify-extras-ui") || arguments.contains("--verify-text-ui") || arguments.contains("--measure") || arguments.contains("--render-states") {
+        if let image, arguments.contains("--verify-area-ui") || arguments.contains("--verify-extras-ui") || arguments.contains("--verify-text-ui") || arguments.contains("--measure") || arguments.contains("--render-states") || arguments.contains("--loupe-frames") {
             let frame = imageFrame(for: image)
             Task {
                 do {
                     if let index = arguments.firstIndex(of: "--render-states") {
                         try await DebugRun.renderStates(into: URL(fileURLWithPath: arguments[index + 1]), image: image, frame: frame, overlay: overlay)
+                    } else if let index = arguments.firstIndex(of: "--loupe-frames") {
+                        try await DebugRun.loupeFrames(into: URL(fileURLWithPath: arguments[index + 1]), image: image, frame: frame, overlay: overlay)
                     } else if arguments.contains("--measure") {
                         try await DebugRun.measure(image: image, frame: frame, overlay: overlay)
                     } else if arguments.contains("--verify-text-ui") {

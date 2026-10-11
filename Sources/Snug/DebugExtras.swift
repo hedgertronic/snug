@@ -126,18 +126,24 @@ extension DebugRun {
         mouse(.leftMouseDragged, CGPoint(x: rough.maxX, y: rough.maxY))
         let loupeCell = Guides.loupeSize / CGFloat(Guides.loupePixels), middle = loupeCell * CGFloat(Guides.loupePixels / 2)
         let edgeBox = guides.edges.path!.boundingBox
-        require(abs(edgeBox.maxX - middle) < 0.01 && abs(edgeBox.minY - (Guides.loupeSize - middle)) < 0.01, "mid-drag the selection's right and bottom edges run through the loupe's center cell: \(edgeBox)")
+        require(abs(edgeBox.maxX - middle - loupeCell) < 0.01 && abs(edgeBox.minY - (Guides.loupeSize - middle - loupeCell)) < 0.01,
+                "mid-drag the selection's right and bottom edges run along the loupe's center cell, the last pixel inside the crop: \(edgeBox)")
         require(guides.flags.map { $0.string as! String } == ["\(Int(rough.minX))", "\(Int(rough.maxX))", "\(Int(rough.minY))", "\(Int(rough.maxY))"], "the rulers flag the span's start and end")
         require(guides.widthLabel.string as? String == "\(Int(rough.width))" && !guides.widthLabel.isHidden, "the ruler shows the span's width")
         require(!(guides.numbers.sublayers!.contains { !$0.isHidden && $0.frame.intersects(guides.widthLabel.frame) }) && guides.numbers.sublayers!.contains { $0.isHidden },
                 "no tick number shows under the span's width")
-        // Sub-pixel pointer moves mid-drag: the outline's edges stay on the loupe's pixel grid, within one cell of the center's, and the loupe sits on whole device pixels.
-        for step in 1...8 {
-            let offset = CGFloat(step) * 0.17
-            mouse(.leftMouseDragged, CGPoint(x: rough.maxX + offset, y: rough.maxY + offset / 2))
+        // Sub-pixel pointer moves mid-drag, through whole, half and other fractions of a pixel: the outline's right and bottom edges stay on
+        // the center cell's far side (they flipped a whole cell at every half pixel when the edges rounded to nearest), the rulers flag the same
+        // sides, and the loupe sits on whole device pixels.
+        for step in 1...12 {
+            let offset = CGFloat(step) * [0.5, 0.17, 0.33][step % 3]
+            let tip = CGPoint(x: rough.maxX + offset, y: rough.maxY + offset / 2)
+            mouse(.leftMouseDragged, tip)
             let box = guides.edges.path!.boundingBox
             let right = (box.maxX - middle) / loupeCell, bottom = (Guides.loupeSize - box.minY - middle) / loupeCell
-            require([right, bottom].allSatisfy { abs($0 - $0.rounded()) < 0.001 && abs($0) < 1.001 }, "step \(step): the outline's right and bottom edges sit on the loupe's grid next to the center cell: \(right) \(bottom)")
+            require([right, bottom].allSatisfy { abs($0 - 1) < 0.001 }, "step \(step): the outline's right and bottom edges run along the center cell's far side: \(right) \(bottom)")
+            require(guides.flags[1].string as? String == "\(Int(tip.x.rounded(.up)))" && guides.flags[3].string as? String == "\(Int(tip.y.rounded(.up)))",
+                    "step \(step): the rulers flag the crop's whole-pixel right and bottom sides")
             let corner = CGPoint(x: guides.loupe.frame.minX * overlay.scale, y: guides.loupe.frame.minY * overlay.scale)
             require(abs(corner.x - corner.x.rounded()) < 0.001 && abs(corner.y - corner.y.rounded()) < 0.001, "step \(step): the loupe sits on whole device pixels: \(corner)")
         }
