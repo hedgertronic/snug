@@ -71,21 +71,27 @@ enum DisplayCapture {
         configuration.showsCursor = false
         var image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
         // With the shadow on, window and shadow are fitted into a canvas the window's size, so the window comes back shrunk (0.8 for a
-        // 920 pt Finder window). The opaque run across the middle row gives the shrink; a second capture on a canvas that much larger
-        // brings the window back at one pixel per device pixel.
-        let row = image.cropping(to: CGRect(x: 0, y: image.height / 2, width: image.width, height: 1))!
-        let pixels = CGContext(data: nil, width: row.width, height: 1, bitsPerComponent: 8, bytesPerRow: row.width * 4,
+        // 920 pt Finder window). The fully opaque bounding box against the canvas gives the shrink on each axis; when both agree, a
+        // second capture on a canvas that much larger brings the window back at one pixel per device pixel. Translucent window content
+        // can only shrink the box on one axis, so the axes disagree and the first capture stands.
+        let pixels = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
                                space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        pixels.draw(row, in: CGRect(x: 0, y: 0, width: row.width, height: 1))
-        let alpha = pixels.data!.bindMemory(to: UInt8.self, capacity: row.width * 4)
-        let shrink = Double((0..<row.width).filter { alpha[$0 * 4 + 3] == 255 }.count) / Double(configuration.width)
-        if shadow, shrink > 0.5, shrink < 0.99 {
-            configuration.width = Int((Double(configuration.width) / shrink).rounded())
-            configuration.height = Int((Double(configuration.height) / shrink).rounded())
+        pixels.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        let alpha = pixels.data!.bindMemory(to: UInt8.self, capacity: image.width * image.height * 4)
+        var (minX, minY, maxX, maxY) = (image.width, image.height, -1, -1)
+        for y in 0..<image.height {
+            for x in 0..<image.width where alpha[(y * image.width + x) * 4 + 3] == 255 {
+                minX = min(minX, x); maxX = max(maxX, x); minY = min(minY, y); maxY = max(maxY, y)
+            }
+        }
+        let shrinkX = Double(maxX - minX + 1) / Double(configuration.width), shrinkY = Double(maxY - minY + 1) / Double(configuration.height)
+        if shadow, maxX >= 0, shrinkX > 0.5, shrinkX < 0.99, abs(shrinkX - shrinkY) < 0.01 {
+            configuration.width = Int((Double(configuration.width) / shrinkX).rounded())
+            configuration.height = Int((Double(configuration.height) / shrinkX).rounded())
             image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
         }
         Pref.logHoverLine("window \(id) frame \(window.frame) contentRect \(info.contentRect) scale \(info.pointPixelScale) shadow \(shadow) "
-                          + "shrink \(shrink) configured \(configuration.width)x\(configuration.height) image \(image.width)x\(image.height)")
+                          + "shrink \(shrinkX) x \(shrinkY) configured \(configuration.width)x\(configuration.height) image \(image.width)x\(image.height)")
         return image
     }
 
