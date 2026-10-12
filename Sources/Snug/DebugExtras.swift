@@ -1002,6 +1002,7 @@ extension DebugRun {
         open()
         overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         overlay.selection = AreaSelection(extent: extent, exact: page)
+        overlay.editedRadii[page] = CornerRadii(24 * overlay.scale)
         key(5, "g")
         require(overlay.scrollArea == page && overlay.selection == nil && overlay.view.image == nil && overlay.window.ignoresMouseEvents && chrome.bottomBar.isHidden,
                 "G starts scrolling capture: the frozen image goes away and the pointer reaches the app below")
@@ -1016,6 +1017,9 @@ extension DebugRun {
         let stitched = NSBitmapImageRep(data: pasteboard.data(forType: .png)!)!
         require(!overlay.window.isVisible && stitched.pixelsWide == 1000 && stitched.pixelsHigh == 900 && overlay.window.isOpaque,
                 "Return copies the stitched image and closes: \(stitched.pixelsWide) x \(stitched.pixelsHigh)")
+        let corners = [(0, 0), (999, 0), (0, 899), (999, 899)].map { stitched.colorAt(x: $0.0, y: $0.1)!.alphaComponent }
+        require(corners.allSatisfy { $0 == 0 } && stitched.colorAt(x: 500, y: 0)!.alphaComponent == 1 && stitched.colorAt(x: 500, y: 899)!.alphaComponent == 1,
+                "the stitched image takes the area's corner radii: corner alphas \(corners)")
         // G on a hovered element starts scrolling capture of it, as E then G does.
         offsets = [0]
         open()
