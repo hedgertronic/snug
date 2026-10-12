@@ -338,6 +338,15 @@ enum DebugRun {
         require(overlay.view.overlays.radii == corners(0, 20), "the outline hugs the window's bottom corners and keeps the top square")
         key(30, "]")
         require(overlay.view.overlays.radii == corners(1, 20 + 1) && overlay.radiusReadout == "r 1 1 21 21", "] grows every corner by 1 pt")
+        require(!overlay.chrome.size.isHidden && texts(in: overlay.chrome.size) == ["r 1 1 21 21"],
+                "the size badge shows the radius after ]: \(overlay.chrome.size.isHidden) \(texts(in: overlay.chrome.size))")
+        mouse(.mouseMoved, CGPoint(x: bottomHalf.midX, y: bottomHalf.midY))
+        key(30, "]")
+        let siblings = overlay.chrome.size.superview!.subviews
+        let covering = siblings[(siblings.firstIndex(of: overlay.chrome.size)! + 1)...].filter { !$0.isHidden && $0.frame.intersects(overlay.chrome.size.frame) }
+        require(!overlay.chrome.size.isHidden && texts(in: overlay.chrome.size) == ["r 2 2 22 22"] && covering.isEmpty,
+                "with the pointer inside, ] shows the radius uncovered: \(texts(in: overlay.chrome.size)) \(overlay.chrome.size.frame) covered by \(covering.map { "\(type(of: $0)) \($0.frame) \(texts(in: $0))" })")
+        key(33, "[")
         key(30, "}", .shift)
         require(overlay.view.overlays.radii == corners(5, 20 + 5), "Shift-] grows every corner by 4 pt")
         key(33, "[")
