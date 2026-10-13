@@ -23,8 +23,8 @@ public struct FlatFills: Sendable {
 
     /// The closed uniform fill around `point` (top-left origin), or nil. The fill's color is the commonest one within 6 px of the point,
     /// so a point on a label in a pill still finds the pill. The fill takes the colors within 24 (summed over RGB) of that one; it counts
-    /// when it never reaches `sides.upperBound` px from the point or the image edge, spans `sides` on both axes, and covers at least half
-    /// its box (a thin border ring or a line does not).
+    /// when it never reaches `sides.upperBound` px from the point or the image edge, spans `sides` on both axes, covers at least half
+    /// its box (a thin border ring or a line does not), and has a uniform surround (not just a part of a larger picture).
     public func region(at point: CGPoint) -> Candidate? {
         let (px, py) = (Int(point.x), Int(point.y))
         guard (0..<width).contains(px), (0..<height).contains(py) else { return nil }
@@ -71,7 +71,13 @@ public struct FlatFills: Sendable {
             }
         }
         let (fillWidth, fillHeight) = (maxX - minX + 1, maxY - minY + 1)
-        guard Self.sides.contains(fillWidth), Self.sides.contains(fillHeight), area * 2 >= fillWidth * fillHeight else { return nil }
+        guard Self.sides.contains(fillWidth), Self.sides.contains(fillHeight), area * 2 >= fillWidth * fillHeight,
+              minX >= 3, minY >= 3, maxX + 3 < width, maxY + 3 < height else { return nil }
+        // A shape of its own is set off by one surround: 70% of the pixels 3 px outside its box share the color at the middle of its top.
+        let surround = (minX - 3...maxX + 3).flatMap { [offset($0, minY - 3), offset($0, maxY + 3)] }
+            + (minY - 3...maxY + 3).flatMap { [offset(minX - 3, $0), offset(maxX + 3, $0)] }
+        let around = offset((minX + maxX) / 2, minY - 3)
+        guard surround.count(where: { gap($0, around) <= 24 }) * 10 >= surround.count * 7 else { return nil }
         return Candidate(id: "fill-\(minX)-\(minY)", label: "Fill", bounds: CGRect(x: minX, y: minY, width: fillWidth, height: fillHeight),
                          score: 1, kind: .region)
     }
