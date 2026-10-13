@@ -132,7 +132,7 @@ extension OverlayController {
     /// Adds the small uniform fill under `pixel` (a pill, chip or input the geometry pass skips for its size) to the session, once.
     func addFill(at pixel: CGPoint) {
         let factor = CGFloat(Int(scale))
-        guard let fill = fills?.region(at: CGPoint(x: pixel.x / factor, y: pixel.y / factor))?.scaled(by: factor),
+        guard let fill = fills?.region(at: CGPoint(x: pixel.x / factor, y: pixel.y / factor))?.scaled(by: factor).grownToBorder(in: image!),
               !session!.candidates.contains(where: { $0.id == fill.id }) else { return }
         session!.merge([fill])
     }
@@ -170,7 +170,7 @@ extension OverlayController {
                                                                                                 scale: scale, extent: extent), frames: frames, in: image, scale: scale)
             Pref.logHoverLine("hover \(point) scale \(scale) frames " + frames.map { "\($0.role) '\($0.roleDescription)' '\($0.title)' \($0.rect)" }.joined(separator: " | ")
                 + " -> " + found.map { "\($0.label) \($0.bounds)" }.joined(separator: " | "))
-            if !found.isEmpty { merge(found) }
+            if !found.isEmpty { merge(found.map { $0.grownToBorder(in: image) }) }
         }
     }
 
