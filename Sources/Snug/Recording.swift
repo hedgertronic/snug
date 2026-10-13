@@ -3,7 +3,7 @@ import AVFoundation
 import os
 import ScreenCaptureKit
 
-let recordingLog = Logger(subsystem: "com.snug", category: "recording")
+let recordingLog = Logger(subsystem: "local.snug", category: "recording")
 
 extension Pref {
     /// Seconds of the count shown over the area before a recording starts: 0 (off), 3 or 5; I cycles it while armed.

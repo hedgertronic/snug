@@ -5,6 +5,8 @@ import ScreenshotCore
 import UniformTypeIdentifiers
 
 let signposter = OSSignposter(subsystem: "local.snug", category: "capture")
+/// Times from the shortcut to the overlay: the capture, the first draw, and the window list.
+let openLog = Logger(subsystem: "local.snug", category: "open")
 
 /// UserDefaults keys and their registered defaults.
 enum Pref {

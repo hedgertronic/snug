@@ -278,14 +278,18 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         guard !overlay.window.isVisible else { return }
         guard CGPreflightScreenCaptureAccess() else { return showFirstRun() }
         let (screen, id) = screenUnderPointer()
+        let clock = ContinuousClock()
+        let pressed = clock.now
         captureTask?.cancel()
         captureTask = Task {
             do {
                 let capturing = signposter.beginInterval("capture")
                 let image = try await DisplayCapture.image(of: id)
                 signposter.endInterval("capture", capturing)
+                let captured = clock.now
                 try Task.checkCancellation()
                 overlay.present(image: image, frame: screen.frame, displayID: id)
+                let presented = clock.now
                 if text { overlay.setMode(.text) }
                 let scale = overlay.scale
                 let listing = signposter.beginInterval("windows")
@@ -312,6 +316,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     }
                 }
                 signposter.endInterval("windows", listing)
+                openLog.notice("open: capture \(pressed.duration(to: captured), privacy: .public), present \(captured.duration(to: presented), privacy: .public), windows \(presented.duration(to: clock.now), privacy: .public)")
                 if overlay.image === image { overlay.setWindows(windows.map(\.rect), names: windows.map(\.name), ids: windows.map(\.id), frozen: windows.map(\.frozen), pointer: NSEvent.mouseLocation) }
             } catch is CancellationError {
             } catch {
