@@ -1107,6 +1107,13 @@ extension DebugRun {
         require(overlay.scrollHeight == 900 && texts(in: chrome.strip) == ["Scrolling 900 px", "Cancel", "esc", "Done", "\u{21A9}"] && chrome.done.primary
                     && chrome.strip.frame.maxY == pageBox.minY - 8 && texts(in: chrome.hints) == ["Scroll the app under the outline"],
                 "frames stitch as the area scrolls, and the strip under the area counts the height: \(overlay.scrollHeight) \(texts(in: chrome.strip)) \(texts(in: chrome.hints))")
+        offsets = [200]
+        for _ in 0..<3000 where overlay.scrollHeight > 800 { try await Task.sleep(for: .milliseconds(10)) }
+        require(overlay.scrollHeight == 800 && texts(in: chrome.strip).first == "Scrolling 800 px",
+                "scrolling back up trims the end to the bottom of the view, and the count follows: \(overlay.scrollHeight) \(texts(in: chrome.strip))")
+        offsets = [300]
+        for _ in 0..<3000 where overlay.scrollHeight < 900 { try await Task.sleep(for: .milliseconds(10)) }
+        require(overlay.scrollHeight == 900, "scrolling down again adds the end back: \(overlay.scrollHeight)")
         key(5, "g")
         require(overlay.scrollArea == page, "other keys do nothing while scrolling")
         pasteboard.clearContents()
