@@ -383,8 +383,11 @@ final class Chrome {
     /// The highlight color: the primary button, pressed caps, lit toggles, the highlighted menu row. Set on each refresh.
     static var tint = NSColor.controlAccentColor
     /// White or black, whichever reads on `tint`.
-    static var onTint: NSColor {
-        let color = tint.usingColorSpace(.sRGB)!
+    static var onTint: NSColor { text(on: tint) }
+
+    /// White or black, whichever reads on `color`.
+    static func text(on color: NSColor) -> NSColor {
+        let color = color.usingColorSpace(.sRGB)!
         return 0.2126 * color.redComponent + 0.7152 * color.greenComponent + 0.0722 * color.blueComponent > 0.7 ? .black : .white
     }
 

@@ -420,6 +420,15 @@ extension DebugRun {
             print(directory.appending(path: "\(name).png").path)
         }
         try renderToast("toast", Toast(png: nil, message: "Copied", detail: "1824 x 768  frame", file: nil, color: nil, defaults: defaults))
+        // The checkmark takes the highlight color; a light one gets a black check.
+        let yellow = UserDefaults(suiteName: "snug-render-toast-\(UUID().uuidString)")!
+        Pref.register(in: yellow)
+        yellow.set("#FFC600", forKey: Pref.highlightColor)
+        let yellowToast = Toast(png: nil, message: "Copied", detail: "1824 x 768", file: nil, color: nil, defaults: yellow)
+        try renderToast("toast-highlight-yellow", yellowToast)
+        let yellowColor = Highlight.color(hex: "#FFC600")
+        require((yellowToast.mark as! NSImageView).symbolConfiguration == NSImage.SymbolConfiguration(pointSize: 17, weight: .semibold).applying(.init(paletteColors: [.black, yellowColor])),
+                "the toast's check is black on the yellow highlight color")
         let roundedCapture = CGContext(data: nil, width: 960, height: 520, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         roundedCapture.addPath(CGPath(roundedRect: CGRect(x: 0, y: 0, width: 960, height: 520), cornerWidth: 40, cornerHeight: 40, transform: nil))
