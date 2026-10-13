@@ -414,6 +414,7 @@ final class Chrome {
     let scroll = BarButton("Scroll", key: "G")
     let record = BarButton("Record", key: "V")
     let cutout = BarButton("Subject", key: "K")
+    let colors = BarButton("Colors", key: "U")
     let scrolled = BarButton("Scrolling", key: nil)
     let done = BarButton("Done", key: "\u{21A9}")
     let cancel = BarButton("Cancel", key: "esc")
@@ -434,6 +435,8 @@ final class Chrome {
     let ratioDivider = NSTextField("|", size: 12, color: NSColor.chromeText.withAlphaComponent(0.5))
     let lock = BarButton("lock", key: "\u{21E7}P")
     let ratioMenu = RatioMenu()
+    /// U's menu under the Colors button: the selection's average color and its five main colors.
+    let colorMenu = RatioMenu()
     /// The live corner radius with its keys.
     let radius = Pill(radius: 8, insets: NSEdgeInsets(top: 0, left: 8, bottom: 0, right: 3), spacing: 6, height: Chrome.labelHeight)
     /// The keys for this moment, at the bottom.
@@ -463,6 +466,7 @@ final class Chrome {
 
     init() {
         ratio.isClickThrough = false
+        colorMenu.toggleKey = "u"
         snap.surface = true
         snap.isHidden = true
         snapTag.surface = true
@@ -475,9 +479,9 @@ final class Chrome {
     /// Every button, for the click wiring.
     var buttons: [BarButton] {
         Array(modeButtons.values) + (viewToggles + styleToggles).map(\.1)
-            + [edit, copy, save, text, scroll, record, cutout, done, cancel, cursor, countIn, start, subject, crop, snap, ratioButton, lock]
+            + [edit, copy, save, text, scroll, record, cutout, colors, done, cancel, cursor, countIn, start, subject, crop, snap, ratioButton, lock]
     }
 
     /// Lowest first: the cut-out preview goes under all of them.
-    var all: [NSView] { [upHint, downHint, hover, size, snap, snapTag, reading, legend] + sideHints + [radius, cornerKeys, list, hints, topBar, strip, status, ratio, ratioMenu, help] }
+    var all: [NSView] { [upHint, downHint, hover, size, snap, snapTag, reading, legend] + sideHints + [radius, cornerKeys, list, hints, topBar, strip, status, ratio, ratioMenu, colorMenu, help] }
 }

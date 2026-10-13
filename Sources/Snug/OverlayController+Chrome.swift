@@ -15,6 +15,8 @@ extension OverlayController {
         cornerChip.surface = true
         chrome.ratioMenu.onClose = { [unowned self] in refresh() }
         chrome.ratioMenu.onKey = { [unowned self] in flash($0) }
+        chrome.colorMenu.onClose = { [unowned self] in refresh() }
+        chrome.colorMenu.onKey = { [unowned self] in flash($0) }
     }
 
     /// Lights the caps of a key just pressed, for 150 ms.
@@ -67,6 +69,7 @@ extension OverlayController {
     /// The keys line: each hint is a label and its key caps, shown in that order.
     private var hints: [(keys: [String], label: String)] {
         if !chrome.ratioMenu.isHidden { return [(["\u{2191}", "\u{2193}"], "pick"), (["\u{21A9}"], "choose"), (["esc"], "close")] }
+        if !chrome.colorMenu.isHidden { return [(["\u{2191}", "\u{2193}"], "pick"), (["\u{21A9}", "1-6"], "copy"), (["esc"], "close")] }
         if cutout != nil { return [(["K", "esc"], "back")] }
         if scrollArea != nil { return [([], "Scroll the app under the outline")] }
         if let armed = armedRecording {
@@ -162,9 +165,9 @@ extension OverlayController {
             c.radius.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText), KeyCap("["), KeyCap("]")] }
             return c.radius
         }
-        /// The capture strip: Edit in its own pill while hovering, then Copy, Save, and Text, then Scroll, Record, and Subject, which are faded when they cannot run on `area`.
+        /// The capture strip: Edit in its own pill while hovering, then Copy, Save, and Text, then Scroll, Record, and Subject (and Colors, once selected), which are faded when they cannot run on `area`.
         func captureStrip(_ area: CGRect, hovering: Bool = false) {
-            c.strip.show((hovering ? [[c.edit]] : []) + [[c.copy, c.save, c.text], [c.scroll, c.record, c.cutout]])
+            c.strip.show((hovering ? [[c.edit]] : []) + [[c.copy, c.save, c.text], [c.scroll, c.record, c.cutout] + (hovering ? [] : [c.colors])])
             c.scroll.isEnabled = (scrollFrames != nil || displayID != nil) && area != extent && windows.contains { $0.insetBy(dx: -2, dy: -2).contains(area) }
             c.record.isEnabled = displayID != nil
         }

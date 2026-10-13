@@ -318,6 +318,56 @@ extension DebugRun {
         let mean = sums.map { Int((Double($0) / 2400).rounded()) }
         require(close(parse(pasteboard.string(forType: .string)!), mean, 1), "C with a selection copies the selection average \(mean)")
 
+        // U opens the Colors menu under the strip's Colors button: the selection's average (what C copied), a separator, then its main
+        // colors, each with a 1-6 cap. The digit or a click copies that value with the C toast and closes the overlay; Esc closes the menu.
+        open()
+        drag(average)
+        let colors = overlay.chrome.colorMenu, format = ColorFormat(rawValue: defaults.string(forKey: Pref.colorFormat)!)!
+        let palette = ColorFormat.palette(of: image, in: average).map(format.string)
+        func openColors(_ action: () -> Void) async throws {
+            colors.isHidden = true
+            action()
+            for _ in 0..<1000 where colors.isHidden { try await Task.sleep(for: .milliseconds(10)) }
+        }
+        try await openColors { overlay.chrome.colors.onClick() }
+        require(texts(in: overlay.chrome.strip).contains("Colors") && !colors.isHidden && overlay.window.firstResponder === colors,
+                "clicking the strip's Colors button opens the menu: \(texts(in: overlay.chrome.strip))")
+        let button = overlay.view.convert(overlay.chrome.colors.bounds, from: overlay.chrome.colors)
+        require(colors.panel.frame.minX == min(max(button.minX, 8), overlay.view.bounds.width - colors.panel.frame.width - 8) && colors.panel.frame.maxY <= button.minY,
+                "the menu sits under the Colors button, left edges aligned: \(colors.panel.frame) \(button)")
+        let averageText = format.string(for: ColorFormat.average(of: image, in: average))
+        require(colors.items.map(\.title) == [averageText, ""] + palette && colors.items.map(\.cap) == ["1", nil, "2", "3", "4", "5", "6"] && palette.count == 5
+                    && colors.items.filter { $0.swatch != nil }.count == 6,
+                "the menu lists the average, a separator, and five main colors, each with a swatch and a cap: \(colors.items.map(\.title)) \(colors.items.map(\.cap))")
+        require(averageText == pasteboard.string(forType: .string), "the first row is the color C copies: \(averageText)")
+        require(texts(in: overlay.chrome.hints) == ["pick", "\u{2191}", "\u{2193}", "copy", "\u{21A9}", "1-6", "close", "esc"], "the keys line names the menu's keys: \(texts(in: overlay.chrome.hints))")
+        key(53, "\u{1B}")
+        require(colors.isHidden && overlay.window.isVisible && overlay.selection?.rect == average, "Esc closes the Colors menu and keeps the selection")
+        try await openColors { key(32, "u") }
+        require(!colors.isHidden, "U opens the menu")
+        key(32, "u")
+        require(colors.isHidden && overlay.window.isVisible, "U again closes it")
+        try await openColors { key(32, "u") }
+        pasteboard.clearContents()
+        key(20, "3")
+        require(!overlay.window.isVisible && pasteboard.string(forType: .string) == palette[1], "the 3 key copies the second main color \(palette[1]): \(pasteboard.string(forType: .string) ?? "nothing")")
+        open()
+        drag(average)
+        try await openColors { key(32, "u") }
+        pasteboard.clearContents()
+        key(18, "1")
+        require(!overlay.window.isVisible && pasteboard.string(forType: .string) == averageText, "the 1 key copies the average \(averageText)")
+        open()
+        drag(average)
+        try await openColors { key(32, "u") }
+        let colorRow = colors.rows[colors.items.firstIndex { $0.cap == "2" }!]
+        let rowPoint = colorRow.convert(CGPoint(x: colorRow.bounds.midX, y: colorRow.bounds.midY), to: overlay.view)
+        pasteboard.clearContents()
+        mouse(.leftMouseDown, CGPoint(x: rowPoint.x * overlay.scale, y: (overlay.view.bounds.height - rowPoint.y) * overlay.scale))
+        mouse(.leftMouseUp, CGPoint(x: rowPoint.x * overlay.scale, y: (overlay.view.bounds.height - rowPoint.y) * overlay.scale))
+        require(!overlay.window.isVisible && pasteboard.string(forType: .string) == palette[0], "a click on a row copies its value \(palette[0])")
+        overlay.dismiss()
+
         // ? shows and hides the keys sheet; Esc closes it without closing the overlay.
         open()
         let help = overlay.chrome.help
@@ -905,7 +955,7 @@ extension DebugRun {
         require(texts(in: chrome.size) == ["\(Int(fit.width)) x \(Int(fit.height))  Snapped"], "a snap preview shows its size and Snapped: \(texts(in: chrome.size))")
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.snap) == ["Snapped", "S"] && chrome.snap.lit, "after release on a fit: Snapped, lit")
-        require(!top.isHidden && texts(in: chrome.strip) == captureStrip && texts(in: chrome.hints)
+        require(!top.isHidden && texts(in: chrome.strip) == captureStrip + ["Colors", "U"] && texts(in: chrome.hints)
                     == ["move", "\u{2190}\u{2192}", "grow", "\u{2325}", "shrink", "\u{2325}\u{2318}", "edge out", "\u{2318}", "edge in", "\u{2318}\u{21E7}", "all sides", "+", "-", "undo", "\u{2318}Z"],
                 "a selection keeps the top bar, has the strip without Edit, and the arrow layers on the keys line: \(texts(in: chrome.hints))")
         require(chrome.hints.frame.height < 40 && chrome.hints.frame.width <= overlay.view.bounds.width - 16, "the keys line is one line and fits: \(chrome.hints.frame) in \(overlay.view.bounds.width)")
@@ -1133,7 +1183,7 @@ extension DebugRun {
                     && texts(in: chrome.strip).contains("Start"),
                 "armed to record, the ratio, radius, and Snap chips and the edge keys hide, and the strip holds the armed controls")
         key(53, "\u{1B}")
-        require(overlay.armedRecording == nil && texts(in: chrome.strip) == captureStrip && !chrome.ratio.isHidden, "Esc disarms and brings the editing chrome back")
+        require(overlay.armedRecording == nil && texts(in: chrome.strip) == captureStrip + ["Colors", "U"] && !chrome.ratio.isHidden, "Esc disarms and brings the editing chrome back")
         overlay.dismiss()
 
         // G: scrolling capture of a released selection inside a window, with frames cut from the fixture as if the page scrolled 300 px.

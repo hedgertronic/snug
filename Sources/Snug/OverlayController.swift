@@ -328,6 +328,7 @@ final class OverlayController {
         ratioBase = nil
         ratioPortrait = nil
         chrome.ratioMenu.isHidden = true
+        chrome.colorMenu.isHidden = true
         walkedLevel = false
         selection = nil
         interaction = .none
@@ -731,6 +732,7 @@ final class OverlayController {
             guard let index = windows.firstIndex(where: { $0.contains(pointer) }) else { return false }
             clickWindow(index, crop: windows[index], shadow: windowShadow(option: false), copy: true, save: afterCaptureSaves)
         case (_, false, "k"): cutOut()
+        case (_, false, "u") where !hovering: showColorsMenu()
         case (_, false, "o"): defaults.set(!defaults.bool(forKey: Pref.roundCorners), forKey: Pref.roundCorners)
         case (_, false, _) where shift && !hovering && character.lowercased() == "p": toggleRatioLock()
         case (_, false, "p") where !hovering: showRatioMenu()

@@ -70,4 +70,40 @@ public enum ColorFormat: String, CaseIterable, Sendable {
         let scale = Double(crop.width * crop.height) * 255
         return SRGBColor(red: Double(sums[0]) / scale, green: Double(sums[1]) / scale, blue: Double(sums[2]) / scale)
     }
+
+    /// The main colors of `rect` (image pixels, top-left origin), most common first: median cut over a copy of the crop sampled down
+    /// to about 64k pixels. A box is split on its widest channel at that channel's mean, the one with the most pixels times that range first;
+    /// fewer than `count` come back when the region has fewer distinct colors.
+    public static func palette(of image: CGImage, in rect: CGRect, count: Int = 5) -> [SRGBColor] {
+        let crop = image.cropping(to: rect)!
+        let shrink = min(1, (65_536 / Double(crop.width * crop.height)).squareRoot())
+        let width = max(1, Int(Double(crop.width) * shrink)), height = max(1, Int(Double(crop.height) * shrink))
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        bytes.withUnsafeMutableBytes { buffer in
+            let context = CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                    space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+            context.interpolationQuality = .none
+            context.draw(crop, in: CGRect(x: 0, y: 0, width: width, height: height))
+        }
+        var pixels = (0..<width * height).map { SIMD3<Int>(Int(bytes[$0 * 4]), Int(bytes[$0 * 4 + 1]), Int(bytes[$0 * 4 + 2])) }
+        func widest(_ box: Range<Int>) -> (channel: Int, range: Int) {
+            let low = pixels[box].reduce(SIMD3<Int>(repeating: 255)) { $0.replacing(with: $1, where: $1 .< $0) }
+            let high = pixels[box].reduce(SIMD3<Int>(repeating: 0)) { $0.replacing(with: $1, where: $1 .> $0) }
+            let spread = high &- low
+            let channel = spread.x >= max(spread.y, spread.z) ? 0 : spread.y >= spread.z ? 1 : 2
+            return (channel, spread[channel])
+        }
+        var boxes = [pixels.indices]
+        while boxes.count < count, let split = boxes.indices.filter({ boxes[$0].count > 1 && widest(boxes[$0]).range > 0 }).max(by: { boxes[$0].count * widest(boxes[$0]).range < boxes[$1].count * widest(boxes[$1]).range }) {
+            let box = boxes.remove(at: split), channel = widest(box).channel
+            let sum = pixels[box].reduce(SIMD3<Int>.zero, &+)
+            let middle = pixels[box].partition { $0[channel] * box.count > sum[channel] }
+            boxes += [box.lowerBound..<middle, middle..<box.upperBound]
+        }
+        return boxes.sorted { $0.count > $1.count }.map { box in
+            let sum = pixels[box].reduce(SIMD3<Int>.zero, &+)
+            let scale = Double(box.count) * 255
+            return SRGBColor(red: Double(sum.x) / scale, green: Double(sum.y) / scale, blue: Double(sum.z) / scale)
+        }
+    }
 }

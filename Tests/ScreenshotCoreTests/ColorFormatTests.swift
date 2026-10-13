@@ -60,4 +60,50 @@ struct ColorFormatTests {
         let color = ColorFormat.average(of: context.makeImage()!, in: CGRect(x: 0, y: 0, width: 2, height: 1))
         #expect(ColorFormat.rgb.string(for: color) == "rgb(128, 128, 128)")
     }
+
+    /// A `width` x `height` sRGB image of vertical stripes: each color with its width in pixels, left to right.
+    func stripes(_ bands: [(color: (Double, Double, Double), width: Int)], height: Int) -> CGImage {
+        let context = CGContext(data: nil, width: bands.map(\.width).reduce(0, +), height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        var x = 0
+        for band in bands {
+            context.setFillColor(CGColor(srgbRed: band.color.0, green: band.color.1, blue: band.color.2, alpha: 1))
+            context.fill(CGRect(x: x, y: 0, width: band.width, height: height))
+            x += band.width
+        }
+        return context.makeImage()!
+    }
+
+    @Test func paletteOfAFlatRegionIsOneColor() {
+        let palette = ColorFormat.palette(of: stripes([((0.2, 0.4, 0.6), 8)], height: 8), in: CGRect(x: 0, y: 0, width: 8, height: 8))
+        #expect(palette.map(ColorFormat.hex.string) == ["#336699"])
+    }
+
+    @Test func paletteListsTheCommonestColorFirst() {
+        let image = stripes([((1, 0, 0), 10), ((0, 0, 1), 30)], height: 10)
+        let palette = ColorFormat.palette(of: image, in: CGRect(x: 0, y: 0, width: 40, height: 10))
+        #expect(palette.map(ColorFormat.hex.string) == ["#0000FF", "#FF0000"])
+    }
+
+    @Test func paletteFindsFiveColorsMostCommonFirst() {
+        let bands: [(color: (Double, Double, Double), width: Int)] = [((0, 0, 0), 10), ((1, 1, 0), 20), ((0, 0, 1), 30), ((0, 1, 0), 40), ((1, 0, 0), 50)]
+        let palette = ColorFormat.palette(of: stripes(bands, height: 20), in: CGRect(x: 0, y: 0, width: 150, height: 20))
+        #expect(palette.map(ColorFormat.hex.string) == ["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#000000"])
+    }
+
+    @Test func paletteStopsAtFiveColors() {
+        let bands: [(color: (Double, Double, Double), width: Int)] = [((1, 0, 0), 50), ((0, 1, 0), 40), ((0, 0, 1), 30), ((1, 1, 0), 20), ((0, 0, 0), 10), ((1, 1, 1), 5)]
+        #expect(ColorFormat.palette(of: stripes(bands, height: 20), in: CGRect(x: 0, y: 0, width: 155, height: 20)).count == 5)
+    }
+
+    @Test func paletteSamplesALargeRegionDown() {
+        let image = stripes([((1, 0, 0), 1500), ((0, 0, 1), 1500)], height: 1000)
+        let palette = ColorFormat.palette(of: image, in: CGRect(x: 0, y: 0, width: 3000, height: 1000))
+        #expect(Set(palette.map(ColorFormat.hex.string)) == ["#FF0000", "#0000FF"])
+    }
+
+    @Test func paletteReadsOnlyTheRect() {
+        let image = stripes([((1, 0, 0), 10), ((0, 0, 1), 10)], height: 10)
+        #expect(ColorFormat.palette(of: image, in: CGRect(x: 10, y: 0, width: 10, height: 10)).map(ColorFormat.hex.string) == ["#0000FF"])
+    }
 }

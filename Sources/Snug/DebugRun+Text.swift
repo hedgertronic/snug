@@ -453,7 +453,9 @@ extension DebugRun {
         let reading = overlay.textTask
         key(escape)
         await reading?.value
-        require(reading != nil && reading!.isCancelled && !overlay.window.isVisible && pasteboard.string(forType: .string) == nil, "Esc during the read cancels it and copies nothing")
+        require(reading != nil && reading!.isCancelled && overlay.selection == nil && pasteboard.string(forType: .string) == nil, "Esc during the read cancels it, drops the selection to hover, and copies nothing")
+        key(escape)
+        require(!overlay.window.isVisible, "a second Esc closes the overlay")
 
         // The real pair on this Mac: either the notice or a real translation, never a prompt.
         let spanish = Locale.Language(identifier: "es")

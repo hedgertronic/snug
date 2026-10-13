@@ -79,13 +79,31 @@ extension OverlayController {
 
     private func swatch(_ color: SRGBColor) -> NSColor { NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1) }
 
-    func copyColor() {
-        guard let color = pickedColor else { return }
+    /// Copies `color`, or the pointer's color or the selection's average, in the chosen format, and closes the overlay.
+    func copyColor(_ color: SRGBColor? = nil) {
+        guard let color = color ?? pickedColor else { return }
         let text = colorFormat.string(for: color)
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
         dismiss()
         Toast.show(message: "Copied", detail: text, color: swatch(color))
+    }
+
+    /// U on a selection: the menu under the Colors button, with the selection's average (what C copies) and its five main colors, each
+    /// copied by its row or its 1-6 key. The colors are worked out off main, since they take over 5 ms on a large selection.
+    func showColorsMenu() {
+        guard let rect = selection?.rect, let image else { return }
+        Task {
+            let (average, palette) = await Task.detached { (ColorFormat.average(of: image, in: rect), ColorFormat.palette(of: image, in: rect)) }.value
+            guard selection?.rect == rect else { return }
+            let rows = [average] + palette
+            let items = rows.enumerated().map { index, color in
+                RatioMenu.Item(title: colorFormat.string(for: color), on: false, swatch: swatch(color), cap: "\(index + 1)") { [self] in copyColor(color) }
+            }
+            let button = chrome.colors
+            chrome.colorMenu.open(Array(items.prefix(1)) + [RatioMenu.Item(title: "", on: false) {}] + items.dropFirst(), under: view.convert(button.bounds, from: button))
+            refresh()
+        }
     }
 
     func cycleColorFormat() {
