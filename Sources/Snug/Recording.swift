@@ -149,8 +149,11 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         Task { @MainActor in finished(nil) }
     }
 
+    /// A stop from outside Snug (the system's screen-recording indicator) may end the output with `userStopped`; the file is then as
+    /// complete as after `stop`, so it delivers like one.
     nonisolated func recordingOutput(_ recordingOutput: SCRecordingOutput, didFailWithError error: any Error) {
-        Task { @MainActor in finished(error) }
+        let stoppedByUser = (error as? SCStreamError)?.code == .userStopped
+        Task { @MainActor in finished(stoppedByUser ? nil : error) }
     }
 
     private func finished(_ error: (any Error)?) {
