@@ -14,7 +14,7 @@ final class Guides {
     static let loupePixels = 11
     static let rulerThickness: CGFloat = 18
     private static let readoutGap: CGFloat = 8
-    /// The readout may stick out this far on each side of the loupe's disc.
+    /// The loupe's placement keeps this much clear on each side of the disc for the readout, which may be wider and then shifts into the view.
     static let readoutOverhang: CGFloat = 30
     /// One duration and curve for every loupe and ruler transition. The outro plays the intro backward, so its curve is the intro's mirrored.
     static let transitionDuration: CFTimeInterval = 0.18
@@ -356,7 +356,7 @@ final class Guides {
             }
             loupeOffset = offset
             loupe.position = CGPoint(x: origin.x + Self.loupeSize / 2, y: origin.y + loupe.bounds.height / 2)
-            readout.frame.origin = CGPoint(x: (origin.x + (Self.loupeSize - readout.frame.width) / 2).rounded(), y: (origin.y + (Chrome.labelHeight - readout.frame.height) / 2).rounded())
+            readout.frame.origin = CGPoint(x: min(max((origin.x + (Self.loupeSize - readout.frame.width) / 2).rounded(), 4), bounds.width - readout.frame.width - 4), y: (origin.y + (Chrome.labelHeight - readout.frame.height) / 2).rounded())
         }
     }
 }
