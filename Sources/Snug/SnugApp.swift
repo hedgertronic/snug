@@ -424,8 +424,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         if settingsWindow == nil {
             settingsWindow = SettingsTabs.makeWindow()
         }
+        // `activate` is only a request that macOS may decline or grant later; ordered front regardless, the window comes up over the
+        // active app's windows either way and becomes key once Snug is active.
         NSApp.activate()
         settingsWindow!.makeKeyAndOrderFront(nil)
+        settingsWindow!.orderFrontRegardless()
     }
 
     private func showFirstRun() {
