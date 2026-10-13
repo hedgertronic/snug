@@ -105,6 +105,7 @@ final class OverlayView: NSView {
             layer!.addSublayer(shape)
         }
         layer!.addSublayer(guides.root)
+        addSubview(guides.readout)
         liveText.preferredInteractionTypes = .textSelection
         // No Live Text button in the corner: Text mode is already the text view.
         liveText.isSupplementaryInterfaceHidden = true

@@ -106,6 +106,16 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: text.x - 300, y: text.y - 200))
         require(guides.loupe.position != before, "the loupe follows the pointer")
         mouse(.mouseMoved, text)
+        // The readout under the loupe is a chip: swatch, hex value, then copy with a C key cap that flashes on C (here through the flash
+        // hook alone, since a real C copies and closes the overlay).
+        let readout = guides.readout, readoutCap = readout.subviews.compactMap { $0 as? KeyCap }.filter { $0.text == "C" }
+        let loupeBox = guides.loupe.frame
+        require(!readout.isHidden && readoutCap.count == 1 && texts(in: readout).count == 3 && texts(in: readout)[0].hasPrefix("#") && texts(in: readout)[1] == "copy"
+                    && readout.frame.minY >= loupeBox.minY && readout.frame.maxY <= loupeBox.minY + 32 && abs(readout.frame.midX - loupeBox.midX) <= 1
+                    && readout.frame.width <= Guides.loupeSize + 2 * Guides.readoutOverhang,
+                "the loupe's readout is a chip under the disc with the value, copy, and a C cap: \(texts(in: readout)) \(readout.frame) \(loupeBox)")
+        overlay.flash(KeyCap.event(for: "C"))
+        require(readoutCap[0].pressed, "C flashes the readout's C cap")
         // The loupe's readout and the rulers' text change without a cross-fade once displayed.
         CATransaction.flush()
         require(animations(guides.root).isEmpty, "moving the pointer animates no guide layer: \(animations(guides.root))")

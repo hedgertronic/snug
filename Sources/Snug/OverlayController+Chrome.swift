@@ -58,7 +58,7 @@ extension OverlayController {
             if restyle { (view as? BarButton)?.apply() }
             view.subviews.forEach(light)
         }
-        (chrome.all + [cornerChip] + chrome.buttons).forEach(light)
+        (chrome.all + [cornerChip, view.guides.readout] + chrome.buttons).forEach(light)
     }
 
     /// The keys line: each hint is a label and its key caps, shown in that order.
@@ -124,7 +124,7 @@ extension OverlayController {
         let look = Chrome.appearance(defaults)
         // The keys sheet keeps its own dark material.
         if c.hints.appearance?.name != look?.name {
-            for item in c.all + [cornerChip] where item !== c.help { item.appearance = look }
+            for item in c.all + [cornerChip, view.guides.readout] where item !== c.help { item.appearance = look }
         }
         for item in [c.hover, c.size, c.snap, c.ratio, c.radius, c.legend, c.reading, c.status, c.strip] { item.isHidden = true }
         c.help.frame = bounds
