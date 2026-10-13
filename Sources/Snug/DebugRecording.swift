@@ -210,7 +210,10 @@ extension DebugRun {
         let reminder = ScreenRecording.makeReminder(around: recordArea, on: display, defaults: defaults)!
         let settings = SettingsTabs.makeWindow()
         require(outline.contentView!.layer!.borderColor == NSColor.systemRed.cgColor, "the recording outline is red, like the armed outline")
-        require(texts(in: reminder.contentView!) == ["\u{2303}\u{21E7}Space", "to stop"], "the reminder reads the shortcut, then to stop: \(texts(in: reminder.contentView!))")
+        require(texts(in: reminder.contentView!) == ["stop", "\u{2303}\u{21E7}Space"], "the reminder reads stop, then the shortcut: \(texts(in: reminder.contentView!))")
+        let reminderCaps = reminder.contentView!.subviews[0].subviews.compactMap { $0 as? KeyCap }
+        require(reminder.contentView is Pill && reminderCaps.map(\.text) == ["\u{2303}\u{21E7}Space"] && reminder.hasShadow,
+                "the reminder is the chrome's surface pill with the shortcut on a key cap, and the panel draws its shadow")
         require(reminder.frame.maxY == outline.frame.minY - ScreenRecording.reminderGap && abs(reminder.frame.midX - outline.frame.midX) <= 0.5,
                 "the reminder is centered under the outline, \(ScreenRecording.reminderGap) pt away: \(reminder.frame) \(outline.frame)")
         let excluded = DisplayCapture.excludedWindowIDs()

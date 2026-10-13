@@ -101,11 +101,7 @@ extension OverlayController {
         let released = mode == .capture && selection != nil
         let editing = released && armedRecording == nil
         Chrome.tint = view.highlight?.color ?? .controlAccentColor
-        let look = switch defaults.string(forKey: Pref.overlayAppearance)! {
-        case "light": NSAppearance(named: .aqua)
-        case "dark": NSAppearance(named: .darkAqua)
-        default: nil as NSAppearance?
-        }
+        let look = Chrome.appearance(defaults)
         // The keys sheet keeps its own dark material.
         if c.hints.appearance?.name != look?.name {
             for item in c.all + [cornerChip] where item !== c.help { item.appearance = look }

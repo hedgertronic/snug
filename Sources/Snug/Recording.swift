@@ -179,21 +179,23 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         return panel
     }
 
-    /// The stop reminder: the capture shortcut then "to stop" (with no shortcut, "Stop from the menu bar") on a dark pill, placed by
-    /// `reminderFrame` within the display's visible frame; nil when it fits neither below nor above the area.
+    /// The stop reminder: "stop" then the capture shortcut's key cap (with no shortcut, "Stop from the menu bar") on the chrome
+    /// surface in the overlay's look, placed by `reminderFrame` within the display's visible frame; nil when it fits neither below nor
+    /// above the area. The panel draws the shadow, since the pill's own would be clipped at the panel's edge.
     static func makeReminder(around area: CGRect, on displayID: CGDirectDisplayID, defaults: UserDefaults) -> RecordingPanel? {
-        let color = NSColor.white.withAlphaComponent(0.92)
-        let pill = Pill.dark(0.9, radius: 11, insets: NSEdgeInsets(top: 8, left: 14, bottom: 8, right: 14), spacing: 6)
-        pill.show("") {
-            defaults.integer(forKey: Pref.hotKeyCode) < 0
-                ? [NSTextField("Stop from the menu bar", size: 12, weight: .medium, color: color)]
-                : [KeyCap(Shortcut.label(from: defaults), color: color), NSTextField("to stop", size: 12, weight: .medium, color: color)]
+        let pill = Pill(radius: 11, insets: NSEdgeInsets(top: 7, left: 14, bottom: 7, right: 14), spacing: 0)
+        pill.appearance = Chrome.appearance(defaults)
+        pill.show("reminder") {
+            [defaults.integer(forKey: Pref.hotKeyCode) < 0
+                ? NSTextField("Stop from the menu bar", size: 12, weight: .medium, color: .chromeText)
+                : Pill.hint([Shortcut.label(from: defaults)], "stop")]
         }
         let screen = NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value == displayID }!
         let visible = CGRect(x: screen.visibleFrame.minX - screen.frame.minX, y: screen.frame.maxY - screen.visibleFrame.maxY,
                              width: screen.visibleFrame.width, height: screen.visibleFrame.height)
         guard let frame = reminderFrame(size: pill.frame.size, around: area, within: visible) else { return nil }
         let panel = RecordingPanel(frame: screenFrame(frame, on: displayID))
+        panel.hasShadow = true
         panel.contentView = pill
         return panel
     }

@@ -398,9 +398,9 @@ extension DebugRun {
 
         try await renderMenuBarIcons(into: directory)
 
-        /// A toast's content on a mid-gray backdrop, since its panel is transparent.
-        func renderToast(_ name: String, _ toast: Toast, hovered: Bool = false) throws {
-            if hovered {
+        /// A toast's (or another transparent panel's) content on a mid-gray backdrop.
+        func renderToast(_ name: String, _ toast: NSPanel, hovered: Bool = false) throws {
+            if hovered, let toast = toast as? Toast {
                 toast.mouseEntered(with: NSEvent.enterExitEvent(with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: toast.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil)!)
                 toast.dismissal?.cancel()
             }
@@ -443,6 +443,10 @@ extension DebugRun {
         try renderToast("toast-preview-top-right", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: topRight))
         try renderToast("toast-preview-top-right-hover", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: topRight), hovered: true)
         try renderToast("toast-saved-hover", Toast(png: roundedPNG, message: "Copied, saved to Desktop", detail: "Snug 2026-10-10 at 12.00.00.png", file: URL(fileURLWithPath: "/tmp/Snug.png"), color: nil, defaults: defaults), hovered: true)
+        // The recording's stop reminder, in the dark look.
+        defaults.set("dark", forKey: Pref.overlayAppearance)
+        try renderToast("recording-reminder", ScreenRecording.makeReminder(around: CGRect(x: 300, y: 300, width: 400, height: 200), on: CGMainDisplayID(), defaults: defaults)!)
+        defaults.removeObject(forKey: Pref.overlayAppearance)
         let noPreview = UserDefaults(suiteName: "snug-render-toast-\(UUID().uuidString)")!
         Pref.register(in: noPreview)
         noPreview.set(false, forKey: Pref.toastPreview)

@@ -111,13 +111,6 @@ final class Pill: NSView {
         }
     }
 
-    /// A pill with a fixed dark fill, drawn in the dark look whatever the overlay's: the recording reminder, outside the overlay.
-    static func dark(_ alpha: CGFloat, radius: CGFloat, insets: NSEdgeInsets, spacing: CGFloat = 8, vertical: Bool = false) -> Pill {
-        let pill = Pill(fill: NSColor(srgbRed: 20 / 255, green: 20 / 255, blue: 22 / 255, alpha: alpha), radius: radius, insets: insets, spacing: spacing, vertical: vertical)
-        pill.appearance = NSAppearance(named: .darkAqua)
-        return pill
-    }
-
     /// An object chip: one line on the surface, 26 pt tall.
     static func chip() -> Pill { Pill(radius: 8, insets: NSEdgeInsets(top: 5, left: 8, bottom: 5, right: 8), spacing: 8) }
 }
@@ -128,8 +121,6 @@ final class Pill: NSView {
 final class KeyCap: NSView {
     let text: String
     private let label: NSTextField
-    /// A fixed glyph color in place of the look's; nil follows the look.
-    private let color: NSColor?
     var pressed = false {
         didSet { apply() }
     }
@@ -137,9 +128,8 @@ final class KeyCap: NSView {
         didSet { apply() }
     }
 
-    init(_ text: String, color: NSColor? = nil) {
+    init(_ text: String) {
         self.text = text
-        self.color = color
         label = NSTextField(text, size: 11, weight: .semibold)
         super.init(frame: .zero)
         wantsLayer = true
@@ -162,7 +152,7 @@ final class KeyCap: NSView {
 
     private func apply() {
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            label.textColor = pressed ? Chrome.onTint : onTint ? Chrome.tint : color ?? .chromeText
+            label.textColor = pressed ? Chrome.onTint : onTint ? Chrome.tint : .chromeText
             layer!.backgroundColor = (pressed ? Chrome.tint : onTint ? NSColor.white.withAlphaComponent(0.94) : NSColor.capFill).cgColor
             layer!.borderColor = (pressed || onTint ? NSColor.clear : NSColor.capEdge).cgColor
             layer!.shadowOpacity = isDark ? 0.55 : 0.22
@@ -382,6 +372,15 @@ final class Bar: NSView {
 final class Chrome {
     /// The highlight color: the primary button, pressed caps, lit toggles, the highlighted menu row. Set on each refresh.
     static var tint = NSColor.controlAccentColor
+    /// The look `SnugOverlayAppearance` picks for the chrome; nil follows the system.
+    static func appearance(_ defaults: UserDefaults) -> NSAppearance? {
+        switch defaults.string(forKey: Pref.overlayAppearance)! {
+        case "light": NSAppearance(named: .aqua)
+        case "dark": NSAppearance(named: .darkAqua)
+        default: nil
+        }
+    }
+
     /// White or black, whichever reads on `tint`.
     static var onTint: NSColor { text(on: tint) }
 
