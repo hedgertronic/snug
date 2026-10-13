@@ -133,7 +133,7 @@ final class HelpSheet: NSView {
                              ("Text: Tab", "Next link, email, phone, code"), ("Text: Cmd-Return", "Open the picked item"), ("Option-Return", "Translate text")]),
         ("Modes, view, recording", [("A", "Capture"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),
                                     ("X", "Crosshair"), ("D", "Window shadow"), ("O", "Rounded corners"), ("M", "Frame on / off"), ("P", "Ratio menu"),
-                                    ("Shift-P", "Lock the ratio"), ("N", "Candidate list"), ("1-5", "Pick from the list (N)"), ("B", "Bottom bar"), ("?", "This sheet"),
+                                    ("Shift-P", "Lock the ratio"), ("N", "Candidate list"), ("1-5", "Pick from the list (N)"), ("B", "Keys line"), ("?", "This sheet"),
                                     ("V", "Arm recording, hover or selection"), ("Armed: Return / V", "Start recording"), ("Armed: H", "Cursor on / off"), ("Armed: I", "Count-in off, 3 s, 5 s"), ("Capture hotkey", "Stop recording")])
     ]
     let panel = NSVisualEffectView()
