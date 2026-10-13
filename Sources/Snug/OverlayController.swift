@@ -716,6 +716,10 @@ final class OverlayController {
         case (48, _, _) where hovering, (126, _, _) where hovering, (125, _, _) where hovering:
             if event.keyCode == 125 || event.keyCode == 48 && shift { session?.shrink() } else { session?.expand() }
             walkedLevel = true
+        case (123, false, _) where hovering && !option, (124, false, _) where hovering && !option:
+            // The element beside the hovered one; it holds like an Up or Down pick.
+            guard session?.step(right: event.keyCode == 124) == true else { beep(); break }
+            walkedLevel = true
         case (_, false, "1"..."5") where hovering && defaults.bool(forKey: Pref.candidates):
             session?.pick(Int(character)! - 1)
             walkedLevel = false

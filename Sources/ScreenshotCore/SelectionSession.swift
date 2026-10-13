@@ -149,6 +149,37 @@ public struct SelectionSession: Sendable {
         selected = next
     }
 
+    /// Selects the region beside the selected one, to the right or left: among the regions with the same parent (else, with none, the
+    /// same number of parents), the nearest whose center lies that way, preferring one that overlaps the selection vertically. Returns
+    /// false, changing nothing, when there is none.
+    public mutating func step(right: Bool) -> Bool {
+        guard let current = selected else { return false }
+        func parentID(_ candidate: Candidate) -> String? { enclosing(candidate)?.id }
+        func depth(_ candidate: Candidate) -> Int {
+            var count = 0, next = enclosing(candidate)
+            while let parent = next {
+                count += 1
+                next = enclosing(parent)
+            }
+            return count
+        }
+        let others = candidates.filter { $0.id != current.id && $0.kind != .display && $0.kind != .window }
+        let parent = parentID(current)
+        var level = others.filter { parentID($0) == parent }
+        if level.isEmpty {
+            let currentDepth = depth(current)
+            level = others.filter { depth($0) == currentDepth }
+        }
+        let ahead = level.filter { right ? $0.bounds.midX > current.bounds.midX : $0.bounds.midX < current.bounds.midX }
+        let overlapping = ahead.filter { $0.bounds.minY < current.bounds.maxY && $0.bounds.maxY > current.bounds.minY }
+        func distance(_ candidate: Candidate) -> CGFloat { hypot(candidate.bounds.midX - current.bounds.midX, candidate.bounds.midY - current.bounds.midY) }
+        guard let next = (overlapping.isEmpty ? ahead : overlapping).min(by: { distance($0) < distance($1) }) else { return false }
+        isLocked = true
+        selected = next
+        expansionPath = []
+        return true
+    }
+
     /// Whether a level picked with a key still holds with the pointer at `point`: while the pointer stays inside it, or for the
     /// display, which the pointer can never leave, while it stays within 12 units of where the level was picked.
     public func holds(at point: CGPoint) -> Bool {

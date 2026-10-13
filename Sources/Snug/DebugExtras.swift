@@ -633,6 +633,27 @@ extension DebugRun {
         require(outer != nil && overlay.view.overlays.hover == outer, "a level a key picked holds while the pointer stays inside it")
         overlay.dismiss()
 
+        // Left and Right step to the element beside the hovered one at the same level. On the page the First name and Last name fields
+        // are accessibility elements, as live; pixel geometry sees their row as one region, their parent. Right from Last name beeps and
+        // stays: the cart panel lies to the right but has another parent.
+        open()
+        await overlay.detectionTask?.value
+        overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        let firstName = Candidate(id: "ax-first-name", label: "Text Field", bounds: CGRect(x: 346, y: 454, width: 590, height: 72), score: AccessibilityBounds.baseScore, kind: .element)
+        let lastName = Candidate(id: "ax-last-name", label: "Text Field", bounds: CGRect(x: 968, y: 454, width: 592, height: 72), score: AccessibilityBounds.baseScore, kind: .element)
+        overlay.merge([firstName, lastName])
+        mouse(.mouseMoved, CGPoint(x: 640, y: 489))
+        var beside = [overlay.view.overlays.hover]
+        for code: UInt16 in [124, 123, 124, 124] {
+            key(code, "")
+            beside.append(overlay.view.overlays.hover)
+        }
+        require(beside == [firstName.bounds, lastName.bounds, firstName.bounds, lastName.bounds, lastName.bounds],
+                "Right steps from First name to Last name, Left back, and Right on Last name stays (the end of its row): \(beside)")
+        mouse(.mouseMoved, CGPoint(x: 645, y: 489))
+        require(overlay.view.overlays.hover == firstName.bounds && !overlay.session!.isLocked, "moving the pointer lets go of the picked element")
+        overlay.dismiss()
+
         // The candidate list: hidden until N, remembered; 1-5 pick from it.
         open()
         await overlay.detectionTask?.value
@@ -787,7 +808,7 @@ extension DebugRun {
         defaults.set(true, forKey: Pref.shadow)
         mouse(.mouseMoved, CGPoint(x: 40, y: 40))
         require(chrome.hover.isHidden && chrome.snap.isHidden && chrome.strip.isHidden, "the chip row and strip go away off the window")
-        require(texts(in: chrome.hints) == ["edit", "E", "bigger / smaller", "\u{2191}", "\u{2193}", "full screen", "F", "window", "W", "all keys", "?"],
+        require(texts(in: chrome.hints) == ["edit", "E", "bigger / smaller", "\u{2191}", "\u{2193}", "next", "\u{2190}", "\u{2192}", "full screen", "F", "window", "W", "all keys", "?"],
                 "the hover keys line has no click capture and names W window after F full screen: \(texts(in: chrome.hints))")
         mouse(.leftMouseDown, rough.origin)
         mouse(.leftMouseDragged, CGPoint(x: rough.midX, y: rough.midY))

@@ -74,7 +74,7 @@ extension OverlayController {
         case .text: [(["Drag"], "select text"), (["\u{21A9}"], "copy"), (["\u{21E7}", "\u{21A9}"], "rows"), (["Tab"], "links, codes"), (["\u{2325}", "\u{21A9}"], "translate"), (["F"], "all text"), (["C"], "color"), (["?"], "all keys")]
         case .capture where selection != nil:
             [(["\u{2190}\u{2192}"], "move"), (["\u{2325}"], "grow"), (["\u{2325}\u{2318}"], "shrink"), (["\u{2318}"], "edge out"), (["\u{2318}\u{21E7}"], "edge in"), (["+", "-"], "all sides"), (["\u{2318}Z"], "undo")]
-        case .capture: [(["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["F"], "full screen"), (["W"], "window"), (["?"], "all keys")]
+        case .capture: [(["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["\u{2190}", "\u{2192}"], "next"), (["F"], "full screen"), (["W"], "window"), (["?"], "all keys")]
         }
     }
 
