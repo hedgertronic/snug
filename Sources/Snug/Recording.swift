@@ -23,6 +23,9 @@ final class RecordingPanel: NSPanel, CaptureExcluded {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         alphaValue = 0
     }
+
+    /// The stop reminder's time recorded so far, which `ScreenRecording.start` counts.
+    var clock: NSTextField?
 }
 
 /// A screen recording of one area of a display: H.264 at up to 60 fps, with or without the cursor, and no audio, written to a .mov by
@@ -52,6 +55,8 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     private let end: AsyncStream<(any Error)?>.Continuation
     private var stopping = false
     private var streamStopped = false
+    /// Counts the reminder's time once a second until the recording stops.
+    private var ticking: Task<Void, any Error>?
 
     private init(file: URL, filter: SCContentFilter, configuration: SCStreamConfiguration, recordingConfiguration: SCRecordingOutputConfiguration,
                  panels: [RecordingPanel]) throws {
@@ -97,6 +102,15 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
             throw error
         }
         panels.forEach { $0.alphaValue = 1 }
+        if let clock = reminder?.clock {
+            let started = ContinuousClock.now
+            recording.ticking = Task {
+                while true {
+                    try await Task.sleep(for: .seconds(1))
+                    clock.stringValue = elapsed(Int(started.duration(to: .now).components.seconds))
+                }
+            }
+        }
         // The start cue: the outline flashes once.
         let pulse = CAKeyframeAnimation(keyPath: "opacity")
         pulse.values = [0, 1, 0.25, 1]
@@ -108,6 +122,7 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     /// Ends the recording and waits until the file is written, or fails after `finishTimeout`.
     func stop() async throws {
         stopping = true
+        ticking?.cancel()
         panels.forEach { $0.orderOut(nil) }
         // A failed stop ends the wait with its error; a stop that never returns is caught by the timeout.
         if !streamStopped {
@@ -160,10 +175,14 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     private func finished(_ error: (any Error)?) {
         end.yield(error)
         if let error, !stopping {
+            ticking?.cancel()
             panels.forEach { $0.orderOut(nil) }
             onFailure(error)
         }
     }
+
+    /// Seconds recorded as minutes and seconds: "0:07", "12:30".
+    static func elapsed(_ seconds: Int) -> String { "\(seconds / 60):" + String(format: "%02d", seconds % 60) }
 
     /// `rect`, in display points with a top-left origin, in AppKit's global coordinates.
     private static func screenFrame(_ rect: CGRect, on displayID: CGDirectDisplayID) -> CGRect {
@@ -203,24 +222,37 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         return panel
     }
 
-    /// The stop reminder: "stop" then the capture shortcut's key cap (with no shortcut, "Stop from the menu bar") on the chrome
-    /// surface in the overlay's look, placed by `reminderFrame` within the display's visible frame; nil when it fits neither below nor
-    /// above the area. The panel draws the shadow, since the pill's own would be clipped at the panel's edge.
+    /// The stop reminder: two floating pills 8 pt apart on the chrome surface in the overlay's look, the time recorded so far ("0:12",
+    /// counted by `start`), then "stop" and the capture shortcut's key cap (with no shortcut, "Stop from the menu bar"); placed by
+    /// `reminderFrame` within the display's visible frame; nil when it fits neither below nor above the area. The panel draws the
+    /// shadow, since a pill's own would be clipped at the panel's edge.
     static func makeReminder(around area: CGRect, on displayID: CGDirectDisplayID, defaults: UserDefaults) -> RecordingPanel? {
-        let pill = Pill(radius: 11, insets: NSEdgeInsets(top: 7, left: 14, bottom: 7, right: 14), spacing: 0)
-        pill.appearance = Chrome.appearance(defaults)
-        pill.show("reminder") {
-            [defaults.integer(forKey: Pref.hotKeyCode) < 0
-                ? NSTextField("Stop from the menu bar", size: 12, weight: .medium, color: .chromeText)
-                : Pill.hint([Shortcut.label(from: defaults)], "stop")]
+        // Sized for "00:00" so the pill holds ten minutes and more; mono digits keep the width.
+        let clock = NSTextField("00:00", size: 12, weight: .medium, mono: true, color: .chromeText)
+        clock.alignment = .center
+        clock.stringValue = elapsed(0)
+        let pills = [[clock] as [NSView], [defaults.integer(forKey: Pref.hotKeyCode) < 0
+            ? NSTextField("Stop from the menu bar", size: 12, weight: .medium, color: .chromeText)
+            : Pill.hint([Shortcut.label(from: defaults)], "stop")]].map { views in
+            let pill = Pill(radius: 11, insets: NSEdgeInsets(top: 7, left: 14, bottom: 7, right: 14), spacing: 0)
+            pill.show("reminder") { views }
+            return pill
         }
+        pills[1].frame.origin.x = pills[0].frame.maxX + 8
+        let pair = NSView(frame: CGRect(x: 0, y: 0, width: pills[1].frame.maxX, height: pills.map(\.frame.height).max()!))
+        for pill in pills {
+            pill.frame.origin.y = ((pair.frame.height - pill.frame.height) / 2).rounded()
+            pair.addSubview(pill)
+        }
+        pair.appearance = Chrome.appearance(defaults)
         let screen = NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value == displayID }!
         let visible = CGRect(x: screen.visibleFrame.minX - screen.frame.minX, y: screen.frame.maxY - screen.visibleFrame.maxY,
                              width: screen.visibleFrame.width, height: screen.visibleFrame.height)
-        guard let frame = reminderFrame(size: pill.frame.size, around: area, within: visible) else { return nil }
+        guard let frame = reminderFrame(size: pair.frame.size, around: area, within: visible) else { return nil }
         let panel = RecordingPanel(frame: screenFrame(frame, on: displayID))
         panel.hasShadow = true
-        panel.contentView = pill
+        panel.contentView = pair
+        panel.clock = clock
         return panel
     }
 

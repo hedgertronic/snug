@@ -210,10 +210,12 @@ extension DebugRun {
         let reminder = ScreenRecording.makeReminder(around: recordArea, on: display, defaults: defaults)!
         let settings = SettingsTabs.makeWindow()
         require(outline.contentView!.layer!.borderColor == NSColor.systemRed.cgColor, "the recording outline is red, like the armed outline")
-        require(texts(in: reminder.contentView!) == ["stop", "\u{2303}\u{21E7}Space"], "the reminder reads stop, then the shortcut: \(texts(in: reminder.contentView!))")
-        let reminderCaps = reminder.contentView!.subviews[0].subviews.compactMap { $0 as? KeyCap }
-        require(reminder.contentView is Pill && reminderCaps.map(\.text) == ["\u{2303}\u{21E7}Space"] && reminder.hasShadow,
-                "the reminder is the chrome's surface pill with the shortcut on a key cap, and the panel draws its shadow")
+        require(texts(in: reminder.contentView!) == ["0:00", "stop", "\u{2303}\u{21E7}Space"], "the reminder reads the time, stop, then the shortcut: \(texts(in: reminder.contentView!))")
+        let reminderPills = reminder.contentView!.subviews.compactMap { $0 as? Pill }
+        let reminderCaps = reminderPills.last.map { $0.subviews[0].subviews.compactMap { $0 as? KeyCap } } ?? []
+        require(reminderPills.count == 2 && reminderPills[1].frame.minX - reminderPills[0].frame.maxX == 8 && reminderCaps.map(\.text) == ["\u{2303}\u{21E7}Space"] && reminder.hasShadow,
+                "the reminder is two chrome pills 8 pt apart, the time and then stop with the shortcut's key cap; the panel draws the shadow")
+        require([0, 7, 59, 60, 750].map(ScreenRecording.elapsed) == ["0:00", "0:07", "0:59", "1:00", "12:30"], "the time reads m:ss")
         require(reminder.frame.maxY == outline.frame.minY - ScreenRecording.reminderGap && abs(reminder.frame.midX - outline.frame.midX) <= 0.5,
                 "the reminder is centered under the outline, \(ScreenRecording.reminderGap) pt away: \(reminder.frame) \(outline.frame)")
         // The dim covers the display at the highlight fade with the area cut out, and lets clicks through.
@@ -229,7 +231,7 @@ extension DebugRun {
                 "the dim, outline and reminder \(panelIDs) are left out of recordings and Settings \(settings.windowNumber) is not: \(excluded.sorted())")
         defaults.set(-1, forKey: Pref.hotKeyCode)
         let unset = ScreenRecording.makeReminder(around: recordArea, on: display, defaults: defaults)!
-        require(texts(in: unset.contentView!) == ["Stop from the menu bar"], "with no shortcut the reminder points to the menu bar: \(texts(in: unset.contentView!))")
+        require(texts(in: unset.contentView!) == ["0:00", "Stop from the menu bar"], "with no shortcut the reminder points to the menu bar: \(texts(in: unset.contentView!))")
         defaults.set(49, forKey: Pref.hotKeyCode)
         // Placement in a 1512 x 945 pt visible frame under a 37 pt menu bar, for a 120 x 36 pt reminder.
         let visible = CGRect(x: 0, y: 37, width: 1512, height: 945)
