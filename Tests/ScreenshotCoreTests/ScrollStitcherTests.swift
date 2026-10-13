@@ -74,7 +74,7 @@ struct ScrollStitcherTests {
     @Test func stitchesScrolledFramesWithStickyBandsOnce() async {
         let stitcher = ScrollStitcher(first: frame(0))
         // Still, down, down, a small scroll back up, then further down.
-        for (offset, adds) in [(0, false), (50, true), (170, true), (150, false), (320, true), (530, true)] {
+        for (offset, adds) in [(0, false), (50, true), (170, true), (150, true), (320, true), (530, true)] {
             #expect(await stitcher.add(frame(offset)) == adds, "offset \(offset)")
         }
         let expected = [UInt8](repeating: 200, count: header * width * 4) + rows(start: 10_000, count: 530 + view)
@@ -88,6 +88,20 @@ struct ScrollStitcherTests {
         let stitcher = ScrollStitcher(first: frame(0))
         #expect(await !stitcher.add(frame(5_000)))
         #expect(await stitcher.height == header + view + footer)
+    }
+
+    /// Scrolling back up trims the end to the bottom of the view and scrolling down adds it back; the height counts the image
+    /// throughout. Above the first frame nothing changes.
+    @Test func scrollingUpTrimsAndScrollingDownAddsBack() async {
+        let stitcher = ScrollStitcher(first: frame(0))
+        for (offset, moves) in [(60, true), (180, true), (150, true), (40, true), (0, true), (-20, false), (90, true), (250, true), (210, true)] {
+            #expect(await stitcher.add(frame(offset)) == moves, "offset \(offset)")
+            let (height, image) = (await stitcher.height, await stitcher.image())
+            #expect(height == header + max(offset, 0) + view + footer && image.height == height, "offset \(offset): \(height) \(image.height)")
+        }
+        let expected = [UInt8](repeating: 200, count: header * width * 4) + rows(start: 10_000, count: 210 + view)
+            + [UInt8](repeating: 60, count: footer * width * 4)
+        #expect(bytes(await stitcher.image()) == expected)
     }
 
     /// A tooltip that appears mid-scroll just above the bottom of the area, as on the round 10 fixture, with shifts smaller than it

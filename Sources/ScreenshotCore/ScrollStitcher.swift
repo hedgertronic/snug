@@ -1,15 +1,16 @@
 import CoreGraphics
 import Foundation
 
-/// Joins same-size frames of one screen area, captured while its content scrolls down, into one tall image.
+/// Joins same-size frames of one screen area, captured while its content scrolls, into one tall image that ends at the bottom
+/// of the latest frame: scrolling back up trims the end, and scrolling down again adds it back.
 ///
 /// Rows that stay identical at the top and bottom of the area when it first moves are fixed bands (a sticky header or
 /// footer): the header appears once at the top and the latest footer once at the bottom. Each frame is matched against the
 /// last matched frame on the samples that changed, so a fixed overlay over part of the width (a tooltip, a floating button)
 /// does not steer the offset. Rows that scrolled above the bottom band join the stitched image; the latest frame supplies the
 /// rest, from where they end down. A fixed overlay in the lower part of the area holds that point above it, so the overlay
-/// appears once, where the latest frame shows it. A frame that did not move, moved up, or matches
-/// nowhere adds nothing.
+/// appears once, where the latest frame shows it. A frame that did not move, moved up past the first frame, or matches
+/// nowhere changes nothing.
 public actor ScrollStitcher {
     /// The tallest stitched image, in pixels.
     public static let maximumHeight = 30_000
@@ -64,7 +65,7 @@ public actor ScrollStitcher {
         // compared sample wins, the smaller distance on a tie, and at most 1 in 10 may mismatch (an overlay appearing, say).
         var best: (shift: Int, mismatches: Int, compared: Int)?
         for distance in 1..<max(1, band.count - 16) {
-            for shift in [distance] {
+            for shift in [distance, -distance] {
                 let overlap = max(band.lowerBound, band.lowerBound - shift)..<min(band.upperBound, band.upperBound - shift)
                 // At most `bound` samples compare, so a shift past `ceiling` mismatches cannot win.
                 let bound = changed[overlap].reduce(0, +)
@@ -83,7 +84,7 @@ public actor ScrollStitcher {
             }
             if best?.mismatches == 0 { break }
         }
-        guard let best, best.shift < 0 || height < Self.maximumHeight else { return false }
+        guard let best, height + best.shift >= frameHeight, best.shift < 0 || height < Self.maximumHeight else { return false }
         if bands == nil {
             bands = fixed
             body.removeLast(fixed.bottom * bytesPerRow)
