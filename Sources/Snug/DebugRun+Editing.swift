@@ -419,6 +419,17 @@ extension DebugRun {
         require(tops == [300, 150, 0] && rect == CGRect(x: 400, y: 0, width: 400, height: 500),
                 "Cmd-Left, Cmd-Down and Cmd-Up move the other sides to their next edges: \(tops) \(rect)")
         overlay.dismiss()
+        // On the page: Cmd-Shift-Right on a selection wider than the cart panel takes the right side in to the panel's right border (the
+        // 2 px run at 2214-2215, counted at its middle), then to its left border (1656-1657), then stays at the minimum size's limit.
+        open()
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: CGRect(x: 1600, y: 450, width: 800, height: 400))
+        var inward: [CGFloat] = []
+        for _ in 0..<3 {
+            key(right, "", [.command, .shift])
+            inward.append(overlay.selection!.rect.maxX)
+        }
+        require(inward == [2215, 1657, 1657], "Cmd-Shift-Right on the page steps the right side in to the cart panel's right edge, then its left: \(inward)")
+        overlay.dismiss()
         // One press's cost on the page: a tall selection whose search reaches across most of the screen.
         open()
         overlay.selection = AreaSelection(extent: overlay.extent, exact: CGRect(x: 20, y: 100, width: 40, height: 1400))

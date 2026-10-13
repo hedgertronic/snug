@@ -312,7 +312,7 @@ extension DebugRun {
                     && helpActions["K"] == "Cut-out preview" && helpActions["Cut-out: Tab"] == "Next subject (Shift: back)" && helpActions["V"] == "Arm recording, hover or selection"
                     && helpActions["Armed: Return / V"] == "Start recording" && helpActions["Armed: H"] == "Cursor on / off" && helpActions["Armed: I"] == "Count-in off, 3 s, 5 s"
                     && helpActions["Capture hotkey"] == "Stop recording" && helpActions["G"] == "Scrolling capture, hover or selection" && helpActions["Cut-out: S"] == "Crop to subject"
-                    && helpActions["Cmd-arrow"] == "Side out to an edge" && helpActions["Cmd-Shift-arrow"] == "Side in to an edge"
+                    && helpActions["Cmd-arrow"] == "Edge out, one side" && helpActions["Cmd-Shift-arrow"] == "Edge in, one side"
                     && helpActions["+ / -"] == "All sides 1 px (Option: 10)" && helpActions["Shift-Return"] == "Copy the text"
                     && helpActions["Tab"] == "Walk out (Shift: in)"
                     && !helpRows.contains { $0.action.contains("Aspect ratio lock") },
@@ -799,7 +799,7 @@ extension DebugRun {
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.snap) == ["Snapped", "S"] && chrome.snap.lit, "after release on a fit: Snapped, lit")
         require(!top.isHidden && texts(in: chrome.strip) == captureStrip && texts(in: chrome.hints)
-                    == ["move", "\u{2190}\u{2192}", "grow", "\u{2325}", "shrink", "\u{2325}\u{2318}", "next edge", "\u{2318}", "all sides", "+", "-", "undo", "\u{2318}Z"],
+                    == ["move", "\u{2190}\u{2192}", "grow", "\u{2325}", "shrink", "\u{2325}\u{2318}", "edge out", "\u{2318}", "edge in", "\u{2318}\u{21E7}", "all sides", "+", "-", "undo", "\u{2318}Z"],
                 "a selection keeps the top bar, has the same strip as hover, and the arrow layers on the keys line: \(texts(in: chrome.hints))")
         require(chrome.hints.frame.height < 40 && chrome.hints.frame.width <= overlay.view.bounds.width - 16, "the keys line is one line and fits: \(chrome.hints.frame) in \(overlay.view.bounds.width)")
         // The chip row: size and Snap from the selection's left edge, the ratio and radius ending at its right edge (after Snap when they
@@ -911,8 +911,12 @@ extension DebugRun {
                     && texts(in: chrome.legend) == ["\u{2325}\u{2318} shrink"] && sides.allSatisfy { !$0.isHidden },
                 "holding Option-Command lights the Option-Command cap, the legend reads shrink, and the side arrows stay: \(texts(in: chrome.legend))")
         flags(.command)
-        require(keyCaps("\u{2318}", in: chrome.hints).allSatisfy(\.pressed) && texts(in: chrome.legend) == ["\u{2318} next edge"] && sides.allSatisfy { !$0.isHidden },
-                "holding Command: the legend reads next edge: \(texts(in: chrome.legend))")
+        require(keyCaps("\u{2318}", in: chrome.hints).allSatisfy(\.pressed) && texts(in: chrome.legend) == ["\u{2318} edge out  \u{2318}\u{21E7} edge in"] && sides.allSatisfy { !$0.isHidden },
+                "holding Command: the legend reads both edge directions: \(texts(in: chrome.legend))")
+        flags([.command, .shift])
+        require(keyCaps("\u{2318}\u{21E7}", in: chrome.hints).allSatisfy(\.pressed) && keyCaps("\u{2318}\u{21E7}", in: chrome.hints).count == 1
+                    && texts(in: chrome.legend) == ["\u{2318} edge out  \u{2318}\u{21E7} edge in"],
+                "holding Command-Shift lights the edge-in cap: \(texts(in: chrome.legend))")
         flags(.shift)
         require(sides.allSatisfy(\.isHidden) && chrome.legend.isHidden, "Shift alone with the pointer outside shows no edge keys")
         flags([])
