@@ -114,7 +114,9 @@ extension OverlayController {
     func refreshChrome() {
         let c = chrome
         let bounds = view.bounds
-        let topEdge = bounds.height - topInset
+        // With Rulers on, chrome keeps clear of the top and left rulers' bands as it does of the menu bar and screen edges.
+        let ruler = defaults.bool(forKey: Pref.rulers) ? Guides.rulerThickness : 0
+        let topEdge = bounds.height - topInset - ruler, leftEdge = 8 + ruler
         let overlays = view.overlays
         let released = mode == .capture && selection != nil
         let editing = released && armedRecording == nil
@@ -251,7 +253,8 @@ extension OverlayController {
             floor = frames.last!.1.maxY + 8
         }
         if bottomItems.allSatisfy(\.isHidden) { floor = 8 }
-        let animate = !isHeadless && (barAtBottom != c.barAtBottom || hintsAtTop != c.hintsAtTop)
+        let animate = !isHeadless && (barAtBottom != c.barAtBottom || hintsAtTop != c.hintsAtTop || ruler != c.ruler)
+        c.ruler = ruler
         c.barAtBottom = barAtBottom
         c.hintsAtTop = hintsAtTop
         if animate {
@@ -272,13 +275,13 @@ extension OverlayController {
                 let size = c.strip.frame.size
                 let below = box.minY - 8 - size.height
                 let y = below >= floor ? below : over + size.height <= top - 8 ? over : max(box.minY + 8, floor)
-                c.strip.frame.origin = CGPoint(x: min(max(box.minX, 8), bounds.width - size.width - 8), y: y)
+                c.strip.frame.origin = CGPoint(x: min(max(box.minX, leftEdge), bounds.width - size.width - 8), y: y)
                 if y == over { over = c.strip.frame.maxY + 8 }
             }
             guard let height = (left + right).first?.frame.height else { return }
             for chip in left + right { chip.isHidden = false }
             var y = over + height <= top - 8 ? over : min(box.maxY, top) - 8 - height
-            var x = min(max(box.minX, 8), bounds.width - 8 - left.reduce(-6) { $0 + $1.frame.width + 6 })
+            var x = min(max(box.minX, leftEdge), bounds.width - 8 - left.reduce(-6) { $0 + $1.frame.width + 6 })
             for chip in left {
                 chip.frame.origin = CGPoint(x: x, y: y)
                 x += chip.frame.width + 6
@@ -286,7 +289,7 @@ extension OverlayController {
             let width = right.reduce(-6) { $0 + $1.frame.width + 6 }
             var start = min(max(box.maxX - width, x), bounds.width - 8 - width)
             if start < x - 0.5 {
-                start = min(max(box.maxX - width, 8), bounds.width - 8 - width)
+                start = min(max(box.maxX - width, leftEdge), bounds.width - 8 - width)
                 y += height + 6
             }
             for chip in right {

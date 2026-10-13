@@ -442,6 +442,8 @@ final class Chrome {
     /// The top bar sits at the bottom and the keys line at the top, each moved off its edge by a rectangle there.
     var barAtBottom = false
     var hintsAtTop = false
+    /// The rulers' thickness the chrome last kept clear of, 0 with Rulers off; a change moves the chrome with the rulers' slide.
+    var ruler: CGFloat = 0
     /// The cap texts of the key just pressed, lit for 150 ms.
     var pressed: Set<String> = []
     var pressTask: Task<Void, any Error>?

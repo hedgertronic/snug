@@ -102,6 +102,12 @@ extension DebugRun {
         }
         let view = overlay.view
         require(guides.crosshair.path!.boundingBox.size == view.bounds.size, "the crosshair spans the view")
+        // With Rulers on, the top bar sits below the top ruler's band and nothing clamps into the left ruler's.
+        let topRuler = CGRect(x: 0, y: view.bounds.height - overlay.topInset - Guides.rulerThickness, width: view.bounds.width, height: Guides.rulerThickness)
+        let leftRuler = CGRect(x: 0, y: 0, width: Guides.rulerThickness, height: view.bounds.height)
+        let edgeChrome = [overlay.chrome.topBar, overlay.chrome.hints, overlay.chrome.strip, overlay.chrome.hover, overlay.chrome.snap].filter { !$0.isHidden }
+        require(edgeChrome.allSatisfy { !$0.frame.intersects(topRuler) && !$0.frame.intersects(leftRuler) } && overlay.chrome.topBar.frame.maxY == topRuler.minY - 8,
+                "with Rulers on, the top bar sits 8 pt under the top ruler and no chrome covers a ruler: \(edgeChrome.map(\.frame)) \(topRuler)")
         let before = guides.loupe.position
         mouse(.mouseMoved, CGPoint(x: text.x - 300, y: text.y - 200))
         require(guides.loupe.position != before, "the loupe follows the pointer")
