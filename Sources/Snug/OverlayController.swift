@@ -266,7 +266,7 @@ final class OverlayController {
             do {
                 try escape!.register(keyCode: 53, modifiers: [])
             } catch {
-                NSApp.presentError(error)
+                return report(error)
             }
         }
         window.makeFirstResponder(view)
