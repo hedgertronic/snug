@@ -61,8 +61,8 @@ extension DebugRun {
                 && !overlay.view.overlays.showsHandles && overlay.chrome.topBar.isHidden,
                 "armed: a red outline on the selection, no handles or top bar")
         require(strip() == ["Cursor", "H", "Count-in", "I", "Cancel", "esc", "Start", "\u{21A9}"] && overlay.chrome.cursor.lit && !overlay.chrome.countIn.lit
-                    && overlay.chrome.start.primary && hints() == ["start", "\u{21A9}", "cancel", "esc"],
-                "the armed strip: Cursor lit, Count-in plain, Start primary; the keys line: \(strip()) \(hints())")
+                    && overlay.chrome.start.primary && overlay.chrome.hints.isHidden,
+                "the armed strip: Cursor lit, Count-in plain, Start primary; no keys line, since the strip shows Start and Cancel: \(strip()) \(hints())")
         // Armed near the right edge, the size chip stays over the selection's left edge.
         select(CGRect(x: extent.width - 600, y: 400, width: 560, height: 500))
         let badgeOffset = overlay.chrome.size.frame.minX - overlay.view.viewRect(overlay.selection!.rect).minX
@@ -193,7 +193,7 @@ extension DebugRun {
         select(CGRect(x: 600, y: 300, width: 400, height: 200))
         key(9, "v")
         key(36, "\r")
-        require(hints().contains("Recording in 3"), "the count-in strip: \(hints())")
+        require(hints() == ["Recording in 3"], "counting in, the keys line leaves out Cancel, which the strip shows: \(hints())")
         try await Task.sleep(for: .milliseconds(1500))
         key(53, "\u{1B}")
         try await Task.sleep(for: .milliseconds(2600))

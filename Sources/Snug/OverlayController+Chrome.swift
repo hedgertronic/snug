@@ -122,10 +122,84 @@ extension OverlayController {
         for (current, button) in c.modeButtons { button.primary = current == mode }
         for (key, button) in c.viewToggles + c.styleToggles { button.lit = defaults.bool(forKey: key) }
 
-        // The keys line, unless B hid it. Hints that do not fit drop from the end, keeping the first and "all keys".
-        c.hints.isHidden = !defaults.bool(forKey: Pref.modeBar)
+        // The object's chips and strip, filled before the keys line, which leaves out what the strip shows, and attached to the object
+        // once the bar and keys line are placed.
+        var attachment: (box: CGRect, strip: Bool, left: [NSView], right: [NSView])?
+        func sizeChip(_ rect: CGRect) -> Pill {
+            let text = "\(Int(rect.width)) x \(Int(rect.height))"
+            c.size.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText)] }
+            return c.size
+        }
+        func radiusChip(_ rect: CGRect) -> Pill {
+            let text = radiusText(rect)
+            c.radius.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText), KeyCap("["), KeyCap("]")] }
+            return c.radius
+        }
+        /// The capture strip: Copy, Save, and Text, then Scroll, Record, and Cut out, which are faded when they cannot run on `area`.
+        func captureStrip(_ area: CGRect) {
+            c.strip.show([[c.copy, c.save, c.text], [c.scroll, c.record, c.cutout]])
+            c.scroll.isEnabled = (scrollFrames != nil || displayID != nil) && area != extent && windows.contains { $0.insetBy(dx: -2, dy: -2).contains(area) }
+            c.record.isEnabled = displayID != nil
+        }
+
+        if let cutout {
+            let subjects = cutout.subjects.count > 1 ? [c.subject] : []
+            c.subject.setTitle(cutout.label)
+            c.crop.lit = cutout.cropped
+            c.strip.show([subjects + [c.crop], [c.save, c.copy]])
+            attachment = (view.viewRect(cutout.frame), true, [sizeChip(cutout.frame)], [])
+        } else if let scrollArea {
+            let height = scrollHeight >= ScrollStitcher.maximumHeight ? "\(ScrollStitcher.maximumHeight) px, the limit" : "\(scrollHeight) px"
+            c.scrolled.setTitle("Scrolling \(height)")
+            c.strip.show([[c.scrolled], [c.cancel, c.done]])
+            attachment = (view.viewRect(scrollArea), true, [], [])
+        } else if let armed = armedRecording, let rect = selection?.rect {
+            let countIn = defaults.integer(forKey: Pref.recordCountIn)
+            c.cursor.lit = defaults.bool(forKey: Pref.recordCursor)
+            c.countIn.setTitle(countIn > 0 ? "\(countIn)-second count" : "Count-in")
+            c.countIn.lit = countIn > 0
+            c.strip.show(armed.remaining == nil ? [[c.cursor, c.countIn], [c.cancel, c.start]] : [[c.cancel]])
+            attachment = (view.viewRect(rect), true, [sizeChip(rect)], [])
+        } else if mode == .capture, let rect = overlays.selection ?? overlays.preview ?? overlays.ghost {
+            // A drag or selection: its size and Snap, which reads Snapped or Exact once released; a selection adds the ratio and radius.
+            let snapped = selection.map { $0.fits.count > 1 && $0.rect != $0.exact }
+            c.snap.setTitle(snapped.map { $0 ? "Snapped" : "Exact" } ?? "Snap")
+            c.snap.lit = snapped ?? (snapEnabled && !bypassSnap)
+            var right: [NSView] = []
+            if editing {
+                c.ratioButton.setTitle(ratioReadout)
+                c.lock.lit = ratioLocked
+                c.ratio.show(ratioReadout) { [c.ratioButton, c.ratioDivider, c.lock] }
+                right = [c.ratio, radiusChip(rect)]
+                captureStrip(rect)
+            }
+            attachment = (view.viewRect(rect), editing, [sizeChip(rect), c.snap], right)
+        } else if mode == .capture, let rect = overlays.hover {
+            // Hovering: the element's name and size, and Snap; the radius once `[` or `]` changed it.
+            let hovered = session!.selected!
+            let isWindow = hovered.kind == .window
+            let index = isWindow ? Int(hovered.id.dropFirst("window-".count))! : 0
+            let name = switch hovered.kind {
+            case .window: windowNames.indices.contains(index) ? windowNames[index] : "Window"
+            case .display: "Full screen"
+            default: hovered.label
+            }
+            let size = "\(Int(rect.width)) x \(Int(rect.height))" + (isWindow && windowShadow(option: optionHeld) ? "  +  shadow" : "")
+            c.hover.show("\(name)|\(size)") {
+                [NSTextField(name, size: 12, weight: .semibold, color: .chromeText), NSTextField(size, size: 12, mono: true, color: NSColor.chromeText.withAlphaComponent(0.65))]
+            }
+            c.snap.setTitle("Snap")
+            c.snap.lit = snapEnabled
+            captureStrip(rect)
+            attachment = (view.viewRect(rect), true, [c.hover, c.snap] + (editedRadii[rect] == nil ? [] : [radiusChip(rect)]), [])
+        }
+
+        // The keys line, unless B hid it, or nothing is left once hints a visible strip button already shows (its title and key) drop.
+        // Hints that do not fit drop from the end, keeping the first and "all keys".
+        let stripped = c.strip.isHidden ? [] : c.strip.groups.flatMap(\.subviews).compactMap { $0 as? BarButton }.map { ($0.title.stringValue.lowercased(), $0.key) }
+        var items = hints.filter { hint in hint.keys.isEmpty || !stripped.contains { $0 == (hint.label, hint.keys.joined()) } }
+        c.hints.isHidden = !defaults.bool(forKey: Pref.modeBar) || items.isEmpty
         if !c.hints.isHidden {
-            var items = hints
             let kept = items.last?.label == "all keys" ? 1 : 0
             while true {
                 c.hints.show(items.map { $0.label + $0.keys.joined() }.joined(separator: "|")) { items.map { Pill.hint($0.keys, $0.label) } }
@@ -200,74 +274,7 @@ extension OverlayController {
                 start += chip.frame.width + 6
             }
         }
-        func sizeChip(_ rect: CGRect) -> Pill {
-            let text = "\(Int(rect.width)) x \(Int(rect.height))"
-            c.size.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText)] }
-            return c.size
-        }
-        func radiusChip(_ rect: CGRect) -> Pill {
-            let text = radiusText(rect)
-            c.radius.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText), KeyCap("["), KeyCap("]")] }
-            return c.radius
-        }
-        /// The capture strip: Copy, Save, and Text, then Scroll, Record, and Cut out, which are faded when they cannot run on `area`.
-        func captureStrip(_ area: CGRect) {
-            c.strip.show([[c.copy, c.save, c.text], [c.scroll, c.record, c.cutout]])
-            c.scroll.isEnabled = (scrollFrames != nil || displayID != nil) && area != extent && windows.contains { $0.insetBy(dx: -2, dy: -2).contains(area) }
-            c.record.isEnabled = displayID != nil
-        }
-
-        if let cutout {
-            let subjects = cutout.subjects.count > 1 ? [c.subject] : []
-            c.subject.setTitle(cutout.label)
-            c.crop.lit = cutout.cropped
-            c.strip.show([subjects + [c.crop], [c.save, c.copy]])
-            attach(to: view.viewRect(cutout.frame), strip: true, left: [sizeChip(cutout.frame)])
-        } else if let scrollArea {
-            let height = scrollHeight >= ScrollStitcher.maximumHeight ? "\(ScrollStitcher.maximumHeight) px, the limit" : "\(scrollHeight) px"
-            c.scrolled.setTitle("Scrolling \(height)")
-            c.strip.show([[c.scrolled], [c.cancel, c.done]])
-            attach(to: view.viewRect(scrollArea), strip: true, left: [])
-        } else if let armed = armedRecording, let rect = selection?.rect {
-            let countIn = defaults.integer(forKey: Pref.recordCountIn)
-            c.cursor.lit = defaults.bool(forKey: Pref.recordCursor)
-            c.countIn.setTitle(countIn > 0 ? "\(countIn)-second count" : "Count-in")
-            c.countIn.lit = countIn > 0
-            c.strip.show(armed.remaining == nil ? [[c.cursor, c.countIn], [c.cancel, c.start]] : [[c.cancel]])
-            attach(to: view.viewRect(rect), strip: true, left: [sizeChip(rect)])
-        } else if mode == .capture, let rect = overlays.selection ?? overlays.preview ?? overlays.ghost {
-            // A drag or selection: its size and Snap, which reads Snapped or Exact once released; a selection adds the ratio and radius.
-            let snapped = selection.map { $0.fits.count > 1 && $0.rect != $0.exact }
-            c.snap.setTitle(snapped.map { $0 ? "Snapped" : "Exact" } ?? "Snap")
-            c.snap.lit = snapped ?? (snapEnabled && !bypassSnap)
-            var right: [NSView] = []
-            if editing {
-                c.ratioButton.setTitle(ratioReadout)
-                c.lock.lit = ratioLocked
-                c.ratio.show(ratioReadout) { [c.ratioButton, c.ratioDivider, c.lock] }
-                right = [c.ratio, radiusChip(rect)]
-                captureStrip(rect)
-            }
-            attach(to: view.viewRect(rect), strip: editing, left: [sizeChip(rect), c.snap], right: right)
-        } else if mode == .capture, let rect = overlays.hover {
-            // Hovering: the element's name and size, and Snap; the radius once `[` or `]` changed it.
-            let hovered = session!.selected!
-            let isWindow = hovered.kind == .window
-            let index = isWindow ? Int(hovered.id.dropFirst("window-".count))! : 0
-            let name = switch hovered.kind {
-            case .window: windowNames.indices.contains(index) ? windowNames[index] : "Window"
-            case .display: "Full screen"
-            default: hovered.label
-            }
-            let size = "\(Int(rect.width)) x \(Int(rect.height))" + (isWindow && windowShadow(option: optionHeld) ? "  +  shadow" : "")
-            c.hover.show("\(name)|\(size)") {
-                [NSTextField(name, size: 12, weight: .semibold, color: .chromeText), NSTextField(size, size: 12, mono: true, color: NSColor.chromeText.withAlphaComponent(0.65))]
-            }
-            c.snap.setTitle("Snap")
-            c.snap.lit = snapEnabled
-            captureStrip(rect)
-            attach(to: view.viewRect(rect), strip: true, left: [c.hover, c.snap] + (editedRadii[rect] == nil ? [] : [radiusChip(rect)]))
-        }
+        if let attachment { attach(to: attachment.box, strip: attachment.strip, left: attachment.left, right: attachment.right) }
 
         // While the pointer rests inside a released selection, or a modifier is held, each side's arrow key sits just outside the side's
         // midpoint, pushed further out past the chips or strip in the way, and inside the side when that leaves the screen; the legend
