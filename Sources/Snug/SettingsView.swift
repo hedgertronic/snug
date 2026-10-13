@@ -435,7 +435,7 @@ struct OverlayPreview: View {
         HStack(spacing: 8) {
             ForEach([false, true], id: \.self) { Sample(dark: $0, color: color, fill: fill, fade: fade, glow: glow) }
         }
-        .frame(height: 124)
+        .frame(height: 140)
     }
 
     private struct Sample: NSViewRepresentable {
@@ -465,7 +465,7 @@ struct OverlayPreview: View {
         private let chip = Pill.chip()
         private let bar = Bar()
         private let loupe = BarButton("Loupe", key: "L")
-        private let rulers = BarButton("Rulers", key: "R")
+        private let rulers = BarButton("Rulers", key: nil)
         private var sample: CGRect { CGRect(x: 24, y: 10, width: bounds.width - 48, height: 50) }
 
         init(dark: Bool) {
