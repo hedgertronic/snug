@@ -49,13 +49,16 @@ extension OverlayController {
         Set([(optionHeld, "\u{2325}"), (commandHeld, "\u{2318}"), (shiftHeld, "\u{21E7}")].compactMap { $0.0 ? Character($0.1) : nil })
     }
 
-    /// Every cap is pressed while its key flashes or while exactly its modifiers are held; with `restyle` (a new tint), every button
-    /// redraws in the current tint.
+    /// Every cap is pressed while its key flashes or while exactly its modifiers are held; with `restyle` (a new tint), every button and
+    /// cap redraws in the current tint.
     private func lightCaps(restyle: Bool = false) {
         let held = heldGlyphs
         func light(_ view: NSView) {
             if let cap = view as? KeyCap { cap.pressed = chrome.pressed.contains(cap.text) || !held.isEmpty && Set(cap.text) == held }
-            if restyle { (view as? BarButton)?.apply() }
+            if restyle {
+                (view as? BarButton)?.apply()
+                (view as? KeyCap)?.apply()
+            }
             view.subviews.forEach(light)
         }
         (chrome.all + [cornerChip, view.guides.readout] + chrome.buttons).forEach(light)

@@ -125,7 +125,7 @@ final class KeyCap: NSView {
         didSet { if pressed != oldValue { apply() } }
     }
     var onTint = false {
-        didSet { apply() }
+        didSet { if onTint != oldValue { apply() } }
     }
 
     init(_ text: String) {
@@ -150,7 +150,8 @@ final class KeyCap: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
     override func viewDidChangeEffectiveAppearance() { apply() }
 
-    private func apply() {
+    /// Draws the current state in the current look and tint.
+    func apply() {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             label.textColor = pressed ? Chrome.onTint : onTint ? Chrome.tint : .chromeText
             layer!.backgroundColor = (pressed ? Chrome.tint : onTint ? NSColor.white.withAlphaComponent(0.94) : NSColor.capFill).cgColor
@@ -225,17 +226,17 @@ final class BarButton: NSView {
     let cap: KeyCap?
     let symbol: NSImageView?
     var lit = false {
-        didSet { apply() }
+        didSet { if lit != oldValue { apply() } }
     }
     var primary = false {
-        didSet { apply() }
+        didSet { if primary != oldValue { apply() } }
     }
     var isEnabled = true {
-        didSet { apply() }
+        didSet { if isEnabled != oldValue { apply() } }
     }
     /// Off for a button inside a chip, which keeps the chip's one fill: lit is then the tint text alone.
     var washes = true {
-        didSet { apply() }
+        didSet { if washes != oldValue { apply() } }
     }
     var surface = false {
         didSet {
