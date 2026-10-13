@@ -12,13 +12,13 @@ extension OutputFrame {
     }
 
     /// The cut-out output of `subject`, an image transparent outside the subject: trimmed to `bounds` (pixels, top-left origin) when
-    /// given, else at full size with its corners masked by `cornerRadii`. Framed, it sits on the usual card, whose shadow follows the
-    /// subject's alpha. Unframed with `shadow`, the window shadow follows the subject's alpha on a canvas grown to hold it.
-    public static func renderCutout(_ subject: CGImage, bounds: CGRect?, cornerRadii: CornerRadii, framed: Bool, shadow: Bool, scale: CGFloat) throws -> CGImage {
+    /// given, else at full size with its corners masked by `cornerRadii`. Framed, the window shadow follows the subject's alpha on a
+    /// canvas grown to hold it; unframed, nothing is added.
+    public static func renderCutout(_ subject: CGImage, bounds: CGRect?, cornerRadii: CornerRadii, framed: Bool, scale: CGFloat) throws -> CGImage {
         let image = bounds.map { subject.cropping(to: $0)! } ?? subject
-        let shaped = try render(image, crop: CGRect(x: 0, y: 0, width: image.width, height: image.height), scale: scale, framed: framed,
+        let shaped = try render(image, crop: CGRect(x: 0, y: 0, width: image.width, height: image.height), scale: scale, framed: false,
                                 cornerRadii: bounds == nil ? cornerRadii : .zero)
-        guard shadow, !framed else { return shaped }
+        guard framed else { return shaped }
         let (sides, top, bottom) = shadowPadding(scale: scale)
         let context = CGContext(data: nil, width: image.width + 2 * sides, height: image.height + top + bottom, bitsPerComponent: 8, bytesPerRow: 0,
                                 space: image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!

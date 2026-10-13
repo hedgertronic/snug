@@ -17,7 +17,7 @@ extension OverlayController {
             chrome.help.isHidden = true
             return true
         }
-        let toggles = ["b": Pref.modeBar, "l": Pref.loupe, "r": Pref.rulers, "x": Pref.crosshair, "d": Pref.shadow, "n": Pref.candidates]
+        let toggles = ["b": Pref.modeBar, "l": Pref.loupe, "r": Pref.rulers, "x": Pref.crosshair, "n": Pref.candidates]
         let character = event.charactersIgnoringModifiers ?? ""
         if let key = toggles[character] {
             defaults.set(!defaults.bool(forKey: key), forKey: key)

@@ -4,9 +4,6 @@ import ScreenshotCore
 /// Positions and fills the on-screen chrome: the top bar, the chip row above the object and the action strip below it, the keys
 /// line, the candidate list, and the keys sheet.
 extension OverlayController {
-    /// Whether a window click captures the shadow: the remembered preference, inverted while Option is down.
-    func windowShadow(option: Bool) -> Bool { defaults.bool(forKey: Pref.shadow) != option }
-
     /// A click on a button presses its key, so it does what the key does in the current state.
     func wireChrome() {
         for button in chrome.buttons + [cornerChip] {
@@ -98,22 +95,20 @@ extension OverlayController {
         return "r " + (Set(points).count == 1 ? "\(points[0])" : points.map(String.init).joined(separator: " / "))
     }
 
-    /// What the output of `rect` gets around it, after its size, in output pixels per axis: Frame's padding ("  + frame 96 x 96") when
-    /// Frame is on; in cut out with Shadow on, the shadow canvas cut out draws ("  + shadow 208 x 210"); and "  + shadow" alone when a
-    /// click takes `rect` as a live window with its shadow, whose size macOS decides per window (a 400 x 523 pt Settings window at 2x
-    /// measured 94 x 123 px, against cut out's 208 x 210).
-    private func additions(_ rect: CGRect) -> String {
-        if framed {
-            let crop = rect.integral, output = OutputFrame.rect(around: crop, scale: scale, framed: true).integral
-            return "  + frame \(Int(output.width - crop.width)) x \(Int(output.height - crop.height))"
-        }
+    /// What the output of `rect` adds when Frame is on (flipped by `option`, Option on a hovered object): "  + frame W x H" in output
+    /// pixels, the padded card's for an area or element and the window shadow's canvas for a subject; and "  + frame" alone when a
+    /// click takes `rect` as a live window with its real shadow, whose size macOS decides per window (a 400 x 523 pt Settings window at
+    /// 2x measured 94 x 123 px, against a subject's 208 x 210).
+    private func additions(_ rect: CGRect, option: Bool = false) -> String {
+        guard framed != option else { return "" }
         if cutout != nil {
-            guard defaults.bool(forKey: Pref.shadow) else { return "" }
             let padding = OutputFrame.shadowPadding(scale: scale)
-            return "  + shadow \(2 * padding.sides) x \(padding.top + padding.bottom)"
+            return "  + frame \(2 * padding.sides) x \(padding.top + padding.bottom)"
         }
         let live = window(matching: rect).map { displayID != nil && !(windowFrozen.indices.contains($0) && windowFrozen[$0]) } ?? false
-        return live && windowShadow(option: optionHeld) ? "  + shadow" : ""
+        if live { return "  + frame" }
+        let crop = rect.integral, output = OutputFrame.rect(around: crop, scale: scale, framed: true).integral
+        return "  + frame \(Int(output.width - crop.width)) x \(Int(output.height - crop.height))"
     }
 
     func refreshChrome() {
@@ -211,7 +206,7 @@ extension OverlayController {
             case .display: "Full screen"
             default: hovered.label
             }
-            let size = "\(Int(rect.width)) x \(Int(rect.height))" + additions(rect)
+            let size = "\(Int(rect.width)) x \(Int(rect.height))" + additions(rect, option: optionHeld)
             c.hover.show("\(name)|\(size)") {
                 [NSTextField(name, size: 12, weight: .semibold, color: .chromeText), NSTextField(size, size: 12, mono: true, color: NSColor.chromeText.withAlphaComponent(0.65))]
             }

@@ -550,9 +550,9 @@ extension DebugRun {
         // K cuts the selection or the hovered element out with Vision's foreground mask and previews it in place: the area outside the
         // subject dimmed and the subject outlined in the highlight color, S crops to the subject, C copies the color, Return copies, Cmd-S saves, K or Esc go
         // back. With no subject the overlay stays open with a notice. The fixtures are the background removal spike's (notes/cutout/fixtures).
-        // Shadow and Frame start off, so the output is the area's size until a check turns them on.
+        // Frame starts off, so the output is the area's size until a check turns it on.
         suffix = ""
-        for key in [Pref.shadow, Pref.frame, Pref.cutoutCrop] { overlay.defaults.set(false, forKey: key) }
+        for key in [Pref.frame, Pref.cutoutCrop] { overlay.defaults.set(false, forKey: key) }
         overlay.defaults.set("#E5484D", forKey: Pref.highlightColor)
         let kKey: UInt16 = 40, sKey: UInt16 = 1, tab: UInt16 = 48
         func spikeFixture(_ name: String) -> CGImage { fixtureImage("notes/cutout/fixtures/\(name)") }
@@ -664,35 +664,33 @@ extension DebugRun {
         try await Task.sleep(for: .seconds(2))
         print("Cutout footprint: \(footprint()) 2 s after delivery")
 
-        // D and M apply to the cutout as to a capture: the window shadow grows the canvas 52 pt to the sides, 35 above and 70 below and
-        // falls under the subject; a frame adds 24 pt all round. The canvas takes the area's corner radii, here edited with ].
-        for (setting, grown, below) in [(Pref.shadow, (208, 210), 140), (Pref.frame, (96, 96), 48)] {
-            overlay.defaults.set(true, forKey: setting)
-            overlay.present(image: icon, frame: iconFrame, displayID: nil)
-            mouse(.leftMouseDown, iconRect.origin)
-            mouse(.leftMouseDragged, CGPoint(x: iconRect.maxX, y: iconRect.maxY))
-            mouse(.leftMouseUp, CGPoint(x: iconRect.maxX, y: iconRect.maxY))
-            key(30, "]")
-            _ = await previewCutout()
-            require(overlay.cutout?.radii == overlay.cornerRadii(of: iconRect) && overlay.cutout?.radii.isSquare == false,
-                    "the preview keeps the area's corner radii for the output: \(String(describing: overlay.cutout?.radii))")
-            let preview = overlay.cutout!, clip = preview.view.clip.path!
-            require(overlay.view.overlays.radii == preview.frameRadii && clip.boundingBoxOfPath == preview.view.checker.frame && clip.contains(preview.view.checker.frame.origin) == preview.cropped,
-                    "the preview and the dim hole clip to the frame's corner radii: \(preview.frameRadii) \(clip.boundingBoxOfPath)")
-            pasteboard.clearContents()
-            let chip = texts(in: overlay.chrome.size)
-            key(returnKey, "\r")
-            let grownCut = await copiedPNG()
-            require(grownCut.map { ($0.width, $0.height) == (180 + grown.0, 180 + grown.1) } == true,
-                    "\(setting) on grows the cutout by \(grown): \(String(describing: grownCut.map { "\($0.width)x\($0.height)" }))")
-            let effect = setting == Pref.shadow ? "shadow" : "frame"
-            require(chip == ["180 x 180  + \(effect) \(grownCut!.width - 180) x \(grownCut!.height - 180)"],
-                    "the size chip adds what \(effect) adds to the delivered cutout: \(chip)")
-            let (grownPixels, grownWidth) = pixels(grownCut!)
-            let shade = grownPixels[((grownCut!.height - below + 20) * grownWidth + grownWidth / 2) * 4 + 3]
-            require(shade > 0 && shade < 255, "\(setting) on: a soft shadow falls 20 px under the area (alpha \(shade))")
-            overlay.defaults.set(false, forKey: setting)
-        }
+        // M applies to the cutout as to a capture: the window shadow grows the canvas 52 pt to the sides, 35 above and 70 below and
+        // falls under the subject. The canvas takes the area's corner radii, here edited with ].
+        let (grown, below) = ((208, 210), 140)
+        overlay.defaults.set(true, forKey: Pref.frame)
+        overlay.present(image: icon, frame: iconFrame, displayID: nil)
+        mouse(.leftMouseDown, iconRect.origin)
+        mouse(.leftMouseDragged, CGPoint(x: iconRect.maxX, y: iconRect.maxY))
+        mouse(.leftMouseUp, CGPoint(x: iconRect.maxX, y: iconRect.maxY))
+        key(30, "]")
+        _ = await previewCutout()
+        require(overlay.cutout?.radii == overlay.cornerRadii(of: iconRect) && overlay.cutout?.radii.isSquare == false,
+                "the preview keeps the area's corner radii for the output: \(String(describing: overlay.cutout?.radii))")
+        let framedCutout = overlay.cutout!, clip = framedCutout.view.clip.path!
+        require(overlay.view.overlays.radii == framedCutout.frameRadii && clip.boundingBoxOfPath == framedCutout.view.checker.frame && clip.contains(framedCutout.view.checker.frame.origin) == framedCutout.cropped,
+                "the preview and the dim hole clip to the frame's corner radii: \(framedCutout.frameRadii) \(clip.boundingBoxOfPath)")
+        pasteboard.clearContents()
+        let chip = texts(in: overlay.chrome.size)
+        key(returnKey, "\r")
+        let grownCut = await copiedPNG()
+        require(grownCut.map { ($0.width, $0.height) == (180 + grown.0, 180 + grown.1) } == true,
+                "Frame on grows the cutout by \(grown): \(String(describing: grownCut.map { "\($0.width)x\($0.height)" }))")
+        require(chip == ["180 x 180  + frame \(grownCut!.width - 180) x \(grownCut!.height - 180)"],
+                "the size chip adds what Frame adds to the delivered cutout: \(chip)")
+        let (grownPixels, grownWidth) = pixels(grownCut!)
+        let shade = grownPixels[((grownCut!.height - below + 20) * grownWidth + grownWidth / 2) * 4 + 3]
+        require(shade > 0 && shade < 255, "Frame on: a soft shadow falls 20 px under the area (alpha \(shade))")
+        overlay.defaults.set(false, forKey: Pref.frame)
 
         // Cmd-S in the preview saves the cutout and leaves the clipboard alone.
         overlay.present(image: icon, frame: iconFrame, displayID: nil)

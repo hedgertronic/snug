@@ -26,7 +26,7 @@ struct CutoutOutputTests {
 
     @Test func uncroppedOutputMasksTheCanvasCornersWithTheRadii() throws {
         let full = subject(CGRect(x: 0, y: 0, width: 200, height: 200), oval: false)
-        let output = try OutputFrame.renderCutout(full, bounds: nil, cornerRadii: CornerRadii(24), framed: false, shadow: false, scale: 2)
+        let output = try OutputFrame.renderCutout(full, bounds: nil, cornerRadii: CornerRadii(24), framed: false, scale: 2)
         let a = alpha(output)
         #expect((output.width, output.height) == (200, 200))
         #expect(a(0, 0) == 0 && a(199, 199) == 0)
@@ -35,7 +35,7 @@ struct CutoutOutputTests {
 
     @Test func croppedOutputIsTheBoundsWithNoPaddingAndNoRadius() throws {
         let bounds = CGRect(x: 30, y: 50, width: 120, height: 80)
-        let output = try OutputFrame.renderCutout(subject(bounds, oval: false), bounds: bounds, cornerRadii: CornerRadii(24), framed: false, shadow: false, scale: 2)
+        let output = try OutputFrame.renderCutout(subject(bounds, oval: false), bounds: bounds, cornerRadii: CornerRadii(24), framed: false, scale: 2)
         let a = alpha(output)
         #expect((output.width, output.height) == (120, 80))
         #expect(a(0, 0) == 255 && a(119, 79) == 255)
@@ -43,7 +43,7 @@ struct CutoutOutputTests {
 
     @Test func theShadowFollowsTheSubjectsAlphaAndFallsBelowIt() throws {
         let disc = CGRect(x: 60, y: 60, width: 80, height: 80)
-        let output = try OutputFrame.renderCutout(subject(disc, oval: true), bounds: disc, cornerRadii: .zero, framed: false, shadow: true, scale: 2)
+        let output = try OutputFrame.renderCutout(subject(disc, oval: true), bounds: disc, cornerRadii: .zero, framed: true, scale: 2)
         let a = alpha(output)
         // 104 px of padding to the sides, 70 above and 140 below the 80 px disc.
         #expect((output.width, output.height) == (80 + 208, 80 + 70 + 140))
@@ -57,11 +57,21 @@ struct CutoutOutputTests {
         #expect(a(0, 0) <= 2 && a(output.width - 1, output.height - 1) <= 2 && a(centerX, output.height - 1) <= 2)
     }
 
-    @Test func aFrameReplacesTheWindowShadow() throws {
+    /// Frame off adds nothing; on, a subject gets the window shadow's canvas and an area or element the card's 24 pt padding.
+    @Test func outputSizesByTargetAndFrame() throws {
         let full = subject(CGRect(x: 0, y: 0, width: 200, height: 200), oval: false)
-        let framed = try OutputFrame.renderCutout(full, bounds: nil, cornerRadii: .zero, framed: true, shadow: true, scale: 2)
-        #expect((framed.width, framed.height) == (296, 296))
-        let a = alpha(framed)
-        #expect(a(0, 0) == 0 && a(148, 148) == 255)
+        let crop = CGRect(x: 0, y: 0, width: 200, height: 200)
+        for scale in [1.0, 2.0] {
+            let padding = OutputFrame.shadowPadding(scale: scale)
+            let off = try OutputFrame.renderCutout(full, bounds: nil, cornerRadii: .zero, framed: false, scale: scale)
+            let on = try OutputFrame.renderCutout(full, bounds: nil, cornerRadii: .zero, framed: true, scale: scale)
+            #expect((off.width, off.height) == (200, 200))
+            #expect((on.width, on.height) == (200 + 2 * padding.sides, 200 + padding.top + padding.bottom))
+            let pad = Int(OutputFrame.points * scale)
+            #expect(try OutputFrame.render(full, crop: crop, scale: scale, framed: false).width == 200)
+            let area = try OutputFrame.render(full, crop: crop, scale: scale, framed: true)
+            #expect((area.width, area.height) == (200 + 2 * pad, 200 + 2 * pad))
+        }
+        #expect(OutputFrame.shadowPadding(scale: 2) == (104, 70, 140))
     }
 }

@@ -22,7 +22,7 @@ extension DebugRun {
     /// handlers and writes `combined.png`, `instance-N.png` and `checker-combined.png` (the combined cutout over a checkerboard). Prints
     /// timings, instance counts, the combined mask's bounding box and coverage, and the memory footprint before, while the observation is
     /// alive, and after release. Then it writes the app's preview outline (`outline.png`) and outputs (`output-crop.png`, `-rounded`,
-    /// `-shadow`, `-crop-shadow`, `-frame`) for all instances together. With `--visionkit` it then lifts subjects with VisionKit's `.visualLookUp` analysis into `subject-N.png`
+    /// `-shadow`, `-crop-shadow`) for all instances together. With `--visionkit` it then lifts subjects with VisionKit's `.visualLookUp` analysis into `subject-N.png`
     /// and `checker-subjects.png`, and fails if they do not arrive within 60 s.
     static func cutout(_ input: URL, into directory: URL, visionKit: Bool) async throws {
         setvbuf(stdout, nil, _IOLBF, 0)
@@ -43,15 +43,15 @@ extension DebugRun {
         print("combined mask: box \(box), coverage \(String(format: "%.3f", coverage)), top-left alpha \(cornerAlpha)")
         try write(checkered([result.combined], size: CGSize(width: image.width, height: image.height)), directory.appending(path: "checker-combined.png"))
         print("vision footprint after release: \(footprint())")
-        // The app's preview subjects and its outputs at 2x: cropped to the alpha > 0 box, rounded by 24 pt, with the window shadow, framed.
+        // The app's preview subjects and its outputs at 2x: cropped to the alpha > 0 box, rounded by 24 pt, with the window shadow.
         let subject = try await OverlayController.cutoutSubjects(image, outline: 3).first
         if let subject {
             print("preview subject: alpha > 0 box \(subject.bounds) vs Vision's extent \(result.instances.count == 1 ? "\(result.instances[0].width)x\(result.instances[0].height)" : "(several instances)")")
             try write(subject.outline, directory.appending(path: "outline.png"))
-            let outputs = [("crop", subject.bounds, CornerRadii.zero, false, false), ("rounded", nil, CornerRadii(48), false, false),
-                           ("shadow", nil, .zero, false, true), ("crop-shadow", subject.bounds, .zero, false, true), ("frame", nil, .zero, true, false)]
-            for (name, bounds, radii, framed, shadow) in outputs {
-                let output = try OutputFrame.renderCutout(subject.image, bounds: bounds, cornerRadii: radii, framed: framed, shadow: shadow, scale: 2)
+            let outputs = [("crop", subject.bounds, CornerRadii.zero, false), ("rounded", nil, CornerRadii(48), false),
+                           ("shadow", nil, .zero, true), ("crop-shadow", subject.bounds, .zero, true)]
+            for (name, bounds, radii, framed) in outputs {
+                let output = try OutputFrame.renderCutout(subject.image, bounds: bounds, cornerRadii: radii, framed: framed, scale: 2)
                 try write(output, directory.appending(path: "output-\(name).png"))
                 print("  output-\(name): \(output.width)x\(output.height)")
             }
