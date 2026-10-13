@@ -9,8 +9,8 @@ extension Pref {
     static let recordCursor = "SnugRecordCursor"
 }
 
-/// A click-through, borderless panel over everything that recordings leave out of the video: the outline around the area and the stop
-/// reminder. It starts transparent.
+/// A click-through, borderless panel over everything that recordings leave out of the video: the dim, the outline around the area, and
+/// the stop reminder. It starts transparent.
 final class RecordingPanel: NSPanel, CaptureExcluded {
     init(frame: CGRect) {
         super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -26,8 +26,8 @@ final class RecordingPanel: NSPanel, CaptureExcluded {
 }
 
 /// A screen recording of one area of a display: H.264 at up to 60 fps, with or without the cursor, and no audio, written to a .mov by
-/// `SCRecordingOutput`. The windows Snug's captures exclude (the overlay, the toast, the outline and the stop reminder) are left out of
-/// the video by window ID; Settings and Snug's other windows show.
+/// `SCRecordingOutput`. Snug is left out of the video by application (the overlay, the toast, the dim, the outline and the stop
+/// reminder), all but its listed windows that captures do not exclude: Settings and Snug's other windows show.
 @MainActor
 final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelegate {
     /// The armed overlay hands the display, its area (display points, top-left origin, whole even pixels) and whether the cursor
