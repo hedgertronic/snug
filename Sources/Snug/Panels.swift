@@ -207,7 +207,7 @@ final class RatioMenu: NSView {
     private(set) var highlighted: Int?
     let panel = NSView()
     private(set) var rows: [NSView] = []
-    private static let rowHeight: CGFloat = 22, separatorHeight: CGFloat = 9, width: CGFloat = 120, inset: CGFloat = 4
+    private static let rowHeight: CGFloat = 22, separatorHeight: CGFloat = 9, inset: CGFloat = 4
 
     init() {
         super.init(frame: .zero)
@@ -239,7 +239,9 @@ final class RatioMenu: NSView {
         frame = superview!.bounds
         rows.forEach { $0.removeFromSuperview() }
         let heights = items.map { $0.title.isEmpty ? Self.separatorHeight : Self.rowHeight }
-        let size = CGSize(width: Self.width, height: heights.reduce(Self.inset * 2, +))
+        // As wide as the longest title: the checkmark column (22) before it, 12 after.
+        let titles = items.map { ($0.title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium)]).width }
+        let size = CGSize(width: (Self.inset * 2 + 22 + titles.max()! + 12).rounded(.up), height: heights.reduce(Self.inset * 2, +))
         var top = size.height - Self.inset
         rows = zip(items, heights).map { item, height in
             top -= height
