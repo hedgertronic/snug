@@ -99,14 +99,17 @@ extension DebugRun {
         key(9, "v")
         key(4, "h")
         require(hints().contains("cursor off") && !defaults.bool(forKey: Pref.recordCursor), "H shows the cursor off and saves it: \(hints())")
-        // C cycles the count-in Off, 3 s, 5 s and saves it.
+        // C no longer touches the count-in; armed, it does nothing. I cycles the count-in Off, 3 s, 5 s and saves it.
+        key(8, "c")
+        require(defaults.integer(forKey: Pref.recordCountIn) == 0 && overlay.armedRecording != nil && overlay.window.isVisible,
+                "C while armed leaves the count-in off and stays armed")
         var counts: [Int] = []
         for _ in 0..<3 {
-            key(8, "c")
+            key(34, "i")
             counts.append(defaults.integer(forKey: Pref.recordCountIn))
-            require(hints().contains(counts.last! > 0 ? "count-in \(counts.last!) s" : "count-in off"), "the strip shows the count-in C set: \(hints())")
+            require(hints().contains(counts.last! > 0 ? "count-in \(counts.last!) s" : "count-in off"), "the strip shows the count-in I set: \(hints())")
         }
-        require(counts == [3, 5, 0], "C cycles the count-in 3 s, 5 s, off: \(counts)")
+        require(counts == [3, 5, 0], "I cycles the count-in 3 s, 5 s, off: \(counts)")
         key(36, "\r")
         require(cursors.last == false, "H hides the cursor in the recording: \(cursors)")
         open()

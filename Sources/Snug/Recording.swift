@@ -3,7 +3,7 @@ import AVFoundation
 import ScreenCaptureKit
 
 extension Pref {
-    /// Seconds of the count shown over the area before a recording starts: 0 (off), 3 or 5; C cycles it while armed.
+    /// Seconds of the count shown over the area before a recording starts: 0 (off), 3 or 5; I cycles it while armed.
     static let recordCountIn = "SnugRecordCountIn"
     /// Whether recordings show the cursor; H switches it while armed.
     static let recordCursor = "SnugRecordCursor"

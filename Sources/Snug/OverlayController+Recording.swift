@@ -17,8 +17,8 @@ final class ArmedRecording {
 }
 
 /// Screen recording: V on a released selection, or on the hovered element or window (which becomes the selection), arms recording.
-/// Armed, the selection has a red outline; Return or V starts after the count-in, H shows or hides the cursor, C cycles the count-in,
-/// Esc disarms. H and C save their choice. The overlay closes before the app starts recording the area.
+/// Armed, the selection has a red outline; Return or V starts after the count-in, H shows or hides the cursor, I cycles the count-in,
+/// Esc disarms. H and I save their choice. The overlay closes before the app starts recording the area.
 extension OverlayController {
     func armRecording() {
         guard displayID != nil, let area = selection?.rect ?? session?.selected?.bounds else { return beep() }
@@ -38,7 +38,7 @@ extension OverlayController {
         armedRecording = nil
     }
 
-    /// While armed: Return or V starts the count-in, H switches the cursor, C cycles the count-in Off, 3 s, 5 s, Esc stops a running
+    /// While armed: Return or V starts the count-in, H switches the cursor, I cycles the count-in Off, 3 s, 5 s, Esc stops a running
     /// count-in or disarms; other keys do nothing.
     func handleRecordingKey(_ event: NSEvent) -> Bool {
         let armed = armedRecording!
@@ -49,7 +49,7 @@ extension OverlayController {
         case (53, _): disarmRecording()
         case (36, _) where armed.remaining == nil, (76, _) where armed.remaining == nil, (_, "v") where armed.remaining == nil: countIn()
         case (_, "h") where armed.remaining == nil: defaults.set(!defaults.bool(forKey: Pref.recordCursor), forKey: Pref.recordCursor)
-        case (_, "c") where armed.remaining == nil:
+        case (_, "i") where armed.remaining == nil:
             defaults.set([0: 3, 3: 5][defaults.integer(forKey: Pref.recordCountIn)] ?? 0, forKey: Pref.recordCountIn)
         default: break
         }
