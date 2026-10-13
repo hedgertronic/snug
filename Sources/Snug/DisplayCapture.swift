@@ -20,8 +20,7 @@ enum DisplayCapture {
     }
 
     /// The display with Snug's windows left out but for its listed windows that are not `excluded` (from `excludedWindowIDs`): Settings,
-    /// About. Leaving Snug out by application also leaves out a window `content` does not list, such as the overlay just ordered out as a
-    /// recording starts, which the window server may still composite for a frame; a window-ID exclusion only finds listed windows.
+    /// About. Leaving Snug out by application also covers a Snug window `content` does not list.
     static func filter(for displayID: CGDirectDisplayID, in content: SCShareableContent, excluding excluded: Set<CGWindowID>) -> SCContentFilter {
         let display = content.displays.first { $0.displayID == displayID }!
         let pid = ProcessInfo.processInfo.processIdentifier
