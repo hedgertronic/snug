@@ -611,9 +611,10 @@ extension DebugRun {
                 "the strip has the preview's controls, Snap to subject plain, and the keys line K back: \(texts(in: overlay.chrome.strip)) \(texts(in: overlay.chrome.hints))")
         let (previewPixels, previewWidth) = pixels(preview!.subjects[0].image)
         require(previewPixels[3] == 0 && previewPixels[(previewWidth / 2 + previewWidth * previewWidth / 2) * 4 + 3] == 255, "the preview is transparent at the corner and opaque at the center")
-        mouse(.leftMouseDown, CGPoint(x: iconRect.midX, y: iconRect.midY))
-        mouse(.leftMouseDragged, CGPoint(x: iconRect.midX + 40, y: iconRect.midY + 40))
-        mouse(.leftMouseUp, CGPoint(x: iconRect.midX + 40, y: iconRect.midY + 40))
+        // The press is near the area's top, off the strip, which this small view lays across its middle.
+        mouse(.leftMouseDown, CGPoint(x: iconRect.midX, y: iconRect.minY + 20))
+        mouse(.leftMouseDragged, CGPoint(x: iconRect.midX + 40, y: iconRect.minY + 20 + 40))
+        mouse(.leftMouseUp, CGPoint(x: iconRect.midX + 40, y: iconRect.minY + 20 + 40))
         key(fKey, "f")
         require(overlay.cutout != nil && overlay.selection == nil && overlay.view.overlays.selection == iconRect, "the pointer and other keys do nothing while previewing: \(overlay.cutout != nil) \(String(describing: overlay.selection)) \(String(describing: overlay.view.overlays.selection)) \(iconRect)")
         // S crops to the subject's box: the outlined frame and the dim move to it, and the choice is remembered; Snap stays as it was.
