@@ -183,11 +183,13 @@ extension OverlayController {
 
     func updateGuides() {
         let guides = view.guides
-        guides.crosshair.isHidden = !defaults.bool(forKey: Pref.crosshair)
+        // Armed recording shows no guides, and brings them back when it ends.
+        let armed = armedRecording != nil
+        guides.crosshair.isHidden = armed || !defaults.bool(forKey: Pref.crosshair)
         let animation = GuidesAnimation(rawValue: defaults.string(forKey: Pref.guidesAnimation)!)!
         let animated = !isHeadless && animation != GuidesAnimation.none
-        guides.setShown(guides.rulers, defaults.bool(forKey: Pref.rulers), from: animation == .slide ? Guides.rulersHiddenTransform : CATransform3DIdentity, animated: animated)
-        guides.setShown(guides.loupe, defaults.bool(forKey: Pref.loupe), from: Guides.loupeHiddenTransform, animated: animated)
+        guides.setShown(guides.rulers, !armed && defaults.bool(forKey: Pref.rulers), from: animation == .slide ? Guides.rulersHiddenTransform : CATransform3DIdentity, animated: animated)
+        guides.setShown(guides.loupe, !armed && defaults.bool(forKey: Pref.loupe), from: Guides.loupeHiddenTransform, animated: animated)
         guides.slidesPlacement = animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         guard !(guides.crosshair.isHidden && guides.rulers.isHidden && guides.loupe.isHidden) else { return }
         // While a drag carries a max side with the pointer, the loupe centers on the last pixel inside the crop, whose max sides round up,

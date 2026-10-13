@@ -16,8 +16,8 @@ final class ArmedRecording {
 }
 
 /// Screen recording: V on a released selection, or on the hovered element or window (which becomes the selection), arms recording.
-/// Armed, the selection has a red outline; Return or V starts after the count-in, H shows or hides the cursor, I cycles the count-in,
-/// C copies the selection's color, Esc disarms. H and I save their choice. The overlay closes before the app starts recording the area.
+/// Armed, the selection has a red outline and the loupe, crosshair and rulers are hidden; Return or V starts after the count-in, H shows or
+/// hides the cursor, I cycles the count-in, Esc disarms. H and I save their choice. The overlay closes before the app starts recording the area.
 extension OverlayController {
     func armRecording() {
         guard displayID != nil, let area = selection?.rect ?? session?.selected?.bounds else { return beep() }
@@ -38,8 +38,8 @@ extension OverlayController {
         armedRecording = nil
     }
 
-    /// While armed: Return or V starts the count-in, H switches the cursor, I cycles the count-in Off, 3 s, 5 s, C copies the color
-    /// (Shift-C cycles its format), Esc stops a running count-in or disarms; other keys do nothing.
+    /// While armed: Return or V starts the count-in, H switches the cursor, I cycles the count-in Off, 3 s, 5 s, Esc stops a
+    /// running count-in or disarms; other keys do nothing.
     func handleRecordingKey(_ event: NSEvent) -> Bool {
         let armed = armedRecording!
         switch (event.keyCode, event.charactersIgnoringModifiers ?? "") {
@@ -51,8 +51,6 @@ extension OverlayController {
         case (_, "h") where armed.remaining == nil: defaults.set(!defaults.bool(forKey: Pref.recordCursor), forKey: Pref.recordCursor)
         case (_, "i") where armed.remaining == nil:
             defaults.set([0: 3, 3: 5][defaults.integer(forKey: Pref.recordCountIn)] ?? 0, forKey: Pref.recordCountIn)
-        case (_, "c") where armed.remaining == nil: copyColor()
-        case (_, "C") where armed.remaining == nil: cycleColorFormat()
         default: break
         }
         refresh()
