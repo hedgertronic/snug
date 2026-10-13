@@ -1,273 +1,260 @@
 import AppKit
 import ScreenshotCore
 
-/// Positions and fills the on-screen chrome: bars, hints, badges, hover title, candidate list, and keys sheet.
+/// Positions and fills the on-screen chrome: the top bar, the chip row above the object and the action strip below it, the keys
+/// line, the candidate list, and the keys sheet.
 extension OverlayController {
     /// Whether a window click captures the shadow: the remembered preference, inverted while Option is down.
     func windowShadow(option: Bool) -> Bool { defaults.bool(forKey: Pref.shadow) != option }
 
-    /// The glyphs of the modifiers held now; hint key caps made of them fill with the accent.
+    /// A click on a button presses its key, so it does what the key does in the current state.
+    func wireChrome() {
+        for button in chrome.buttons + [cornerChip] {
+            button.onClick = { [unowned self, unowned button] in _ = handleKey(KeyCap.event(for: button.key!)) }
+        }
+        cornerChip.surface = true
+        chrome.ratioMenu.onClose = { [unowned self] in refresh() }
+    }
+
+    /// Lights the caps of a key just pressed, for 150 ms.
+    func flash(_ event: NSEvent) {
+        chrome.pressed = KeyCap.pressed(by: event)
+        chrome.pressTask?.cancel()
+        chrome.pressTask = Task {
+            try await Task.sleep(for: .milliseconds(150))
+            chrome.pressed = []
+            lightCaps()
+        }
+        lightCaps()
+    }
+
+    /// Whether `point` (view points) is on the top bar, or between the hovered element and its chips or strip: there the
+    /// hover holds, so their buttons can be reached.
+    func holdsHover(at point: CGPoint) -> Bool {
+        guard selection == nil, let hover = view.overlays.hover else { return false }
+        let box = view.viewRect(hover)
+        // Each attached item and the bridge across the gap between it and the box, as wide as both.
+        let attached = [chrome.hover, chrome.snap, chrome.radius, chrome.strip].filter { !$0.isHidden }.flatMap { item in
+            let left = max(box.minX, item.frame.minX), right = min(box.maxX, item.frame.maxX)
+            let span = item.frame.union(box)
+            return [item.frame] + (right > left ? [CGRect(x: left, y: span.minY, width: right - left, height: span.height)] : [])
+        }
+        return !box.contains(point) && attached.contains { $0.insetBy(dx: -2, dy: -2).contains(point) }
+            || !chrome.topBar.isHidden && chrome.topBar.frame.contains(point)
+    }
+
+    /// The glyphs of the modifiers held now; a cap made of exactly these is lit.
     private var heldGlyphs: Set<Character> {
         Set([(optionHeld, "\u{2325}"), (commandHeld, "\u{2318}"), (shiftHeld, "\u{21E7}")].compactMap { $0.0 ? Character($0.1) : nil })
     }
 
-    /// The hint row: each hint is a label and its key caps, shown in that order.
+    /// Every cap is pressed while its key flashes or while exactly its modifiers are held; every button redraws in the current tint.
+    private func lightCaps() {
+        let held = heldGlyphs
+        func light(_ view: NSView) {
+            if let cap = view as? KeyCap { cap.pressed = chrome.pressed.contains(cap.text) || !held.isEmpty && Set(cap.text) == held }
+            (view as? BarButton)?.apply()
+            view.subviews.forEach(light)
+        }
+        (chrome.all + [cornerChip] + chrome.buttons).forEach(light)
+    }
+
+    /// The keys line: each hint is a label and its key caps, shown in that order.
     private var hints: [(keys: [String], label: String)] {
-        if let cutout {
-            return [([], cutout.label)] + (cutout.subjects.count > 1 ? [(["Tab"], "next subject")] : [])
-                + [(["C"], cutout.cropped ? "crop on" : "crop off"), (["\u{21A9}"], "copy"), (["\u{2318}S"], "save"), (["K"], "back")]
-        }
-        if scrollArea != nil {
-            let height = scrollHeight >= ScrollStitcher.maximumHeight ? "\(ScrollStitcher.maximumHeight) px, the limit" : "\(scrollHeight) px"
-            return [([], "Scroll to capture more: \(height)"), (["\u{21A9}"], "done"), (["esc"], "cancel")]
-        }
+        if !chrome.ratioMenu.isHidden { return [(["\u{2191}\u{2193}"], "pick"), (["\u{21A9}"], "choose"), (["esc"], "close")] }
+        if cutout != nil { return [(["K", "esc"], "back")] }
+        if scrollArea != nil { return [([], "Scroll the app under the outline")] }
         if let armed = armedRecording {
             if let remaining = armed.remaining { return [([], "Recording in \(remaining)"), (["esc"], "cancel")] }
-            let countIn = defaults.integer(forKey: Pref.recordCountIn)
-            return [(["\u{21A9}"], "start"), (["H"], defaults.bool(forKey: Pref.recordCursor) ? "cursor on" : "cursor off"),
-                    (["C"], countIn > 0 ? "count-in \(countIn) s" : "count-in off"), (["esc"], "cancel")]
+            return [(["\u{21A9}"], "start"), (["esc"], "cancel")]
         }
         return switch mode {
         case .text: [(["Drag"], "select text"), (["\u{21A9}"], "copy"), (["\u{21E7}", "\u{21A9}"], "rows"), (["Tab"], "links, codes"), (["\u{2325}", "\u{21A9}"], "translate"), (["F"], "all text"), (["C"], "color"), (["?"], "all keys")]
         case .capture where selection != nil:
-            // The resize hint follows the held modifiers: Option grows, Option-Command shrinks; the side arrows appear in place.
-            [optionHeld && commandHeld ? (["\u{2325}", "\u{2318}"], "shrink") : (["\u{2325}"], optionHeld ? "grow" : "resize"),
-             (["\u{21E7}"], "keep ratio, axis"), (["esc"], "cancel")]
-        case .capture: [(["Click"], "capture"), (["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["F"], "full screen"), (["W"], "window"), (["?"], "all keys")]
+            [(["\u{2190}\u{2192}"], "move"), (["\u{2325}"], "grow"), (["\u{2325}\u{2318}"], "shrink"), (["\u{2318}"], "next edge"), (["+", "-"], "all sides")]
+        case .capture: [(["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["F"], "full screen"), (["W"], "window"), (["?"], "all keys")]
         }
     }
 
-    /// Fills the ratio chip: the readout with P, which opens the ratio menu, then the lock with Shift-P, which locks or unlocks the
-    /// current ratio. Both take clicks.
-    private func fillRatioChip(_ readout: String) {
-        chrome.ratio.show(readout + (ratioLocked ? "|locked" : "")) {
-            let menu = BarButton(readout, key: "P", height: 22, size: 12)
-            let lock = BarButton("", key: "\u{21E7}P", symbol: ratioLocked ? ("lock.fill", "Ratio locked") : ("lock.open", "Ratio unlocked"), height: 22, size: 12)
-            let text = NSColor.white.withAlphaComponent(0.92)
-            menu.style(fill: NSColor.white.withAlphaComponent(0.12), text: text)
-            lock.style(fill: ratioLocked ? .controlAccentColor : NSColor.white.withAlphaComponent(0.12), text: text, bold: ratioLocked)
-            menu.onClick = { [unowned self] in showRatioMenu() }
-            lock.onClick = { [unowned self] in
-                toggleRatioLock()
-                refresh()
-            }
-            return [menu, lock]
+    /// What the arrow keys do with the modifiers held now.
+    private var arrowLegend: String {
+        switch (optionHeld, commandHeld) {
+        case (true, true): "\u{2325}\u{2318} shrink"
+        case (true, false): "\u{2325} grow"
+        case (false, true): shiftHeld ? "\u{2318}\u{21E7} next edge in" : "\u{2318} next edge"
+        case (false, false): shiftHeld ? "\u{21E7} move 10 px" : "move"
         }
+    }
+
+    /// "r 12", or each corner when they differ: "r 12 / 0 / 0 / 12" (top-left, top-right, bottom-left, bottom-right), in points.
+    private func radiusText(_ rect: CGRect) -> String {
+        let radii = cornerRadii(of: rect)
+        let points = CornerRadii.corners.map { Int((radii[$0] / scale).rounded()) }
+        return "r " + (Set(points).count == 1 ? "\(points[0])" : points.map(String.init).joined(separator: " / "))
     }
 
     func refreshChrome() {
         let c = chrome
         let bounds = view.bounds
         let topEdge = bounds.height - topInset
-        var top = topEdge
         let overlays = view.overlays
         let released = mode == .capture && selection != nil
-        for pill in [c.hover, c.size, c.status, c.reading] { pill.isHidden = true }
+        let editing = released && armedRecording == nil
+        Chrome.tint = view.highlight?.color ?? .controlAccentColor
+        let look = switch defaults.string(forKey: Pref.overlayAppearance)! {
+        case "light": NSAppearance(named: .aqua)
+        case "dark": NSAppearance(named: .darkAqua)
+        default: nil as NSAppearance?
+        }
+        // The keys sheet keeps its own dark material.
+        if c.hints.appearance?.name != look?.name {
+            for item in c.all + [cornerChip] where item !== c.help { item.appearance = look }
+        }
+        for item in [c.hover, c.size, c.snap, c.ratio, c.radius, c.legend, c.reading, c.status, c.strip] { item.isHidden = true }
         c.help.frame = bounds
         c.help.layoutPanel()
 
-        c.bottomBar.update(mode: mode, defaults: defaults)
-        c.bottomBar.isHidden = released || scrollArea != nil || cutout != nil || !defaults.bool(forKey: Pref.modeBar)
-        c.actionBar.framed = framed
-        c.actionBar.snapped = snapEnabled
-        c.actionBar.rounded = defaults.bool(forKey: Pref.roundCorners)
-        c.actionBar.shadowed = defaults.bool(forKey: Pref.shadow)
-        c.actionBar.isHidden = !released
-        // Hints that do not fit drop from the end, keeping the first and "all keys".
-        var items = hints
-        let held = heldGlyphs
-        let kept = items.last?.label == "all keys" ? 1 : 0
-        while true {
-            c.hints.show(items.map { $0.label + $0.keys.joined() }.joined(separator: "|") + String(held.sorted())) {
-                items.map { Pill.chip($0.keys, $0.label, held: held) }
-            }
-            guard c.hints.frame.width > bounds.width - 16, items.count > kept + 1 else { break }
-            items.remove(at: items.count - 1 - kept)
+        // The top bar: the modes (not in cut out), view, and style (not in Text); hidden while scrolling or armed to record, and on a
+        // screen too narrow for it.
+        if scrollArea != nil || armedRecording != nil {
+            c.topBar.isHidden = true
+        } else {
+            let modes = cutout == nil ? [[c.modeButtons[.capture]!, c.modeButtons[.text]!]] : []
+            c.topBar.show(modes + [c.viewToggles.map(\.1)] + (mode == .text ? [] : [c.styleToggles.map(\.1)]))
+            c.topBar.isHidden = c.topBar.frame.width > bounds.width - 16
         }
-        // The bar and the hint row stack inward from the bottom edge, or from just under the menu bar or notch.
-        let stack: [NSView] = c.bottomBar.isHidden ? [c.hints] : [c.bottomBar, c.hints]
-        func layout(atTop: Bool) -> [CGRect] {
-            var edge = atTop ? topEdge - 8 : 32
-            return stack.map {
-                let frame = CGRect(x: ((bounds.width - $0.frame.width) / 2).rounded(), y: atTop ? edge - $0.frame.height : edge, width: $0.frame.width, height: $0.frame.height)
-                edge = atTop ? frame.minY - 8 : frame.maxY + 8
-                return frame
+        for (current, button) in c.modeButtons { button.primary = current == mode }
+        for (key, button) in c.viewToggles + c.styleToggles { button.lit = defaults.bool(forKey: key) }
+
+        // The keys line, unless B hid it. Hints that do not fit drop from the end, keeping the first and "all keys".
+        c.hints.isHidden = !defaults.bool(forKey: Pref.modeBar)
+        if !c.hints.isHidden {
+            var items = hints
+            let kept = items.last?.label == "all keys" ? 1 : 0
+            while true {
+                c.hints.show(items.map { $0.label + $0.keys.joined() }.joined(separator: "|")) { items.map { Pill.hint($0.keys, $0.label) } }
+                guard c.hints.frame.width > bounds.width - 16, items.count > kept + 1 else { break }
+                items.remove(at: items.count - 1 - kept)
             }
         }
-        /// Within 24 pt of the bottom stack: the pointer (not once released, when the stack only holds hints), or a drag, preview,
-        /// hover, or selection rectangle, unless that rectangle also reaches the top stack.
-        let zones = [false, true].map { layout(atTop: $0).reduce(CGRect.null) { $0.union($1) }.insetBy(dx: -24, dy: -24) }
-        let pointerView = CGPoint(x: pointer.x / scale, y: bounds.height - pointer.y / scale)
-        let atTop = (!released && zones[0].contains(pointerView))
-            || [overlays.ghost, overlays.preview, overlays.selection, overlays.hover].compactMap { $0 }.map(view.viewRect).contains { $0.intersects(zones[0]) && !$0.intersects(zones[1]) }
-        let frames = layout(atTop: atTop)
-        let animate = !isHeadless && atTop != c.atTop
-        c.atTop = atTop
+
+        // The top bar sits under the menu bar or notch and the keys line at the bottom. Each moves to the other edge when a drag,
+        // preview, or selection reaches it there and not there; items on one edge stack inward, the bar nearer the top.
+        let objects = [overlays.ghost, overlays.preview, overlays.selection].compactMap { $0 }.map(view.viewRect)
+        func zone(_ item: NSView, atTop: Bool) -> CGRect {
+            CGRect(x: (bounds.width - item.frame.width) / 2, y: atTop ? topEdge - 8 - item.frame.height : 32, width: item.frame.width, height: item.frame.height).insetBy(dx: -24, dy: -24)
+        }
+        func moves(_ item: NSView, fromTop: Bool) -> Bool {
+            !item.isHidden && objects.contains { $0.intersects(zone(item, atTop: fromTop)) && !$0.intersects(zone(item, atTop: !fromTop)) }
+        }
+        let barAtBottom = moves(c.topBar, fromTop: true), hintsAtTop = moves(c.hints, fromTop: false)
+        let topItems: [NSView] = (barAtBottom ? [] : [c.topBar]) + (hintsAtTop ? [c.hints] : [])
+        let bottomItems: [NSView] = (hintsAtTop ? [] : [c.hints]) + (barAtBottom ? [c.topBar] : [])
+        var top = topEdge, floor: CGFloat = 32
+        var frames: [(NSView, CGRect)] = []
+        for item in topItems where !item.isHidden {
+            frames.append((item, CGRect(x: ((bounds.width - item.frame.width) / 2).rounded(), y: top - 8 - item.frame.height, width: item.frame.width, height: item.frame.height)))
+            top = frames.last!.1.minY
+        }
+        for item in bottomItems where !item.isHidden {
+            frames.append((item, CGRect(x: ((bounds.width - item.frame.width) / 2).rounded(), y: floor, width: item.frame.width, height: item.frame.height)))
+            floor = frames.last!.1.maxY + 8
+        }
+        if bottomItems.allSatisfy(\.isHidden) { floor = 8 }
+        let animate = !isHeadless && (barAtBottom != c.barAtBottom || hintsAtTop != c.hintsAtTop)
+        c.barAtBottom = barAtBottom
+        c.hintsAtTop = hintsAtTop
         if animate {
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.15
-                for (item, frame) in zip(stack, frames) { item.animator().frame = frame }
+                for (item, frame) in frames { item.animator().frame = frame }
             }
         } else {
-            for (item, frame) in zip(stack, frames) { item.frame = frame }
-        }
-        let floor = atTop ? 8 : frames[stack.firstIndex(of: c.hints)!].maxY + 8
-        if atTop { top = frames.map(\.minY).min()! }
-
-        /// Left-aligns `pills` next to `box` with an 8 pt gap: below it (or above, when `above`) if there is room, else the other side, else inside.
-        func place(_ pills: [NSView], near box: CGRect, above: Bool) {
-            let height = pills[0].frame.height
-            let width = pills.reduce(0) { $0 + $1.frame.width } + 6 * CGFloat(pills.count - 1)
-            let below = box.minY - 8 - height, over = box.maxY + 8
-            let fitsBelow = below >= floor, fitsAbove = over + height <= top - 8
-            let options = above ? [(over, fitsAbove), (below, fitsBelow)] : [(below, fitsBelow), (over, fitsAbove)]
-            let y = options.first { $0.1 }?.0 ?? top - height - 8
-            var x = min(max(box.minX, 8), bounds.width - width - 8)
-            for pill in pills {
-                pill.frame.origin = CGPoint(x: x, y: y)
-                x += pill.frame.width + 6
-            }
-        }
-        func centered(_ pill: Pill, in box: CGRect) {
-            pill.frame.origin = CGPoint(x: min(max(box.midX - pill.frame.width / 2, 8), bounds.width - pill.frame.width - 8),
-                                        y: min(max(box.midY - pill.frame.height / 2, 8), top - pill.frame.height - 8))
+            for (item, frame) in frames { item.frame = frame }
         }
 
-        // A released selection: the action bar attached below it (above when the bottom has no room, else inside), the badges above.
-        var anchor: CGRect?
-        if released, let rect = overlays.selection {
-            let box = view.viewRect(rect)
-            let bar = c.actionBar.frame.size
-            let below = box.minY - 8 - bar.height, over = box.maxY + 8
-            let y = below >= floor ? below : over + bar.height <= top - 8 ? over : max(box.minY + 8, floor)
-            c.actionBar.frame.origin = CGPoint(x: min(max(box.minX, 8), bounds.width - bar.width - 8), y: y)
-            // The badges clear the bar vertically but stay over the selection's left edge; armed to record, the bar is hidden.
-            let union = box.union(c.actionBar.frame)
-            anchor = armedRecording == nil && (y == over || y == below) ? CGRect(x: box.minX, y: union.minY, width: box.width, height: union.height) : box
+        /// Attaches the strip below `box` (above when the bottom has no room, else inside), then the chip row above it (above the strip
+        /// when that is above, else inside the top): `left` from the box's left edge, `right` ending at its right edge, or after `left`
+        /// when they would meet, or a row higher when the screen ends first. Only the box's edges place them.
+        func attach(to box: CGRect, strip: Bool, left: [NSView], right: [NSView] = []) {
+            var over = box.maxY + 8
+            if strip {
+                let size = c.strip.frame.size
+                let below = box.minY - 8 - size.height
+                let y = below >= floor ? below : over + size.height <= top - 8 ? over : max(box.minY + 8, floor)
+                c.strip.frame.origin = CGPoint(x: min(max(box.minX, 8), bounds.width - size.width - 8), y: y)
+                if y == over { over = c.strip.frame.maxY + 8 }
+            }
+            guard let height = (left + right).first?.frame.height else { return }
+            for chip in left + right { chip.isHidden = false }
+            var y = over + height <= top - 8 ? over : min(box.maxY, top) - 8 - height
+            var x = min(max(box.minX, 8), bounds.width - 8 - left.reduce(-6) { $0 + $1.frame.width + 6 })
+            for chip in left {
+                chip.frame.origin = CGPoint(x: x, y: y)
+                x += chip.frame.width + 6
+            }
+            let width = right.reduce(-6) { $0 + $1.frame.width + 6 }
+            var start = min(max(box.maxX - width, x), bounds.width - 8 - width)
+            if start < x - 0.5 {
+                start = min(max(box.maxX - width, 8), bounds.width - 8 - width)
+                y += height + 6
+            }
+            for chip in right {
+                chip.frame.origin = CGPoint(x: start, y: y)
+                start += chip.frame.width + 6
+            }
+        }
+        func sizeChip(_ rect: CGRect) -> Pill {
+            let text = "\(Int(rect.width)) x \(Int(rect.height))"
+            c.size.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText)] }
+            return c.size
+        }
+        func radiusChip(_ rect: CGRect) -> Pill {
+            let text = radiusText(rect)
+            c.radius.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText), KeyCap("["), KeyCap("]")] }
+            return c.radius
+        }
+        /// The capture strip: Copy, Save, and Text, then Scroll, Record, and Cut out, which are faded when they cannot run on `area`.
+        func captureStrip(_ area: CGRect) {
+            c.strip.show([[c.copy, c.save, c.text], [c.scroll, c.record, c.cutout]])
+            c.scroll.isEnabled = (scrollFrames != nil || displayID != nil) && area != extent && windows.contains { $0.insetBy(dx: -2, dy: -2).contains(area) }
+            c.record.isEnabled = displayID != nil
         }
 
-        if mode != .text, let rect = overlays.selection ?? overlays.preview ?? overlays.ghost ?? (radiusReadout == nil ? nil : overlays.hover) {
-            let size = radiusReadout ?? "\(Int(rect.width)) x \(Int(rect.height))"
-            c.size.show(size) { [NSTextField(size, size: 12, mono: true, color: .white)] }
-            var pills: [NSView] = [c.size]
-            var status: (text: String, dot: NSColor)?
-            if mode == .capture {
-                if let selection {
-                    status = selection.fits.count > 1 && selection.rect != selection.exact
-                        ? ("Snapped", .controlAccentColor)
-                        : (snapEnabled ? ("Exact", .white) : ("Exact, snap off", .white))
-                } else if overlays.ghost != nil {
-                    if snapPreview != nil {
-                        status = ("Snap ready: release to take it", .controlAccentColor)
-                    } else if !snapEnabled || bypassSnap {
-                        status = ("Snap off: exact drag", .white)
-                    }
-                }
+        if let cutout {
+            let subjects = cutout.subjects.count > 1 ? [c.subject] : []
+            c.subject.setTitle(cutout.label)
+            c.crop.lit = cutout.cropped
+            c.strip.show([subjects + [c.crop], [c.save, c.copy]])
+            attach(to: view.viewRect(cutout.frame), strip: true, left: [sizeChip(cutout.frame)])
+        } else if let scrollArea {
+            let height = scrollHeight >= ScrollStitcher.maximumHeight ? "\(ScrollStitcher.maximumHeight) px, the limit" : "\(scrollHeight) px"
+            c.scrolled.setTitle("Scrolling \(height)")
+            c.strip.show([[c.scrolled], [c.cancel, c.done]])
+            attach(to: view.viewRect(scrollArea), strip: true, left: [])
+        } else if let armed = armedRecording, let rect = selection?.rect {
+            let countIn = defaults.integer(forKey: Pref.recordCountIn)
+            c.cursor.lit = defaults.bool(forKey: Pref.recordCursor)
+            c.countIn.setTitle(countIn > 0 ? "\(countIn)-second count" : "Count-in")
+            c.countIn.lit = countIn > 0
+            c.strip.show(armed.remaining == nil ? [[c.cursor, c.countIn], [c.cancel, c.start]] : [[c.cancel]])
+            attach(to: view.viewRect(rect), strip: true, left: [sizeChip(rect)])
+        } else if mode == .capture, let rect = overlays.selection ?? overlays.preview ?? overlays.ghost {
+            // A drag or selection: its size and Snap, which reads Snapped or Exact once released; a selection adds the ratio and radius.
+            let snapped = selection.map { $0.fits.count > 1 && $0.rect != $0.exact }
+            c.snap.setTitle(snapped.map { $0 ? "Snapped" : "Exact" } ?? "Snap")
+            c.snap.lit = snapped ?? (snapEnabled && !bypassSnap)
+            var right: [NSView] = []
+            if editing {
+                c.ratioButton.setTitle(ratioReadout)
+                c.lock.lit = ratioLocked
+                c.ratio.show(ratioReadout) { [c.ratioButton, c.ratioDivider, c.lock] }
+                right = [c.ratio, radiusChip(rect)]
+                captureStrip(rect)
             }
-            if ratioLocked {
-                status = (status.map { "\($0.text), Ratio locked" } ?? "Ratio locked", status?.dot ?? .white)
-            }
-            if let status {
-                c.status.show(status.text) {
-                    let dot = Dot(status.dot)
-                    return [dot, NSTextField(status.text, size: 12, color: .white)]
-                }
-                pills.append(c.status)
-            }
-            place(pills, near: anchor ?? view.viewRect(rect), above: released)
-        }
-
-        // Editing a released selection (not armed to record): the ratio chip right-aligned above it (above the action bar when that is
-        // above, after the badges when they are in the way, inside the top when there is no room), and the Live Text button inside the
-        // bottom-right corner, past the corner dot, lifted over any chrome in the way and hidden when the selection cannot hold it.
-        let editing = released && armedRecording == nil
-        c.ratio.isHidden = !editing
-        c.textButton.isHidden = true
-        if editing, let rect = overlays.selection {
-            let box = view.viewRect(rect)
-            fillRatioChip("ratio \(ratioReadout)")
-            let chip = c.ratio.frame.size
-            let over = (anchor ?? box).maxY + 8
-            var origin = CGPoint(x: min(max(box.maxX - chip.width, 8), bounds.width - chip.width - 8),
-                                 y: over + chip.height <= top - 8 ? over : min(box.maxY, top) - 8 - chip.height)
-            // On the size badge's row, centered on it.
-            if !c.size.isHidden, abs(c.size.frame.minY - origin.y) < 1 { origin.y = (c.size.frame.midY - chip.height / 2).rounded() }
-            let badges = [c.size, c.status].filter { !$0.isHidden }.reduce(CGRect.null) { $0.union($1.frame) }
-            if badges.intersects(CGRect(origin: origin, size: chip)) {
-                origin = badges.maxX + 6 + chip.width <= bounds.width - 8 ? CGPoint(x: badges.maxX + 6, y: origin.y) : CGPoint(x: origin.x, y: badges.maxY + 6)
-            }
-            c.ratio.frame.origin = origin
-
-            let dot = view.viewRect(CGRect(origin: cornerRadii(of: rect).dot(of: .bottomRight, in: rect, minimumInset: 8 * scale), size: .zero)).origin
-            let inset = box.maxX - dot.x + 8, button = c.textButton.frame.size
-            var frame = CGRect(x: box.maxX - inset - button.width, y: box.minY + inset, width: button.width, height: button.height)
-            for obstacle in [c.actionBar, c.hints, c.size, c.status, c.ratio] where !obstacle.isHidden && obstacle.frame.intersects(frame) {
-                frame.origin.y = obstacle.frame.maxY + 8
-            }
-            c.textButton.isHidden = frame.minX < box.minX + inset || frame.maxY > box.maxY - inset
-            c.textButton.frame = frame
-        }
-
-        // While the pointer rests inside a released selection, or Option is held, each side's arrow key sits just outside the side's
-        // midpoint, pushed further out past the action bar or a badge in the way, and inside the side when that leaves the screen, past
-        // the ratio chip or Live Text button in the way. The radius keys sit outside the top-right corner.
-        let resting = draggedRect == nil && selection?.rect.contains(pointer) == true
-        let showsEdgeKeys = editing && (optionHeld || resting)
-        for (index, pill) in c.sideHints.enumerated() {
-            pill.isHidden = true
-            guard showsEdgeKeys, let rect = overlays.selection else { continue }
-            let arrow = ["\u{2190}", "\u{2192}", "\u{2191}", "\u{2193}"][index]
-            pill.show(arrow) { [KeyCap(arrow, color: .white)] }
-            let box = view.viewRect(rect), size = pill.frame.size, gap: CGFloat = 6
-            let midX = (box.midX - size.width / 2).rounded(), midY = (box.midY - size.height / 2).rounded()
-            var outside: CGRect
-            var inside: CGPoint
-            switch index {
-            case 0: (outside, inside) = (CGRect(origin: CGPoint(x: box.minX - gap - size.width, y: midY), size: size), CGPoint(x: box.minX + gap, y: midY))
-            case 1: (outside, inside) = (CGRect(origin: CGPoint(x: box.maxX + gap, y: midY), size: size), CGPoint(x: box.maxX - gap - size.width, y: midY))
-            case 2: (outside, inside) = (CGRect(origin: CGPoint(x: midX, y: box.maxY + gap), size: size), CGPoint(x: midX, y: min(box.maxY, top) - gap - size.height))
-            default: (outside, inside) = (CGRect(origin: CGPoint(x: midX, y: box.minY - gap - size.height), size: size), CGPoint(x: midX, y: box.minY + gap))
-            }
-            for obstacle in [c.actionBar, c.size, c.status, c.ratio] where !obstacle.isHidden && obstacle.frame.intersects(outside) {
-                switch index {
-                case 0: outside.origin.x = obstacle.frame.minX - gap - size.width
-                case 1: outside.origin.x = obstacle.frame.maxX + gap
-                case 2: outside.origin.y = obstacle.frame.maxY + gap
-                default: outside.origin.y = obstacle.frame.minY - gap - size.height
-                }
-            }
-            for obstacle in [c.ratio, c.textButton] where !obstacle.isHidden && obstacle.frame.intersects(CGRect(origin: inside, size: size)) {
-                switch index {
-                case 0: inside.x = obstacle.frame.maxX + gap
-                case 1: inside.x = obstacle.frame.minX - gap - size.width
-                case 2: inside.y = obstacle.frame.minY - gap - size.height
-                default: inside.y = obstacle.frame.maxY + gap
-                }
-            }
-            pill.frame.origin = CGRect(x: 4, y: 4, width: bounds.width - 8, height: top - 8).contains(outside) ? outside.origin : inside
-        }
-        c.radiusHint.isHidden = true
-        if showsEdgeKeys, cornerChip.isHidden, let rect = overlays.selection {
-            c.radiusHint.show("radius") { [Pill.chip(["[", "]"], "radius")] }
-            // On the ratio chip's row when the chip is above the selection, after it.
-            let box = view.viewRect(rect), chip = c.ratio.frame, size = c.radiusHint.frame.size
-            let origin = chip.minY > box.maxY ? CGPoint(x: max(box.maxX, chip.maxX) + 6, y: chip.midY - size.height / 2) : CGPoint(x: box.maxX + 6, y: box.maxY + 6)
-            let frame = CGRect(origin: origin, size: size)
-            c.radiusHint.frame = frame
-            c.radiusHint.isHidden = !CGRect(x: 4, y: 4, width: bounds.width - 8, height: top - 8).contains(frame)
-                || ([c.ratio, c.size, c.status, c.actionBar] + c.sideHints).contains { !$0.isHidden && $0.frame.intersects(frame) }
-        }
-
-        // The keys of a hovered corner dot stack under its "All corners" chip (over it at the bottom corners), flush with the chip's outer side.
-        c.cornerKeys.isHidden = cornerChip.isHidden
-        if !cornerChip.isHidden, let corner = hoveredCorner {
-            c.cornerKeys.show("corner" + String(held.sorted())) { [Pill.chip(["[", "]"], "radius"), Pill.chip(["\u{2325}"], "one corner", held: held)] }
-            let chip = cornerChip.frame, size = c.cornerKeys.frame.size
-            c.cornerKeys.frame.origin = CGPoint(x: min(max(corner.movesLeft ? chip.maxX - size.width : chip.minX, 8), bounds.width - size.width - 8),
-                                                y: corner.movesTop ? chip.minY - 4 - size.height : chip.maxY + 4)
-        }
-
-        if mode == .capture, selection == nil, let rect = overlays.hover {
+            attach(to: view.viewRect(rect), strip: editing, left: [sizeChip(rect), c.snap], right: right)
+        } else if mode == .capture, let rect = overlays.hover {
+            // Hovering: the element's name and size, and Snap; the radius once `[` or `]` changed it.
             let hovered = session!.selected!
             let isWindow = hovered.kind == .window
             let index = isWindow ? Int(hovered.id.dropFirst("window-".count))! : 0
@@ -278,13 +265,70 @@ extension OverlayController {
             }
             let size = "\(Int(rect.width)) x \(Int(rect.height))" + (isWindow && windowShadow(option: optionHeld) ? "  +  shadow" : "")
             c.hover.show("\(name)|\(size)") {
-                let divider = NSView(frame: CGRect(x: 0, y: 0, width: 1, height: 16))
-                divider.wantsLayer = true
-                divider.layer!.backgroundColor = NSColor.white.withAlphaComponent(0.16).cgColor
-                return [NSTextField(name, size: 13, weight: .semibold, color: .white), NSTextField(size, size: 11, weight: .medium, mono: true, color: NSColor.white.withAlphaComponent(0.65)),
-                        divider, Pill.chip(["\u{21A9}"], "copy"), Pill.chip(["\u{2318}S"], "save")]
+                [NSTextField(name, size: 12, weight: .semibold, color: .chromeText), NSTextField(size, size: 12, mono: true, color: NSColor.chromeText.withAlphaComponent(0.65))]
             }
-            place([c.hover], near: view.viewRect(rect), above: false)
+            c.snap.setTitle("Snap")
+            c.snap.lit = snapEnabled
+            captureStrip(rect)
+            attach(to: view.viewRect(rect), strip: true, left: [c.hover, c.snap] + (editedRadii[rect] == nil ? [] : [radiusChip(rect)]))
+        }
+
+        // While the pointer rests inside a released selection, or a modifier is held, each side's arrow key sits just outside the side's
+        // midpoint, pushed further out past the chips or strip in the way, and inside the side when that leaves the screen; the legend
+        // in the middle says what the arrows do.
+        let resting = draggedRect == nil && selection?.rect.contains(pointer) == true
+        let showsEdgeKeys = editing && (optionHeld || commandHeld || resting)
+        let obstacles: [NSView] = [c.strip, c.size, c.snap, c.ratio, c.radius].filter { !$0.isHidden }
+        for (index, pill) in c.sideHints.enumerated() {
+            pill.isHidden = true
+            guard showsEdgeKeys, let rect = overlays.selection else { continue }
+            let arrow = ["\u{2190}", "\u{2192}", "\u{2191}", "\u{2193}"][index]
+            pill.show(arrow) { [KeyCap(arrow)] }
+            let box = view.viewRect(rect), size = pill.frame.size, gap: CGFloat = 6
+            let midX = (box.midX - size.width / 2).rounded(), midY = (box.midY - size.height / 2).rounded()
+            var outside: CGRect
+            var inside: CGPoint
+            switch index {
+            case 0: (outside, inside) = (CGRect(origin: CGPoint(x: box.minX - gap - size.width, y: midY), size: size), CGPoint(x: box.minX + gap, y: midY))
+            case 1: (outside, inside) = (CGRect(origin: CGPoint(x: box.maxX + gap, y: midY), size: size), CGPoint(x: box.maxX - gap - size.width, y: midY))
+            case 2: (outside, inside) = (CGRect(origin: CGPoint(x: midX, y: box.maxY + gap), size: size), CGPoint(x: midX, y: min(box.maxY, top) - gap - size.height))
+            default: (outside, inside) = (CGRect(origin: CGPoint(x: midX, y: box.minY - gap - size.height), size: size), CGPoint(x: midX, y: box.minY + gap))
+            }
+            for obstacle in obstacles where obstacle.frame.intersects(outside) {
+                switch index {
+                case 0: outside.origin.x = obstacle.frame.minX - gap - size.width
+                case 1: outside.origin.x = obstacle.frame.maxX + gap
+                case 2: outside.origin.y = obstacle.frame.maxY + gap
+                default: outside.origin.y = obstacle.frame.minY - gap - size.height
+                }
+            }
+            for obstacle in obstacles where obstacle.frame.intersects(CGRect(origin: inside, size: size)) {
+                switch index {
+                case 0: inside.x = obstacle.frame.maxX + gap
+                case 1: inside.x = obstacle.frame.minX - gap - size.width
+                case 2: inside.y = obstacle.frame.minY - gap - size.height
+                default: inside.y = obstacle.frame.maxY + gap
+                }
+            }
+            pill.frame.origin = CGRect(x: 4, y: 4, width: bounds.width - 8, height: top - 8).contains(outside) ? outside.origin : inside
+        }
+        if showsEdgeKeys, let rect = overlays.selection {
+            let legend = arrowLegend
+            c.legend.show(legend) { [NSTextField(legend, size: 11, weight: .semibold, color: .chromeText)] }
+            let box = view.viewRect(rect)
+            c.legend.frame.origin = CGPoint(x: (box.midX - c.legend.frame.width / 2).rounded(), y: (box.midY - c.legend.frame.height / 2).rounded())
+            // Under the top arrow or over the bottom one when they come inside that far.
+            if c.sideHints[2].frame.intersects(c.legend.frame) { c.legend.frame.origin.y = c.sideHints[2].frame.minY - 6 - c.legend.frame.height }
+            if c.sideHints[3].frame.intersects(c.legend.frame) { c.legend.frame.origin.y = c.sideHints[3].frame.maxY + 6 }
+        }
+
+        // The keys of a hovered corner dot stack under its "All corners" chip (over it at the bottom corners), flush with the chip's outer side.
+        c.cornerKeys.isHidden = cornerChip.isHidden
+        if !cornerChip.isHidden, let corner = hoveredCorner {
+            c.cornerKeys.show("corner") { [Pill.hint(["[", "]"], "radius"), Pill.hint(["\u{2325}"], "one corner")] }
+            let chip = cornerChip.frame, size = c.cornerKeys.frame.size
+            c.cornerKeys.frame.origin = CGPoint(x: min(max(corner.movesLeft ? chip.maxX - size.width : chip.minX, 8), bounds.width - size.width - 8),
+                                                y: corner.movesTop ? chip.minY - 4 - size.height : chip.maxY + 4)
         }
 
         // The key caps of the faint Up and Down outlines sit inside their top-left corners.
@@ -297,12 +341,14 @@ extension OverlayController {
         }
 
         if let rect = text.reading {
-            c.reading.show("reading") { [NSTextField("Reading text...", size: 12, color: .white)] }
-            centered(c.reading, in: view.viewRect(rect))
+            c.reading.show("reading") { [NSTextField("Reading text...", size: 12, color: .chromeText)] }
+            let box = view.viewRect(rect)
+            c.reading.frame.origin = CGPoint(x: min(max(box.midX - c.reading.frame.width / 2, 8), bounds.width - c.reading.frame.width - 8),
+                                             y: min(max(box.midY - c.reading.frame.height / 2, 8), top - c.reading.frame.height - 8))
         }
 
         if let notice = text.notice {
-            c.status.show(notice) { [NSTextField(notice, size: 12, color: .white)] }
+            c.status.show(notice) { [NSTextField(notice, size: 12, color: .chromeText)] }
             c.status.frame.origin = CGPoint(x: ((bounds.width - c.status.frame.width) / 2).rounded(), y: floor)
         }
 
@@ -315,5 +361,6 @@ extension OverlayController {
             let x = box.maxX + 12 + width <= bounds.width - 8 ? box.maxX + 12 : (box.minX - 12 - width >= 8 ? box.minX - 12 - width : 12)
             c.list.frame.origin = CGPoint(x: x, y: min(max(box.maxY - height, 8), top - height - 8))
         }
+        lightCaps()
     }
 }

@@ -6,8 +6,7 @@ final class ArmedRecording {
     var remaining: Int?
     var countIn: Task<Void, any Error>?
     let outline = CAShapeLayer()
-    let count = Pill(fill: NSColor(srgbRed: 20 / 255, green: 20 / 255, blue: 22 / 255, alpha: 0.86), radius: 22,
-                     insets: NSEdgeInsets(top: 6, left: 26, bottom: 6, right: 26), spacing: 0)
+    let count = Pill(radius: 22, insets: NSEdgeInsets(top: 6, left: 26, bottom: 6, right: 26), spacing: 0)
 
     init() {
         outline.fillColor = nil
@@ -26,6 +25,7 @@ extension OverlayController {
         let armed = ArmedRecording()
         view.layer!.addSublayer(armed.outline)
         view.addSubview(armed.count)
+        armed.count.appearance = chrome.hints.appearance
         armedRecording = armed
         refresh()
     }
@@ -87,10 +87,9 @@ extension OverlayController {
         ScreenRecording.requested(displayID, points, showsCursor)
     }
 
-    /// Armed: the red outline on the selection, in place of the accent one, and the count in its middle, with no handles or action bar.
+    /// Armed: the red outline on the selection, in place of the accent one, and the count in its middle, with no handles.
     func refreshRecording() {
         guard let armed = armedRecording, let rect = selection?.rect else { return }
-        chrome.actionBar.isHidden = true
         view.overlays.showsHandles = false
         view.overlays.showsOutline = false
         let box = view.viewRect(rect)
@@ -100,7 +99,7 @@ extension OverlayController {
         armed.outline.path = view.overlays.radii.scaled(by: 1 / scale).path(in: box.insetBy(dx: 1, dy: 1))
         armed.count.isHidden = armed.remaining == nil
         if let remaining = armed.remaining {
-            armed.count.show("\(remaining)") { [NSTextField("\(remaining)", size: 64, weight: .semibold, mono: true, color: .white)] }
+            armed.count.show("\(remaining)") { [NSTextField("\(remaining)", size: 64, weight: .semibold, mono: true, color: .chromeText)] }
             armed.count.frame.origin = CGPoint(x: (box.midX - armed.count.frame.width / 2).rounded(), y: (box.midY - armed.count.frame.height / 2).rounded())
         }
     }

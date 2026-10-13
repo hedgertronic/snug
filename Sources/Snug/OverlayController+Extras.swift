@@ -52,7 +52,7 @@ extension OverlayController {
         refresh()
     }
 
-    /// Back to the state every capture opens in: Capture mode, no help, focus returned to the previous app.
+    /// Back to the state every capture opens in: Capture mode, no help, no cap lit, focus returned to the previous app.
     func resetExtras() {
         detectionTask?.cancel()
         detectionTask = nil
@@ -65,6 +65,7 @@ extension OverlayController {
         mode = .capture
         view.guides.loupeOffset = nil
         chrome.help.isHidden = true
+        chrome.pressed = []
         if !isHeadless { previousApp?.activate() }
         previousApp = nil
     }
@@ -185,6 +186,6 @@ extension OverlayController {
         guides.update(point: CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale), pixel: pixel,
                       image: image, bounds: view.bounds, scale: scale, topInset: topInset,
                       selected: draggedRect ?? selection?.rect, dragging: draggedRect != nil,
-                      avoiding: [chrome.bottomBar, chrome.actionBar, chrome.hints, chrome.list].filter { !$0.isHidden }.map(\.frame))
+                      avoiding: [chrome.topBar, chrome.strip, chrome.hints, chrome.list].filter { !$0.isHidden }.map(\.frame))
     }
 }

@@ -44,6 +44,7 @@ extension DebugRun {
         }
         let scale = overlay.scale
         let hints = { texts(in: overlay.chrome.hints) }
+        let strip = { texts(in: overlay.chrome.strip) }
 
         require(defaults.integer(forKey: Pref.recordCountIn) == 3 && defaults.bool(forKey: Pref.recordCursor),
                 "recording defaults: a 3 s count-in and the cursor shown")
@@ -57,10 +58,12 @@ extension DebugRun {
         require(overlay.window.isVisible && requests.isEmpty && armed != nil && overlay.selection != nil,
                 "V on a released selection arms recording and keeps the overlay and selection: \(requests)")
         require(armed!.outline.superlayer != nil && armed!.outline.path != nil && armed!.outline.strokeColor == NSColor.systemRed.cgColor
-                && overlay.chrome.actionBar.isHidden && !overlay.view.overlays.showsHandles,
-                "armed: a red outline on the selection, no action bar or handles")
-        require(hints() == ["start", "\u{21A9}", "cursor on", "H", "count-in off", "C", "cancel", "esc"], "the armed strip: \(hints())")
-        // Armed near the right edge, the size badge stays over the selection's left edge (the hidden action bar doesn't move it).
+                && !overlay.view.overlays.showsHandles && overlay.chrome.topBar.isHidden,
+                "armed: a red outline on the selection, no handles or top bar")
+        require(strip() == ["Cursor", "H", "Count-in", "I", "Cancel", "esc", "Start", "\u{21A9}"] && overlay.chrome.cursor.lit && !overlay.chrome.countIn.lit
+                    && overlay.chrome.start.primary && hints() == ["start", "\u{21A9}", "cancel", "esc"],
+                "the armed strip: Cursor lit, Count-in plain, Start primary; the keys line: \(strip()) \(hints())")
+        // Armed near the right edge, the size chip stays over the selection's left edge.
         select(CGRect(x: extent.width - 600, y: 400, width: 560, height: 500))
         let badgeOffset = overlay.chrome.size.frame.minX - overlay.view.viewRect(overlay.selection!.rect).minX
         require(abs(badgeOffset) <= 1, "armed, the size badge sits over the selection's left edge: \(badgeOffset)")
@@ -83,7 +86,7 @@ extension DebugRun {
         // The Record button arms; V starts.
         open()
         select(CGRect(x: 600, y: 300, width: 400, height: 200))
-        overlay.chrome.actionBar.record.onClick()
+        overlay.chrome.record.onClick()
         require(overlay.window.isVisible && requests.count == 1 && overlay.armedRecording != nil, "clicking Record arms recording")
         key(9, "v")
         require(!overlay.window.isVisible && requests.last == CGRect(x: 600 / scale, y: 300 / scale, width: 400 / scale, height: 200 / scale),
@@ -94,17 +97,18 @@ extension DebugRun {
         select(CGRect(x: 600, y: 300, width: 400, height: 200))
         key(9, "v")
         key(53, "\u{1B}")
-        require(overlay.window.isVisible && overlay.armedRecording == nil && overlay.selection != nil && !overlay.chrome.actionBar.isHidden
+        require(overlay.window.isVisible && overlay.armedRecording == nil && overlay.selection != nil && strip().contains("Copy")
                 && requests.count == 2, "Esc while armed disarms and keeps the selection")
         key(9, "v")
         key(4, "h")
-        require(hints().contains("cursor off") && !defaults.bool(forKey: Pref.recordCursor), "H shows the cursor off and saves it: \(hints())")
+        require(strip().contains("Cursor") && !overlay.chrome.cursor.lit && !defaults.bool(forKey: Pref.recordCursor), "H turns Cursor plain and saves it: \(strip())")
         // C cycles the count-in Off, 3 s, 5 s and saves it.
         var counts: [Int] = []
         for _ in 0..<3 {
             key(8, "c")
             counts.append(defaults.integer(forKey: Pref.recordCountIn))
-            require(hints().contains(counts.last! > 0 ? "count-in \(counts.last!) s" : "count-in off"), "the strip shows the count-in C set: \(hints())")
+            require(strip().contains(counts.last! > 0 ? "\(counts.last!)-second count" : "Count-in") && overlay.chrome.countIn.lit == (counts.last! > 0),
+                    "the strip shows the count-in set, lit when on: \(strip())")
         }
         require(counts == [3, 5, 0], "C cycles the count-in 3 s, 5 s, off: \(counts)")
         key(36, "\r")
@@ -112,7 +116,7 @@ extension DebugRun {
         open()
         select(CGRect(x: 600, y: 300, width: 400, height: 200))
         key(9, "v")
-        require(hints().contains("cursor off"), "the cursor choice sticks for the next recording: \(hints())")
+        require(!overlay.chrome.cursor.lit, "the cursor choice sticks for the next recording: \(strip())")
         key(4, "h")
         key(53, "\u{1B}")
         overlay.dismiss()
@@ -161,7 +165,7 @@ extension DebugRun {
         open()
         select(CGRect(x: 600, y: 300, width: 400, height: 200))
         key(9, "v")
-        require(hints().contains("count-in 3 s"), "the armed strip shows the count-in: \(hints())")
+        require(strip().contains("3-second count") && overlay.chrome.countIn.lit, "the armed strip shows the count-in: \(strip())")
         let pressed = ContinuousClock.now
         key(36, "\r")
         var shown: [String] = []
