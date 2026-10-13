@@ -249,8 +249,6 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     /// `reminderFrame` within the display's visible frame. The panel draws the
     /// shadow, since a pill's own would be clipped at the panel's edge.
     static func makeReminder(around area: CGRect, on displayID: CGDirectDisplayID, defaults: UserDefaults) -> RecordingPanel {
-        // The control height, which both pills take so they match: a zero-width spacer of this height sets each pill's height.
-        let height: CGFloat = 32
         // Sized for "00:00" so the pill holds ten minutes and more; mono digits keep the width.
         let clock = NSTextField("00:00", size: 12, weight: .medium, mono: true, color: .chromeText)
         clock.alignment = .center
@@ -258,8 +256,9 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         let pills = [[clock] as [NSView], [defaults.integer(forKey: Pref.hotKeyCode) < 0
             ? NSTextField("Stop from the menu bar", size: 12, weight: .medium, color: .chromeText)
             : Pill.hint([Shortcut.label(from: defaults)], "stop")]].map { views in
-            let pill = Pill(radius: height / 2, insets: NSEdgeInsets(top: 0, left: 14, bottom: 0, right: 14), spacing: 0)
-            pill.show("reminder") { views + [NSView(frame: CGRect(x: 0, y: 0, width: 0, height: height))] }
+            // Both take the control height, like the keys line, so they match.
+            let pill = Pill(radius: 11, insets: NSEdgeInsets(top: 0, left: 14, bottom: 0, right: 14), spacing: 0, height: Chrome.controlHeight)
+            pill.show("reminder") { views }
             return pill
         }
         pills[1].frame.origin.x = pills[0].frame.maxX + 8

@@ -508,7 +508,7 @@ extension DebugRun {
         let capture = menu.items[0]
         require(menu.items.map(\.title) == ["Capture", "Capture Text", "Repeat Last Area", "", "Settings...", "About Snug", "", "Quit Snug"], "menu items: \(menu.items.map(\.title))")
         require(capture.keyEquivalent == " " && capture.keyEquivalentModifierMask == [.control, .shift], "Capture shows the shortcut as a key equivalent")
-        require(menu.items[5].keyEquivalent == "," && menu.items[8].keyEquivalent == "q", "Settings and Quit carry their command keys")
+        require(menu.items[4].keyEquivalent == "," && menu.items[7].keyEquivalent == "q", "Settings and Quit carry their command keys")
         SnugApp.showRecording(true, in: menu)
         require(menu.items.filter { !$0.isHidden }.prefix(2).map(\.title) == ["Stop Recording", "Repeat Last Area"] && capture.keyEquivalent == " ",
                 "while recording, Stop Recording with the shortcut replaces Capture and Capture Text: \(menu.items.filter { !$0.isHidden }.map(\.title))")
