@@ -243,6 +243,10 @@ final class BarButton: NSView {
     var isEnabled = true {
         didSet { apply() }
     }
+    /// Off for a button inside a chip, which keeps the chip's one fill: lit is then the tint text alone.
+    var washes = true {
+        didSet { apply() }
+    }
     var surface = false {
         didSet {
             layer!.borderWidth = surface ? 0.5 : 0
@@ -318,7 +322,7 @@ final class BarButton: NSView {
             let dark = isDark
             let wash = dark ? 0.26 : 0.16
             let fill: NSColor? = primary ? Chrome.tint
-                : lit ? (surface ? NSColor.chromeSurface.blended(withFraction: wash, of: Chrome.tint) : Chrome.tint.withAlphaComponent(wash))
+                : lit && washes ? (surface ? NSColor.chromeSurface.blended(withFraction: wash, of: Chrome.tint) : Chrome.tint.withAlphaComponent(wash))
                 : surface ? .chromeSurface : nil
             let text: NSColor = primary ? Chrome.onTint : lit ? Chrome.tint.blended(withFraction: dark ? 0.38 : 0.2, of: dark ? .white : .black)! : .chromeText
             layer!.backgroundColor = fill?.cgColor
@@ -444,6 +448,7 @@ final class Chrome {
         ratio.isClickThrough = false
         snap.surface = true
         snap.isHidden = true
+        lock.washes = false
         for button in [copy, done, start] { button.primary = true }
     }
 

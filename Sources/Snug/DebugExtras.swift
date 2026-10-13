@@ -805,7 +805,7 @@ extension DebugRun {
                     && zip(row, row.dropFirst()).allSatisfy { $1.frame.minX >= $0.frame.maxX + 5.99 } && chrome.radius.frame.maxX >= roughBox.maxX - 0.5,
                 "the chip row sits on the selection's top edge: \(row.map(\.frame)) \(roughBox)")
         require(texts(in: chrome.ratio) == [overlay.ratioReadout, "P", "|", "lock", "\u{21E7}P"] && chrome.lock.lit == lockedBefore
-                    && chrome.ratioButton.layer!.backgroundColor == nil && (lockedBefore || chrome.lock.layer!.backgroundColor == nil),
+                    && chrome.ratioButton.layer!.backgroundColor == nil && chrome.lock.layer!.backgroundColor == nil,
                 "the ratio chip shows the readout with P, then lock with Shift-P, with no fill of their own: \(texts(in: chrome.ratio))")
         require(texts(in: chrome.radius).count == 3 && texts(in: chrome.radius)[0].hasPrefix("r ") && texts(in: chrome.radius).suffix(2) == ["[", "]"],
                 "the radius chip shows the live radius and its keys: \(texts(in: chrome.radius))")
@@ -813,8 +813,8 @@ extension DebugRun {
             require(overlay.view.hitTest(centerOf(button)) === button, "a click on the ratio chip's \(texts(in: button)) reaches it")
         }
         chrome.lock.onClick()
-        require(overlay.ratioLocked != lockedBefore && overlay.selection!.rect == rectBefore && chrome.lock.lit != lockedBefore,
-                "clicking the lock toggles the lock, keeps the selection, and lights the lock")
+        require(overlay.ratioLocked != lockedBefore && overlay.selection!.rect == rectBefore && chrome.lock.lit != lockedBefore && chrome.lock.layer!.backgroundColor == nil,
+                "clicking the lock toggles the lock, keeps the selection, and lights the lock with no fill of its own")
         chrome.lock.onClick()
         require(overlay.ratioLocked == lockedBefore && overlay.selection!.rect == rectBefore, "clicking the lock again puts it back")
         // The ratio menu: a panel under the ratio segment, left edges aligned, taking the keys and the pointer while open.
