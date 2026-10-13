@@ -95,6 +95,22 @@ extension OverlayController {
         return "r " + (Set(points).count == 1 ? "\(points[0])" : points.map(String.init).joined(separator: " / "))
     }
 
+    /// What the output of `rect` gets around it, after its size, in output pixels per axis: Frame's padding ("  + frame 96 x 96") when
+    /// Frame is on, else the window shadow's ("  + shadow 208 x 210") when a click takes `rect` as a live window with its shadow, or, in
+    /// cut out, when Shadow is on. The window's own shadow comes from macOS; its padding here is the fit cut out draws.
+    private func additions(_ rect: CGRect) -> String {
+        if framed {
+            let crop = rect.integral, output = OutputFrame.rect(around: crop, scale: scale, framed: true).integral
+            return "  + frame \(Int(output.width - crop.width)) x \(Int(output.height - crop.height))"
+        }
+        let shadow = cutout == nil
+            ? window(matching: rect).map { displayID != nil && !(windowFrozen.indices.contains($0) && windowFrozen[$0]) && windowShadow(option: optionHeld) } ?? false
+            : defaults.bool(forKey: Pref.shadow)
+        guard shadow else { return "" }
+        let padding = OutputFrame.shadowPadding(scale: scale)
+        return "  + shadow \(2 * padding.sides) x \(padding.top + padding.bottom)"
+    }
+
     func refreshChrome() {
         let c = chrome
         let bounds = view.bounds
@@ -130,7 +146,7 @@ extension OverlayController {
         // once the bar and keys line are placed.
         var attachment: (box: CGRect, strip: Bool, left: [NSView], right: [NSView])?
         func sizeChip(_ rect: CGRect) -> Pill {
-            let text = "\(Int(rect.width)) x \(Int(rect.height))"
+            let text = "\(Int(rect.width)) x \(Int(rect.height))" + (armedRecording == nil ? additions(rect) : "")
             c.size.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText)] }
             return c.size
         }
@@ -188,7 +204,7 @@ extension OverlayController {
             case .display: "Full screen"
             default: hovered.label
             }
-            let size = "\(Int(rect.width)) x \(Int(rect.height))" + (isWindow && windowShadow(option: optionHeld) ? "  +  shadow" : "")
+            let size = "\(Int(rect.width)) x \(Int(rect.height))" + additions(rect)
             c.hover.show("\(name)|\(size)") {
                 [NSTextField(name, size: 12, weight: .semibold, color: .chromeText), NSTextField(size, size: 12, mono: true, color: NSColor.chromeText.withAlphaComponent(0.65))]
             }

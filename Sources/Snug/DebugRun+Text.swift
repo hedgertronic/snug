@@ -676,10 +676,14 @@ extension DebugRun {
             require(overlay.cutout?.radii == overlay.cornerRadii(of: iconRect) && overlay.cutout?.radii.isSquare == false,
                     "the preview keeps the area's corner radii for the output: \(String(describing: overlay.cutout?.radii))")
             pasteboard.clearContents()
+            let chip = texts(in: overlay.chrome.size)
             key(returnKey, "\r")
             let grownCut = await copiedPNG()
             require(grownCut.map { ($0.width, $0.height) == (180 + grown.0, 180 + grown.1) } == true,
                     "\(setting) on grows the cutout by \(grown): \(String(describing: grownCut.map { "\($0.width)x\($0.height)" }))")
+            let effect = setting == Pref.shadow ? "shadow" : "frame"
+            require(chip == ["180 x 180  + \(effect) \(grownCut!.width - 180) x \(grownCut!.height - 180)"],
+                    "the size chip adds what \(effect) adds to the delivered cutout: \(chip)")
             let (grownPixels, grownWidth) = pixels(grownCut!)
             let shade = grownPixels[((grownCut!.height - below + 20) * grownWidth + grownWidth / 2) * 4 + 3]
             require(shade > 0 && shade < 255, "\(setting) on: a soft shadow falls 20 px under the area (alpha \(shade))")

@@ -474,6 +474,20 @@ extension DebugRun {
         require(overlay.undoStack.isEmpty && overlay.redoStack.isEmpty, "a fresh drag starts the history over")
         overlay.dismiss()
 
+        // With Frame on, the size chip adds what the delivered image adds around the selection.
+        open()
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: a)
+        defaults.set(true, forKey: Pref.frame)
+        overlay.refresh()
+        let framedChip = texts(in: overlay.chrome.size)
+        pasteboard.clearContents()
+        key(returnKey, "\r")
+        await overlay.commitTask?.value
+        let framedOutput = pngSize(pasteboard.data(forType: .png))!
+        defaults.set(false, forKey: Pref.frame)
+        require(framedChip == ["400 x 200  + frame \(Int(framedOutput.width) - 400) x \(Int(framedOutput.height) - 200)"],
+                "the size chip adds the frame the copy gets: \(framedChip), copied \(framedOutput)")
+
         // Cmd-Shift-S: Save As writes where the panel (here the seam) says, with the usual name offered, and closes the overlay.
         var offered: URL?
         overlay.chooseSaveURL = { suggested in

@@ -752,8 +752,8 @@ extension DebugRun {
         overlay.setWindows([window], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
         let windowBox = overlay.view.viewRect(window)
-        require(texts(in: chrome.hover) == ["Browser", "400 x 200  +  shadow"] && texts(in: chrome.snap) == ["Snap", "S"] && chrome.snap.lit,
-                "hovering a window shows the chip row: its title, size, and shadow, then Snap, lit: \(texts(in: chrome.hover)) \(texts(in: chrome.snap))")
+        require(texts(in: chrome.hover) == ["Browser", "400 x 200"] && texts(in: chrome.snap) == ["Snap", "S"] && chrome.snap.lit,
+                "hovering a window shows the chip row: its title and size (a frozen run crops windows, so no shadow), then Snap, lit: \(texts(in: chrome.hover)) \(texts(in: chrome.snap))")
         require(chrome.hover.frame.minX == windowBox.minX && chrome.hover.frame.minY == windowBox.maxY + 8 && chrome.snap.frame.minY == chrome.hover.frame.minY
                     && chrome.snap.frame.minX == chrome.hover.frame.maxX + 6, "the chip row sits on the hovered box's top-left edge: \(chrome.hover.frame) \(chrome.snap.frame) \(windowBox)")
         let captureStrip = ["Copy", "\u{21A9}", "Save", "\u{2318}S", "Text", "\u{21E7}\u{21A9}", "Scroll", "G", "Record", "V", "Cut out", "K"]
@@ -777,19 +777,13 @@ extension DebugRun {
         defaults.set(false, forKey: Pref.loupe)
         defaults.set(false, forKey: Pref.crosshair)
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
-        overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: .option, timestamp: ProcessInfo.processInfo.systemUptime,
-            windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
-        require(texts(in: chrome.hover)[1] == "400 x 200", "holding Option drops the shadow from the hover size: \(texts(in: chrome.hover))")
-        overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-            windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
-        defaults.set(false, forKey: Pref.shadow)
+        // Frame adds its padding to the hover size, from the output code: 24 pt all round.
+        defaults.set(true, forKey: Pref.frame)
         overlay.refresh()
-        require(texts(in: chrome.hover)[1] == "400 x 200", "with the shadow off, the hover size has no shadow: \(texts(in: chrome.hover))")
-        overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: .option, timestamp: ProcessInfo.processInfo.systemUptime,
-            windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
-        require(texts(in: chrome.hover)[1] == "400 x 200  +  shadow", "with the shadow off, holding Option shows the shadow on the hover size: \(texts(in: chrome.hover))")
-        overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-            windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
+        let framePad = Int(2 * OutputFrame.points * overlay.scale)
+        require(texts(in: chrome.hover)[1] == "400 x 200  + frame \(framePad) x \(framePad)", "Frame on adds its padding to the hover size: \(texts(in: chrome.hover))")
+        defaults.set(false, forKey: Pref.frame)
+        overlay.refresh()
         defaults.set(true, forKey: Pref.shadow)
         mouse(.mouseMoved, CGPoint(x: 40, y: 40))
         require(chrome.hover.isHidden && chrome.snap.isHidden && chrome.strip.isHidden, "the chip row and strip go away off the window")

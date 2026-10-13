@@ -751,7 +751,7 @@ final class OverlayController {
     }
 
     /// The window whose frame `rect` matches within 3 pt on every side: copying it captures the real window shape, not a crop.
-    private func window(matching rect: CGRect) -> Int? {
+    func window(matching rect: CGRect) -> Int? {
         windows.firstIndex { abs($0.minX - rect.minX) <= 3 * scale && abs($0.minY - rect.minY) <= 3 * scale
             && abs($0.maxX - rect.maxX) <= 3 * scale && abs($0.maxY - rect.maxY) <= 3 * scale }
     }

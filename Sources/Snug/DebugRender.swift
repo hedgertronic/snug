@@ -330,6 +330,42 @@ extension DebugRun {
         defaults.set(false, forKey: Pref.candidates)
         overlay.dismiss()
 
+        // On a live display a hovered window is captured with its shadow: the hover size adds the shadow's canvas, which Option drops
+        // (or, with Shadow off, adds); Frame takes its place.
+        open()
+        try await overlay.detectionTask?.value
+        let browser = CGRect(x: 100, y: 100, width: 1500, height: 1200)
+        overlay.setWindows([browser], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, CGPoint(x: 422, y: 585))
+        for _ in 0..<8 where overlay.session?.selected?.kind != .window { key(126, "") }
+        func option(_ held: Bool) {
+            overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: held ? .option : [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
+        }
+        let padding = OutputFrame.shadowPadding(scale: overlay.scale)
+        let shadowed = "1500 x 1200  + shadow \(2 * padding.sides) x \(padding.top + padding.bottom)"
+        var sizes = [texts(in: overlay.chrome.hover).last ?? ""]
+        try snapshot("capture-hover-window")
+        option(true)
+        sizes.append(texts(in: overlay.chrome.hover).last ?? "")
+        option(false)
+        defaults.set(false, forKey: Pref.shadow)
+        overlay.refresh()
+        sizes.append(texts(in: overlay.chrome.hover).last ?? "")
+        option(true)
+        sizes.append(texts(in: overlay.chrome.hover).last ?? "")
+        option(false)
+        defaults.set(true, forKey: Pref.shadow)
+        defaults.set(true, forKey: Pref.frame)
+        overlay.refresh()
+        let framePad = Int(2 * OutputFrame.points * overlay.scale)
+        sizes.append(texts(in: overlay.chrome.hover).last ?? "")
+        try snapshot("capture-hover-window-frame")
+        defaults.set(false, forKey: Pref.frame)
+        require(sizes == [shadowed, "1500 x 1200", "1500 x 1200", shadowed, "1500 x 1200  + frame \(framePad) x \(framePad)"],
+                "a live window's hover size adds its shadow, Option flips it, and Frame takes its place: \(sizes)")
+        overlay.dismiss()
+
         open()
         key(44, "?", .shift)
         try snapshot("help")
