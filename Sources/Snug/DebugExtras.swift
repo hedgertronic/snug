@@ -837,7 +837,7 @@ extension DebugRun {
         let segment = chrome.ratio.convert(chrome.ratioButton.frame, to: overlay.view)
         require(!menu.isHidden && overlay.window.firstResponder === menu && menu.panel.frame.minX == segment.minX && menu.panel.frame.maxY <= segment.minY,
                 "clicking the readout opens the ratio panel under the ratio segment, left edges aligned: \(menu.panel.frame) \(segment)")
-        require(texts(in: chrome.hints) == ["pick", "\u{2191}\u{2193}", "choose", "\u{21A9}", "close", "esc"], "the keys line names the menu's keys: \(texts(in: chrome.hints))")
+        require(texts(in: chrome.hints) == ["pick", "\u{2191}", "\u{2193}", "choose", "\u{21A9}", "close", "esc"], "the keys line names the menu's keys: \(texts(in: chrome.hints))")
         require(menu.items.map(\.title) == ["Free", "Original", "1:1", "4:3", "3:2", "16:10", "16:9", "21:9", "", "Portrait"] && menu.items.filter(\.on).map(\.title) == (overlay.ratioLocked ? [] : ["Free"]),
                 "the panel lists the presets and checks Free while unlocked: \(menu.items.map(\.title))")
         key(53, "\u{1B}")
@@ -845,6 +845,8 @@ extension DebugRun {
                 "Esc closes the panel and leaves the selection, the overlay, and the selection's keys line")
         key(35, "p")
         key(down, "")
+        let downCaps = chrome.hints.subviews.flatMap(\.subviews).compactMap { $0 as? KeyCap }.filter(\.pressed).map(\.text)
+        require(chrome.pressed == ["\u{2193}"] && downCaps == ["\u{2193}"], "Down in the ratio menu flashes the keys line's Down cap: \(chrome.pressed) \(downCaps)")
         key(down, "")
         key(up, "")
         key(up, "")

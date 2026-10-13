@@ -206,6 +206,8 @@ final class RatioMenu: NSView {
     }
 
     var onClose: () -> Void = {}
+    /// A key the menu handles itself, so its cap can flash.
+    var onKey: (NSEvent) -> Void = { _ in }
     private(set) var items: [Item] = []
     private(set) var highlighted: Int?
     let panel = Pill(radius: 11, insets: NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0), spacing: 0)
@@ -309,6 +311,7 @@ final class RatioMenu: NSView {
 
     override func keyDown(with event: NSEvent) {
         let choices = items.indices.filter { !items[$0].title.isEmpty }
+        if [125, 126, 36, 76, 53].contains(event.keyCode) || event.charactersIgnoringModifiers == "p" { onKey(event) }
         switch event.keyCode {
         case 125, 126:
             let position = highlighted.flatMap(choices.firstIndex) ?? (event.keyCode == 125 ? -1 : choices.count)

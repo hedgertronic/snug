@@ -14,6 +14,7 @@ extension OverlayController {
         }
         cornerChip.surface = true
         chrome.ratioMenu.onClose = { [unowned self] in refresh() }
+        chrome.ratioMenu.onKey = { [unowned self] in flash($0) }
     }
 
     /// Lights the caps of a key just pressed, for 150 ms.
@@ -61,7 +62,7 @@ extension OverlayController {
 
     /// The keys line: each hint is a label and its key caps, shown in that order.
     private var hints: [(keys: [String], label: String)] {
-        if !chrome.ratioMenu.isHidden { return [(["\u{2191}\u{2193}"], "pick"), (["\u{21A9}"], "choose"), (["esc"], "close")] }
+        if !chrome.ratioMenu.isHidden { return [(["\u{2191}", "\u{2193}"], "pick"), (["\u{21A9}"], "choose"), (["esc"], "close")] }
         if cutout != nil { return [(["K", "esc"], "back")] }
         if scrollArea != nil { return [([], "Scroll the app under the outline")] }
         if let armed = armedRecording {
