@@ -615,7 +615,7 @@ extension DebugRun {
         mouse(.leftMouseDragged, CGPoint(x: iconRect.midX + 40, y: iconRect.midY + 40))
         mouse(.leftMouseUp, CGPoint(x: iconRect.midX + 40, y: iconRect.midY + 40))
         key(fKey, "f")
-        require(overlay.cutout != nil && overlay.selection == nil && overlay.view.overlays.selection == iconRect, "the pointer and other keys do nothing while previewing")
+        require(overlay.cutout != nil && overlay.selection == nil && overlay.view.overlays.selection == iconRect, "the pointer and other keys do nothing while previewing: \(overlay.cutout != nil) \(String(describing: overlay.selection)) \(String(describing: overlay.view.overlays.selection)) \(iconRect)")
         // S crops to the subject's box: the outlined frame and the dim move to it, and the choice is remembered; Snap stays as it was.
         let box = preview!.subjects[0].bounds.offsetBy(dx: iconRect.minX, dy: iconRect.minY)
         key(sKey, "s")
@@ -675,6 +675,9 @@ extension DebugRun {
             _ = await previewCutout()
             require(overlay.cutout?.radii == overlay.cornerRadii(of: iconRect) && overlay.cutout?.radii.isSquare == false,
                     "the preview keeps the area's corner radii for the output: \(String(describing: overlay.cutout?.radii))")
+            let preview = overlay.cutout!, clip = preview.view.clip.path!
+            require(overlay.view.overlays.radii == preview.frameRadii && clip.boundingBoxOfPath == preview.view.checker.frame && clip.contains(preview.view.checker.frame.origin) == preview.cropped,
+                    "the preview and the dim hole clip to the frame's corner radii: \(preview.frameRadii) \(clip.boundingBoxOfPath)")
             pasteboard.clearContents()
             let chip = texts(in: overlay.chrome.size)
             key(returnKey, "\r")
