@@ -934,6 +934,7 @@ final class OverlayController {
         }
         if let scrollArea { overlays.selection = scrollArea; overlays.showsHandles = false; overlays.hover = nil }
         if let cutout { overlays.selection = cutout.frame; overlays.showsHandles = false; overlays.hover = nil }
+        overlays.dimsAll = mode == .capture && overlays.selection == nil && overlays.preview == nil && overlays.ghost == nil && overlays.hover == nil
         // The selection is measured once it settles; a dragged handle makes a new rectangle on every event.
         let settled: CGRect? = if case .none = interaction { selection?.rect } else { nil }
         let shown = selection?.rect ?? snapPreview

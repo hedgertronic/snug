@@ -633,6 +633,30 @@ extension DebugRun {
         require(outer != nil && overlay.view.overlays.hover == outer, "a level a key picked holds while the pointer stays inside it")
         overlay.dismiss()
 
+        // Dim = not part of the target: with nothing targeted (just opened, or the pointer on a blank stretch of page with no window) the
+        // whole screen dims evenly; a hovered element cuts it out; the full display walked out to and Text mode dim nothing.
+        open()
+        let dimBox = { overlay.view.dimLayer.path?.boundingBox ?? .null }
+        let openedDim = (overlay.view.overlays.dimsAll, dimBox())
+        await overlay.detectionTask?.value
+        mouse(.mouseMoved, CGPoint(x: 2450, y: 1500))
+        let blankDim = (overlay.view.overlays.hover, dimBox())
+        require(openedDim == (true, overlay.view.bounds) && blankDim.0 == nil && blankDim.1 == overlay.view.bounds,
+                "with nothing targeted the dim covers the whole screen: on open \(openedDim), on a blank stretch \(blankDim)")
+        overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, aim)
+        require(overlay.view.overlays.hover != nil && !overlay.view.overlays.dimsAll && overlay.view.dimLayer.fillRule == .evenOdd && dimBox() == overlay.view.bounds,
+                "a hovered element cuts an even-odd hole in the dim")
+        for _ in 0..<20 where overlay.session!.selected!.kind != .display { key(up, "") }
+        let fullChips = [overlay.chrome.hover, overlay.chrome.snap, overlay.chrome.strip]
+        require(overlay.view.overlays.hover == extent && overlay.view.dimLayer.path?.isEmpty != false && texts(in: overlay.chrome.hover).first == "Full screen"
+                    && fullChips.allSatisfy { !$0.isHidden && overlay.view.bounds.contains($0.frame) && !$0.frame.intersects(overlay.chrome.topBar.frame) },
+                "the full display walked out to dims nothing, and its chips and strip sit on screen clear of the top bar: \(fullChips.map(\.frame))")
+        key(17, "t")
+        require(overlay.mode == .text && overlay.view.dimLayer.path?.isEmpty != false, "Text mode dims nothing")
+        key(0, "a")
+        overlay.dismiss()
+
         // Left and Right step to the element beside the hovered one at the same level. On the page the First name and Last name fields
         // are accessibility elements, as live; pixel geometry sees their row as one region, their parent. Right from Last name beeps and
         // stays: the cart panel lies to the right but has another parent.

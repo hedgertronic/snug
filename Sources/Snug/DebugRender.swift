@@ -333,6 +333,7 @@ extension DebugRun {
         // On a live display a hovered window is captured with its shadow: the hover size adds the shadow's canvas, which Option drops
         // (or, with Shadow off, adds); Frame takes its place.
         open()
+        try snapshot("capture-nothing-targeted")
         try await overlay.detectionTask?.value
         let browser = CGRect(x: 100, y: 100, width: 1500, height: 1200)
         overlay.setWindows([browser], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
@@ -346,6 +347,9 @@ extension DebugRun {
         let shadowed = "1500 x 1200  + shadow \(2 * padding.sides) x \(padding.top + padding.bottom)"
         var sizes = [texts(in: overlay.chrome.hover).last ?? ""]
         try snapshot("capture-hover-window")
+        for _ in 0..<4 where overlay.session?.selected?.kind != .display { key(126, "") }
+        try snapshot("capture-hover-display")
+        for _ in 0..<4 where overlay.session?.selected?.kind != .window { key(125, "") }
         option(true)
         sizes.append(texts(in: overlay.chrome.hover).last ?? "")
         option(false)

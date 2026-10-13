@@ -146,7 +146,7 @@ extension OverlayController {
         // once the bar and keys line are placed.
         var attachment: (box: CGRect, strip: Bool, left: [NSView], right: [NSView])?
         func sizeChip(_ rect: CGRect) -> Pill {
-            let text = "\(Int(rect.width)) x \(Int(rect.height))" + (armedRecording == nil ? additions(rect) : "")
+            let text = (rect == extent ? "Full screen  " : "") + "\(Int(rect.width)) x \(Int(rect.height))" + (armedRecording == nil ? additions(rect) : "")
             c.size.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText)] }
             return c.size
         }
