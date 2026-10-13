@@ -410,7 +410,7 @@ final class Chrome {
     let text = BarButton("Text", key: "\u{21E7}\u{21A9}")
     let scroll = BarButton("Scroll", key: "G")
     let record = BarButton("Record", key: "V")
-    let cutout = BarButton("Cut out", key: "K")
+    let cutout = BarButton("Subject", key: "K")
     let scrolled = BarButton("Scrolling", key: nil)
     let done = BarButton("Done", key: "\u{21A9}")
     let cancel = BarButton("Cancel", key: "esc")
