@@ -125,7 +125,7 @@ final class HelpSheet: NSView {
                      ("G", "Scrolling capture, hover or selection"), ("K", "Cut-out preview"), ("Cut-out: Tab", "Next subject (Shift: back)"), ("Cut-out: S", "Crop to subject"),
                      ("C", "Copy color"), ("Shift-C", "Cycle color format"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
         ("Adjust and text", [("Tab", "Walk out (Shift: in)"), ("Arrows", "Nudge 1 px (Shift: 10 px)"), ("Option-arrow", "Grow one side 1 px"), ("Option-Cmd-arrow", "Shrink one side 1 px"),
-                             ("Cmd-arrow", "Side out to an edge"), ("Cmd-Shift-arrow", "Side in to an edge"), ("+ / -", "All sides 1 px (Option: 10)"),
+                             ("Cmd-arrow", "Side out to an edge"), ("Cmd-Shift-arrow", "Side in to an edge"), ("+ / -", "All sides 1 px (Option: 10)"), ("Cmd-Z", "Undo an edit (Shift: redo)"),
                              ("Up / Down", "Bigger / smaller element"), ("Shift-click", "Add an element"),
                              ("[ ]", "Corner radius"), ("Shift-[ ]", "Corner radius by 4 pt"), ("=", "Same radius on all corners"), ("Option-drag dot", "One corner's radius"),
                              ("Shift-drag handle", "Keep the aspect ratio"), ("Shift-move", "Lock to one axis"),

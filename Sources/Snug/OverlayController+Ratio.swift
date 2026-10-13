@@ -30,8 +30,16 @@ extension OverlayController {
             ratioPortrait = !portrait
             if let lockedRatio { conformSelection(base, to: 1 / lockedRatio) }
         }
-        chrome.ratioMenu.open([free, RatioMenu.Item(title: "Original", on: lockedRatio == original) { [self] in conformSelection(base, to: original) }]
-                                + presets + [RatioMenu.Item(title: "", on: false) {}, flip], under: chrome.ratio.frame)
+        // Each pick is one undo step.
+        let before = selectionState
+        let items = [free, RatioMenu.Item(title: "Original", on: lockedRatio == original) { [self] in conformSelection(base, to: original) }]
+            + presets + [RatioMenu.Item(title: "", on: false) {}, flip]
+        chrome.ratioMenu.open(items.map { item in
+            RatioMenu.Item(title: item.title, on: item.on) { [self] in
+                item.pick()
+                recordEdit(from: before)
+            }
+        }, under: chrome.ratio.frame)
     }
 
     /// The selection becomes the largest rectangle of `ratio` that fits inside `base` on its center, in whole pixels, and `ratio` locks.

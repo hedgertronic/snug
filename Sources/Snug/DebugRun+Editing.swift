@@ -444,6 +444,36 @@ extension DebugRun {
         require(overlay.selection?.rect == overlay.extent, "+ stops at the extent")
         overlay.dismiss()
 
+        // Cmd-Z undoes one edit at a time back to the released drag, then beeps and stays; Cmd-Shift-Z redoes them. Quick nudges are one step.
+        open()
+        drag(from: CGPoint(x: 1000, y: 600), by: CGPoint(x: 400, y: 300))
+        let released = overlay.selection!.rect
+        for _ in 0..<3 { key(right) }
+        let nudged = overlay.selection!.rect
+        drag(from: CGPoint(x: nudged.maxX, y: nudged.midY), by: CGPoint(x: 60, y: 0))
+        let resized = overlay.selection!.rect
+        key(30, "]")
+        let rounded = overlay.editedRadii[resized]
+        require(nudged == released.offsetBy(dx: 3, dy: 0) && resized.width > nudged.width && rounded != nil && overlay.undoStack.count == 3,
+                "a drag, three quick nudges, a handle drag and ] make three undo steps: \(released) \(nudged) \(resized) \(overlay.undoStack.count)")
+        var undone: [(CGRect, CornerRadii?)] = []
+        for _ in 0..<4 {
+            key(6, "z", .command)
+            undone.append((overlay.selection!.rect, overlay.editedRadii[overlay.selection!.rect]))
+        }
+        require(undone.map(\.0) == [resized, nudged, released, released] && undone[0].1 == nil,
+                "Cmd-Z steps back through ], the handle drag and the nudges, then stays on the released drag: \(undone.map(\.0))")
+        var redone: [(CGRect, CornerRadii?)] = []
+        for _ in 0..<3 {
+            key(6, "Z", [.command, .shift])
+            redone.append((overlay.selection!.rect, overlay.editedRadii[overlay.selection!.rect]))
+        }
+        require(redone.map(\.0) == [nudged, resized, resized] && redone[2].1 == rounded && overlay.redoStack.isEmpty,
+                "Cmd-Shift-Z comes back step by step to the rounded, resized selection: \(redone.map(\.0))")
+        drag(from: CGPoint(x: 200, y: 200), by: CGPoint(x: 300, y: 300))
+        require(overlay.undoStack.isEmpty && overlay.redoStack.isEmpty, "a fresh drag starts the history over")
+        overlay.dismiss()
+
         // Cmd-Shift-S: Save As writes where the panel (here the seam) says, with the usual name offered, and closes the overlay.
         var offered: URL?
         overlay.chooseSaveURL = { suggested in

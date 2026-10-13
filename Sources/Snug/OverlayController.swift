@@ -111,6 +111,11 @@ final class OverlayController {
     var radiusTasks: [CGRect: Task<(radius: CGFloat, arcs: CornerRadii), Never>] = [:]
     /// Per-corner radii set with `[`, `]`, the corner dots, and E, by rectangle; they replace the measured ones.
     var editedRadii: [CGRect: CornerRadii] = [:]
+    /// Cmd-Z and Cmd-Shift-Z: the selection states before each edit since the selection was made, and those undone; the last key
+    /// that edited it and when, for coalescing.
+    var undoStack: [SelectionState] = []
+    var redoStack: [SelectionState] = []
+    var lastEdit: (key: String, at: ContinuousClock.Instant)?
     /// The corner a dot drag last changed; `=` copies its radius to the other corners.
     var lastEditedCorner: Handle?
     /// The corner whose dot the pointer is on (or whose chip it is heading to), and its "All corners" chip.
@@ -169,6 +174,8 @@ final class OverlayController {
     private var snappedEdges: [CGRect] = []
     var bypassSnap = false
     private var hadSelection = false
+    /// The selection state when the current press began, for its undo step.
+    private var pressState: SelectionState?
     var spaceHeld = false
     /// Scrolling capture (G): the area in image pixels, the stitched height so far, the stitcher, and the loop capturing the area.
     /// Debug runs replace the live frame source.
@@ -298,6 +305,8 @@ final class OverlayController {
         arcs = [:]
         radiusTasks = [:]
         editedRadii = [:]
+        undoStack = []
+        redoStack = []
         lastEditedCorner = nil
         hoveredCorner = nil
         lockedRatio = nil
@@ -415,6 +424,7 @@ final class OverlayController {
         pointer = point
         if cornerDot(at: point) == nil { hoveredCorner = nil }
         hadSelection = selection != nil
+        pressState = selectionState
         shiftHeld = event.modifierFlags.contains(.shift)
         if let selection {
             if let corner = cornerDot(at: point) {
@@ -526,6 +536,8 @@ final class OverlayController {
         pointer = point
         let finished = interaction
         interaction = .none
+        // A handle drag, move, corner drag or Shift-click union is one undo step; a fresh drag starts the history over in `release`.
+        if case .drawing = finished {} else if let pressState { recordEdit(from: pressState) }
         snappedEdges = []
         edgeFramesTask?.cancel()
         switch finished {
@@ -556,6 +568,8 @@ final class OverlayController {
         selection = AreaSelection(extent: extent, exact: rect, suggestions: suggestions, takingFirst: !suggestions.isEmpty)
         snapPreview = nil
         snapSuggestions = []
+        undoStack = []
+        redoStack = []
     }
 
     // MARK: Snap
@@ -639,6 +653,13 @@ final class OverlayController {
         if scrollArea != nil { return handleScrollKey(event) }
         if armedRecording != nil { return handleRecordingKey(event) }
         if cutout != nil { return handleCutoutKey(event) }
+        let flags = event.modifierFlags.intersection([.command, .option, .shift])
+        if mode == .capture, selection != nil, flags.isSuperset(of: .command), event.charactersIgnoringModifiers?.lowercased() == "z" {
+            undoEdit(redo: flags.contains(.shift))
+            refresh()
+            return true
+        }
+        let before = selectionState
         var handled = handleExtrasKey(event)
         if !handled {
             switch mode {
@@ -646,6 +667,9 @@ final class OverlayController {
             case .text: handled = handleTextKey(event)
             }
         }
+        // Arrow nudges, and presses of one key, coalesce into one undo step.
+        let nudge = (123...126).contains(event.keyCode) && !flags.contains(.command) && !flags.contains(.option)
+        recordEdit(from: before, key: nudge ? "nudge" : "\(event.keyCode) \(event.charactersIgnoringModifiers ?? "") \(flags.rawValue)")
         refresh()
         return handled
     }

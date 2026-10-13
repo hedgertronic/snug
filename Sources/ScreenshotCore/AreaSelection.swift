@@ -62,7 +62,7 @@ public struct AreaDrag: Sendable {
 }
 
 /// An editable area selection with a Tab-cycled list of fits.
-public struct AreaSelection: Sendable {
+public struct AreaSelection: Equatable, Sendable {
     /// Smallest width or height a resize can produce.
     public static let minimumSize: CGFloat = 8
 

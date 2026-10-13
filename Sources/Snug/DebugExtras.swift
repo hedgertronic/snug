@@ -805,7 +805,7 @@ extension DebugRun {
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.snap) == ["Snapped", "S"] && chrome.snap.lit, "after release on a fit: Snapped, lit")
         require(!top.isHidden && texts(in: chrome.strip) == captureStrip && texts(in: chrome.hints)
-                    == ["move", "\u{2190}\u{2192}", "grow", "\u{2325}", "shrink", "\u{2325}\u{2318}", "next edge", "\u{2318}", "all sides", "+", "-"],
+                    == ["move", "\u{2190}\u{2192}", "grow", "\u{2325}", "shrink", "\u{2325}\u{2318}", "next edge", "\u{2318}", "all sides", "+", "-", "undo", "\u{2318}Z"],
                 "a selection keeps the top bar, has the same strip as hover, and the arrow layers on the keys line: \(texts(in: chrome.hints))")
         require(chrome.hints.frame.height < 40 && chrome.hints.frame.width <= overlay.view.bounds.width - 16, "the keys line is one line and fits: \(chrome.hints.frame) in \(overlay.view.bounds.width)")
         // The chip row: size and Snap from the selection's left edge, the ratio and radius ending at its right edge (after Snap when they
