@@ -149,33 +149,28 @@ public struct SelectionSession: Sendable {
         selected = next
     }
 
-    /// Selects the region beside the selected one, to the right or left: among the regions with the same parent (else, with none, the
-    /// same number of parents), the nearest whose center lies that way, preferring one that overlaps the selection vertically. Returns
-    /// false, changing nothing, when there is none.
+    /// Selects the next peer of the selected region in reading order, or the previous one, wrapping at the ends. Peers share the
+    /// region's parent (none, with none), and are neither ancestors nor descendants of it. Rows come first, top to bottom: regions
+    /// whose vertical centers are within half the shorter height of the one above join its row; within a row, by left edge. Returns
+    /// false, changing nothing, when there is no peer.
     public mutating func step(right: Bool) -> Bool {
         guard let current = selected else { return false }
-        func parentID(_ candidate: Candidate) -> String? { enclosing(candidate)?.id }
-        func depth(_ candidate: Candidate) -> Int {
-            var count = 0, next = enclosing(candidate)
-            while let parent = next {
-                count += 1
-                next = enclosing(parent)
-            }
-            return count
+        let parent = enclosing(current)?.id
+        func nests(_ outer: CGRect, _ inner: CGRect) -> Bool { outer.insetBy(dx: -3, dy: -3).contains(inner) }
+        let peers = candidates.filter {
+            $0.id == current.id || $0.kind != .display && $0.kind != .window && enclosing($0)?.id == parent
+                && !nests($0.bounds, current.bounds) && !nests(current.bounds, $0.bounds)
+        }.sorted { $0.bounds.midY < $1.bounds.midY }
+        var row = 0
+        var rows: [String: Int] = [:]
+        for (index, peer) in peers.enumerated() {
+            if index > 0, peer.bounds.midY - peers[index - 1].bounds.midY > min(peer.bounds.height, peers[index - 1].bounds.height) / 2 { row += 1 }
+            rows[peer.id] = row
         }
-        let others = candidates.filter { $0.id != current.id && $0.kind != .display && $0.kind != .window }
-        let parent = parentID(current)
-        var level = others.filter { parentID($0) == parent }
-        if level.isEmpty {
-            let currentDepth = depth(current)
-            level = others.filter { depth($0) == currentDepth }
-        }
-        let ahead = level.filter { right ? $0.bounds.midX > current.bounds.midX : $0.bounds.midX < current.bounds.midX }
-        let overlapping = ahead.filter { $0.bounds.minY < current.bounds.maxY && $0.bounds.maxY > current.bounds.minY }
-        func distance(_ candidate: Candidate) -> CGFloat { hypot(candidate.bounds.midX - current.bounds.midX, candidate.bounds.midY - current.bounds.midY) }
-        guard let next = (overlapping.isEmpty ? ahead : overlapping).min(by: { distance($0) < distance($1) }) else { return false }
+        let ordered = peers.sorted { (rows[$0.id]!, $0.bounds.minX) < (rows[$1.id]!, $1.bounds.minX) }
+        guard ordered.count > 1, let index = ordered.firstIndex(where: { $0.id == current.id }) else { return false }
         isLocked = true
-        selected = next
+        selected = ordered[(index + (right ? 1 : ordered.count - 1)) % ordered.count]
         expansionPath = []
         return true
     }

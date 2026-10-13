@@ -206,4 +206,50 @@ struct SelectionSessionTests {
         session.hover(at: CGPoint(x: 1500, y: 900))
         #expect(session.selected?.id == "page")
     }
+
+    private func element(_ id: String, _ x: CGFloat, _ y: CGFloat, _ width: CGFloat = 100, _ height: CGFloat = 60) -> Candidate {
+        Candidate(id: id, label: id, bounds: CGRect(x: x, y: y, width: width, height: height), score: 2, kind: .element)
+    }
+
+    /// The id selected after a step, nil when there was no peer.
+    private func walk(_ session: inout SelectionSession, right: Bool) -> String? {
+        session.step(right: right) ? session.selected?.id : nil
+    }
+
+    @Test func rightAndLeftWalkAGridInReadingOrderAndWrap() {
+        // A 2x2 grid in a panel; b sits 4 pt lower than a, still the same row.
+        let panel = element("panel", 50, 50, 400, 300)
+        let grid = [element("a", 100, 100), element("b", 300, 104), element("c", 100, 200), element("d", 300, 200)]
+        var session = SelectionSession(candidates: [panel] + grid, extent: extent, anchor: CGPoint(x: 150, y: 120))
+        #expect(session.selected?.id == "a")
+        var visited: [String] = []
+        for _ in 0..<5 { visited.append(walk(&session, right: true)!) }
+        #expect(visited == ["b", "c", "d", "a", "b"])
+        #expect(session.isLocked)
+        #expect(walk(&session, right: false) == "a")
+        #expect(walk(&session, right: false) == "d")
+    }
+
+    @Test func rightAndLeftWalkAVerticalStackTopToBottom() {
+        let stack = [element("top", 100, 100, 300, 40), element("middle", 100, 160, 300, 40), element("bottom", 100, 220, 300, 40)]
+        var session = SelectionSession(candidates: stack, extent: extent, anchor: CGPoint(x: 200, y: 120))
+        #expect(walk(&session, right: true) == "middle")
+        #expect(walk(&session, right: true) == "bottom")
+        #expect(walk(&session, right: true) == "top")
+        #expect(walk(&session, right: false) == "bottom")
+    }
+
+    @Test func peersExcludeAncestorsDescendantsAndOtherDepths() {
+        let outer = element("outer", 100, 100, 300, 200)
+        let inner = element("inner", 120, 120, 100, 60)
+        let leaf = element("leaf", 130, 130, 30, 20)
+        let sibling = element("sibling", 500, 100, 100, 60)
+        var session = SelectionSession(candidates: [outer, inner, leaf, sibling], extent: extent, anchor: CGPoint(x: 140, y: 135))
+        #expect(session.selected?.id == "leaf")
+        #expect(walk(&session, right: true) == nil && !session.isLocked)
+        session.expand()
+        session.expand()
+        #expect(session.selected?.id == "outer")
+        #expect(walk(&session, right: true) == "sibling")
+    }
 }
