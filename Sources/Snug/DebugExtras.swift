@@ -761,11 +761,19 @@ extension DebugRun {
         require(!chrome.record.isEnabled && chrome.record.alphaValue == 0.25 && overlay.view.hitTest(centerOf(chrome.record)) !== chrome.record && chrome.copy.alphaValue == 1,
                 "with no live display Record is disabled: faded and not clickable")
         require(chrome.all.flatMap(faded).isEmpty, "nothing else in the chrome is faded: \(chrome.all.flatMap(faded))")
-        // The hover holds while the pointer crosses from the element to its strip, so a click reaches Copy.
+        // The hover holds while the pointer crosses from the element to its strip, so a click reaches Copy; the loupe and crosshair still
+        // follow the pointer.
+        defaults.set(true, forKey: Pref.loupe)
+        defaults.set(true, forKey: Pref.crosshair)
         mouse(.mouseMoved, viewPixel(CGPoint(x: centerOf(chrome.copy).x, y: windowBox.minY - 4)))
+        let heldLoupe = overlay.view.guides.loupe.position, heldCrosshair = overlay.view.guides.crosshair.path
         mouse(.mouseMoved, viewPixel(centerOf(chrome.copy)))
         require(overlay.view.overlays.hover == window && overlay.view.hitTest(centerOf(chrome.copy)) === chrome.copy,
                 "the hover holds on the way to the strip and a click reaches Copy: \(String(describing: overlay.view.overlays.hover))")
+        require(overlay.view.guides.loupe.position != heldLoupe && overlay.view.guides.crosshair.path != heldCrosshair,
+                "while the hover holds, the loupe and crosshair follow the pointer")
+        defaults.set(false, forKey: Pref.loupe)
+        defaults.set(false, forKey: Pref.crosshair)
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
         overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: .option, timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
