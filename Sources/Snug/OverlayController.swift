@@ -942,7 +942,7 @@ final class OverlayController {
         let shown = selection?.rect ?? snapPreview
         for rect in [snapPreview, settled, overlays.hover, overlays.upHint, overlays.downHint] { measureRadius(rect) }
         for rect in [shown, overlays.hover, overlays.upHint, overlays.downHint] { measureRadius(rect.flatMap(container)) }
-        overlays.radii = shown.map(cornerRadii) ?? .zero
+        overlays.radii = cutout?.frameRadii ?? shown.map(cornerRadii) ?? .zero
         overlays.hoverRadii = overlays.hover.map(cornerRadii) ?? .zero
         layoutCornerChip()
         overlays.upHintRadii = overlays.upHint.map(cornerRadii) ?? .zero

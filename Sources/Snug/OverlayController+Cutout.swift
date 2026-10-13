@@ -17,6 +17,9 @@ struct CutoutPreview {
     var cropped: Bool
     let view: CutoutView
 
+    /// The corner radii of `frame`: the area's when not cropped, none around a subject's box.
+    var frameRadii: CornerRadii { cropped ? .zero : radii }
+
     /// The output's frame in image pixels: the cut-out area, or the shown subject's box when cropped.
     var frame: CGRect { cropped ? subjects[shown].bounds.offsetBy(dx: rect.minX, dy: rect.minY) : rect }
 
@@ -37,11 +40,14 @@ final class CutoutView: NSView {
     let ghost = CALayer()
     let outline = CALayer()
     let subject = CALayer()
+    /// Clips the whole preview to the output's frame and its corner radii.
+    let clip = CAShapeLayer()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         outline.mask = CALayer()
         content.frame = frame
+        content.mask = clip
         let tile = NSImage(size: CGSize(width: 16, height: 16), flipped: false) { _ in
             NSColor.white.setFill()
             CGRect(x: 0, y: 0, width: 16, height: 16).fill()
@@ -89,6 +95,7 @@ extension OverlayController {
         preview.checker.frame = view.viewRect(cutout!.frame)
         preview.ghost.frame = preview.checker.frame
         preview.ghost.contents = image!.cropping(to: cutout!.frame)
+        preview.clip.path = cutout!.frameRadii.scaled(by: 1 / scale).path(in: preview.checker.frame)
         preview.outline.frame = view.viewRect(cutout!.rect)
         preview.outline.mask!.frame = preview.outline.bounds
         preview.outline.mask!.contents = cutout!.subjects[index].outline
