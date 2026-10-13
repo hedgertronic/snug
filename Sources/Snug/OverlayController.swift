@@ -158,6 +158,9 @@ final class OverlayController {
     var accessibilityTask: Task<Void, Error>?
     var accessibilityStarted: ContinuousClock.Instant?
     var previousApp: NSRunningApplication?
+    /// Esc as a global hot key while the overlay is up (never in debug runs): Snug may not be active, as when the shortcut opened the
+    /// overlay over another app's open menu, and then a plain Esc would go to that app. A press reaches the overlay as its Esc key.
+    private var escape: HotKey?
     private var interaction = Interaction.none
     private var snapSuggestions: [CGRect] = []
     /// Debug runs replace the accessibility lookup behind snap fits and edges with synthetic frames (image pixels).
@@ -253,6 +256,18 @@ final class OverlayController {
         } else {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate()
+            if escape == nil {
+                escape = HotKey(id: 2) { [unowned self] in
+                    window.sendEvent(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                      windowNumber: window.windowNumber, context: nil, characters: "\u{1B}",
+                                                      charactersIgnoringModifiers: "\u{1B}", isARepeat: false, keyCode: 53)!)
+                }
+            }
+            do {
+                try escape!.register(keyCode: 53, modifiers: [])
+            } catch {
+                NSApp.presentError(error)
+            }
         }
         window.makeFirstResponder(view)
         signposter.endInterval("overlay shown", shown)
@@ -292,6 +307,7 @@ final class OverlayController {
         view.liveText.analysis = nil
         smallImage = nil
         window.orderOut(nil)
+        escape?.unregister()
         view.image = nil
         image = nil
         windows = []

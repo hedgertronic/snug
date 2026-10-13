@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import ScreenshotCore
 
 extension DebugRun {
@@ -1113,6 +1114,20 @@ extension DebugRun {
         overlay.dismiss()
         for key in [Pref.rulers, Pref.loupe] { defaults.set(false, forKey: key) }
         try await verifyRecording(image: image, frame: frame, overlay: overlay, require: require)
+
+        // Hot keys: each handler takes only presses of its own ID (the capture shortcut and the overlay's Esc share the app's target).
+        // The presses are Carbon events sent to the app, so nothing is registered system-wide.
+        var fired: [UInt32] = []
+        let hotKeys = [HotKey(id: 7) { fired.append(7) }, HotKey(id: 8) { fired.append(8) }]
+        for id: UInt32 in [7, 8, 7] {
+            var event: EventRef?
+            CreateEvent(nil, OSType(kEventClassKeyboard), UInt32(kEventHotKeyPressed), 0, EventAttributes(kEventAttributeNone), &event)
+            var hotKeyID = EventHotKeyID(signature: OSType(0x534E5547), id: id)
+            SetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), MemoryLayout<EventHotKeyID>.size, &hotKeyID)
+            SendEventToEventTarget(event, GetApplicationEventTarget())
+            ReleaseEvent(event)
+        }
+        require(fired == [7, 8, 7] && hotKeys.count == 2, "each hot key acts on its own presses only: \(fired)")
 
         print("Extras UI verification passed (\(passed.count) checks)")
         passed.forEach { print("  ok: \($0)") }

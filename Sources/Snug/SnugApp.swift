@@ -96,7 +96,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         }
         installStatusItem()
         ScreenRecording.requested = { [unowned self] in startRecording(displayID: $0, area: $1, showsCursor: $2) }
-        hotKey = HotKey { [unowned self] in capture() }
+        hotKey = HotKey(id: 1) { [unowned self] in capture() }
         registerHotKey()
         _ = OverlayController.warmVisionInChild(defaults: .standard)
         Task {
