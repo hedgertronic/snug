@@ -99,10 +99,7 @@ extension DebugRun {
         key(9, "v")
         key(4, "h")
         require(hints().contains("cursor off") && !defaults.bool(forKey: Pref.recordCursor), "H shows the cursor off and saves it: \(hints())")
-        // C no longer touches the count-in; armed, it does nothing. I cycles the count-in Off, 3 s, 5 s and saves it.
-        key(8, "c")
-        require(defaults.integer(forKey: Pref.recordCountIn) == 0 && overlay.armedRecording != nil && overlay.window.isVisible,
-                "C while armed leaves the count-in off and stays armed")
+        // I cycles the count-in Off, 3 s, 5 s and saves it.
         var counts: [Int] = []
         for _ in 0..<3 {
             key(34, "i")
@@ -158,6 +155,17 @@ extension DebugRun {
         key(9, "v")
         require(overlay.window.isVisible && overlay.armedRecording == nil, "V does nothing on an opened image, which has no display to record")
         overlay.dismiss()
+
+        // Armed, C copies the selection's color as everywhere: it closes the overlay, records nothing, and leaves the count-in alone.
+        open()
+        select(CGRect(x: 600, y: 300, width: 400, height: 200))
+        key(9, "v")
+        overlay.pasteboard.clearContents()
+        let countIn = defaults.integer(forKey: Pref.recordCountIn)
+        key(8, "c")
+        let average = ColorFormat(rawValue: defaults.string(forKey: Pref.colorFormat)!)!.string(for: ColorFormat.average(of: image, in: CGRect(x: 600, y: 300, width: 400, height: 200)))
+        require(!overlay.window.isVisible && overlay.armedRecording == nil && requests.count == count && defaults.integer(forKey: Pref.recordCountIn) == countIn
+                && overlay.pasteboard.string(forType: .string) == average, "C while armed copies the selection's color \(average) and records nothing: \(overlay.pasteboard.string(forType: .string) ?? "nothing")")
 
         // A 3 s count-in shows 3, 2, 1 over the selection; the request comes 3 s after Return, with the overlay already closed.
         defaults.set(3, forKey: Pref.recordCountIn)
