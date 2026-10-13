@@ -61,8 +61,8 @@ extension DebugRun {
                 && !overlay.view.overlays.showsHandles && overlay.chrome.topBar.isHidden,
                 "armed: a red outline on the selection, no handles or top bar")
         require(strip() == ["Cursor", "H", "Count-in", "I", "Cancel", "esc", "Start", "\u{21A9}"] && overlay.chrome.cursor.lit && !overlay.chrome.countIn.lit
-                    && overlay.chrome.start.primary && hints() == ["start", "\u{21A9}", "cancel", "esc"],
-                "the armed strip: Cursor lit, Count-in plain, Start primary; the keys line: \(strip()) \(hints())")
+                    && overlay.chrome.start.primary && overlay.chrome.hints.isHidden,
+                "the armed strip: Cursor lit, Count-in plain, Start primary; no keys line, since the strip shows Start and Cancel: \(strip()) \(hints())")
         // Armed near the right edge, the size chip stays over the selection's left edge.
         select(CGRect(x: extent.width - 600, y: 400, width: 560, height: 500))
         let badgeOffset = overlay.chrome.size.frame.minX - overlay.view.viewRect(overlay.selection!.rect).minX
@@ -193,7 +193,7 @@ extension DebugRun {
         select(CGRect(x: 600, y: 300, width: 400, height: 200))
         key(9, "v")
         key(36, "\r")
-        require(hints().contains("Recording in 3"), "the count-in strip: \(hints())")
+        require(hints() == ["Recording in 3"], "counting in, the keys line leaves out Cancel, which the strip shows: \(hints())")
         try await Task.sleep(for: .milliseconds(1500))
         key(53, "\u{1B}")
         try await Task.sleep(for: .milliseconds(2600))
@@ -210,16 +210,28 @@ extension DebugRun {
         let reminder = ScreenRecording.makeReminder(around: recordArea, on: display, defaults: defaults)!
         let settings = SettingsTabs.makeWindow()
         require(outline.contentView!.layer!.borderColor == NSColor.systemRed.cgColor, "the recording outline is red, like the armed outline")
-        require(texts(in: reminder.contentView!) == ["\u{2303}\u{21E7}Space", "to stop"], "the reminder reads the shortcut, then to stop: \(texts(in: reminder.contentView!))")
+        require(texts(in: reminder.contentView!) == ["0:00", "stop", "\u{2303}\u{21E7}Space"], "the reminder reads the time, stop, then the shortcut: \(texts(in: reminder.contentView!))")
+        let reminderPills = reminder.contentView!.subviews.compactMap { $0 as? Pill }
+        let reminderCaps = reminderPills.last.map { $0.subviews[0].subviews.compactMap { $0 as? KeyCap } } ?? []
+        require(reminderPills.count == 2 && reminderPills[1].frame.minX - reminderPills[0].frame.maxX == 8 && reminderCaps.map(\.text) == ["\u{2303}\u{21E7}Space"] && reminder.hasShadow,
+                "the reminder is two chrome pills 8 pt apart, the time and then stop with the shortcut's key cap; the panel draws the shadow")
+        require([0, 7, 59, 60, 750].map(ScreenRecording.elapsed) == ["0:00", "0:07", "0:59", "1:00", "12:30"], "the time reads m:ss")
         require(reminder.frame.maxY == outline.frame.minY - ScreenRecording.reminderGap && abs(reminder.frame.midX - outline.frame.midX) <= 0.5,
                 "the reminder is centered under the outline, \(ScreenRecording.reminderGap) pt away: \(reminder.frame) \(outline.frame)")
+        // The dim covers the display at the highlight fade with the area cut out, and lets clicks through.
+        let dim = ScreenRecording.makeDim(around: recordArea, on: display, defaults: defaults)
+        let dimPath = (dim.contentView!.layer!.sublayers![0] as! CAShapeLayer).path!
+        let displayHeight = CGDisplayBounds(display).height
+        require(dim.frame.size == CGDisplayBounds(display).size && dim.ignoresMouseEvents && dimPath.contains(CGPoint(x: 10, y: 10), using: .evenOdd)
+                    && !dimPath.contains(CGPoint(x: recordArea.midX, y: displayHeight - recordArea.midY), using: .evenOdd),
+                "the dim panel covers the display, cuts the area out, and is click-through: \(dim.frame)")
         let excluded = DisplayCapture.excludedWindowIDs()
-        let panelIDs = [outline, reminder].map { CGWindowID($0.windowNumber) }
+        let panelIDs = [dim, outline, reminder].map { CGWindowID($0.windowNumber) }
         require(panelIDs.allSatisfy { $0 > 0 && excluded.contains($0) } && !excluded.contains(CGWindowID(settings.windowNumber)),
-                "the outline and reminder \(panelIDs) are left out of recordings and Settings \(settings.windowNumber) is not: \(excluded.sorted())")
+                "the dim, outline and reminder \(panelIDs) are left out of recordings and Settings \(settings.windowNumber) is not: \(excluded.sorted())")
         defaults.set(-1, forKey: Pref.hotKeyCode)
         let unset = ScreenRecording.makeReminder(around: recordArea, on: display, defaults: defaults)!
-        require(texts(in: unset.contentView!) == ["Stop from the menu bar"], "with no shortcut the reminder points to the menu bar: \(texts(in: unset.contentView!))")
+        require(texts(in: unset.contentView!) == ["0:00", "Stop from the menu bar"], "with no shortcut the reminder points to the menu bar: \(texts(in: unset.contentView!))")
         defaults.set(49, forKey: Pref.hotKeyCode)
         // Placement in a 1512 x 945 pt visible frame under a 37 pt menu bar, for a 120 x 36 pt reminder.
         let visible = CGRect(x: 0, y: 37, width: 1512, height: 945)
@@ -301,13 +313,16 @@ extension DebugRun {
         require(recorded.size == CGSize(width: area.width * pixelScale, height: area.height * pixelScale) && abs(recorded.seconds - 1) < 0.3,
                 "a live 1 s recording of 200 x 100 pt is \(area.width * pixelScale) x \(area.height * pixelScale) px and about 1 s: \(recorded)")
 
-        // `start` orders the outline and reminder in while still transparent, before it reads the shareable content: ScreenCaptureKit
-        // lists them then, so the filter's window-ID exclusion finds them. (A display filter's `includedWindows` is empty, so it can't
-        // show the exclusion itself.)
-        [outline, reminder].forEach { $0.orderFrontRegardless() }
+        // `start` orders the panels in while still transparent, before it reads the shareable content: ScreenCaptureKit lists them then.
+        [dim, outline, reminder].forEach { $0.orderFrontRegardless() }
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
-        [outline, reminder].forEach { $0.orderOut(nil) }
+        [dim, outline, reminder].forEach { $0.orderOut(nil) }
         let listed = Set(content.windows.map(\.windowID))
-        require(panelIDs.allSatisfy(listed.contains), "the transparent outline and reminder \(panelIDs) are in the shareable content")
+        require(panelIDs.allSatisfy(listed.contains), "the transparent dim, outline and reminder \(panelIDs) are in the shareable content")
+        // The stream's filter leaves Snug out by application, so it includes none of Snug's excluded windows, listed or not.
+        let streamFilter = DisplayCapture.filter(for: display, in: content, excluding: DisplayCapture.excludedWindowIDs())
+        let leftOut = DisplayCapture.excludedWindowIDs().union(panelIDs)
+        require(Set(streamFilter.includedWindows.map(\.windowID)).isDisjoint(with: leftOut) && streamFilter.includedApplications.allSatisfy { $0.processID != getpid() },
+                "the recording filter includes none of Snug's chrome windows \(leftOut.sorted())")
     }
 }

@@ -30,6 +30,8 @@ final class Toast: NSPanel, NSDraggingSource {
     /// The pill.
     let card: NSVisualEffectView
     private let row: NSStackView
+    /// The checkmark, or a color toast's swatch.
+    let mark: NSView
     let message: NSTextField
     private let detail: NSTextField
     let closeButton: NSButton
@@ -102,15 +104,17 @@ final class Toast: NSPanel, NSDraggingSource {
             mark.layer!.borderWidth = 1
             mark.layer!.borderColor = NSColor.white.withAlphaComponent(0.4).cgColor
         } else {
+            // The highlight color, as the overlay resolves it, with the check in white or black by its luminance.
+            let tint = Highlight.color(hex: defaults.string(forKey: Pref.highlightColor)!)
             let check = NSImageView(image: NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)!)
-            check.symbolConfiguration = .init(pointSize: 17, weight: .semibold)
-            check.contentTintColor = .controlAccentColor
+            check.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 17, weight: .semibold).applying(.init(paletteColors: [Chrome.text(on: tint), tint]))
             check.frame = NSRect(x: 0, y: 0, width: 20, height: 20)
             mark = check
         }
         message = NSTextField(messageText, size: 13, weight: .semibold)
         detail = NSTextField(detailText, size: 12, mono: true, color: .secondaryLabelColor)
         detail.isHidden = detailText.isEmpty
+        self.mark = mark
         row = NSStackView(views: [mark, message, detail])
         row.spacing = 10
         row.edgeInsets = NSEdgeInsets(top: 9, left: 12, bottom: 9, right: 16)

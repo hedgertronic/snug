@@ -120,12 +120,12 @@ final class ActionButton: NSButton {
 final class HelpSheet: NSView {
     static let columns: [(title: String, rows: [(keys: String, action: String)])] = [
         ("Capture", [("drag", "Select a region"), ("click", "Element or window"), ("Option-click", "Flip window shadow"), ("Option-drag", "Exact, no snap"),
-                     ("F", "Full screen, or all text"), ("W", "Capture the window"), ("Return", "Copy"), ("Shift-Return", "Copy the text"), ("Cmd-S", "Save"),
+                     ("F", "Full screen, or all text"), ("W", "Capture the window"), ("Left / Right", "Element beside (hover)"), ("Return", "Copy"), ("Shift-Return", "Copy the text"), ("Cmd-S", "Save"),
                      ("Cmd-Shift-S", "Save As"), ("E / Shift-click", "Edit as a selection"),
                      ("G", "Scrolling capture, hover or selection"), ("K", "Cut-out preview"), ("Cut-out: Tab", "Next subject (Shift: back)"), ("Cut-out: S", "Crop to subject"),
                      ("C", "Copy color"), ("Shift-C", "Cycle color format"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
         ("Adjust and text", [("Tab", "Walk out (Shift: in)"), ("Arrows", "Nudge 1 px (Shift: 10 px)"), ("Option-arrow", "Grow one side 1 px"), ("Option-Cmd-arrow", "Shrink one side 1 px"),
-                             ("Cmd-arrow", "Side out to an edge"), ("Cmd-Shift-arrow", "Side in to an edge"), ("+ / -", "All sides 1 px (Option: 10)"),
+                             ("Cmd-arrow", "Edge out, one side"), ("Cmd-Shift-arrow", "Edge in, one side"), ("+ / -", "All sides 1 px (Option: 10)"), ("Cmd-Z", "Undo an edit (Shift: redo)"),
                              ("Up / Down", "Bigger / smaller element"), ("Shift-click", "Add an element"),
                              ("[ ]", "Corner radius"), ("Shift-[ ]", "Corner radius by 4 pt"), ("=", "Same radius on all corners"), ("Option-drag dot", "One corner's radius"),
                              ("Shift-drag handle", "Keep the aspect ratio"), ("Shift-move", "Lock to one axis"),
@@ -206,6 +206,8 @@ final class RatioMenu: NSView {
     }
 
     var onClose: () -> Void = {}
+    /// A key the menu handles itself, so its cap can flash.
+    var onKey: (NSEvent) -> Void = { _ in }
     private(set) var items: [Item] = []
     private(set) var highlighted: Int?
     let panel = Pill(radius: 11, insets: NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0), spacing: 0)
@@ -309,6 +311,7 @@ final class RatioMenu: NSView {
 
     override func keyDown(with event: NSEvent) {
         let choices = items.indices.filter { !items[$0].title.isEmpty }
+        if [125, 126, 36, 76, 53].contains(event.keyCode) || event.charactersIgnoringModifiers == "p" { onKey(event) }
         switch event.keyCode {
         case 125, 126:
             let position = highlighted.flatMap(choices.firstIndex) ?? (event.keyCode == 125 ? -1 : choices.count)

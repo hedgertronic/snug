@@ -14,9 +14,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow?
     private var firstRunWindow: NSWindow?
     private var registeredShortcut: [Int] = []
-    /// The screen recording from its request on: its start, which may still be running. The capture shortcut and the system's
-    /// screen-recording indicator in the menu bar stop it; the status item keeps its icon and menu.
-    private var recording: Task<ScreenRecording, any Error>?
+    /// The screen recording from its request on: its start, which may still be running. The capture shortcut, the menu's Stop
+    /// Recording, and the system's screen-recording indicator in the menu bar stop it; the status item keeps its icon.
+    private var recording: Task<ScreenRecording, any Error>? {
+        didSet { statusItem.map { Self.showRecording(recording != nil, in: $0.menu!) } }
+    }
     private var iconObservation: NSKeyValueObservation?
 
     static func main() {
@@ -246,6 +248,13 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         return menu
     }
 
+    /// While recording, the menu's top item is Stop Recording, still showing the capture shortcut, in place of Capture and Capture Text.
+    static func showRecording(_ recording: Bool, in menu: NSMenu) {
+        menu.items[0].title = recording ? "Stop Recording" : "Capture"
+        menu.items[1].isHidden = recording
+    }
+
+    /// Capture, or Stop Recording while recording.
     @objc private func captureFromMenu() { capture() }
 
     @objc private func showAbout() {

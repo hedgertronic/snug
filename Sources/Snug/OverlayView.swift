@@ -44,6 +44,8 @@ final class OverlayView: NSView {
         /// Sides a resize snapped to, as zero-width or zero-height rectangles.
         var snappedEdges: [CGRect] = []
         var showsHandles = false
+        /// Capture with nothing targeted: the whole screen dims, since none of it is the target.
+        var dimsAll = false
         /// The selection's accent outline; armed to record, the red outline takes its place.
         var showsOutline = true
         /// Corner radii in image pixels of the selection (or the snap preview when there is no selection), and of the hovered rectangle.
@@ -76,6 +78,8 @@ final class OverlayView: NSView {
     let liveText = ImageAnalysisOverlayView()
     let guides = Guides()
     private let imageLayer = CALayer()
+    /// The hovered rectangle the dim was last cut around (nil with none) while nothing is dragged or selected.
+    private var dimTarget: CGRect?
     let dimLayer = CAShapeLayer()
     let hoverLayer = CAShapeLayer()
     /// The glow: the shadow of the hovered rectangle's filled shape, masked to the outside of it so the inside stays clear.
@@ -101,6 +105,7 @@ final class OverlayView: NSView {
             layer!.addSublayer(shape)
         }
         layer!.addSublayer(guides.root)
+        addSubview(guides.readout)
         liveText.preferredInteractionTypes = .textSelection
         // No Live Text button in the corner: Text mode is already the text view.
         liveText.isSupplementaryInterfaceHidden = true
@@ -158,11 +163,7 @@ final class OverlayView: NSView {
         CGRect(x: pixels.minX / scale, y: bounds.height - pixels.maxY / scale, width: pixels.width / scale, height: pixels.height / scale)
     }
 
-    override func mouseMoved(with event: NSEvent) {
-        // On the top bar, or crossing from the hovered element to its chips or strip, the hover holds so their buttons can be clicked.
-        if controller?.holdsHover(at: convert(event.locationInWindow, from: nil)) == true { return }
-        controller?.mouseMoved(event)
-    }
+    override func mouseMoved(with event: NSEvent) { controller?.mouseMoved(event) }
     override func mouseDown(with event: NSEvent) { controller?.mouseDown(event) }
     override func mouseDragged(with event: NSEvent) { controller?.mouseDragged(event) }
     override func mouseUp(with event: NSEvent) { controller?.mouseUp(event) }
@@ -217,14 +218,31 @@ final class OverlayView: NSView {
                                                   bottomLeft: corners.bottomLeft > 0 ? corners.bottomLeft + outset : 0, bottomRight: corners.bottomRight > 0 ? corners.bottomRight + outset : 0) }
             return corners.path(in: box)
         }
+        // Dim = not part of the target: everything outside it, nothing when it is the whole screen, everything when there is none.
         let dim = CGMutablePath()
         if let cutout = o.selection ?? o.preview ?? o.ghost {
-            dim.addRect(bounds)
-            dim.addPath(path(cutout, radii: o.radii))
+            if viewRect(cutout) != bounds {
+                dim.addRect(bounds)
+                dim.addPath(path(cutout, radii: o.radii))
+            }
         } else if let hover = o.hover {
+            if viewRect(hover) != bounds {
+                dim.addRect(bounds)
+                dim.addPath(path(hover, radii: o.hoverRadii))
+            }
+        } else if o.dimsAll {
             dim.addRect(bounds)
-            dim.addPath(path(hover, radii: o.hoverRadii))
         }
+        // A new hover target, or none, crossfades the dim in 150 ms; a drag or selection changes it at once.
+        let hovering = o.selection == nil && o.preview == nil && o.ghost == nil
+        if hovering, o.hover != dimTarget, controller?.isHeadless == false {
+            let fade = CATransition()
+            fade.type = .fade
+            fade.duration = 0.15
+            fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            dimLayer.add(fade, forKey: "dim")
+        }
+        dimTarget = hovering ? o.hover : nil
         dimLayer.path = dim
         hoverLayer.path = o.hover.map { path($0, radii: o.hoverRadii, inset: 0.75) }
         glowLayer.path = hoverLayer.path

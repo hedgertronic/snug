@@ -14,6 +14,7 @@ extension OverlayController {
         }
         cornerChip.surface = true
         chrome.ratioMenu.onClose = { [unowned self] in refresh() }
+        chrome.ratioMenu.onKey = { [unowned self] in flash($0) }
     }
 
     /// Lights the caps of a key just pressed, for 150 ms.
@@ -48,20 +49,24 @@ extension OverlayController {
         Set([(optionHeld, "\u{2325}"), (commandHeld, "\u{2318}"), (shiftHeld, "\u{21E7}")].compactMap { $0.0 ? Character($0.1) : nil })
     }
 
-    /// Every cap is pressed while its key flashes or while exactly its modifiers are held; every button redraws in the current tint.
-    private func lightCaps() {
+    /// Every cap is pressed while its key flashes or while exactly its modifiers are held; with `restyle` (a new tint), every button and
+    /// cap redraws in the current tint.
+    private func lightCaps(restyle: Bool = false) {
         let held = heldGlyphs
         func light(_ view: NSView) {
             if let cap = view as? KeyCap { cap.pressed = chrome.pressed.contains(cap.text) || !held.isEmpty && Set(cap.text) == held }
-            (view as? BarButton)?.apply()
+            if restyle {
+                (view as? BarButton)?.apply()
+                (view as? KeyCap)?.apply()
+            }
             view.subviews.forEach(light)
         }
-        (chrome.all + [cornerChip] + chrome.buttons).forEach(light)
+        (chrome.all + [cornerChip, view.guides.readout] + chrome.buttons).forEach(light)
     }
 
     /// The keys line: each hint is a label and its key caps, shown in that order.
     private var hints: [(keys: [String], label: String)] {
-        if !chrome.ratioMenu.isHidden { return [(["\u{2191}\u{2193}"], "pick"), (["\u{21A9}"], "choose"), (["esc"], "close")] }
+        if !chrome.ratioMenu.isHidden { return [(["\u{2191}", "\u{2193}"], "pick"), (["\u{21A9}"], "choose"), (["esc"], "close")] }
         if cutout != nil { return [(["K", "esc"], "back")] }
         if scrollArea != nil { return [([], "Scroll the app under the outline")] }
         if let armed = armedRecording {
@@ -71,8 +76,8 @@ extension OverlayController {
         return switch mode {
         case .text: [(["Drag"], "select text"), (["\u{21A9}"], "copy"), (["\u{21E7}", "\u{21A9}"], "rows"), (["Tab"], "links, codes"), (["\u{2325}", "\u{21A9}"], "translate"), (["F"], "all text"), (["C"], "color"), (["?"], "all keys")]
         case .capture where selection != nil:
-            [(["\u{2190}\u{2192}"], "move"), (["\u{2325}"], "grow"), (["\u{2325}\u{2318}"], "shrink"), (["\u{2318}"], "next edge"), (["+", "-"], "all sides")]
-        case .capture: [(["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["F"], "full screen"), (["W"], "window"), (["?"], "all keys")]
+            [(["\u{2190}\u{2192}"], "move"), (["\u{2325}"], "grow"), (["\u{2325}\u{2318}"], "shrink"), (["\u{2318}"], "edge out"), (["\u{2318}\u{21E7}"], "edge in"), (["+", "-"], "all sides"), (["\u{2318}Z"], "undo")]
+        case .capture: [(["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["\u{2190}", "\u{2192}"], "next"), (["F"], "full screen"), (["W"], "window"), (["?"], "all keys")]
         }
     }
 
@@ -81,7 +86,7 @@ extension OverlayController {
         switch (optionHeld, commandHeld) {
         case (true, true): "\u{2325}\u{2318} shrink"
         case (true, false): "\u{2325} grow"
-        case (false, true): shiftHeld ? "\u{2318}\u{21E7} next edge in" : "\u{2318} next edge"
+        case (false, true): "\u{2318} edge out  \u{2318}\u{21E7} edge in"
         case (false, false): shiftHeld ? "\u{21E7} move 10 px" : "move"
         }
     }
@@ -93,22 +98,40 @@ extension OverlayController {
         return "r " + (Set(points).count == 1 ? "\(points[0])" : points.map(String.init).joined(separator: " / "))
     }
 
+    /// What the output of `rect` gets around it, after its size, in output pixels per axis: Frame's padding ("  + frame 96 x 96") when
+    /// Frame is on; in cut out with Shadow on, the shadow canvas cut out draws ("  + shadow 208 x 210"); and "  + shadow" alone when a
+    /// click takes `rect` as a live window with its shadow, whose size macOS decides per window (a 400 x 523 pt Settings window at 2x
+    /// measured 94 x 123 px, against cut out's 208 x 210).
+    private func additions(_ rect: CGRect) -> String {
+        if framed {
+            let crop = rect.integral, output = OutputFrame.rect(around: crop, scale: scale, framed: true).integral
+            return "  + frame \(Int(output.width - crop.width)) x \(Int(output.height - crop.height))"
+        }
+        if cutout != nil {
+            guard defaults.bool(forKey: Pref.shadow) else { return "" }
+            let padding = OutputFrame.shadowPadding(scale: scale)
+            return "  + shadow \(2 * padding.sides) x \(padding.top + padding.bottom)"
+        }
+        let live = window(matching: rect).map { displayID != nil && !(windowFrozen.indices.contains($0) && windowFrozen[$0]) } ?? false
+        return live && windowShadow(option: optionHeld) ? "  + shadow" : ""
+    }
+
     func refreshChrome() {
         let c = chrome
         let bounds = view.bounds
-        let topEdge = bounds.height - topInset
+        // With Rulers on, chrome keeps clear of the top and left rulers' bands as it does of the menu bar and screen edges.
+        let ruler = defaults.bool(forKey: Pref.rulers) ? Guides.rulerThickness : 0
+        let topEdge = bounds.height - topInset - ruler, leftEdge = 8 + ruler
         let overlays = view.overlays
         let released = mode == .capture && selection != nil
         let editing = released && armedRecording == nil
-        Chrome.tint = view.highlight?.color ?? .controlAccentColor
-        let look = switch defaults.string(forKey: Pref.overlayAppearance)! {
-        case "light": NSAppearance(named: .aqua)
-        case "dark": NSAppearance(named: .darkAqua)
-        default: nil as NSAppearance?
-        }
+        let tint = view.highlight?.color ?? .controlAccentColor
+        let restyle = tint != Chrome.tint
+        Chrome.tint = tint
+        let look = Chrome.appearance(defaults)
         // The keys sheet keeps its own dark material.
         if c.hints.appearance?.name != look?.name {
-            for item in c.all + [cornerChip] where item !== c.help { item.appearance = look }
+            for item in c.all + [cornerChip, view.guides.readout] where item !== c.help { item.appearance = look }
         }
         for item in [c.hover, c.size, c.snap, c.ratio, c.radius, c.legend, c.reading, c.status, c.strip] { item.isHidden = true }
         c.help.frame = bounds
@@ -126,10 +149,84 @@ extension OverlayController {
         for (current, button) in c.modeButtons { button.primary = current == mode }
         for (key, button) in c.viewToggles + c.styleToggles { button.lit = defaults.bool(forKey: key) }
 
-        // The keys line, unless B hid it. Hints that do not fit drop from the end, keeping the first and "all keys".
-        c.hints.isHidden = !defaults.bool(forKey: Pref.modeBar)
+        // The object's chips and strip, filled before the keys line, which leaves out what the strip shows, and attached to the object
+        // once the bar and keys line are placed.
+        var attachment: (box: CGRect, strip: Bool, left: [NSView], right: [NSView])?
+        func sizeChip(_ rect: CGRect) -> Pill {
+            let text = (rect == extent ? "Full screen  " : "") + "\(Int(rect.width)) x \(Int(rect.height))" + (armedRecording == nil ? additions(rect) : "")
+            c.size.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText)] }
+            return c.size
+        }
+        func radiusChip(_ rect: CGRect) -> Pill {
+            let text = radiusText(rect)
+            c.radius.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText), KeyCap("["), KeyCap("]")] }
+            return c.radius
+        }
+        /// The capture strip: Copy, Save, and Text, then Scroll, Record, and Cut out, which are faded when they cannot run on `area`.
+        func captureStrip(_ area: CGRect) {
+            c.strip.show([[c.copy, c.save, c.text], [c.scroll, c.record, c.cutout]])
+            c.scroll.isEnabled = (scrollFrames != nil || displayID != nil) && area != extent && windows.contains { $0.insetBy(dx: -2, dy: -2).contains(area) }
+            c.record.isEnabled = displayID != nil
+        }
+
+        if let cutout {
+            let subjects = cutout.subjects.count > 1 ? [c.subject] : []
+            c.subject.setTitle(cutout.label)
+            c.crop.lit = cutout.cropped
+            c.strip.show([subjects + [c.crop], [c.save, c.copy]])
+            attachment = (view.viewRect(cutout.frame), true, [sizeChip(cutout.frame)], [])
+        } else if let scrollArea {
+            let height = scrollHeight >= ScrollStitcher.maximumHeight ? "\(ScrollStitcher.maximumHeight) px, the limit" : "\(scrollHeight) px"
+            c.scrolled.setTitle("Scrolling \(height)")
+            c.strip.show([[c.scrolled], [c.cancel, c.done]])
+            attachment = (view.viewRect(scrollArea), true, [], [])
+        } else if let armed = armedRecording, let rect = selection?.rect {
+            let countIn = defaults.integer(forKey: Pref.recordCountIn)
+            c.cursor.lit = defaults.bool(forKey: Pref.recordCursor)
+            c.countIn.setTitle(countIn > 0 ? "\(countIn)-second count" : "Count-in")
+            c.countIn.lit = countIn > 0
+            c.strip.show(armed.remaining == nil ? [[c.cursor, c.countIn], [c.cancel, c.start]] : [[c.cancel]])
+            attachment = (view.viewRect(rect), true, [sizeChip(rect)], [])
+        } else if mode == .capture, let rect = overlays.selection ?? overlays.preview ?? overlays.ghost {
+            // A drag or selection: its size and Snap, which reads Snapped or Exact once released; a selection adds the ratio and radius.
+            let snapped = selection.map { $0.fits.count > 1 && $0.rect != $0.exact }
+            c.snap.setTitle(snapped.map { $0 ? "Snapped" : "Exact" } ?? "Snap")
+            c.snap.lit = snapped ?? (snapEnabled && !bypassSnap)
+            var right: [NSView] = []
+            if editing {
+                c.ratioButton.setTitle(ratioReadout)
+                c.lock.lit = ratioLocked
+                c.ratio.show(ratioReadout) { [c.ratioButton, c.ratioDivider, c.lock] }
+                right = [c.ratio, radiusChip(rect)]
+                captureStrip(rect)
+            }
+            attachment = (view.viewRect(rect), editing, [sizeChip(rect), c.snap], right)
+        } else if mode == .capture, let rect = overlays.hover {
+            // Hovering: the element's name and size, and Snap; the radius once `[` or `]` changed it.
+            let hovered = session!.selected!
+            let isWindow = hovered.kind == .window
+            let index = isWindow ? Int(hovered.id.dropFirst("window-".count))! : 0
+            let name = switch hovered.kind {
+            case .window: windowNames.indices.contains(index) ? windowNames[index] : "Window"
+            case .display: "Full screen"
+            default: hovered.label
+            }
+            let size = "\(Int(rect.width)) x \(Int(rect.height))" + additions(rect)
+            c.hover.show("\(name)|\(size)") {
+                [NSTextField(name, size: 12, weight: .semibold, color: .chromeText), NSTextField(size, size: 12, mono: true, color: NSColor.chromeText.withAlphaComponent(0.65))]
+            }
+            c.snap.setTitle("Snap")
+            c.snap.lit = snapEnabled
+            captureStrip(rect)
+            attachment = (view.viewRect(rect), true, [c.hover, c.snap] + (editedRadii[rect] == nil ? [] : [radiusChip(rect)]), [])
+        }
+
+        // The keys line, unless B hid it, or nothing is left once hints a visible strip button already shows (its title and key) drop.
+        // Hints that do not fit drop from the end, keeping the first and "all keys".
+        let stripped = c.strip.isHidden ? [] : c.strip.groups.flatMap(\.subviews).compactMap { $0 as? BarButton }.map { ($0.title.stringValue.lowercased(), $0.key) }
+        var items = hints.filter { hint in hint.keys.isEmpty || !stripped.contains { $0 == (hint.label, hint.keys.joined()) } }
+        c.hints.isHidden = !defaults.bool(forKey: Pref.modeBar) || items.isEmpty
         if !c.hints.isHidden {
-            var items = hints
             let kept = items.last?.label == "all keys" ? 1 : 0
             while true {
                 c.hints.show(items.map { $0.label + $0.keys.joined() }.joined(separator: "|")) { items.map { Pill.hint($0.keys, $0.label) } }
@@ -161,7 +258,8 @@ extension OverlayController {
             floor = frames.last!.1.maxY + 8
         }
         if bottomItems.allSatisfy(\.isHidden) { floor = 8 }
-        let animate = !isHeadless && (barAtBottom != c.barAtBottom || hintsAtTop != c.hintsAtTop)
+        let animate = !isHeadless && (barAtBottom != c.barAtBottom || hintsAtTop != c.hintsAtTop || ruler != c.ruler)
+        c.ruler = ruler
         c.barAtBottom = barAtBottom
         c.hintsAtTop = hintsAtTop
         if animate {
@@ -182,13 +280,13 @@ extension OverlayController {
                 let size = c.strip.frame.size
                 let below = box.minY - 8 - size.height
                 let y = below >= floor ? below : over + size.height <= top - 8 ? over : max(box.minY + 8, floor)
-                c.strip.frame.origin = CGPoint(x: min(max(box.minX, 8), bounds.width - size.width - 8), y: y)
+                c.strip.frame.origin = CGPoint(x: min(max(box.minX, leftEdge), bounds.width - size.width - 8), y: y)
                 if y == over { over = c.strip.frame.maxY + 8 }
             }
             guard let height = (left + right).first?.frame.height else { return }
             for chip in left + right { chip.isHidden = false }
             var y = over + height <= top - 8 ? over : min(box.maxY, top) - 8 - height
-            var x = min(max(box.minX, 8), bounds.width - 8 - left.reduce(-6) { $0 + $1.frame.width + 6 })
+            var x = min(max(box.minX, leftEdge), bounds.width - 8 - left.reduce(-6) { $0 + $1.frame.width + 6 })
             for chip in left {
                 chip.frame.origin = CGPoint(x: x, y: y)
                 x += chip.frame.width + 6
@@ -196,7 +294,7 @@ extension OverlayController {
             let width = right.reduce(-6) { $0 + $1.frame.width + 6 }
             var start = min(max(box.maxX - width, x), bounds.width - 8 - width)
             if start < x - 0.5 {
-                start = min(max(box.maxX - width, 8), bounds.width - 8 - width)
+                start = min(max(box.maxX - width, leftEdge), bounds.width - 8 - width)
                 y += height + 6
             }
             for chip in right {
@@ -204,74 +302,7 @@ extension OverlayController {
                 start += chip.frame.width + 6
             }
         }
-        func sizeChip(_ rect: CGRect) -> Pill {
-            let text = "\(Int(rect.width)) x \(Int(rect.height))"
-            c.size.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText)] }
-            return c.size
-        }
-        func radiusChip(_ rect: CGRect) -> Pill {
-            let text = radiusText(rect)
-            c.radius.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText), KeyCap("["), KeyCap("]")] }
-            return c.radius
-        }
-        /// The capture strip: Copy, Save, and Text, then Scroll, Record, and Cut out, which are faded when they cannot run on `area`.
-        func captureStrip(_ area: CGRect) {
-            c.strip.show([[c.copy, c.save, c.text], [c.scroll, c.record, c.cutout]])
-            c.scroll.isEnabled = (scrollFrames != nil || displayID != nil) && area != extent && windows.contains { $0.insetBy(dx: -2, dy: -2).contains(area) }
-            c.record.isEnabled = displayID != nil
-        }
-
-        if let cutout {
-            let subjects = cutout.subjects.count > 1 ? [c.subject] : []
-            c.subject.setTitle(cutout.label)
-            c.crop.lit = cutout.cropped
-            c.strip.show([subjects + [c.crop], [c.save, c.copy]])
-            attach(to: view.viewRect(cutout.frame), strip: true, left: [sizeChip(cutout.frame)])
-        } else if let scrollArea {
-            let height = scrollHeight >= ScrollStitcher.maximumHeight ? "\(ScrollStitcher.maximumHeight) px, the limit" : "\(scrollHeight) px"
-            c.scrolled.setTitle("Scrolling \(height)")
-            c.strip.show([[c.scrolled], [c.cancel, c.done]])
-            attach(to: view.viewRect(scrollArea), strip: true, left: [])
-        } else if let armed = armedRecording, let rect = selection?.rect {
-            let countIn = defaults.integer(forKey: Pref.recordCountIn)
-            c.cursor.lit = defaults.bool(forKey: Pref.recordCursor)
-            c.countIn.setTitle(countIn > 0 ? "\(countIn)-second count" : "Count-in")
-            c.countIn.lit = countIn > 0
-            c.strip.show(armed.remaining == nil ? [[c.cursor, c.countIn], [c.cancel, c.start]] : [[c.cancel]])
-            attach(to: view.viewRect(rect), strip: true, left: [sizeChip(rect)])
-        } else if mode == .capture, let rect = overlays.selection ?? overlays.preview ?? overlays.ghost {
-            // A drag or selection: its size and Snap, which reads Snapped or Exact once released; a selection adds the ratio and radius.
-            let snapped = selection.map { $0.fits.count > 1 && $0.rect != $0.exact }
-            c.snap.setTitle(snapped.map { $0 ? "Snapped" : "Exact" } ?? "Snap")
-            c.snap.lit = snapped ?? (snapEnabled && !bypassSnap)
-            var right: [NSView] = []
-            if editing {
-                c.ratioButton.setTitle(ratioReadout)
-                c.lock.lit = ratioLocked
-                c.ratio.show(ratioReadout) { [c.ratioButton, c.ratioDivider, c.lock] }
-                right = [c.ratio, radiusChip(rect)]
-                captureStrip(rect)
-            }
-            attach(to: view.viewRect(rect), strip: editing, left: [sizeChip(rect), c.snap], right: right)
-        } else if mode == .capture, let rect = overlays.hover {
-            // Hovering: the element's name and size, and Snap; the radius once `[` or `]` changed it.
-            let hovered = session!.selected!
-            let isWindow = hovered.kind == .window
-            let index = isWindow ? Int(hovered.id.dropFirst("window-".count))! : 0
-            let name = switch hovered.kind {
-            case .window: windowNames.indices.contains(index) ? windowNames[index] : "Window"
-            case .display: "Full screen"
-            default: hovered.label
-            }
-            let size = "\(Int(rect.width)) x \(Int(rect.height))" + (isWindow && windowShadow(option: optionHeld) ? "  +  shadow" : "")
-            c.hover.show("\(name)|\(size)") {
-                [NSTextField(name, size: 12, weight: .semibold, color: .chromeText), NSTextField(size, size: 12, mono: true, color: NSColor.chromeText.withAlphaComponent(0.65))]
-            }
-            c.snap.setTitle("Snap")
-            c.snap.lit = snapEnabled
-            captureStrip(rect)
-            attach(to: view.viewRect(rect), strip: true, left: [c.hover, c.snap] + (editedRadii[rect] == nil ? [] : [radiusChip(rect)]))
-        }
+        if let attachment { attach(to: attachment.box, strip: attachment.strip, left: attachment.left, right: attachment.right) }
 
         // While the pointer rests inside a released selection, or a modifier is held, each side's arrow key sits just outside the side's
         // midpoint, pushed further out past the chips or strip in the way, and inside the side when that leaves the screen; the legend
@@ -361,6 +392,6 @@ extension OverlayController {
             let x = box.maxX + 12 + width <= bounds.width - 8 ? box.maxX + 12 : (box.minX - 12 - width >= 8 ? box.minX - 12 - width : 12)
             c.list.frame.origin = CGPoint(x: x, y: min(max(box.maxY - height, 8), top - height - 8))
         }
-        lightCaps()
+        lightCaps(restyle: restyle)
     }
 }

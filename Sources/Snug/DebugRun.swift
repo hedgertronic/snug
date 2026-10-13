@@ -92,7 +92,7 @@ enum DebugRun {
 
         // Pause-to-snap, release takes the preview.
         open()
-        require(overlay.view.dimLayer.path!.isEmpty, "an idle Capture has no dim")
+        require(overlay.view.dimLayer.path!.boundingBox == overlay.view.bounds && overlay.view.overlays.dimsAll, "an idle Capture with nothing targeted dims the whole screen")
         pressDrag(rough)
         require(!overlay.view.dimLayer.path!.isEmpty, "dragging dims everything outside the drag")
         require(overlay.snapPreview == nil, "no preview before the debounce")
@@ -337,7 +337,7 @@ enum DebugRun {
         }
         require(overlay.view.overlays.radii == corners(0, 20), "the outline hugs the window's bottom corners and keeps the top square")
         key(30, "]")
-        require(overlay.view.overlays.radii == corners(1, 20 + 1) && overlay.radiusReadout == "r 1 1 21 21", "] grows every corner by 1 pt")
+        require(overlay.view.overlays.radii == corners(1, 20 + 1), "] grows every corner by 1 pt")
         require(!overlay.chrome.radius.isHidden && texts(in: overlay.chrome.radius) == ["r 1 / 1 / 21 / 21", "[", "]"]
                     && texts(in: overlay.chrome.size) == ["\(Int(bottomHalf.width)) x \(Int(bottomHalf.height))"],
                 "the radius chip shows each corner after ], and the size chip keeps the size: \(texts(in: overlay.chrome.radius)) \(texts(in: overlay.chrome.size))")
@@ -690,6 +690,31 @@ enum DebugRun {
         print("hover move, per event (runs 2-30, \(moves.count) events): p50 \(String(format: "%.2f", percentile(moves, 0.5))) ms, "
               + "p95 \(String(format: "%.2f", percentile(moves, 0.95))) ms, max \(String(format: "%.2f", moves.max()!)) ms")
         print("snap suggestions per run: \(snapCount), dock tiles: \(dockTileCount)")
+        // 200 pointer moves across the hovered page with the chrome up, 8 ms apart: each move from the event through committing its layer
+        // changes, and a `refresh` on its own right after it.
+        overlay.present(image: decodedCopy(), frame: frame, displayID: nil)
+        overlay.setWindows([CGRect(x: 200, y: 200, width: image.width - 400, height: image.height - 400)], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        await overlay.detectionTask?.value
+        var pointerMoves: [Double] = [], refreshes: [Double] = []
+        for step in 0..<200 {
+            try await Task.sleep(for: .milliseconds(8))
+            let point = CGPoint(x: frame.width * (0.05 + 0.9 * CGFloat(step) / 199), y: frame.height * (0.95 - 0.9 * CGFloat(step) / 199))
+            let event = NSEvent.mouseEvent(with: .mouseMoved, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                           windowNumber: overlay.window.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0)!
+            var start = ContinuousClock.now
+            overlay.window.sendEvent(event)
+            CATransaction.flush()
+            pointerMoves.append(start.duration(to: .now).milliseconds)
+            start = ContinuousClock.now
+            overlay.refresh()
+            CATransaction.flush()
+            refreshes.append(start.duration(to: .now).milliseconds)
+        }
+        overlay.dismiss()
+        for (name, values) in [("pointer move", pointerMoves), ("refresh", refreshes)] {
+            print("\(name), 200 hover moves: p50 \(String(format: "%.3f", percentile(values, 0.5))) ms, p95 \(String(format: "%.3f", percentile(values, 0.95))) ms, "
+                  + "mean \(String(format: "%.3f", values.reduce(0, +) / Double(values.count))) ms")
+        }
         print("footprint: before the first capture \(launched), after the last dismiss \(footprint())")
         try await Task.sleep(for: .seconds(1))
         print("footprint: 1 s after the last dismiss \(footprint())")

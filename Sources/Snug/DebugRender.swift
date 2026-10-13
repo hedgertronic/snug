@@ -330,6 +330,45 @@ extension DebugRun {
         defaults.set(false, forKey: Pref.candidates)
         overlay.dismiss()
 
+        // On a live display a hovered window is captured with its shadow: the hover size adds the shadow's canvas, which Option drops
+        // (or, with Shadow off, adds); Frame takes its place.
+        open()
+        try snapshot("capture-nothing-targeted")
+        try await overlay.detectionTask?.value
+        let browser = CGRect(x: 100, y: 100, width: 1500, height: 1200)
+        overlay.setWindows([browser], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, CGPoint(x: 422, y: 585))
+        for _ in 0..<8 where overlay.session?.selected?.kind != .window { key(126, "") }
+        func option(_ held: Bool) {
+            overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: held ? .option : [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
+        }
+        let shadowed = "1500 x 1200  + shadow"
+        var sizes = [texts(in: overlay.chrome.hover).last ?? ""]
+        try snapshot("capture-hover-window")
+        for _ in 0..<4 where overlay.session?.selected?.kind != .display { key(126, "") }
+        try snapshot("capture-hover-display")
+        for _ in 0..<4 where overlay.session?.selected?.kind != .window { key(125, "") }
+        option(true)
+        sizes.append(texts(in: overlay.chrome.hover).last ?? "")
+        option(false)
+        defaults.set(false, forKey: Pref.shadow)
+        overlay.refresh()
+        sizes.append(texts(in: overlay.chrome.hover).last ?? "")
+        option(true)
+        sizes.append(texts(in: overlay.chrome.hover).last ?? "")
+        option(false)
+        defaults.set(true, forKey: Pref.shadow)
+        defaults.set(true, forKey: Pref.frame)
+        overlay.refresh()
+        let framePad = Int(2 * OutputFrame.points * overlay.scale)
+        sizes.append(texts(in: overlay.chrome.hover).last ?? "")
+        try snapshot("capture-hover-window-frame")
+        defaults.set(false, forKey: Pref.frame)
+        require(sizes == [shadowed, "1500 x 1200", "1500 x 1200", shadowed, "1500 x 1200  + frame \(framePad) x \(framePad)"],
+                "a live window's hover size adds its shadow, Option flips it, and Frame takes its place: \(sizes)")
+        overlay.dismiss()
+
         open()
         key(44, "?", .shift)
         try snapshot("help")
@@ -398,9 +437,9 @@ extension DebugRun {
 
         try await renderMenuBarIcons(into: directory)
 
-        /// A toast's content on a mid-gray backdrop, since its panel is transparent.
-        func renderToast(_ name: String, _ toast: Toast, hovered: Bool = false) throws {
-            if hovered {
+        /// A toast's (or another transparent panel's) content on a mid-gray backdrop.
+        func renderToast(_ name: String, _ toast: NSPanel, hovered: Bool = false) throws {
+            if hovered, let toast = toast as? Toast {
                 toast.mouseEntered(with: NSEvent.enterExitEvent(with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: toast.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil)!)
                 toast.dismissal?.cancel()
             }
@@ -420,6 +459,15 @@ extension DebugRun {
             print(directory.appending(path: "\(name).png").path)
         }
         try renderToast("toast", Toast(png: nil, message: "Copied", detail: "1824 x 768  frame", file: nil, color: nil, defaults: defaults))
+        // The checkmark takes the highlight color; a light one gets a black check.
+        let yellow = UserDefaults(suiteName: "snug-render-toast-\(UUID().uuidString)")!
+        Pref.register(in: yellow)
+        yellow.set("#FFC600", forKey: Pref.highlightColor)
+        let yellowToast = Toast(png: nil, message: "Copied", detail: "1824 x 768", file: nil, color: nil, defaults: yellow)
+        try renderToast("toast-highlight-yellow", yellowToast)
+        let yellowColor = Highlight.color(hex: "#FFC600")
+        require((yellowToast.mark as! NSImageView).symbolConfiguration == NSImage.SymbolConfiguration(pointSize: 17, weight: .semibold).applying(.init(paletteColors: [.black, yellowColor])),
+                "the toast's check is black on the yellow highlight color")
         let roundedCapture = CGContext(data: nil, width: 960, height: 520, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         roundedCapture.addPath(CGPath(roundedRect: CGRect(x: 0, y: 0, width: 960, height: 520), cornerWidth: 40, cornerHeight: 40, transform: nil))
@@ -434,6 +482,10 @@ extension DebugRun {
         try renderToast("toast-preview-top-right", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: topRight))
         try renderToast("toast-preview-top-right-hover", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: topRight), hovered: true)
         try renderToast("toast-saved-hover", Toast(png: roundedPNG, message: "Copied, saved to Desktop", detail: "Snug 2026-10-10 at 12.00.00.png", file: URL(fileURLWithPath: "/tmp/Snug.png"), color: nil, defaults: defaults), hovered: true)
+        // The recording's stop reminder, in the dark look.
+        defaults.set("dark", forKey: Pref.overlayAppearance)
+        try renderToast("recording-reminder", ScreenRecording.makeReminder(around: CGRect(x: 300, y: 300, width: 400, height: 200), on: CGMainDisplayID(), defaults: defaults)!)
+        defaults.removeObject(forKey: Pref.overlayAppearance)
         let noPreview = UserDefaults(suiteName: "snug-render-toast-\(UUID().uuidString)")!
         Pref.register(in: noPreview)
         noPreview.set(false, forKey: Pref.toastPreview)
@@ -457,6 +509,12 @@ extension DebugRun {
         require(menu.items.map(\.title) == ["Capture", "Capture Text", "Repeat Last Area", "Open Image...", "", "Settings...", "About Snug", "", "Quit Snug"], "menu items: \(menu.items.map(\.title))")
         require(capture.keyEquivalent == " " && capture.keyEquivalentModifierMask == [.control, .shift], "Capture shows the shortcut as a key equivalent")
         require(menu.items[5].keyEquivalent == "," && menu.items[8].keyEquivalent == "q", "Settings and Quit carry their command keys")
+        SnugApp.showRecording(true, in: menu)
+        require(menu.items.filter { !$0.isHidden }.prefix(2).map(\.title) == ["Stop Recording", "Repeat Last Area"] && capture.keyEquivalent == " ",
+                "while recording, Stop Recording with the shortcut replaces Capture and Capture Text: \(menu.items.filter { !$0.isHidden }.map(\.title))")
+        SnugApp.showRecording(false, in: menu)
+        require(menu.items.filter { !$0.isHidden }.map(\.title) == ["Capture", "Capture Text", "Repeat Last Area", "Open Image...", "", "Settings...", "About Snug", "", "Quit Snug"],
+                "after the recording the menu is restored")
         require(Shortcut.label(from: defaults) == "\u{2303}\u{21E7}Space", "the default shortcut displays as glyphs: \(Shortcut.label(from: defaults))")
         defaults.set(40, forKey: Pref.hotKeyCode)
         defaults.set(Int(NSEvent.ModifierFlags([.control, .option]).rawValue), forKey: Pref.hotKeyModifiers)

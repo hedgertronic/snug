@@ -111,8 +111,11 @@ final class OverlayController {
     var radiusTasks: [CGRect: Task<(radius: CGFloat, arcs: CornerRadii), Never>] = [:]
     /// Per-corner radii set with `[`, `]`, the corner dots, and E, by rectangle; they replace the measured ones.
     var editedRadii: [CGRect: CornerRadii] = [:]
-    /// The size pill's text while a radius edit is fresh, e.g. "r 12".
-    var radiusReadout: String?
+    /// Cmd-Z and Cmd-Shift-Z: the selection states before each edit since the selection was made, and those undone; the last key
+    /// that edited it and when, for coalescing.
+    var undoStack: [SelectionState] = []
+    var redoStack: [SelectionState] = []
+    var lastEdit: (key: String, at: ContinuousClock.Instant)?
     /// The corner a dot drag last changed; `=` copies its radius to the other corners.
     var lastEditedCorner: Handle?
     /// The corner whose dot the pointer is on (or whose chip it is heading to), and its "All corners" chip.
@@ -134,8 +137,13 @@ final class OverlayController {
     var ratioReadout: String {
         (draggedRect ?? selection?.rect).map { RatioLock.readout(for: $0.size) } ?? ""
     }
-    /// Shift is down: with a selection open, the element under the pointer is outlined for a union.
+    /// Shift is down: with a selection open, once the pointer moves outside the selection, the element under it is outlined for a union.
     var shiftHeld = false
+    /// The pointer moved (or clicked) since Shift went down.
+    private var movedWithShift = false
+    /// With a selection open, Shift held, and the pointer moved since then and outside the selection, the hover outlines the element
+    /// under the pointer for a union.
+    private var unionHover: Bool { shiftHeld && movedWithShift && selection.map { !$0.rect.contains(pointer) } ?? false }
     /// Save As: the file to write, given the usual name in the save folder; nil cancels. Debug runs answer without a panel.
     var chooseSaveURL: (URL) -> URL? = { suggested in
         NSApp.activate()
@@ -145,7 +153,6 @@ final class OverlayController {
         panel.allowedContentTypes = [.png]
         return panel.runModal() == .OK ? panel.url : nil
     }
-    var radiusReadoutTask: Task<Void, Error>?
     /// The last pointer position in image pixels.
     var pointer = CGPoint.zero
     /// Capture mode: what the pointer is over (accessibility elements, pixel geometry, windows, the display), and the running geometry analysis.
@@ -172,6 +179,8 @@ final class OverlayController {
     private var snappedEdges: [CGRect] = []
     var bypassSnap = false
     private var hadSelection = false
+    /// The selection state when the current press began, for its undo step.
+    private var pressState: SelectionState?
     var spaceHeld = false
     /// Scrolling capture (G): the area in image pixels, the stitched height so far, the stitcher, and the loop capturing the area.
     /// Debug runs replace the live frame source.
@@ -301,8 +310,8 @@ final class OverlayController {
         arcs = [:]
         radiusTasks = [:]
         editedRadii = [:]
-        radiusReadoutTask?.cancel()
-        radiusReadout = nil
+        undoStack = []
+        redoStack = []
         lastEditedCorner = nil
         hoveredCorner = nil
         lockedRatio = nil
@@ -339,6 +348,7 @@ final class OverlayController {
         let shift = event.modifierFlags.contains(.shift)
         if shift != shiftHeld, image != nil {
             shiftHeld = shift
+            movedWithShift = false
             updateHover(pixel: pointer)
         }
         refresh()
@@ -349,8 +359,12 @@ final class OverlayController {
         optionHeld = event.modifierFlags.contains(.option)
         commandHeld = event.modifierFlags.contains(.command)
         shiftHeld = event.modifierFlags.contains(.shift)
+        movedWithShift = shiftHeld
         let wasInside = selection?.rect.contains(pointer)
         pointer = view.pixelPoint(event)
+        // On the top bar, or crossing from the hovered element to its chips or strip, the hover holds so their buttons can be clicked;
+        // the guides, loupe and crosshair still follow the pointer.
+        if holdsHover(at: view.convert(event.locationInWindow, from: nil)) { return updateGuides() }
         // The edge keys show while the pointer is inside a released selection.
         if selection?.rect.contains(pointer) != wasInside { refresh() }
         updateHoveredCorner()
@@ -390,7 +404,7 @@ final class OverlayController {
     /// anchor stops following the pointer while a level holds).
     private func updateHover(pixel: CGPoint) {
         guard case .none = interaction else { return }
-        guard selection == nil || shiftHeld else {
+        guard selection == nil || unionHover else {
             if view.overlays.hover != nil { refresh() }
             return
         }
@@ -417,6 +431,7 @@ final class OverlayController {
         pointer = point
         if cornerDot(at: point) == nil { hoveredCorner = nil }
         hadSelection = selection != nil
+        pressState = selectionState
         shiftHeld = event.modifierFlags.contains(.shift)
         if let selection {
             if let corner = cornerDot(at: point) {
@@ -433,6 +448,8 @@ final class OverlayController {
                 return updateCursor()
             }
             if shiftHeld {
+                // A Shift-click counts as a move: it outlines and takes the element under the pointer.
+                movedWithShift = true
                 updateHover(pixel: point)
                 if let hovered = hoverRect, !selection.rect.contains(point) { return growSelection(toInclude: hovered) }
             }
@@ -490,7 +507,6 @@ final class OverlayController {
             let radii = from.moving(corner, by: delta, alone: event.modifierFlags.contains(.option), in: rect.size)
             editedRadii[rect] = radii
             lastEditedCorner = corner
-            showRadiusReadout(radii)
         }
         updateCursor()
         refresh()
@@ -529,6 +545,10 @@ final class OverlayController {
         pointer = point
         let finished = interaction
         interaction = .none
+        // A handle drag, move, corner drag or Shift-click union is one undo step; a fresh drag starts the history over in `release`. A
+        // button click's release reaches here without its press, so only a press on the overlay itself counts.
+        if case .drawing = finished {} else if let pressState { recordEdit(from: pressState) }
+        pressState = nil
         snappedEdges = []
         edgeFramesTask?.cancel()
         switch finished {
@@ -559,6 +579,8 @@ final class OverlayController {
         selection = AreaSelection(extent: extent, exact: rect, suggestions: suggestions, takingFirst: !suggestions.isEmpty)
         snapPreview = nil
         snapSuggestions = []
+        undoStack = []
+        redoStack = []
     }
 
     // MARK: Snap
@@ -642,6 +664,13 @@ final class OverlayController {
         if scrollArea != nil { return handleScrollKey(event) }
         if armedRecording != nil { return handleRecordingKey(event) }
         if cutout != nil { return handleCutoutKey(event) }
+        let flags = event.modifierFlags.intersection([.command, .option, .shift])
+        if mode == .capture, selection != nil, flags.isSuperset(of: .command), event.charactersIgnoringModifiers?.lowercased() == "z" {
+            undoEdit(redo: flags.contains(.shift))
+            refresh()
+            return true
+        }
+        let before = selectionState
         var handled = handleExtrasKey(event)
         if !handled {
             switch mode {
@@ -649,6 +678,9 @@ final class OverlayController {
             case .text: handled = handleTextKey(event)
             }
         }
+        // Arrow nudges, and presses of one key, coalesce into one undo step.
+        let nudge = (123...126).contains(event.keyCode) && !flags.contains(.command) && !flags.contains(.option)
+        recordEdit(from: before, key: nudge ? "nudge" : "\(event.keyCode) \(event.charactersIgnoringModifiers ?? "") \(flags.rawValue)")
         refresh()
         return handled
     }
@@ -685,6 +717,10 @@ final class OverlayController {
         case (36, _, _), (76, _, _): copy()
         case (48, _, _) where hovering, (126, _, _) where hovering, (125, _, _) where hovering:
             if event.keyCode == 125 || event.keyCode == 48 && shift { session?.shrink() } else { session?.expand() }
+            walkedLevel = true
+        case (123, false, _) where hovering && !option, (124, false, _) where hovering && !option:
+            // The element beside the hovered one; it holds like an Up or Down pick.
+            guard session?.step(right: event.keyCode == 124) == true else { beep(); break }
             walkedLevel = true
         case (_, false, "1"..."5") where hovering && defaults.bool(forKey: Pref.candidates):
             session?.pick(Int(character)! - 1)
@@ -730,7 +766,7 @@ final class OverlayController {
     }
 
     /// The window whose frame `rect` matches within 3 pt on every side: copying it captures the real window shape, not a crop.
-    private func window(matching rect: CGRect) -> Int? {
+    func window(matching rect: CGRect) -> Int? {
         windows.firstIndex { abs($0.minX - rect.minX) <= 3 * scale && abs($0.minY - rect.minY) <= 3 * scale
             && abs($0.maxX - rect.maxX) <= 3 * scale && abs($0.maxY - rect.maxY) <= 3 * scale }
     }
@@ -832,9 +868,7 @@ final class OverlayController {
     /// `]` / `[`: every corner of the selection (or the hovered rectangle) grows or shrinks by `points`, from its current radii.
     private func adjustRadii(by points: CGFloat) {
         guard let rect = selection?.rect ?? hoverRect else { return }
-        let adjusted = cornerRadii(of: rect).offset(by: points * scale, in: rect.size)
-        editedRadii[rect] = adjusted
-        showRadiusReadout(adjusted)
+        editedRadii[rect] = cornerRadii(of: rect).offset(by: points * scale, in: rect.size)
     }
 
     /// Closes the overlay first, then encodes off main and delivers.
@@ -892,7 +926,7 @@ final class OverlayController {
         overlays.selection = selection?.rect
         overlays.snappedEdges = snappedEdges
         overlays.showsHandles = selection != nil
-        if selection == nil || shiftHeld, case .none = interaction { overlays.hover = hoverRect }
+        if selection == nil || unionHover, case .none = interaction { overlays.hover = hoverRect }
         if mode == .text, let picked = text.picked { overlays.hover = text.items![picked].bounds }
         // While hovering, faint outlines show what Up and Down would select, unless that is nothing, the display, or within 4 pt of the hover.
         if mode == .capture, selection == nil, let hover = overlays.hover, let session {
@@ -902,6 +936,7 @@ final class OverlayController {
         }
         if let scrollArea { overlays.selection = scrollArea; overlays.showsHandles = false; overlays.hover = nil }
         if let cutout { overlays.selection = cutout.frame; overlays.showsHandles = false; overlays.hover = nil }
+        overlays.dimsAll = mode == .capture && overlays.selection == nil && overlays.preview == nil && overlays.ghost == nil && overlays.hover == nil
         // The selection is measured once it settles; a dragged handle makes a new rectangle on every event.
         let settled: CGRect? = if case .none = interaction { selection?.rect } else { nil }
         let shown = selection?.rect ?? snapPreview

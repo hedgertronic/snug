@@ -1,8 +1,53 @@
 import AppKit
 import ScreenshotCore
 
-/// Selection editing: opening an element as a selection, growing it, corner dots, and edge nudges.
+/// One undo step: everything an edit of the selection changes. `ratioBase` is the base and conformed rectangles.
+struct SelectionState: Equatable {
+    var selection: AreaSelection?
+    var radii: CornerRadii?
+    var lockedRatio: CGFloat?
+    var ratioBase: [CGRect]?
+    var ratioPortrait: Bool?
+    var lastEditedCorner: Handle?
+}
+
+/// Selection editing: opening an element as a selection, growing it, corner dots, edge nudges, and undo.
 extension OverlayController {
+    var selectionState: SelectionState {
+        get {
+            SelectionState(selection: selection, radii: selection.flatMap { editedRadii[$0.rect] }, lockedRatio: lockedRatio,
+                           ratioBase: ratioBase.map { [$0.base, $0.conformed] }, ratioPortrait: ratioPortrait, lastEditedCorner: lastEditedCorner)
+        }
+        set {
+            selection = newValue.selection
+            if let rect = selection?.rect { editedRadii[rect] = newValue.radii }
+            lockedRatio = newValue.lockedRatio
+            ratioBase = newValue.ratioBase.map { ($0[0], $0[1]) }
+            ratioPortrait = newValue.ratioPortrait
+            lastEditedCorner = newValue.lastEditedCorner
+        }
+    }
+
+    /// After a change that started from `before`: a selection edited from one that existed is an undo step, unless `key` repeats the
+    /// last edit's key within 0.5 s; a new selection, or none, starts the history over.
+    func recordEdit(from before: SelectionState, key: String? = nil) {
+        guard selectionState != before else { return }
+        let now = ContinuousClock.now
+        defer { lastEdit = key.map { ($0, now) } }
+        redoStack = []
+        guard before.selection != nil, selection != nil else { return undoStack = [] }
+        if let key, let last = lastEdit, last.key == key, last.at.duration(to: now) < .milliseconds(500) { return }
+        undoStack.append(before)
+    }
+
+    /// Cmd-Z: back to the state before the last edit; with `redo` (Cmd-Shift-Z), forward again. Nothing left: a beep.
+    func undoEdit(redo: Bool) {
+        guard let state = redo ? redoStack.popLast() : undoStack.popLast() else { return beep() }
+        if redo { undoStack.append(selectionState) } else { redoStack.append(selectionState) }
+        selectionState = state
+        lastEdit = nil
+    }
+
     /// The corner whose dot is under `point` (image pixels), if a selection is open.
     func cornerDot(at point: CGPoint) -> Handle? {
         guard let rect = selection?.rect else { return nil }
@@ -58,9 +103,7 @@ extension OverlayController {
         guard let rect = selection?.rect else { return }
         let current = cornerRadii(of: rect)
         let radius = (hoveredCorner ?? lastEditedCorner).map { current[$0] } ?? CornerRadii.corners.map { current[$0] }.max()!
-        let applied = CornerRadii(radius).offset(by: 0, in: rect.size)
-        editedRadii[rect] = applied
-        showRadiusReadout(applied)
+        editedRadii[rect] = CornerRadii(radius).offset(by: 0, in: rect.size)
         refresh()
     }
 
@@ -93,18 +136,6 @@ extension OverlayController {
         let inside = corner.movesLeft ? box.minX + 14 : box.maxX - 14 - size.width
         cornerChip.frame.origin = CGPoint(x: fits ? outside : inside, y: corner.movesTop ? box.maxY - size.height : box.minY)
         cornerChip.isHidden = false
-    }
-
-    /// The size badge's text for a radius edit, e.g. "r 12" or "r 12 0 0 12" (top-left, top-right, bottom-left, bottom-right), for 1.5 s.
-    func showRadiusReadout(_ radii: CornerRadii) {
-        let points = CornerRadii.corners.map { Int((radii[$0] / scale).rounded()) }
-        radiusReadout = "r " + (Set(points).count == 1 ? "\(points[0])" : points.map(String.init).joined(separator: " "))
-        radiusReadoutTask?.cancel()
-        radiusReadoutTask = Task {
-            try await Task.sleep(for: .seconds(1.5))
-            radiusReadout = nil
-            refresh()
-        }
     }
 
     /// An arrow-key move of the selection, keeping its edited corners.

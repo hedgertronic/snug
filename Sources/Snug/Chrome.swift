@@ -111,13 +111,6 @@ final class Pill: NSView {
         }
     }
 
-    /// A pill with a fixed dark fill, drawn in the dark look whatever the overlay's: the recording reminder, outside the overlay.
-    static func dark(_ alpha: CGFloat, radius: CGFloat, insets: NSEdgeInsets, spacing: CGFloat = 8, vertical: Bool = false) -> Pill {
-        let pill = Pill(fill: NSColor(srgbRed: 20 / 255, green: 20 / 255, blue: 22 / 255, alpha: alpha), radius: radius, insets: insets, spacing: spacing, vertical: vertical)
-        pill.appearance = NSAppearance(named: .darkAqua)
-        return pill
-    }
-
     /// An object chip: one line on the surface, 26 pt tall.
     static func chip() -> Pill { Pill(radius: 8, insets: NSEdgeInsets(top: 5, left: 8, bottom: 5, right: 8), spacing: 8) }
 }
@@ -128,18 +121,15 @@ final class Pill: NSView {
 final class KeyCap: NSView {
     let text: String
     private let label: NSTextField
-    /// A fixed glyph color in place of the look's; nil follows the look.
-    private let color: NSColor?
     var pressed = false {
-        didSet { apply() }
+        didSet { if pressed != oldValue { apply() } }
     }
     var onTint = false {
-        didSet { apply() }
+        didSet { if onTint != oldValue { apply() } }
     }
 
-    init(_ text: String, color: NSColor? = nil) {
+    init(_ text: String) {
         self.text = text
-        self.color = color
         label = NSTextField(text, size: 11, weight: .semibold)
         super.init(frame: .zero)
         wantsLayer = true
@@ -160,9 +150,10 @@ final class KeyCap: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
     override func viewDidChangeEffectiveAppearance() { apply() }
 
-    private func apply() {
+    /// Draws the current state in the current look and tint.
+    func apply() {
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            label.textColor = pressed ? Chrome.onTint : onTint ? Chrome.tint : color ?? .chromeText
+            label.textColor = pressed ? Chrome.onTint : onTint ? Chrome.tint : .chromeText
             layer!.backgroundColor = (pressed ? Chrome.tint : onTint ? NSColor.white.withAlphaComponent(0.94) : NSColor.capFill).cgColor
             layer!.borderColor = (pressed || onTint ? NSColor.clear : NSColor.capEdge).cgColor
             layer!.shadowOpacity = isDark ? 0.55 : 0.22
@@ -235,17 +226,17 @@ final class BarButton: NSView {
     let cap: KeyCap?
     let symbol: NSImageView?
     var lit = false {
-        didSet { apply() }
+        didSet { if lit != oldValue { apply() } }
     }
     var primary = false {
-        didSet { apply() }
+        didSet { if primary != oldValue { apply() } }
     }
     var isEnabled = true {
-        didSet { apply() }
+        didSet { if isEnabled != oldValue { apply() } }
     }
     /// Off for a button inside a chip, which keeps the chip's one fill: lit is then the tint text alone.
     var washes = true {
-        didSet { apply() }
+        didSet { if washes != oldValue { apply() } }
     }
     var surface = false {
         didSet {
@@ -382,9 +373,21 @@ final class Bar: NSView {
 final class Chrome {
     /// The highlight color: the primary button, pressed caps, lit toggles, the highlighted menu row. Set on each refresh.
     static var tint = NSColor.controlAccentColor
+    /// The look `SnugOverlayAppearance` picks for the chrome; nil follows the system.
+    static func appearance(_ defaults: UserDefaults) -> NSAppearance? {
+        switch defaults.string(forKey: Pref.overlayAppearance)! {
+        case "light": NSAppearance(named: .aqua)
+        case "dark": NSAppearance(named: .darkAqua)
+        default: nil
+        }
+    }
+
     /// White or black, whichever reads on `tint`.
-    static var onTint: NSColor {
-        let color = tint.usingColorSpace(.sRGB)!
+    static var onTint: NSColor { text(on: tint) }
+
+    /// White or black, whichever reads on `color`.
+    static func text(on color: NSColor) -> NSColor {
+        let color = color.usingColorSpace(.sRGB)!
         return 0.2126 * color.redComponent + 0.7152 * color.greenComponent + 0.0722 * color.blueComponent > 0.7 ? .black : .white
     }
 
@@ -440,6 +443,8 @@ final class Chrome {
     /// The top bar sits at the bottom and the keys line at the top, each moved off its edge by a rectangle there.
     var barAtBottom = false
     var hintsAtTop = false
+    /// The rulers' thickness the chrome last kept clear of, 0 with Rulers off; a change moves the chrome with the rulers' slide.
+    var ruler: CGFloat = 0
     /// The cap texts of the key just pressed, lit for 150 ms.
     var pressed: Set<String> = []
     var pressTask: Task<Void, any Error>?

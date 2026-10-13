@@ -195,7 +195,27 @@ extension DebugRun {
         require(overlay.selection?.rect == a && pasteboard.data(forType: .png) == nil, "Shift-click opens the hovered element instead of copying it")
         try await waitFor("Shift-click carries the radii") { overlay.editedRadii[a] == CornerRadii(radius) }
 
-        // With a selection open, Shift outlines the element under the pointer and Shift-click grows to the union.
+        // With a selection open, Shift outlines the element under the pointer only once the pointer moves outside the selection: not for a
+        // Shift-arrow with the pointer inside, nor for Shift going down outside until the pointer moves.
+        func shift(_ down: Bool) {
+            overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: down ? .shift : [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!)
+        }
+        let unionStart = overlay.selection!.rect
+        mouse(.mouseMoved, CGPoint(x: unionStart.midX, y: unionStart.midY))
+        shift(true)
+        key(right, "", .shift)
+        let insideOutline = overlay.view.overlays.hover
+        key(left, "", .shift)
+        shift(false)
+        mouse(.mouseMoved, insideB)
+        shift(true)
+        let unmovedOutline = overlay.view.overlays.hover
+        mouse(.mouseMoved, CGPoint(x: insideB.x + 4, y: insideB.y), .shift)
+        let movedOutline = overlay.view.overlays.hover
+        shift(false)
+        require(insideOutline == nil && unmovedOutline == nil && movedOutline == b && overlay.selection?.rect == unionStart,
+                "Shift draws no union outline inside the selection or before the pointer moves, and does once it moves outside: \(String(describing: movedOutline))")
         mouse(.mouseMoved, insideB)
         require(overlay.view.overlays.hover == nil, "without Shift an open selection draws no hover")
         mouse(.mouseMoved, insideB, .shift)
@@ -419,6 +439,17 @@ extension DebugRun {
         require(tops == [300, 150, 0] && rect == CGRect(x: 400, y: 0, width: 400, height: 500),
                 "Cmd-Left, Cmd-Down and Cmd-Up move the other sides to their next edges: \(tops) \(rect)")
         overlay.dismiss()
+        // On the page: Cmd-Shift-Right on a selection wider than the cart panel takes the right side in to the panel's right border (the
+        // 2 px run at 2214-2215, counted at its middle), then to its left border (1656-1657), then stays at the minimum size's limit.
+        open()
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: CGRect(x: 1600, y: 450, width: 800, height: 400))
+        var inward: [CGFloat] = []
+        for _ in 0..<3 {
+            key(right, "", [.command, .shift])
+            inward.append(overlay.selection!.rect.maxX)
+        }
+        require(inward == [2215, 1657, 1657], "Cmd-Shift-Right on the page steps the right side in to the cart panel's right edge, then its left: \(inward)")
+        overlay.dismiss()
         // One press's cost on the page: a tall selection whose search reaches across most of the screen.
         open()
         overlay.selection = AreaSelection(extent: overlay.extent, exact: CGRect(x: 20, y: 100, width: 40, height: 1400))
@@ -443,6 +474,60 @@ extension DebugRun {
         key(24, "+", .shift)
         require(overlay.selection?.rect == overlay.extent, "+ stops at the extent")
         overlay.dismiss()
+
+        // Cmd-Z undoes one edit at a time back to the released drag, then beeps and stays; Cmd-Shift-Z redoes them. Quick nudges are one step.
+        open()
+        drag(from: CGPoint(x: 1000, y: 600), by: CGPoint(x: 400, y: 300))
+        let released = overlay.selection!.rect
+        for _ in 0..<3 { key(right) }
+        let nudged = overlay.selection!.rect
+        drag(from: CGPoint(x: nudged.maxX, y: nudged.midY), by: CGPoint(x: 60, y: 0))
+        let resized = overlay.selection!.rect
+        key(30, "]")
+        let rounded = overlay.editedRadii[resized]
+        require(nudged == released.offsetBy(dx: 3, dy: 0) && resized.width > nudged.width && rounded != nil && overlay.undoStack.count == 3,
+                "a drag, three quick nudges, a handle drag and ] make three undo steps: \(released) \(nudged) \(resized) \(overlay.undoStack.count)")
+        var undone: [(CGRect, CornerRadii?)] = []
+        for _ in 0..<4 {
+            key(6, "z", .command)
+            undone.append((overlay.selection!.rect, overlay.editedRadii[overlay.selection!.rect]))
+        }
+        require(undone.map(\.0) == [resized, nudged, released, released] && undone[0].1 == nil,
+                "Cmd-Z steps back through ], the handle drag and the nudges, then stays on the released drag: \(undone.map(\.0))")
+        var redone: [(CGRect, CornerRadii?)] = []
+        for _ in 0..<3 {
+            key(6, "Z", [.command, .shift])
+            redone.append((overlay.selection!.rect, overlay.editedRadii[overlay.selection!.rect]))
+        }
+        require(redone.map(\.0) == [nudged, resized, resized] && redone[2].1 == rounded && overlay.redoStack.isEmpty,
+                "Cmd-Shift-Z comes back step by step to the rounded, resized selection: \(redone.map(\.0))")
+        drag(from: CGPoint(x: 200, y: 200), by: CGPoint(x: 300, y: 300))
+        require(overlay.undoStack.isEmpty && overlay.redoStack.isEmpty, "a fresh drag starts the history over")
+        // A real click on a chip button is one step too; its release, which reaches the overlay, leaves the history alone.
+        key(right)
+        let lockChip = overlay.chrome.lock
+        let lockPoint = lockChip.convert(CGPoint(x: lockChip.bounds.midX, y: lockChip.bounds.midY), to: overlay.view)
+        let lockPixel = CGPoint(x: lockPoint.x * scale, y: (overlay.view.bounds.height - lockPoint.y) * scale)
+        mouse(.leftMouseDown, lockPixel)
+        mouse(.leftMouseUp, lockPixel)
+        require(overlay.ratioLocked && overlay.undoStack.count == 2, "clicking the lock chip locks the ratio as one more undo step: \(overlay.undoStack.count)")
+        key(6, "z", .command)
+        require(!overlay.ratioLocked && overlay.undoStack.count == 1, "Cmd-Z undoes the lock click")
+        overlay.dismiss()
+
+        // With Frame on, the size chip adds what the delivered image adds around the selection.
+        open()
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: a)
+        defaults.set(true, forKey: Pref.frame)
+        overlay.refresh()
+        let framedChip = texts(in: overlay.chrome.size)
+        pasteboard.clearContents()
+        key(returnKey, "\r")
+        await overlay.commitTask?.value
+        let framedOutput = pngSize(pasteboard.data(forType: .png))!
+        defaults.set(false, forKey: Pref.frame)
+        require(framedChip == ["400 x 200  + frame \(Int(framedOutput.width) - 400) x \(Int(framedOutput.height) - 200)"],
+                "the size chip adds the frame the copy gets: \(framedChip), copied \(framedOutput)")
 
         // Cmd-Shift-S: Save As writes where the panel (here the seam) says, with the usual name offered, and closes the overlay.
         var offered: URL?
