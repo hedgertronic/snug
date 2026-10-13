@@ -37,7 +37,8 @@ extension DebugRun {
                     isARepeat: false, keyCode: code)!)
             }
         }
-        func open() { overlay.present(image: image, frame: frame, displayID: nil) }
+        // On the main display, as a live capture is, so Record shows enabled; nothing here captures from it.
+        func open() { overlay.present(image: image, frame: frame, displayID: CGMainDisplayID()) }
         func drag(_ rect: CGRect, release: Bool) {
             mouse(.leftMouseDown, CGPoint(x: rect.minX, y: rect.minY))
             mouse(.leftMouseDragged, CGPoint(x: rect.midX, y: rect.midY))
@@ -65,9 +66,9 @@ extension DebugRun {
             try snapshot("loupe-drag-\(name)")
             mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
             overlay.dismiss()
-            // The pointer just above the bottom bar: the loupe flips above it instead of hiding behind the bar.
+            // The pointer just above the keys line: the loupe flips above it instead of hiding behind it.
             overlay.present(image: content, frame: frame, displayID: nil)
-            let barTop = overlay.chrome.bottomBar.frame.maxY
+            let barTop = overlay.chrome.hints.frame.maxY
             let nearBar = CGRect(x: 900, y: (overlay.view.bounds.height - barTop - 40) * overlay.scale - 200, width: 500, height: 200)
             drag(nearBar, release: false)
             try snapshot("loupe-near-bar-\(name)")
@@ -107,7 +108,7 @@ extension DebugRun {
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         try snapshot("area-released")
         // The ratio chip's lock, clicked on and off.
-        func ratioLock() -> BarButton { overlay.chrome.ratio.subviews.compactMap { $0 as? BarButton }.last! }
+        func ratioLock() -> BarButton { overlay.chrome.lock }
         ratioLock().onClick()
         try snapshot("area-released-ratio-locked")
         ratioLock().onClick()
@@ -363,6 +364,38 @@ extension DebugRun {
         try snapshot("recording-count-in")
         overlay.dismiss()
 
+        // Scrolling capture of an area inside a window, frames cut from the fixture; the live screen would show through.
+        open()
+        overlay.scrollFrames = { image.cropping(to: $0)! }
+        overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        overlay.selection = AreaSelection(extent: editExtent, exact: editRect)
+        key(5, "g")
+        try await waitFor("the first frame") { overlay.scrollHeight > 0 }
+        try snapshot("scrolling")
+        overlay.dismiss()
+        overlay.scrollFrames = nil
+
+        // The light look: hover, a selection with the pointer inside and the ratio menu open, and armed recording.
+        defaults.set("light", forKey: Pref.overlayAppearance)
+        open()
+        overlay.detectionTask?.cancel()
+        overlay.setWindows([CGRect(x: 300, y: 300, width: 1300, height: 1000)], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, CGPoint(x: 900, y: 700))
+        try snapshot("light-window-hover")
+        overlay.dismiss()
+        open()
+        overlay.selection = AreaSelection(extent: editExtent, exact: editRect)
+        overlay.refresh()
+        mouse(.mouseMoved, CGPoint(x: editRect.midX, y: editRect.midY))
+        try snapshot("light-edit-chrome-pointer-inside")
+        key(35, "p")
+        try snapshot("light-edit-ratio-menu")
+        key(53, "\u{1B}")
+        key(9, "v")
+        try snapshot("light-recording-armed")
+        overlay.dismiss()
+        defaults.removeObject(forKey: Pref.overlayAppearance)
+
         try await renderMenuBarIcons(into: directory)
 
         /// A toast's content on a mid-gray backdrop, since its panel is transparent.
@@ -431,7 +464,7 @@ extension DebugRun {
         require(capture.keyEquivalent == "k" && capture.keyEquivalentModifierMask == [.control, .option], "a recorded letter shortcut updates the key equivalent")
         require(Shortcut.label(from: defaults) == "\u{2303}\u{2325}K", "the recorded shortcut displays from code and modifiers: \(Shortcut.label(from: defaults))")
         let hintFill = overlay.chrome.hints.layer!.backgroundColor.flatMap(NSColor.init(cgColor:))!
-        require(hintFill.alphaComponent >= 0.9, "the hint strip is nearly opaque: \(hintFill.alphaComponent)")
+        require(hintFill.alphaComponent >= 0.92, "the keys line is on the chrome surface: \(hintFill.alphaComponent)")
         exit(EXIT_SUCCESS)
     }
 

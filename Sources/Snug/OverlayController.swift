@@ -194,25 +194,8 @@ final class OverlayController {
         window.contentView = view
         chrome.all.forEach(view.addSubview)
         cornerChip.isHidden = true
-        cornerChip.style(fill: NSColor(srgbRed: 20 / 255, green: 20 / 255, blue: 22 / 255, alpha: 0.86), text: .white)
-        cornerChip.onClick = { [unowned self] in applyRadiusToAll() }
         view.addSubview(cornerChip)
-        chrome.bottomBar.onMode = { [unowned self] in setMode($0) }
-        chrome.bottomBar.onToggle = { [unowned self] in
-            if $0 == Pref.snap { return toggleSnap() }
-            defaults.set(!defaults.bool(forKey: $0), forKey: $0)
-            refresh()
-        }
-        chrome.actionBar.onFrame = { [unowned self] in toggleFrame() }
-        chrome.actionBar.onSnap = { [unowned self] in toggleSnap() }
-        chrome.actionBar.roundedButton.onClick = { [unowned self] in chrome.bottomBar.onToggle(Pref.roundCorners) }
-        chrome.actionBar.shadowButton.onClick = { [unowned self] in chrome.bottomBar.onToggle(Pref.shadow) }
-        chrome.textButton.button.onClick = { [unowned self] in copySelectionText(translating: false) }
-        chrome.actionBar.onSave = { [unowned self] in save() }
-        chrome.actionBar.onCopy = { [unowned self] in copy() }
-        chrome.actionBar.record.onClick = { [unowned self] in armRecording() }
-        chrome.actionBar.scroll.onClick = { [unowned self] in startScroll() }
-        chrome.actionBar.cutout.onClick = { [unowned self] in cutOut() }
+        wireChrome()
     }
 
     static let resizeCursors: [Handle: NSCursor] = [
@@ -654,6 +637,7 @@ final class OverlayController {
 
     /// The single key dispatch point; each mode routes its own keys.
     func handleKey(_ event: NSEvent) -> Bool {
+        flash(event)
         text.notice = nil
         if scrollArea != nil { return handleScrollKey(event) }
         if armedRecording != nil { return handleRecordingKey(event) }

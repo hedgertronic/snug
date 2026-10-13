@@ -99,9 +99,9 @@ extension DebugRun {
         require(liveText.hasText(at: topLeft(CGPoint(x: productName.midX, y: productName.midY))) && !liveText.hasText(at: topLeft(blank))
                 && !liveText.hasText(at: topLeft(CGPoint(x: productName.midX, y: productName.maxY + 45))), "Live Text's text sits under the same pixels as the image")
         require(overlay.view.hitTest(textPoint)?.isDescendant(of: liveText) == true, "a press on the image reaches Live Text")
-        let button = overlay.chrome.bottomBar.modeButtons[.capture]!
+        let button = overlay.chrome.modeButtons[.capture]!
         let buttonPoint = button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: overlay.view)
-        require(overlay.view.hitTest(buttonPoint)?.isDescendant(of: button) == true, "the bottom bar stays clickable above Live Text")
+        require(overlay.view.hitTest(buttonPoint)?.isDescendant(of: button) == true, "the top bar stays clickable above Live Text")
         mouse(.mouseMoved, CGPoint(x: productName.midX, y: productName.midY))
         require(overlay.view.cursor == .iBeam, "the cursor is an I-beam over text")
         mouse(.mouseMoved, blank)
@@ -409,7 +409,7 @@ extension DebugRun {
         }
         capture(cart)
         require(overlay.selection?.rect == cart, "an Option-drag releases the exact cart selection")
-        require(!overlay.chrome.textButton.isHidden && texts(in: overlay.chrome.textButton).contains("\u{21E7}\u{21A9}"), "the Live Text button in the selection names Shift-Return")
+        require(texts(in: overlay.chrome.strip).contains("Text") && texts(in: overlay.chrome.text) == ["Text", "\u{21E7}\u{21A9}"], "the strip's Text button names Shift-Return")
         pasteboard.clearContents()
         key(returnKey, "\r", .shift)
         require(!overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."], "a Reading text... pill shows while the selection is read")
@@ -588,25 +588,27 @@ extension DebugRun {
         let preview = overlay.cutout
         require(overlay.window.isVisible && preview != nil && pasteboard.data(forType: .png) == nil, "K on a selection opens the preview and copies nothing")
         require(preview?.rect == iconRect && preview?.subjects.count == 1 && preview!.view.superview === overlay.view
-                && preview!.view.dim.frame == overlay.view.viewRect(iconRect) && preview!.view.subject.frame == preview!.view.dim.frame
-                && preview!.view.outline.frame == preview!.view.dim.frame && (preview!.view.subject.contents as! CGImage).width == Int(iconRect.width)
+                && preview!.view.checker.frame == overlay.view.viewRect(iconRect) && preview!.view.subject.frame == preview!.view.checker.frame
+                && preview!.view.ghost.frame == preview!.view.checker.frame && preview!.view.outline.frame == preview!.view.checker.frame && (preview!.view.subject.contents as! CGImage).width == Int(iconRect.width)
                 && preview!.view.outline.mask!.contents as! CGImage === preview!.subjects[0].outline,
-                "the preview dims the area under the subject's own pixels and outlines the subject, with no checkerboard")
+                "the preview fills the area with the checkerboard and the faint removed pixels under the subject's own pixels, and outlines the subject")
         let sublayers = overlay.view.layer!.sublayers!
         require(sublayers.firstIndex(of: preview!.view.content)! < sublayers.firstIndex(of: overlay.view.guides.root)!,
                 "the preview draws under the guides, so the loupe stays on top of the subject")
-        require(preview!.view.outline.backgroundColor == Highlight.color(hex: "#E5484D").cgColor && preview!.view.dim.backgroundColor?.alpha == 0.42,
-                "the outline is the highlight color and the dim matches the fade: \(String(describing: preview!.view.outline.backgroundColor)), \(String(describing: preview!.view.dim.backgroundColor))")
+        require(preview!.view.outline.backgroundColor == Highlight.color(hex: "#E5484D").cgColor && preview!.view.ghost.opacity == 0.2
+                    && (preview!.view.ghost.contents as! CGImage).width == Int(iconRect.width) && preview!.view.checker.backgroundColor != nil,
+                "the ghost: a checkerboard, the removed pixels at 20%, the outline in the highlight color: \(String(describing: preview!.view.outline.backgroundColor))")
         let ring = preview!.subjects[0].outline
         let ringData = ring.dataProvider!.data!
         let ringAlpha = CFDataGetBytePtr(ringData)!
         let ringPixels = (0..<ring.height).reduce(0) { sum, y in sum + (0..<ring.width).count { ringAlpha[y * ring.bytesPerRow + $0 * 2 + 1] > 0 } }
         require(ringAlpha[(ring.height / 2) * ring.bytesPerRow + ring.width / 2 * 2 + 1] == 0 && ringPixels > 0 && ringPixels < ring.width * ring.height / 10,
                 "the outline is a thin ring outside the subject: \(ringPixels) of \(ring.width * ring.height) pixels, center clear")
-        require(overlay.selection == nil && overlay.chrome.actionBar.isHidden && overlay.chrome.bottomBar.isHidden && overlay.view.overlays.selection == iconRect
-                && !overlay.view.overlays.showsHandles, "while previewing, the action bar, mode bar and handles stay hidden and the area stays outlined")
-        // The icon page is 200 pt wide, so the hint row drops what does not fit from the end.
-        require(texts(in: overlay.chrome.hints).prefix(3) == ["Subject", "crop off", "C"], "the hint row names the preview: \(texts(in: overlay.chrome.hints))")
+        require(overlay.selection == nil && overlay.chrome.topBar.groups.count == 2 && !texts(in: overlay.chrome.topBar).contains("Capture") && overlay.view.overlays.selection == iconRect
+                && !overlay.view.overlays.showsHandles, "while previewing, the top bar has no modes, the handles stay hidden and the area stays outlined")
+        require(texts(in: overlay.chrome.strip) == ["Snap to subject", "S", "Save", "\u{2318}S", "Copy", "\u{21A9}"] && !overlay.chrome.crop.lit
+                    && texts(in: overlay.chrome.hints) == ["back", "K", "esc"],
+                "the strip has the preview's controls, Snap to subject plain, and the keys line K back: \(texts(in: overlay.chrome.strip)) \(texts(in: overlay.chrome.hints))")
         let (previewPixels, previewWidth) = pixels(preview!.subjects[0].image)
         require(previewPixels[3] == 0 && previewPixels[(previewWidth / 2 + previewWidth * previewWidth / 2) * 4 + 3] == 255, "the preview is transparent at the corner and opaque at the center")
         mouse(.leftMouseDown, CGPoint(x: iconRect.midX, y: iconRect.midY))
@@ -619,11 +621,11 @@ extension DebugRun {
         key(sKey, "s")
         require(!overlay.defaults.bool(forKey: Pref.snap), "S in the preview leaves Snap off")
         require(overlay.cutout?.cropped == true && overlay.defaults.bool(forKey: Pref.cutoutCrop) && overlay.view.overlays.selection == box
-                && overlay.cutout!.view.dim.frame == overlay.view.viewRect(box) && texts(in: overlay.chrome.hints).prefix(3) == ["Subject", "crop on", "C"],
-                "S crops to the subject's box \(box): outlined \(String(describing: overlay.view.overlays.selection)), hints \(texts(in: overlay.chrome.hints))")
+                && overlay.cutout!.view.checker.frame == overlay.view.viewRect(box) && overlay.cutout!.view.ghost.frame == overlay.view.viewRect(box) && overlay.chrome.crop.lit,
+                "S crops to the subject's box \(box) and lights Snap to subject: outlined \(String(describing: overlay.view.overlays.selection))")
         key(kKey, "k")
-        require(overlay.cutout == nil && preview!.view.superview == nil && preview!.view.content.superlayer == nil && overlay.selection?.rect == iconRect && !overlay.chrome.actionBar.isHidden,
-                "K again goes back to the selection: preview \(overlay.cutout != nil), view in overlay \(preview!.view.superview != nil), selection \(String(describing: overlay.selection?.rect)), action bar hidden \(overlay.chrome.actionBar.isHidden)")
+        require(overlay.cutout == nil && preview!.view.superview == nil && preview!.view.content.superlayer == nil && overlay.selection?.rect == iconRect && texts(in: overlay.chrome.strip).contains("Scroll"),
+                "K again goes back to the selection: preview \(overlay.cutout != nil), view in overlay \(preview!.view.superview != nil), selection \(String(describing: overlay.selection?.rect)), strip \(texts(in: overlay.chrome.strip))")
         let secondK = await previewCutout()
         require(overlay.cutout != nil, "K opens the preview again")
         require(overlay.cutout!.cropped && overlay.view.overlays.selection == box, "the preview opens cropped as last chosen")
@@ -727,14 +729,14 @@ extension DebugRun {
         let count = (overlay.cutout?.subjects.count ?? 1) - 1
         print("Subjects fixture: \(count) instances")
         require(count > 1, "the subjects fixture has more than one instance: \(count)")
-        require(texts(in: overlay.chrome.hints).prefix(3) == ["All \(count) subjects", "next subject", "Tab"], "the hint row says all subjects are shown and names Tab: \(texts(in: overlay.chrome.hints))")
+        require(texts(in: overlay.chrome.strip).prefix(2) == ["All \(count) subjects", "Tab"], "the strip says all subjects are shown and names Tab: \(texts(in: overlay.chrome.strip))")
         key(tab, "\t")
-        require(overlay.cutout?.shown == 1 && texts(in: overlay.chrome.hints).first == "Subject 1 of \(count)"
-                && overlay.cutout!.view.subject.contents as! CGImage === overlay.cutout!.subjects[1].image, "Tab shows the first subject alone: \(texts(in: overlay.chrome.hints))")
+        require(overlay.cutout?.shown == 1 && texts(in: overlay.chrome.strip).first == "Subject 1 of \(count)"
+                && overlay.cutout!.view.subject.contents as! CGImage === overlay.cutout!.subjects[1].image, "Tab shows the first subject alone: \(texts(in: overlay.chrome.strip))")
         key(sKey, "s")
         key(tab, "\t", .shift)
         key(tab, "\t", .shift)
-        require(overlay.cutout?.shown == count && texts(in: overlay.chrome.hints).first == "Subject \(count) of \(count)", "Shift-Tab steps back and wraps to the last subject")
+        require(overlay.cutout?.shown == count && texts(in: overlay.chrome.strip).first == "Subject \(count) of \(count)", "Shift-Tab steps back and wraps to the last subject")
         let alone = overlay.cutout!.subjects[count].bounds
         require(overlay.view.overlays.selection == alone && alone.width < CGFloat(group.width) / 2,
                 "cropped, the outlined frame follows the shown subject's box \(alone): \(String(describing: overlay.view.overlays.selection))")

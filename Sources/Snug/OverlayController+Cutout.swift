@@ -1,7 +1,8 @@
 import AppKit
 import ScreenshotCore
 
-/// K's cut-out preview: the selection as it is, everything in it but the subject dimmed, and the subject's edge outlined in the highlight color.
+/// K's cut-out preview, a ghost: checkerboard in the frame, the removed pixels faint over it, the subject on top with its edge outlined in
+/// the highlight color.
 struct CutoutPreview {
     /// The cut-out area, image pixels.
     var rect: CGRect
@@ -27,11 +28,13 @@ struct CutoutPreview {
 }
 
 /// Covers the overlay below the chrome while the preview is open, so the pointer cannot edit the selection behind it. Its `content`, in
-/// the overlay view's layer under the guides so the loupe stays on top, dims the frozen image over the frame, then draws the outline
-/// (the highlight color through the subject's ring) and the subject's own pixels on top.
+/// the overlay view's layer under the guides so the loupe stays on top, fills the frame with a checkerboard (transparent), draws the
+/// frozen image there at 20% (the removed pixels), then the outline (the highlight color through the subject's ring) and the subject's
+/// own pixels on top. Outside the frame the overlay's usual dim stays.
 final class CutoutView: NSView {
     let content = CALayer()
-    let dim = CALayer()
+    let checker = CALayer()
+    let ghost = CALayer()
     let outline = CALayer()
     let subject = CALayer()
 
@@ -39,7 +42,17 @@ final class CutoutView: NSView {
         super.init(frame: frame)
         outline.mask = CALayer()
         content.frame = frame
-        for sublayer in [dim, outline, subject] { content.addSublayer(sublayer) }
+        let tile = NSImage(size: CGSize(width: 16, height: 16), flipped: false) { _ in
+            NSColor.white.setFill()
+            CGRect(x: 0, y: 0, width: 16, height: 16).fill()
+            NSColor(white: 0.85, alpha: 1).setFill()
+            CGRect(x: 0, y: 0, width: 8, height: 8).fill()
+            CGRect(x: 8, y: 8, width: 8, height: 8).fill()
+            return true
+        }
+        checker.backgroundColor = NSColor(patternImage: tile).cgColor
+        ghost.opacity = 0.2
+        for sublayer in [checker, ghost, outline, subject] { content.addSublayer(sublayer) }
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -61,7 +74,6 @@ extension OverlayController {
         CATransaction.commit()
         let highlight = view.highlight
         view.effectiveAppearance.performAsCurrentDrawingAppearance {
-            preview.dim.backgroundColor = NSColor.black.withAlphaComponent(highlight?.fade ?? 0.42).cgColor
             preview.outline.backgroundColor = (highlight?.color ?? .controlAccentColor).cgColor
         }
         cutout = CutoutPreview(rect: rect, selection: selection, radii: radii, subjects: subjects, cropped: defaults.bool(forKey: Pref.cutoutCrop), view: preview)
@@ -74,7 +86,9 @@ extension OverlayController {
         let preview = cutout!.view
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        preview.dim.frame = view.viewRect(cutout!.frame)
+        preview.checker.frame = view.viewRect(cutout!.frame)
+        preview.ghost.frame = preview.checker.frame
+        preview.ghost.contents = image!.cropping(to: cutout!.frame)
         preview.outline.frame = view.viewRect(cutout!.rect)
         preview.outline.mask!.frame = preview.outline.bounds
         preview.outline.mask!.contents = cutout!.subjects[index].outline

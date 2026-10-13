@@ -158,7 +158,11 @@ final class OverlayView: NSView {
         CGRect(x: pixels.minX / scale, y: bounds.height - pixels.maxY / scale, width: pixels.width / scale, height: pixels.height / scale)
     }
 
-    override func mouseMoved(with event: NSEvent) { controller?.mouseMoved(event) }
+    override func mouseMoved(with event: NSEvent) {
+        // On the top bar, or crossing from the hovered element to its chips or strip, the hover holds so their buttons can be clicked.
+        if controller?.holdsHover(at: convert(event.locationInWindow, from: nil)) == true { return }
+        controller?.mouseMoved(event)
+    }
     override func mouseDown(with event: NSEvent) { controller?.mouseDown(event) }
     override func mouseDragged(with event: NSEvent) { controller?.mouseDragged(event) }
     override func mouseUp(with event: NSEvent) { controller?.mouseUp(event) }

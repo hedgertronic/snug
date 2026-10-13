@@ -338,14 +338,15 @@ enum DebugRun {
         require(overlay.view.overlays.radii == corners(0, 20), "the outline hugs the window's bottom corners and keeps the top square")
         key(30, "]")
         require(overlay.view.overlays.radii == corners(1, 20 + 1) && overlay.radiusReadout == "r 1 1 21 21", "] grows every corner by 1 pt")
-        require(!overlay.chrome.size.isHidden && texts(in: overlay.chrome.size) == ["r 1 1 21 21"],
-                "the size badge shows the radius after ]: \(overlay.chrome.size.isHidden) \(texts(in: overlay.chrome.size))")
+        require(!overlay.chrome.radius.isHidden && texts(in: overlay.chrome.radius) == ["r 1 / 1 / 21 / 21", "[", "]"]
+                    && texts(in: overlay.chrome.size) == ["\(Int(bottomHalf.width)) x \(Int(bottomHalf.height))"],
+                "the radius chip shows each corner after ], and the size chip keeps the size: \(texts(in: overlay.chrome.radius)) \(texts(in: overlay.chrome.size))")
         mouse(.mouseMoved, CGPoint(x: bottomHalf.midX, y: bottomHalf.midY))
         key(30, "]")
-        let siblings = overlay.chrome.size.superview!.subviews
-        let covering = siblings[(siblings.firstIndex(of: overlay.chrome.size)! + 1)...].filter { !$0.isHidden && $0.frame.intersects(overlay.chrome.size.frame) }
-        require(!overlay.chrome.size.isHidden && texts(in: overlay.chrome.size) == ["r 2 2 22 22"] && covering.isEmpty,
-                "with the pointer inside, ] shows the radius uncovered: \(texts(in: overlay.chrome.size)) \(overlay.chrome.size.frame) covered by \(covering.map { "\(type(of: $0)) \($0.frame) \(texts(in: $0))" })")
+        let siblings = overlay.chrome.radius.superview!.subviews
+        let covering = siblings[(siblings.firstIndex(of: overlay.chrome.radius)! + 1)...].filter { !$0.isHidden && $0.frame.intersects(overlay.chrome.radius.frame) }
+        require(!overlay.chrome.radius.isHidden && texts(in: overlay.chrome.radius).first == "r 2 / 2 / 22 / 22" && covering.isEmpty,
+                "with the pointer inside, ] shows the radius uncovered: \(texts(in: overlay.chrome.radius)) \(overlay.chrome.radius.frame) covered by \(covering.map { "\(type(of: $0)) \($0.frame) \(texts(in: $0))" })")
         key(33, "[")
         key(30, "}", .shift)
         require(overlay.view.overlays.radii == corners(5, 20 + 5), "Shift-] grows every corner by 4 pt")
@@ -546,19 +547,20 @@ enum DebugRun {
         let live = overlay.snapPreview!
         key(1, "s")
         require(!defaults.bool(forKey: Pref.snap) && overlay.snapPreview == nil && overlay.view.overlays.preview == nil, "S during a drag clears the preview at once")
-        require(texts(in: overlay.chrome.status) == ["Snap off: exact drag"], "the status pill says snap is off: \(texts(in: overlay.chrome.status))")
+        let snap = overlay.chrome.snap
+        require(texts(in: snap) == ["Snap", "S"] && !snap.lit, "the Snap chip turns plain: \(texts(in: snap))")
         key(1, "s")
         try await waitFor("the analysis restarts when S turns snap on mid-drag") { overlay.snapPreview != nil }
         require(overlay.snapPreview == live, "S during a drag starts the analysis for the current drag")
         release(rough)
         require(overlay.selection?.rect == live, "release takes the preview")
         key(1, "s")
-        require(overlay.selection?.rect == rough && texts(in: overlay.chrome.status) == ["Exact, snap off"] && overlay.chrome.actionBar.snapButton.layer!.backgroundColor == nil, "S after release switches to the exact drag and says so, and the Snap button turns off")
+        require(overlay.selection?.rect == rough && texts(in: snap) == ["Exact", "S"] && !snap.lit, "S after release switches to the exact drag, and the Snap chip reads Exact, plain")
         key(1, "s")
-        require(overlay.selection?.rect == live && texts(in: overlay.chrome.status) == ["Snapped"] && overlay.chrome.actionBar.snapButton.layer!.backgroundColor != nil, "S again switches back to the best fit and the Snap button turns on")
-        overlay.chrome.bottomBar.toggles.first { $0.0 == Pref.snap }!.1.onClick()
+        require(overlay.selection?.rect == live && texts(in: snap) == ["Snapped", "S"] && snap.lit, "S again switches back to the best fit, and the Snap chip reads Snapped, lit")
+        snap.onClick()
         require(!defaults.bool(forKey: Pref.snap) && overlay.selection?.rect == rough, "the Snap button acts the same way")
-        overlay.chrome.bottomBar.toggles.first { $0.0 == Pref.snap }!.1.onClick()
+        snap.onClick()
         require(overlay.selection?.rect == live, "the Snap button switches back to the best fit")
         overlay.dismiss()
 

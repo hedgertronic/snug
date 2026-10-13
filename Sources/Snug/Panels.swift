@@ -1,7 +1,7 @@
 import AppKit
 import ScreenshotCore
 
-/// The Capture hover's candidate list: numbered rows, the current one filled with the accent.
+/// The Capture hover's candidate list: numbered rows, the current one filled with the tint.
 @MainActor
 final class CandidateList: NSVisualEffectView {
     static let width: CGFloat = 240
@@ -75,14 +75,15 @@ final class CandidateList: NSVisualEffectView {
             let row = NSView(frame: CGRect(x: 6, y: height - 8 - CGFloat(index + 1) * Self.rowHeight, width: Self.width - 12, height: Self.rowHeight))
             row.wantsLayer = true
             row.layer!.cornerRadius = 8
-            row.layer!.backgroundColor = selected ? NSColor.controlAccentColor.cgColor : nil
-            let text: NSColor = selected ? .white : .labelColor
-            let cap = KeyCap(String(index + 1), color: selected ? .white : .secondaryLabelColor)
+            row.layer!.backgroundColor = selected ? Chrome.tint.cgColor : nil
+            let text: NSColor = selected ? Chrome.onTint : .labelColor
+            let cap = KeyCap(String(index + 1))
+            cap.onTint = selected
             cap.frame.origin = CGPoint(x: 8, y: (Self.rowHeight - cap.frame.height) / 2)
             let name = NSTextField(Self.name(of: candidate), size: 13, weight: selected ? .semibold : .regular, color: text)
             name.sizeToFit()
             name.frame.origin = CGPoint(x: 36, y: (Self.rowHeight - name.frame.height) / 2)
-            let size = NSTextField("\(Int(candidate.bounds.width)) x \(Int(candidate.bounds.height))", size: 11, mono: true, color: selected ? NSColor.white.withAlphaComponent(0.85) : .secondaryLabelColor)
+            let size = NSTextField("\(Int(candidate.bounds.width)) x \(Int(candidate.bounds.height))", size: 11, mono: true, color: selected ? Chrome.onTint.withAlphaComponent(0.85) : .secondaryLabelColor)
             size.sizeToFit()
             size.frame.origin = CGPoint(x: row.frame.width - 8 - size.frame.width, y: (Self.rowHeight - size.frame.height) / 2)
             for view in [cap, name, size] { row.addSubview(view) }
@@ -192,9 +193,9 @@ final class HelpSheet: NSView {
     }
 }
 
-/// The ratio chip's menu: rows on a dark panel like the chips, over a clear layer that covers the overlay and closes the menu on a
-/// click outside it. While open it is the first responder: Up and Down move the highlight, Return picks, Esc or P closes; the pointer
-/// highlights the row under it and a click picks. Any other key closes it and goes on to the overlay.
+/// The ratio chip's menu: rows on the chrome surface, over a clear layer that covers the overlay and closes the menu on a click outside
+/// it. While open it is the first responder: Up and Down move the highlight, Return picks, Esc or P closes; the pointer highlights the
+/// row under it and a click picks. Any other key closes it and goes on to the overlay.
 @MainActor
 final class RatioMenu: NSView {
     /// A row; an empty title is a separator.
@@ -204,20 +205,18 @@ final class RatioMenu: NSView {
         let pick: () -> Void
     }
 
+    var onClose: () -> Void = {}
     private(set) var items: [Item] = []
     private(set) var highlighted: Int?
-    let panel = NSView()
+    let panel = Pill(radius: 11, insets: NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0), spacing: 0)
     private(set) var rows: [NSView] = []
     private static let rowHeight: CGFloat = 22, separatorHeight: CGFloat = 9, inset: CGFloat = 4
 
     init() {
         super.init(frame: .zero)
         isHidden = true
-        panel.wantsLayer = true
-        panel.layer!.backgroundColor = NSColor(srgbRed: 20 / 255, green: 20 / 255, blue: 22 / 255, alpha: 0.94).cgColor
-        panel.layer!.cornerRadius = 8
-        panel.layer!.borderWidth = 0.5
-        panel.layer!.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
+        panel.isHidden = false
+        panel.isClickThrough = false
         addSubview(panel)
     }
 
@@ -232,7 +231,7 @@ final class RatioMenu: NSView {
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeAlways, .inVisibleRect], owner: self))
     }
 
-    /// Opens over the whole superview with `items`, the panel under `anchor` (superview points) with right edges aligned, or over it
+    /// Opens over the whole superview with `items`, the panel under `anchor` (superview points) with left edges aligned, or over it
     /// when there is no room below.
     func open(_ items: [Item], under anchor: CGRect) {
         self.items = items
@@ -248,20 +247,20 @@ final class RatioMenu: NSView {
             top -= height
             let row = NSView(frame: CGRect(x: Self.inset, y: top, width: size.width - Self.inset * 2, height: height))
             row.wantsLayer = true
-            row.layer!.cornerRadius = 5
+            row.layer!.cornerRadius = 6
             if item.title.isEmpty {
                 let line = NSView(frame: CGRect(x: 6, y: (height / 2).rounded(), width: row.frame.width - 12, height: 1))
                 line.wantsLayer = true
-                line.layer!.backgroundColor = NSColor.white.withAlphaComponent(0.16).cgColor
+                effectiveAppearance.performAsCurrentDrawingAppearance { line.layer!.backgroundColor = NSColor.chromeHairline.cgColor }
                 row.addSubview(line)
             } else {
-                let title = NSTextField(item.title, size: 12, weight: .medium, color: NSColor.white.withAlphaComponent(0.92))
+                let title = NSTextField(item.title, size: 12, weight: .medium, color: .chromeText)
                 title.frame.origin = CGPoint(x: 22, y: ((height - title.frame.height) / 2).rounded())
                 row.addSubview(title)
                 if item.on {
                     let check = NSImageView(image: NSImage(systemSymbolName: "checkmark", accessibilityDescription: "Current")!)
                     check.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 10, weight: .semibold)
-                    check.contentTintColor = .white
+                    check.contentTintColor = .chromeText
                     check.frame.size = check.fittingSize
                     check.frame.origin = CGPoint(x: 6, y: ((height - check.frame.height) / 2).rounded())
                     row.addSubview(check)
@@ -271,8 +270,9 @@ final class RatioMenu: NSView {
             return row
         }
         let below = anchor.minY - 4 - size.height
-        panel.frame = CGRect(x: min(max(anchor.maxX - size.width, 8), bounds.width - size.width - 8),
+        panel.frame = CGRect(x: min(max(anchor.minX, 8), bounds.width - size.width - 8),
                              y: below >= 8 ? below : min(anchor.maxY + 4, bounds.height - size.height - 8), width: size.width, height: size.height)
+        panel.layer!.shadowPath = CGPath(roundedRect: panel.bounds, cornerWidth: 11, cornerHeight: 11, transform: nil)
         isHidden = false
         window!.makeFirstResponder(self)
     }
@@ -280,6 +280,7 @@ final class RatioMenu: NSView {
     func close() {
         isHidden = true
         window!.makeFirstResponder(superview)
+        onClose()
     }
 
     /// Closes the menu, then runs the item at `index`.
@@ -288,9 +289,16 @@ final class RatioMenu: NSView {
         items[index].pick()
     }
 
+    /// Fills the highlighted row with the tint, its title and check in the color that reads on it.
     private func highlight(_ index: Int?) {
         highlighted = index
-        for (row, item) in rows.enumerated() { item.layer!.backgroundColor = row == index ? NSColor.controlAccentColor.cgColor : nil }
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            for (row, item) in rows.enumerated() {
+                item.layer!.backgroundColor = row == index ? Chrome.tint.cgColor : nil
+                for label in item.subviews.compactMap({ $0 as? NSTextField }) { label.textColor = row == index ? Chrome.onTint : .chromeText }
+                for check in item.subviews.compactMap({ $0 as? NSImageView }) { check.contentTintColor = row == index ? Chrome.onTint : .chromeText }
+            }
+        }
     }
 
     /// The item row under a point in this view's coordinates, skipping separators.

@@ -90,8 +90,8 @@ extension DebugRun {
         key(down)
         require(overlay.selection?.rect == a.offsetBy(dx: 0, dy: 1), "an arrow moves the selection 1 device pixel, not 1 pt")
         key(up)
-        require(texts(in: overlay.chrome.hints).contains("resize") && texts(in: overlay.chrome.actionBar).contains("Scroll") && !["frame", "corners"].contains(where: texts(in: overlay.chrome.hints).contains),
-                "the selection hint row offers resize, the action bar offers Scroll, and there is no frame or corners hint")
+        require(texts(in: overlay.chrome.hints).contains("grow") && texts(in: overlay.chrome.strip).contains("Scroll") && !["frame", "corners"].contains(where: texts(in: overlay.chrome.hints).contains),
+                "the selection keys line offers grow, the strip offers Scroll, and there is no frame or corners hint")
 
         // Corner dots: cursor, drag all, Option-drag one, clamp.
         mouse(.mouseMoved, dot(.topLeft))
@@ -103,12 +103,12 @@ extension DebugRun {
         require(overlay.selection?.rect == a, "dragging a dot does not move or resize the selection")
         require(equal(radii(), before.offset(by: moved, in: a.size)) && overlay.editedRadii[a].map({ equal($0, radii()) }) == true,
                 "dragging a dot changes all four corners by the drag along the diagonal")
-        require(overlay.radiusReadout == "r \(Int((before.topLeft + moved) / scale))", "the size badge reads the radius: \(overlay.radiusReadout ?? "nil")")
+        require(texts(in: overlay.chrome.radius).first == "r \(Int(((before.topLeft + moved) / scale).rounded()))", "the radius chip reads the radius: \(texts(in: overlay.chrome.radius))")
         let all = radii()
         drag(from: dot(.bottomRight), by: CGPoint(x: -step, y: -step), .option)
         require(near(radii().bottomRight, all.bottomRight + moved) && near(radii().topLeft, all.topLeft) && near(radii().topRight, all.topRight)
                 && near(radii().bottomLeft, all.bottomLeft), "Option-dragging a dot changes only that corner")
-        require(overlay.radiusReadout?.split(separator: " ").count == 5, "unequal corners read as four values: \(overlay.radiusReadout ?? "nil")")
+        require(texts(in: overlay.chrome.radius).first?.split(separator: "/").count == 4, "unequal corners read as four values: \(texts(in: overlay.chrome.radius))")
         require(overlay.lastEditedCorner == .bottomRight, "the dragged corner is the last edited one")
 
         // Per-corner apply: hovering a dot shows its "All corners" chip outside that corner; = and the chip copy the hovered corner to all four.
