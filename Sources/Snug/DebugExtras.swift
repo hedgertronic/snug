@@ -673,6 +673,9 @@ extension DebugRun {
         let openedDim = (overlay.view.overlays.dimsAll, dimBox())
         await overlay.detectionTask?.value
         mouse(.mouseMoved, CGPoint(x: 2450, y: 1500))
+        require(dimBox() == .null, "before the windows arrive, a hover leaves the screen undimmed: \(dimBox())")
+        overlay.setWindows([], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, CGPoint(x: 2450, y: 1500))
         let blankDim = (overlay.view.overlays.hover, dimBox())
         require(openedDim.0 == false && openedDim.1 == .null && blankDim.0 == nil && blankDim.1 == overlay.view.bounds,
                 "the first frame has no dim, and once nothing is targeted the dim covers the whole screen: on open \(openedDim), on a blank stretch \(blankDim)")

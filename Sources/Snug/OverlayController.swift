@@ -133,7 +133,7 @@ final class OverlayController {
     var ratioPortrait: Bool?
     /// The hovered level was walked to with Up, Down or Tab (not picked from the list); it lets go after 4 pt of pointer travel.
     private var walkedLevel = false
-    /// The first hover target has resolved since the overlay opened (see `Overlays.dimResolved`).
+    /// The windows have arrived since the overlay opened, so the hover target is known (see `Overlays.dimResolved`).
     private var dimResolved = false
     /// The ratio of the rectangle being dragged or selected, with the nearest standard (see `RatioLock.readout`); empty with neither.
     var ratioReadout: String {
@@ -284,6 +284,8 @@ final class OverlayController {
         windowIDs = ids
         windowFrozen = frozen
         if mode == .capture { buildSession() }
+        // The dim waits for the windows: a hover before them would find nothing, dim everything, then fade to the window under the pointer.
+        dimResolved = true
         updateHover(pixel: CGPoint(x: (pointer.x - window.frame.minX) * scale, y: (window.frame.maxY - pointer.y) * scale))
     }
 
@@ -417,7 +419,6 @@ final class OverlayController {
             if session!.isLocked, !session!.holds(at: pixel) || walkLetGo { session!.toggleLock() }
             if !session!.isLocked { walkedLevel = false }
             session!.hover(at: pixel)
-            dimResolved = true
         }
         refresh()
     }
