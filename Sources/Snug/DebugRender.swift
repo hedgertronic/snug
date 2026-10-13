@@ -138,6 +138,10 @@ extension DebugRun {
         for _ in 0..<3 { key(125, "") }
         try snapshot("edit-ratio-menu")
         key(53, "\u{1B}")
+        key(32, "u")
+        try await waitFor("the Colors menu") { !overlay.chrome.colorMenu.isHidden }
+        try snapshot("edit-colors-menu")
+        key(53, "\u{1B}")
         let edgeRects = [("small", CGRect(x: 600, y: 300, width: 120, height: 80)), ("left", CGRect(x: 0, y: 600, width: 500, height: 300)),
                          ("right", CGRect(x: editExtent.width - 500, y: 600, width: 500, height: 300)), ("top", CGRect(x: 900, y: 0, width: 700, height: 300)),
                          ("bottom", CGRect(x: 900, y: editExtent.height - 300, width: 700, height: 300)), ("full", editExtent)]
@@ -154,6 +158,10 @@ extension DebugRun {
         overlay.setWindows([CGRect(x: 300, y: 300, width: 1300, height: 1000)], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, CGPoint(x: 900, y: 700))
         try snapshot("window-hover")
+        defaults.set(true, forKey: Pref.loupe)
+        mouse(.mouseMoved, CGPoint(x: 901, y: 701))
+        try snapshot("window-hover-loupe")
+        defaults.set(false, forKey: Pref.loupe)
         overlay.dismiss()
 
         open()
@@ -397,8 +405,11 @@ extension DebugRun {
         overlay.detectionTask?.cancel()
         overlay.selection = AreaSelection(extent: overlay.extent, exact: cart)
         overlay.refresh()
+        for key in [Pref.loupe, Pref.rulers, Pref.crosshair] { defaults.set(true, forKey: key) }
+        mouse(.mouseMoved, CGPoint(x: cart.midX, y: cart.midY))
         key(9, "v")
         try snapshot("recording-armed")
+        for key in [Pref.loupe, Pref.rulers, Pref.crosshair] { defaults.set(false, forKey: key) }
         key(36, "\r")
         try snapshot("recording-count-in")
         overlay.dismiss()
@@ -421,6 +432,10 @@ extension DebugRun {
         overlay.setWindows([CGRect(x: 300, y: 300, width: 1300, height: 1000)], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, CGPoint(x: 900, y: 700))
         try snapshot("light-window-hover")
+        defaults.set(true, forKey: Pref.loupe)
+        mouse(.mouseMoved, CGPoint(x: 901, y: 701))
+        try snapshot("light-window-hover-loupe")
+        defaults.set(false, forKey: Pref.loupe)
         overlay.dismiss()
         open()
         overlay.selection = AreaSelection(extent: editExtent, exact: editRect)
@@ -430,8 +445,14 @@ extension DebugRun {
         key(35, "p")
         try snapshot("light-edit-ratio-menu")
         key(53, "\u{1B}")
+        key(32, "u")
+        try await waitFor("the Colors menu") { !overlay.chrome.colorMenu.isHidden }
+        try snapshot("light-edit-colors-menu")
+        key(53, "\u{1B}")
+        for key in [Pref.loupe, Pref.rulers, Pref.crosshair] { defaults.set(true, forKey: key) }
         key(9, "v")
         try snapshot("light-recording-armed")
+        for key in [Pref.loupe, Pref.rulers, Pref.crosshair] { defaults.set(false, forKey: key) }
         overlay.dismiss()
         defaults.removeObject(forKey: Pref.overlayAppearance)
 
