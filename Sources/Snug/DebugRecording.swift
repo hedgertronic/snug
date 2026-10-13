@@ -312,5 +312,10 @@ extension DebugRun {
         [outline, reminder].forEach { $0.orderOut(nil) }
         let listed = Set(content.windows.map(\.windowID))
         require(panelIDs.allSatisfy(listed.contains), "the transparent outline and reminder \(panelIDs) are in the shareable content")
+        // The stream's filter leaves Snug out by application, so it includes none of Snug's excluded windows, listed or not.
+        let streamFilter = DisplayCapture.filter(for: display, in: content, excluding: DisplayCapture.excludedWindowIDs())
+        let leftOut = DisplayCapture.excludedWindowIDs().union(panelIDs)
+        require(Set(streamFilter.includedWindows.map(\.windowID)).isDisjoint(with: leftOut) && streamFilter.includedApplications.allSatisfy { $0.processID != getpid() },
+                "the recording filter includes none of Snug's chrome windows \(leftOut.sorted())")
     }
 }
