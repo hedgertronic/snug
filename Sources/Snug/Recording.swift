@@ -64,13 +64,14 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         try stream.addRecordingOutput(output)
     }
 
-    /// Starts recording `area` of the display into `file`. With `showsPanels`, a thin red outline just outside the area pulses once as
-    /// capture starts, and the stop reminder sits outside it.
+    /// Starts recording `area` of the display into `file`. With `showsPanels`, the rest of the display dims, a thin red outline just
+    /// outside the area pulses once as capture starts, and the stop reminder sits outside it.
     static func start(displayID: CGDirectDisplayID, area: CGRect, file: URL, showsCursor: Bool, showsPanels: Bool, defaults: UserDefaults) async throws -> ScreenRecording {
         // Ordered in while transparent, so the window server lists them for the filter that leaves them out.
+        let dim = showsPanels ? makeDim(around: area, on: displayID, defaults: defaults) : nil
         let outline = showsPanels ? makeOutline(around: area, on: displayID) : nil
         let reminder = showsPanels ? makeReminder(around: area, on: displayID, defaults: defaults) : nil
-        let panels = [outline, reminder].compactMap(\.self)
+        let panels = [dim, outline, reminder].compactMap(\.self)
         panels.forEach { $0.orderFrontRegardless() }
         let recording: ScreenRecording
         do {
@@ -168,6 +169,26 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     private static func screenFrame(_ rect: CGRect, on displayID: CGDirectDisplayID) -> CGRect {
         let bounds = CGDisplayBounds(displayID)
         return CGRect(x: bounds.minX + rect.minX, y: CGDisplayBounds(CGMainDisplayID()).height - (bounds.minY + rect.maxY), width: rect.width, height: rect.height)
+    }
+
+    /// The dim: the whole display at the overlay's outside dim (`highlight.fade`) with the area cut out, so the recorded area reads as the
+    /// target; clicks go through to the apps.
+    static func makeDim(around area: CGRect, on displayID: CGDirectDisplayID, defaults: UserDefaults) -> RecordingPanel {
+        let size = CGDisplayBounds(displayID).size
+        let panel = RecordingPanel(frame: screenFrame(CGRect(origin: .zero, size: size), on: displayID))
+        let shape = CAShapeLayer()
+        let path = CGMutablePath()
+        path.addRect(CGRect(origin: .zero, size: size))
+        // The panel's layer has a bottom-left origin.
+        path.addRect(CGRect(x: area.minX, y: size.height - area.maxY, width: area.width, height: area.height))
+        shape.path = path
+        shape.fillRule = .evenOdd
+        shape.fillColor = NSColor.black.withAlphaComponent(defaults.double(forKey: Pref.highlightFade)).cgColor
+        let view = NSView(frame: CGRect(origin: .zero, size: size))
+        view.wantsLayer = true
+        view.layer!.addSublayer(shape)
+        panel.contentView = view
+        return panel
     }
 
     /// The outline: a 2 pt red border, the armed outline's color, just outside `area`.

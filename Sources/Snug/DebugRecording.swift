@@ -216,10 +216,17 @@ extension DebugRun {
                 "the reminder is the chrome's surface pill with the shortcut on a key cap, and the panel draws its shadow")
         require(reminder.frame.maxY == outline.frame.minY - ScreenRecording.reminderGap && abs(reminder.frame.midX - outline.frame.midX) <= 0.5,
                 "the reminder is centered under the outline, \(ScreenRecording.reminderGap) pt away: \(reminder.frame) \(outline.frame)")
+        // The dim covers the display at the highlight fade with the area cut out, and lets clicks through.
+        let dim = ScreenRecording.makeDim(around: recordArea, on: display, defaults: defaults)
+        let dimPath = (dim.contentView!.layer!.sublayers![0] as! CAShapeLayer).path!
+        let displayHeight = CGDisplayBounds(display).height
+        require(dim.frame.size == CGDisplayBounds(display).size && dim.ignoresMouseEvents && dimPath.contains(CGPoint(x: 10, y: 10), using: .evenOdd)
+                    && !dimPath.contains(CGPoint(x: recordArea.midX, y: displayHeight - recordArea.midY), using: .evenOdd),
+                "the dim panel covers the display, cuts the area out, and is click-through: \(dim.frame)")
         let excluded = DisplayCapture.excludedWindowIDs()
-        let panelIDs = [outline, reminder].map { CGWindowID($0.windowNumber) }
+        let panelIDs = [dim, outline, reminder].map { CGWindowID($0.windowNumber) }
         require(panelIDs.allSatisfy { $0 > 0 && excluded.contains($0) } && !excluded.contains(CGWindowID(settings.windowNumber)),
-                "the outline and reminder \(panelIDs) are left out of recordings and Settings \(settings.windowNumber) is not: \(excluded.sorted())")
+                "the dim, outline and reminder \(panelIDs) are left out of recordings and Settings \(settings.windowNumber) is not: \(excluded.sorted())")
         defaults.set(-1, forKey: Pref.hotKeyCode)
         let unset = ScreenRecording.makeReminder(around: recordArea, on: display, defaults: defaults)!
         require(texts(in: unset.contentView!) == ["Stop from the menu bar"], "with no shortcut the reminder points to the menu bar: \(texts(in: unset.contentView!))")
@@ -304,14 +311,12 @@ extension DebugRun {
         require(recorded.size == CGSize(width: area.width * pixelScale, height: area.height * pixelScale) && abs(recorded.seconds - 1) < 0.3,
                 "a live 1 s recording of 200 x 100 pt is \(area.width * pixelScale) x \(area.height * pixelScale) px and about 1 s: \(recorded)")
 
-        // `start` orders the outline and reminder in while still transparent, before it reads the shareable content: ScreenCaptureKit
-        // lists them then, so the filter's window-ID exclusion finds them. (A display filter's `includedWindows` is empty, so it can't
-        // show the exclusion itself.)
-        [outline, reminder].forEach { $0.orderFrontRegardless() }
+        // `start` orders the panels in while still transparent, before it reads the shareable content: ScreenCaptureKit lists them then.
+        [dim, outline, reminder].forEach { $0.orderFrontRegardless() }
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
-        [outline, reminder].forEach { $0.orderOut(nil) }
+        [dim, outline, reminder].forEach { $0.orderOut(nil) }
         let listed = Set(content.windows.map(\.windowID))
-        require(panelIDs.allSatisfy(listed.contains), "the transparent outline and reminder \(panelIDs) are in the shareable content")
+        require(panelIDs.allSatisfy(listed.contains), "the transparent dim, outline and reminder \(panelIDs) are in the shareable content")
         // The stream's filter leaves Snug out by application, so it includes none of Snug's excluded windows, listed or not.
         let streamFilter = DisplayCapture.filter(for: display, in: content, excluding: DisplayCapture.excludedWindowIDs())
         let leftOut = DisplayCapture.excludedWindowIDs().union(panelIDs)
