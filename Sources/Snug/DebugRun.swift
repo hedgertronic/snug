@@ -337,7 +337,7 @@ enum DebugRun {
         }
         require(overlay.view.overlays.radii == corners(0, 20), "the outline hugs the window's bottom corners and keeps the top square")
         key(30, "]")
-        require(overlay.view.overlays.radii == corners(1, 20 + 1) && overlay.radiusReadout == "r 1 1 21 21", "] grows every corner by 1 pt")
+        require(overlay.view.overlays.radii == corners(1, 20 + 1), "] grows every corner by 1 pt")
         require(!overlay.chrome.radius.isHidden && texts(in: overlay.chrome.radius) == ["r 1 / 1 / 21 / 21", "[", "]"]
                     && texts(in: overlay.chrome.size) == ["\(Int(bottomHalf.width)) x \(Int(bottomHalf.height))"],
                 "the radius chip shows each corner after ], and the size chip keeps the size: \(texts(in: overlay.chrome.radius)) \(texts(in: overlay.chrome.size))")

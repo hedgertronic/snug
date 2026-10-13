@@ -58,9 +58,7 @@ extension OverlayController {
         guard let rect = selection?.rect else { return }
         let current = cornerRadii(of: rect)
         let radius = (hoveredCorner ?? lastEditedCorner).map { current[$0] } ?? CornerRadii.corners.map { current[$0] }.max()!
-        let applied = CornerRadii(radius).offset(by: 0, in: rect.size)
-        editedRadii[rect] = applied
-        showRadiusReadout(applied)
+        editedRadii[rect] = CornerRadii(radius).offset(by: 0, in: rect.size)
         refresh()
     }
 
@@ -93,18 +91,6 @@ extension OverlayController {
         let inside = corner.movesLeft ? box.minX + 14 : box.maxX - 14 - size.width
         cornerChip.frame.origin = CGPoint(x: fits ? outside : inside, y: corner.movesTop ? box.maxY - size.height : box.minY)
         cornerChip.isHidden = false
-    }
-
-    /// The size badge's text for a radius edit, e.g. "r 12" or "r 12 0 0 12" (top-left, top-right, bottom-left, bottom-right), for 1.5 s.
-    func showRadiusReadout(_ radii: CornerRadii) {
-        let points = CornerRadii.corners.map { Int((radii[$0] / scale).rounded()) }
-        radiusReadout = "r " + (Set(points).count == 1 ? "\(points[0])" : points.map(String.init).joined(separator: " "))
-        radiusReadoutTask?.cancel()
-        radiusReadoutTask = Task {
-            try await Task.sleep(for: .seconds(1.5))
-            radiusReadout = nil
-            refresh()
-        }
     }
 
     /// An arrow-key move of the selection, keeping its edited corners.

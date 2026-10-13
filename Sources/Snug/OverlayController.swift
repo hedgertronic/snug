@@ -111,8 +111,6 @@ final class OverlayController {
     var radiusTasks: [CGRect: Task<(radius: CGFloat, arcs: CornerRadii), Never>] = [:]
     /// Per-corner radii set with `[`, `]`, the corner dots, and E, by rectangle; they replace the measured ones.
     var editedRadii: [CGRect: CornerRadii] = [:]
-    /// The size pill's text while a radius edit is fresh, e.g. "r 12".
-    var radiusReadout: String?
     /// The corner a dot drag last changed; `=` copies its radius to the other corners.
     var lastEditedCorner: Handle?
     /// The corner whose dot the pointer is on (or whose chip it is heading to), and its "All corners" chip.
@@ -145,7 +143,6 @@ final class OverlayController {
         panel.allowedContentTypes = [.png]
         return panel.runModal() == .OK ? panel.url : nil
     }
-    var radiusReadoutTask: Task<Void, Error>?
     /// The last pointer position in image pixels.
     var pointer = CGPoint.zero
     /// Capture mode: what the pointer is over (accessibility elements, pixel geometry, windows, the display), and the running geometry analysis.
@@ -301,8 +298,6 @@ final class OverlayController {
         arcs = [:]
         radiusTasks = [:]
         editedRadii = [:]
-        radiusReadoutTask?.cancel()
-        radiusReadout = nil
         lastEditedCorner = nil
         hoveredCorner = nil
         lockedRatio = nil
@@ -493,7 +488,6 @@ final class OverlayController {
             let radii = from.moving(corner, by: delta, alone: event.modifierFlags.contains(.option), in: rect.size)
             editedRadii[rect] = radii
             lastEditedCorner = corner
-            showRadiusReadout(radii)
         }
         updateCursor()
         refresh()
@@ -835,9 +829,7 @@ final class OverlayController {
     /// `]` / `[`: every corner of the selection (or the hovered rectangle) grows or shrinks by `points`, from its current radii.
     private func adjustRadii(by points: CGFloat) {
         guard let rect = selection?.rect ?? hoverRect else { return }
-        let adjusted = cornerRadii(of: rect).offset(by: points * scale, in: rect.size)
-        editedRadii[rect] = adjusted
-        showRadiusReadout(adjusted)
+        editedRadii[rect] = cornerRadii(of: rect).offset(by: points * scale, in: rect.size)
     }
 
     /// Closes the overlay first, then encodes off main and delivers.
