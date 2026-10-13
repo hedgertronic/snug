@@ -99,19 +99,21 @@ extension OverlayController {
     }
 
     /// What the output of `rect` gets around it, after its size, in output pixels per axis: Frame's padding ("  + frame 96 x 96") when
-    /// Frame is on, else the window shadow's ("  + shadow 208 x 210") when a click takes `rect` as a live window with its shadow, or, in
-    /// cut out, when Shadow is on. The window's own shadow comes from macOS; its padding here is the fit cut out draws.
+    /// Frame is on; in cut out with Shadow on, the shadow canvas cut out draws ("  + shadow 208 x 210"); and "  + shadow" alone when a
+    /// click takes `rect` as a live window with its shadow, whose size macOS decides per window (a 400 x 523 pt Settings window at 2x
+    /// measured 94 x 123 px, against cut out's 208 x 210).
     private func additions(_ rect: CGRect) -> String {
         if framed {
             let crop = rect.integral, output = OutputFrame.rect(around: crop, scale: scale, framed: true).integral
             return "  + frame \(Int(output.width - crop.width)) x \(Int(output.height - crop.height))"
         }
-        let shadow = cutout == nil
-            ? window(matching: rect).map { displayID != nil && !(windowFrozen.indices.contains($0) && windowFrozen[$0]) && windowShadow(option: optionHeld) } ?? false
-            : defaults.bool(forKey: Pref.shadow)
-        guard shadow else { return "" }
-        let padding = OutputFrame.shadowPadding(scale: scale)
-        return "  + shadow \(2 * padding.sides) x \(padding.top + padding.bottom)"
+        if cutout != nil {
+            guard defaults.bool(forKey: Pref.shadow) else { return "" }
+            let padding = OutputFrame.shadowPadding(scale: scale)
+            return "  + shadow \(2 * padding.sides) x \(padding.top + padding.bottom)"
+        }
+        let live = window(matching: rect).map { displayID != nil && !(windowFrozen.indices.contains($0) && windowFrozen[$0]) } ?? false
+        return live && windowShadow(option: optionHeld) ? "  + shadow" : ""
     }
 
     func refreshChrome() {

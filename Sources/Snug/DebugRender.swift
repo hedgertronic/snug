@@ -343,8 +343,7 @@ extension DebugRun {
             overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: held ? .option : [], timestamp: ProcessInfo.processInfo.systemUptime,
                 windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
         }
-        let padding = OutputFrame.shadowPadding(scale: overlay.scale)
-        let shadowed = "1500 x 1200  + shadow \(2 * padding.sides) x \(padding.top + padding.bottom)"
+        let shadowed = "1500 x 1200  + shadow"
         var sizes = [texts(in: overlay.chrome.hover).last ?? ""]
         try snapshot("capture-hover-window")
         for _ in 0..<4 where overlay.session?.selected?.kind != .display { key(126, "") }
