@@ -207,7 +207,7 @@ extension DebugRun {
         // windows Snug's captures leave out, which Settings is not.
         let recordArea = CGRect(x: 300, y: 300, width: 400, height: 200)
         let outline = ScreenRecording.makeOutline(around: recordArea, on: display)
-        let reminder = ScreenRecording.makeReminder(around: recordArea, on: display, defaults: defaults)!
+        let reminder = ScreenRecording.makeReminder(around: recordArea, on: display, defaults: defaults)
         let settings = SettingsTabs.makeWindow()
         require(outline.contentView!.layer!.borderColor == NSColor.systemRed.cgColor, "the recording outline is red, like the armed outline")
         require(texts(in: reminder.contentView!) == ["0:00", "stop", "\u{2303}\u{21E7}Space"], "the reminder reads the time, stop, then the shortcut: \(texts(in: reminder.contentView!))")
@@ -215,6 +215,7 @@ extension DebugRun {
         let reminderCaps = reminderPills.last.map { $0.subviews[0].subviews.compactMap { $0 as? KeyCap } } ?? []
         require(reminderPills.count == 2 && reminderPills[1].frame.minX - reminderPills[0].frame.maxX == 8 && reminderCaps.map(\.text) == ["\u{2303}\u{21E7}Space"] && reminder.hasShadow,
                 "the reminder is two chrome pills 8 pt apart, the time and then stop with the shortcut's key cap; the panel draws the shadow")
+        require(reminderPills.map(\.frame.height) == [32, 32], "the time and stop pills are both the 32 pt control height: \(reminderPills.map(\.frame.height))")
         require([0, 7, 59, 60, 750].map(ScreenRecording.elapsed) == ["0:00", "0:07", "0:59", "1:00", "12:30"], "the time reads m:ss")
         require(reminder.frame.maxY == outline.frame.minY - ScreenRecording.reminderGap && abs(reminder.frame.midX - outline.frame.midX) <= 0.5,
                 "the reminder is centered under the outline, \(ScreenRecording.reminderGap) pt away: \(reminder.frame) \(outline.frame)")
@@ -230,7 +231,7 @@ extension DebugRun {
         require(panelIDs.allSatisfy { $0 > 0 && excluded.contains($0) } && !excluded.contains(CGWindowID(settings.windowNumber)),
                 "the dim, outline and reminder \(panelIDs) are left out of recordings and Settings \(settings.windowNumber) is not: \(excluded.sorted())")
         defaults.set(-1, forKey: Pref.hotKeyCode)
-        let unset = ScreenRecording.makeReminder(around: recordArea, on: display, defaults: defaults)!
+        let unset = ScreenRecording.makeReminder(around: recordArea, on: display, defaults: defaults)
         require(texts(in: unset.contentView!) == ["0:00", "Stop from the menu bar"], "with no shortcut the reminder points to the menu bar: \(texts(in: unset.contentView!))")
         defaults.set(49, forKey: Pref.hotKeyCode)
         // Placement in a 1512 x 945 pt visible frame under a 37 pt menu bar, for a 120 x 36 pt reminder.
@@ -240,10 +241,19 @@ extension DebugRun {
         let placements = [recordArea, near, CGRect(x: 1450, y: 300, width: 60, height: 100), CGRect(x: 0, y: 37, width: 1512, height: 945),
                           CGRect(x: 0, y: 60, width: 1512, height: 880)].map { ScreenRecording.reminderFrame(size: size, around: $0, within: visible) }
         require(placements[0] == CGRect(x: 440, y: 511, width: 120, height: 36) && placements[1] == CGRect(x: 690, y: 653, width: 120, height: 36)
-                && placements[2] == CGRect(x: 1392, y: 411, width: 120, height: 36) && placements[3] == nil && placements[4] == nil,
-                "the reminder goes below, above when the area reaches the bottom, inside the screen sideways, and nowhere when neither fits: \(placements)")
-        require(placements.compactMap(\.self).allSatisfy { visible.contains($0) }
-                && zip([recordArea, near], placements).allSatisfy { !$0.0.insetBy(dx: -3, dy: -3).intersects($0.1!) }, "the reminder never covers the outlined area")
+                && placements[2] == CGRect(x: 1392, y: 411, width: 120, height: 36) && placements[3] == CGRect(x: 696, y: 922, width: 120, height: 36)
+                && placements[4] == CGRect(x: 696, y: 922, width: 120, height: 36),
+                "the reminder goes below, above when the area reaches the bottom, inside the screen sideways, and inside the area, bottom center 24 pt up, when neither fits: \(placements)")
+        require(placements.allSatisfy { visible.contains($0) }
+                && zip([recordArea, near], placements).allSatisfy { !$0.0.insetBy(dx: -3, dy: -3).intersects($0.1) }, "the reminder stays on screen and off a partial area's outline")
+        // A full-screen area: the reminder panel sits inside it, bottom center, 24 pt above the visible frame's bottom, and the outline stays on the display.
+        let displayBounds = CGRect(origin: .zero, size: CGDisplayBounds(display).size)
+        let fullOutline = ScreenRecording.makeOutline(around: displayBounds, on: display)
+        let fullReminder = ScreenRecording.makeReminder(around: displayBounds, on: display, defaults: defaults)
+        let screen = NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value == display }!
+        require(fullOutline.frame == screen.frame && fullReminder.frame.minY == screen.visibleFrame.minY + ScreenRecording.fullScreenInset
+                && abs(fullReminder.frame.midX - screen.frame.midX) <= 0.5 && screen.visibleFrame.contains(fullReminder.frame),
+                "a full-screen recording's outline is inset to the display and its reminder sits bottom center inside: \(fullOutline.frame) \(fullReminder.frame) \(screen.visibleFrame)")
 
         // Stopping waits at most 5 s for the recording output to finish the file, then fails with an error naming it.
         let (never, unfinished) = AsyncStream<(any Error)?>.makeStream()

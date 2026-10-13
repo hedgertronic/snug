@@ -255,7 +255,10 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     }
 
     /// Capture, or Stop Recording while recording.
-    @objc private func captureFromMenu() { capture() }
+    @objc private func captureFromMenu() {
+        if recording != nil { return stopRecording(via: "menu item") }
+        capture()
+    }
 
     @objc private func showAbout() {
         NSApp.activate()
@@ -272,7 +275,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     }
 
     private func capture(text: Bool = false) {
-        if recording != nil { return stopRecording() }
+        if recording != nil { return stopRecording(via: "shortcut") }
         guard !overlay.window.isVisible else { return }
         guard CGPreflightScreenCaptureAccess() else { return showFirstRun() }
         let (screen, id) = screenUnderPointer()
@@ -324,22 +327,22 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     private func startRecording(displayID: CGDirectDisplayID, area: CGRect, showsCursor: Bool) {
         let file = Output.defaultFile(defaults: .standard).deletingPathExtension().appendingPathExtension("mov")
         let start = Task {
-            try await ScreenRecording.start(displayID: displayID, area: area, file: file, showsCursor: showsCursor, showsPanels: true, defaults: .standard)
+            try await ScreenRecording.start(displayID: displayID, area: area, file: file, showsCursor: showsCursor, showsPanels: true, defaults: .standard,
+                                            onFailure: { [self] error in
+                                                endRecording()
+                                                showRecordingFailure(error)
+                                            },
+                                            onStop: { [self] in stopRecording(via: "stream stop") })
         }
         recording = start
         Task {
             do {
-                let session = try await start.value
-                session.onFailure = { [self] error in
-                    endRecording()
-                    NSApp.presentError(error)
-                }
-                session.onStop = { [self] in stopRecording() }
+                _ = try await start.value
             } catch {
                 // After a stop during startup, `stopRecording` reports the failed start.
                 guard recording == start else { return }
                 endRecording()
-                NSApp.presentError(error)
+                showRecordingFailure(error)
             }
         }
     }
@@ -351,8 +354,17 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         return recording
     }
 
-    /// Stops the recording once it has started, then copies the saved file's URL and shows the toast with its first frame.
-    private func stopRecording() {
+    /// A toast for a recording that failed: "Recording failed" and the error's description. Alerts may never show for an accessory app.
+    private func showRecordingFailure(_ error: any Error) {
+        let failure = error as NSError
+        recordingLog.error("recording failed, error \(failure.domain, privacy: .public) \(failure.code): \(failure.localizedDescription, privacy: .public)")
+        Toast.show(message: "Recording failed", detail: failure.localizedDescription, color: .systemRed)
+    }
+
+    /// Stops the recording once it has started, then copies the saved file's URL and shows the toast with its first frame. `via` names
+    /// the route, for the log: "shortcut", "menu item" or "stream stop".
+    private func stopRecording(via: String) {
+        recordingLog.notice("stop requested via \(via, privacy: .public), recording \(self.recording != nil)")
         guard let start = endRecording() else { return }
         Task {
             do {
@@ -360,7 +372,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 try await session.stop()
                 _ = try await ScreenRecording.deliver(session.file, pasteboard: .general, defaults: .standard)
             } catch {
-                NSApp.presentError(error)
+                showRecordingFailure(error)
             }
         }
     }
