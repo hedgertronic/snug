@@ -715,7 +715,7 @@ final class OverlayController {
         case (_, true, "s") where hovering: clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true)
         case (36, _, _) where shift || option, (76, _, _) where shift || option: copySelectionText(translating: option)
         case (36, _, _), (76, _, _): copy()
-        case (48, _, _) where hovering, (126, _, _) where hovering, (125, _, _) where hovering:
+        case (48, _, _) where hovering, (126, _, _) where hovering || unionHover, (125, _, _) where hovering || unionHover:
             if event.keyCode == 125 || event.keyCode == 48 && shift { session?.shrink() } else { session?.expand() }
             walkedLevel = true
         case (123, false, _) where hovering && !option, (124, false, _) where hovering && !option:
