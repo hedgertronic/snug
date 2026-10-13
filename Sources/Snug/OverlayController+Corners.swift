@@ -129,4 +129,26 @@ extension OverlayController {
         selection!.resize(side, to: CGPoint(x: from.x + direction.x * distance, y: from.y + direction.y * distance), ratio: lockedRatio)
         carryRadii(from: old)
     }
+
+    /// Command-arrow moves the side facing the arrow outward to the next pixel edge along it, up to the extent; Command-Shift-arrow
+    /// moves it inward, keeping the minimum size. A sharp edge reads as a run of neighboring positions, so each run counts once, at
+    /// its middle, and the run the side sits on is skipped. With no edge in the way, nothing moves.
+    func moveSideToEdge(keyCode: UInt16, outward: Bool) {
+        guard let image, let rect = selection?.rect else { return }
+        let vertical = keyCode == 123 || keyCode == 124
+        let maxSide = keyCode == 124 || keyCode == 125
+        let (low, high) = vertical ? (rect.minX, rect.maxX) : (rect.minY, rect.maxY)
+        let side = maxSide ? high : low
+        let limit = outward ? (maxSide ? (vertical ? extent.maxX : extent.maxY) : 0)
+            : maxSide ? low + AreaSelection.minimumSize : high - AreaSelection.minimumSize
+        // Cancellation is the only error here and a key press is never cancelled.
+        let found = try! SmartSnap().edges(in: image, of: rect, vertical: vertical, near: (side + limit) / 2, band: Int(abs(limit - side) / 2) + 2, limit: .max)
+        var runs: [[CGFloat]] = []
+        for position in found.sorted() {
+            if let last = runs.last?.last, position - last <= 1 { runs[runs.count - 1].append(position) } else { runs.append([position]) }
+        }
+        let edges = runs.map { $0[$0.count / 2] }.filter { abs($0 - side) > 1 && ($0 - side) * (limit - side) > 0 && abs($0 - side) <= abs(limit - side) }
+        guard let edge = edges.min(by: { abs($0 - side) < abs($1 - side) }) else { return beep() }
+        nudgeSide(keyCode: keyCode, outward: outward, by: abs(edge - side))
+    }
 }

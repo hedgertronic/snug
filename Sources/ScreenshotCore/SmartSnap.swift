@@ -119,9 +119,9 @@ public struct SmartSnap {
     }
 
     /// Pixel edges for one side of `rect`: the positions within `band` of `position` where the pixels along that
-    /// side's span change strongly, plus the image border when the band reaches it. The caller picks among them.
-    /// `vertical` scans for a vertical edge (an x position); positions are source-image pixels.
-    public func edges(in image: CGImage, of rect: CGRect, vertical: Bool, near position: CGFloat, band: Int) throws -> [CGFloat] {
+    /// side's span change strongly, the strongest first (at most `limit`, after the image border when the band reaches it). The caller
+    /// picks among them. `vertical` scans for a vertical edge (an x position); positions are source-image pixels.
+    public func edges(in image: CGImage, of rect: CGRect, vertical: Bool, near position: CGFloat, band: Int, limit: Int = 6) throws -> [CGFloat] {
         let extent = CGRect(x: 0, y: 0, width: image.width, height: image.height)
         let span = rect.intersection(extent)
         guard !span.isNull else { return [] }
@@ -135,10 +135,10 @@ public struct SmartSnap {
         let inset = max(2, Int(CGFloat(length) * 0.16))
         let low = vertical ? raster.borders.left : raster.borders.top
         let high = vertical ? raster.borders.right : raster.borders.bottom
-        let limit = vertical ? raster.width : raster.height
+        let positionLimit = vertical ? raster.width : raster.height
         let choices = try snapSideChoices(raster, vertical: vertical, fixedRange: (inset, length - inset),
-                                          around: Int((position - origin).rounded()), radius: band, positionLimit: limit,
-                                          border: low ? 0 : high ? limit : nil)
+                                          around: Int((position - origin).rounded()), radius: band, positionLimit: positionLimit,
+                                          border: low ? 0 : high ? positionLimit : nil, limit: limit)
         return choices.filter { $0.support >= 0.43 }.map { origin + CGFloat($0.position) }
     }
 }
@@ -179,7 +179,7 @@ private func snapRasterize(_ image: CGImage, crop: CGRect) -> SnapRaster? {
 }
 
 private func snapSideChoices(_ raster: SnapRaster, vertical: Bool, fixedRange: (Int, Int),
-                             around: Int, radius: Int, positionLimit: Int, border: Int?) throws -> [SideChoice] {
+                             around: Int, radius: Int, positionLimit: Int, border: Int?, limit: Int = 6) throws -> [SideChoice] {
     let spanLimit = vertical ? raster.height : raster.width
     let lower = max(1, fixedRange.0), upper = min(spanLimit - 1, fixedRange.1)
     guard upper - lower >= 8 else { return [] }
@@ -215,7 +215,7 @@ private func snapSideChoices(_ raster: SnapRaster, vertical: Bool, fixedRange: (
     let strongest = Array(choices.sorted {
         if $0.support != $1.support { return $0.support > $1.support }
         return abs($0.position - around) < abs($1.position - around)
-    }.prefix(6))
+    }.prefix(limit))
     guard let border, abs(border - around) <= radius else { return strongest }
     return [SideChoice(position: border, support: 1)] + strongest
 }
