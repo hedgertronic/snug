@@ -48,6 +48,8 @@ enum Pref {
     /// The menu bar icon variant, "a" or "d" (see `SnugApp.menuBarIcon`). The status item redraws as soon as it changes, so
     /// `defaults write local.snug SnugMenuBarIcon d` switches the icon live.
     static let menuBarIcon = "SnugMenuBarIcon"
+    /// The overlay chrome's look: "system" follows the system appearance, "light" or "dark" fixes it.
+    static let overlayAppearance = "SnugOverlayAppearance"
 
     static func logHoverLine(_ line: String, key: String = logHover, file name: String = "hover.log") {
         guard UserDefaults.standard.bool(forKey: key) else { return }
@@ -85,6 +87,7 @@ enum Pref {
             toastPosition: "bottomCenter",
             roundCorners: true,
             menuBarIcon: "a",
+            overlayAppearance: "system",
             cutoutCrop: false,
             recordCountIn: 3,
             recordCursor: true
