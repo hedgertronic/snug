@@ -6,15 +6,14 @@ public enum SnapFits {
     /// with the smallest total offset first, at most three), then the pixel fits that do not repeat one of them. The best pixel fit
     /// goes ahead of the frames further from the drag than it is (a shape drawn in an image view, whose frame is the image's bounds).
     public static func merge(frames: [CGRect], pixel: [CGRect], drag: CGRect, scale: CGFloat) -> [CGRect] {
-        let bandX = CGFloat(SmartSnap.band(side: drag.width, scale: scale))
-        let bandY = CGFloat(SmartSnap.band(side: drag.height, scale: scale))
+        let band = CGFloat(SmartSnap.band(scale: scale))
         func offset(_ r: CGRect) -> CGFloat {
             abs(r.minX - drag.minX) + abs(r.maxX - drag.maxX) + abs(r.minY - drag.minY) + abs(r.maxY - drag.maxY)
         }
         var fits: [CGRect] = []
         for frame in frames.sorted(by: { offset($0) < offset($1) })
-        where abs(frame.minX - drag.minX) <= bandX && abs(frame.maxX - drag.maxX) <= bandX
-            && abs(frame.minY - drag.minY) <= bandY && abs(frame.maxY - drag.maxY) <= bandY
+        where abs(frame.minX - drag.minX) <= band && abs(frame.maxX - drag.maxX) <= band
+            && abs(frame.minY - drag.minY) <= band && abs(frame.maxY - drag.maxY) <= band
             && !fits.contains(where: { snapOverlap($0, frame) > 0.94 }) {
             fits.append(frame)
             if fits.count == 3 { break }

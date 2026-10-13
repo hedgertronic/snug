@@ -37,14 +37,13 @@ struct SnapFitsTests {
         #expect(merged == [exact, off])
     }
 
-    @Test func bandFloorIsEightPointsAtTheCaptureScale() {
-        #expect(SmartSnap.band(side: 22, scale: 1) == 8)
-        #expect(SmartSnap.band(side: 22, scale: 2) == 16)
-        #expect(SmartSnap.band(side: 400, scale: 1) == 48)
-        #expect(SmartSnap.band(side: 2000, scale: 1) == 56)
-        let drag = CGRect(x: 0, y: 0, width: 200, height: 22)
-        #expect(AreaSelection.preview(drag.insetBy(dx: -6, dy: -7), stillFits: drag, scale: 1))
-        #expect(!AreaSelection.preview(drag.insetBy(dx: -6, dy: -7), stillFits: drag.offsetBy(dx: 0, dy: 9), scale: 1))
+    @Test func bandIsSixPointsAtTheCaptureScale() {
+        #expect(SmartSnap.band(scale: 1) == 6)
+        #expect(SmartSnap.band(scale: 2) == 12)
+        let drag = CGRect(x: 0, y: 0, width: 2000, height: 22)
+        #expect(AreaSelection.preview(drag.insetBy(dx: -6, dy: -6), stillFits: drag, scale: 1))
+        #expect(!AreaSelection.preview(drag.insetBy(dx: -7, dy: -6), stillFits: drag, scale: 1))
+        #expect(AreaSelection.preview(drag.insetBy(dx: -12, dy: -12), stillFits: drag, scale: 2))
     }
 
     @Test func nearestEdgeWithinBandPrefersFramesOnATie() {

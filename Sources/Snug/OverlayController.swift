@@ -521,7 +521,7 @@ final class OverlayController {
         if snapEnabled, !exact, ratio == nil {
             for vertical in [true, false] where vertical ? handle.movesLeft || handle.movesRight : handle.movesTop || handle.movesBottom {
                 let value = vertical ? point.x : point.y
-                let band = SmartSnap.band(side: vertical ? rect.width : rect.height, scale: scale)
+                let band = SmartSnap.band(scale: scale)
                 // Cancellation is the only error here and a drag event is never cancelled.
                 let pixel = try! SmartSnap().edges(in: image, of: rect, vertical: vertical, near: value, band: band)
                 guard let edge = SnapFits.edge(near: value, band: CGFloat(band), frames: edgeFrames, pixel: pixel, vertical: vertical) else { continue }

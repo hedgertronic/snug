@@ -202,13 +202,12 @@ public struct AreaSelection: Equatable, Sendable {
         isEdited = true
     }
 
-    /// Whether a snap preview still lies within the search band of a new drag, so it can stay visible.
+    /// Whether a snap preview still lies within the snap band of a new drag, so it can stay visible.
     ///
     /// The band is `SmartSnap.band` at the capture's `scale`.
     public static func preview(_ preview: CGRect, stillFits drag: CGRect, scale: CGFloat) -> Bool {
-        let bandX = CGFloat(SmartSnap.band(side: drag.width, scale: scale))
-        let bandY = CGFloat(SmartSnap.band(side: drag.height, scale: scale))
-        return abs(preview.minX - drag.minX) <= bandX && abs(preview.maxX - drag.maxX) <= bandX
-            && abs(preview.minY - drag.minY) <= bandY && abs(preview.maxY - drag.maxY) <= bandY
+        let band = CGFloat(SmartSnap.band(scale: scale))
+        return abs(preview.minX - drag.minX) <= band && abs(preview.maxX - drag.maxX) <= band
+            && abs(preview.minY - drag.minY) <= band && abs(preview.maxY - drag.maxY) <= band
     }
 }
