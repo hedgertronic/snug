@@ -161,6 +161,9 @@ final class OverlayController {
     var session: SelectionSession?
     var detectionTask: Task<Void, Never>?
     var detected: [Candidate] = []
+    /// Small uniform fills read from the 1x capture (built off main), and the task building them; hover adds the one under the pointer.
+    var fills: FlatFills?
+    var fillsTask: Task<Void, Never>?
     /// The Dock's icon tiles read from the frozen image, labeled by the Dock's item titles.
     var dockTiles: [Candidate] = []
     /// The running accessibility lookup and when the last one started (throttle).
@@ -224,6 +227,8 @@ final class OverlayController {
         dimResolved = false
         detectionTask?.cancel()
         detected = []
+        fillsTask?.cancel()
+        fills = nil
         dockTiles = []
         accessibilityTask?.cancel()
         let start = ContinuousClock.now
@@ -415,6 +420,7 @@ final class OverlayController {
         }
         if mode == .capture, session != nil {
             requestAccessibility(at: pixel)
+            addFill(at: pixel)
             let walkLetGo = walkedLevel && hypot(pixel.x - session!.anchor.x, pixel.y - session!.anchor.y) > 4 * scale
             if session!.isLocked, !session!.holds(at: pixel) || walkLetGo { session!.toggleLock() }
             if !session!.isLocked { walkedLevel = false }

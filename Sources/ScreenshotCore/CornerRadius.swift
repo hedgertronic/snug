@@ -117,3 +117,58 @@ public func windowCornerRadius(in image: CGImage, rect: CGRect) -> CGFloat {
                 fit(corner: (0, height - 1), step: (1, -1)), fit(corner: (width - 1, height - 1), step: (-1, -1))].compactMap { $0 }.sorted()
     return fits.isEmpty ? 0 : CGFloat(fits[fits.count / 2])
 }
+
+extension Candidate {
+    /// This candidate with its rect grown to the outer edge of a 1 to 2 px border ring that lies 1 to 3 px outside it, as a UI box whose
+    /// frame sits just inside its border has (a composer, an input); `self` when any side has no such ring. A side has one where, at three
+    /// places along it, the interior color runs to the ring, the ring color to its far edge, and a different color follows. The rect,
+    /// in image pixels with a top-left origin, then ends where the border does, so the corner radius measured on it is the border's.
+    public func grownToBorder(in image: CGImage) -> Candidate {
+        let rect = bounds.integral
+        let sides: [(x: (Double) -> Int, y: (Double) -> Int, step: (x: Int, y: Int))] = [
+            ({ Int(rect.minX + rect.width * $0) }, { _ in Int(rect.minY) }, (0, -1)), ({ Int(rect.minX + rect.width * $0) }, { _ in Int(rect.maxY) - 1 }, (0, 1)),
+            ({ _ in Int(rect.minX) }, { Int(rect.minY + rect.height * $0) }, (-1, 0)), ({ _ in Int(rect.maxX) - 1 }, { Int(rect.minY + rect.height * $0) }, (1, 0)),
+        ]
+        var outsets: [Int] = []
+        for side in sides {
+            let found = [1.0 / 3, 0.5, 2.0 / 3].map { fraction in
+                ringOutset(along: pixelLine(in: image, from: (side.x(fraction), side.y(fraction)), step: side.step, count: 6))
+            }
+            guard let outset = found[0], found.allSatisfy({ $0 == outset }) else { return self }
+            outsets.append(outset)
+        }
+        let grown = CGRect(x: rect.minX - CGFloat(outsets[2]), y: rect.minY - CGFloat(outsets[0]),
+                           width: rect.width + CGFloat(outsets[2] + outsets[3]), height: rect.height + CGFloat(outsets[0] + outsets[1]))
+        return Candidate(id: id, label: label, bounds: grown, score: score, kind: kind, hitRegions: hitRegions)
+    }
+}
+
+/// `count` RGB pixels of `image` starting at `start` and stepping by `step` (one of the four axis directions); empty when any is outside.
+private func pixelLine(in image: CGImage, from start: (x: Int, y: Int), step: (x: Int, y: Int), count: Int) -> [[Int]] {
+    let end = (x: start.x + step.x * (count - 1), y: start.y + step.y * (count - 1))
+    let box = CGRect(x: min(start.x, end.x), y: min(start.y, end.y), width: abs(step.x) * (count - 1) + 1, height: abs(step.y) * (count - 1) + 1)
+    guard CGRect(x: 0, y: 0, width: image.width, height: image.height).contains(box) else { return [] }
+    var bytes = [UInt8](repeating: 0, count: count * 4)
+    bytes.withUnsafeMutableBytes { storage in
+        let context = CGContext(data: storage.baseAddress, width: Int(box.width), height: Int(box.height), bitsPerComponent: 8, bytesPerRow: Int(box.width) * 4,
+                                space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)!
+        context.draw(image.cropping(to: box)!, in: CGRect(x: 0, y: 0, width: box.width, height: box.height))
+    }
+    let line = (0..<count).map { [Int(bytes[$0 * 4]), Int(bytes[$0 * 4 + 1]), Int(bytes[$0 * 4 + 2])] }
+    return step.x + step.y < 0 ? line.reversed() : line
+}
+
+/// How many px past the first pixel of `line` (the interior, then outward) a border ring ends: the interior color holds up to a ring
+/// that starts at the 2nd to 4th pixel, runs 1 or 2 px in one color, and gives way to a color unlike it. Nil without such a ring.
+private func ringOutset(along line: [[Int]]) -> Int? {
+    guard line.count == 6 else { return nil }
+    func gap(_ a: [Int], _ b: [Int]) -> Int { zip(a, b).reduce(0) { $0 + abs($1.0 - $1.1) } }
+    for start in 1...3 {
+        guard gap(line[start], line[0]) >= 14 else { continue }
+        let thickness = (start..<line.count).prefix { gap(line[$0], line[start]) <= 8 }.count
+        guard (1...2).contains(thickness), start + thickness < line.count, gap(line[start + thickness], line[start]) >= 14 else { return nil }
+        return start + thickness - 1
+    }
+    return nil
+}
