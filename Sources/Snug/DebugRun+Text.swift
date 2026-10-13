@@ -425,6 +425,18 @@ extension DebugRun {
         let plain = await copied()
         require(plain == "you@example.com", "Shift-Return on one column copies plain text: \(plain.debugDescription)")
 
+        // Shift-Return on a hovered element copies its text, as on a selection, not the image.
+        overlay.present(image: image, frame: frame, displayID: nil)
+        overlay.detectionTask?.cancel()
+        overlay.setWindows([email], names: ["Email"], pointer: CGPoint(x: frame.minX + email.midX / overlay.scale, y: frame.maxY - email.midY / overlay.scale))
+        require(overlay.selection == nil && overlay.hoverRect == email, "the email field is hovered: \(String(describing: overlay.hoverRect))")
+        pasteboard.clearContents()
+        key(returnKey, "\r", .shift)
+        await overlay.textTask?.value
+        let hoverText = await copied()
+        require(hoverText == "you@example.com" && pasteboard.data(forType: .png) == nil && !overlay.window.isVisible,
+                "Shift-Return on the hovered element copies its text, not an image: \(hoverText.debugDescription)")
+
         overlay.targetLanguage = german
         overlay.translationStatus = { _, _ in .installed }
         sent = nil

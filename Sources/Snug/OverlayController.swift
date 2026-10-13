@@ -679,7 +679,7 @@ final class OverlayController {
         let hovering = selection == nil
         switch (event.keyCode, command, character) {
         case (53, _, _): dismiss()
-        case (36, _, _) where hovering, (76, _, _) where hovering: clickHover(shadow: windowShadow(option: false), copy: true, save: afterCaptureSaves, takeDisplay: true)
+        case (36, _, _) where hovering && !shift, (76, _, _) where hovering && !shift: clickHover(shadow: windowShadow(option: false), copy: true, save: afterCaptureSaves, takeDisplay: true)
         case (_, true, _) where shift && character.lowercased() == "s":
             if hovering { clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true, saveAs: true) } else { save(saveAs: true) }
         case (_, false, "e") where hovering && hoverRect != nil: openAsSelection(hoverRect!)
