@@ -328,6 +328,7 @@ final class OverlayController {
         ratioBase = nil
         ratioPortrait = nil
         chrome.ratioMenu.isHidden = true
+        chrome.colorMenu.isHidden = true
         walkedLevel = false
         selection = nil
         interaction = .none
@@ -676,8 +677,24 @@ final class OverlayController {
         if armedRecording != nil { return handleRecordingKey(event) }
         if cutout != nil { return handleCutoutKey(event) }
         let flags = event.modifierFlags.intersection([.command, .option, .shift])
-        if mode == .capture, selection != nil, flags.isSuperset(of: .command), event.charactersIgnoringModifiers?.lowercased() == "z" {
+        // After Esc dropped the selection, the undo stack holds it, so Cmd-Z brings it back.
+        if mode == .capture, selection != nil || !undoStack.isEmpty, flags.isSuperset(of: .command), event.charactersIgnoringModifiers?.lowercased() == "z" {
             undoEdit(redo: flags.contains(.shift))
+            if selection == nil { updateHover(pixel: pointer) }
+            refresh()
+            return true
+        }
+        // Esc with a released selection drops it back to hover, as an undo step.
+        if event.keyCode == 53, mode == .capture, selection != nil, chrome.help.isHidden, case .none = interaction {
+            undoStack.append(selectionState)
+            redoStack = []
+            lastEdit = nil
+            cancelWork()
+            selection = nil
+            lockedRatio = nil
+            ratioBase = nil
+            ratioPortrait = nil
+            updateHover(pixel: pointer)
             refresh()
             return true
         }
@@ -715,6 +732,7 @@ final class OverlayController {
             guard let index = windows.firstIndex(where: { $0.contains(pointer) }) else { return false }
             clickWindow(index, crop: windows[index], framed: framed, copy: true, save: afterCaptureSaves)
         case (_, false, "k"): cutOut()
+        case (_, false, "u") where !hovering: showColorsMenu()
         case (_, false, "o"): defaults.set(!defaults.bool(forKey: Pref.roundCorners), forKey: Pref.roundCorners)
         case (_, false, _) where shift && !hovering && character.lowercased() == "p": toggleRatioLock()
         case (_, false, "p") where !hovering: showRatioMenu()

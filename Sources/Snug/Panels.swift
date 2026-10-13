@@ -122,7 +122,7 @@ final class HelpSheet: NSView {
         ("Capture", [("drag", "Select a region"), ("click", "Element or window"), ("Option-click", "Flip Frame for this capture"), ("Option-drag", "Exact, no snap"),
                      ("F", "Full screen, or all text"), ("W", "Capture the window"), ("Left / Right", "Next / previous peer (hover)"), ("Return", "Copy"), ("Shift-Return", "Copy the text"), ("Cmd-S", "Save"),
                      ("Cmd-Shift-S", "Save As"), ("E / Shift-click", "Edit as a selection"),
-                     ("G", "Scrolling capture, hover or selection"), ("K", "Cut-out preview"), ("Cut-out: Tab", "Next subject (Shift: back)"), ("Cut-out: S", "Crop to subject"),
+                     ("G", "Scrolling capture, hover or selection"), ("K", "Subject preview"), ("Subject: Tab", "Next subject (Shift: back)"), ("Subject: S", "Crop to subject"),
                      ("C", "Copy color"), ("Shift-C", "Cycle color format"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
         ("Adjust and text", [("Tab", "Walk out (Shift: in)"), ("Arrows", "Nudge 1 px (Shift: 10 px)"), ("Option-arrow", "Grow one side 1 px"), ("Option-Cmd-arrow", "Shrink one side 1 px"),
                              ("Cmd-arrow", "Edge out, one side"), ("Cmd-Shift-arrow", "Edge in, one side"), ("+ / -", "All sides 1 px (Option: 10)"), ("Cmd-Z", "Undo an edit (Shift: redo)"),
@@ -133,7 +133,7 @@ final class HelpSheet: NSView {
                              ("Text: Tab", "Next link, email, phone, code"), ("Text: Cmd-Return", "Open the picked item"), ("Option-Return", "Translate text")]),
         ("Modes, view, recording", [("A", "Capture"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),
                                     ("X", "Crosshair"), ("O", "Rounded corners"), ("M", "Frame: shadow on / off"), ("P", "Ratio menu"),
-                                    ("Shift-P", "Lock the ratio"), ("N", "Candidate list"), ("1-5", "Pick from the list (N)"), ("B", "Keys line"), ("?", "This sheet"),
+                                    ("Shift-P", "Lock the ratio"), ("U", "Colors menu: 1-6 copies"), ("N", "Candidate list"), ("1-5", "Pick from the list (N)"), ("B", "Keys line"), ("?", "This sheet"),
                                     ("V", "Arm recording, hover or selection"), ("Armed: Return / V", "Start recording"), ("Armed: H", "Cursor on / off"), ("Armed: I", "Count-in off, 3 s, 5 s"), ("Capture hotkey", "Stop recording")])
     ]
     let panel = NSVisualEffectView()
@@ -193,17 +193,23 @@ final class HelpSheet: NSView {
     }
 }
 
-/// The ratio chip's menu: rows on the chrome surface, over a clear layer that covers the overlay and closes the menu on a click outside
-/// it. While open it is the first responder: Up and Down move the highlight, Return picks, Esc or P closes; the pointer highlights the
-/// row under it and a click picks. Any other key closes it and goes on to the overlay.
+/// The ratio chip's menu, and the Colors menu: rows on the chrome surface, over a clear layer that covers the overlay and closes the menu
+/// on a click outside it. While open it is the first responder: Up and Down move the highlight, Return picks, Esc or its own key
+/// (`toggleKey`) closes, a row's cap key picks it; the pointer highlights the row under it and a click picks. Any other key closes it
+/// and goes on to the overlay.
 @MainActor
 final class RatioMenu: NSView {
-    /// A row; an empty title is a separator.
+    /// A row; an empty title is a separator. `swatch` takes the check column, and `cap` is a key cap at the row's right end that picks it.
     struct Item {
         let title: String
         let on: Bool
+        var swatch: NSColor?
+        var cap: String?
         let pick: () -> Void
     }
+
+    /// The key that opens the menu, which closes it again.
+    var toggleKey = "p"
 
     var onClose: () -> Void = {}
     /// A key the menu handles itself, so its cap can flash.
@@ -243,7 +249,8 @@ final class RatioMenu: NSView {
         let heights = items.map { $0.title.isEmpty ? Self.separatorHeight : Self.rowHeight }
         // As wide as the longest title: the checkmark column (22) before it, 12 after.
         let titles = items.map { ($0.title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium)]).width }
-        let size = CGSize(width: (Self.inset * 2 + 22 + titles.max()! + 12).rounded(.up), height: heights.reduce(Self.inset * 2, +))
+        let capWidth = items.contains { $0.cap != nil } ? KeyCap("1").frame.width + 12 : 0
+        let size = CGSize(width: (Self.inset * 2 + 22 + titles.max()! + 12 + capWidth).rounded(.up), height: heights.reduce(Self.inset * 2, +))
         var top = size.height - Self.inset
         rows = zip(items, heights).map { item, height in
             top -= height
@@ -259,6 +266,20 @@ final class RatioMenu: NSView {
                 let title = NSTextField(item.title, size: 12, weight: .medium, color: .chromeText)
                 title.frame.origin = CGPoint(x: 22, y: ((height - title.frame.height) / 2).rounded())
                 row.addSubview(title)
+                if let color = item.swatch {
+                    let swatch = NSView(frame: CGRect(x: 6, y: ((height - 12) / 2).rounded(), width: 12, height: 12))
+                    swatch.wantsLayer = true
+                    swatch.layer!.cornerRadius = 3
+                    swatch.layer!.backgroundColor = color.cgColor
+                    swatch.layer!.borderWidth = 0.5
+                    effectiveAppearance.performAsCurrentDrawingAppearance { swatch.layer!.borderColor = NSColor.chromeHairline.cgColor }
+                    row.addSubview(swatch)
+                }
+                if let key = item.cap {
+                    let cap = KeyCap(key)
+                    cap.frame.origin = CGPoint(x: row.frame.width - cap.frame.width - 6, y: ((height - cap.frame.height) / 2).rounded())
+                    row.addSubview(cap)
+                }
                 if item.on {
                     let check = NSImageView(image: NSImage(systemSymbolName: "checkmark", accessibilityDescription: "Current")!)
                     check.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 10, weight: .semibold)
@@ -299,6 +320,7 @@ final class RatioMenu: NSView {
                 item.layer!.backgroundColor = row == index ? Chrome.tint.cgColor : nil
                 for label in item.subviews.compactMap({ $0 as? NSTextField }) { label.textColor = row == index ? Chrome.onTint : .chromeText }
                 for check in item.subviews.compactMap({ $0 as? NSImageView }) { check.contentTintColor = row == index ? Chrome.onTint : .chromeText }
+                for cap in item.subviews.compactMap({ $0 as? KeyCap }) { cap.onTint = row == index }
             }
         }
     }
@@ -311,7 +333,12 @@ final class RatioMenu: NSView {
 
     override func keyDown(with event: NSEvent) {
         let choices = items.indices.filter { !items[$0].title.isEmpty }
-        if [125, 126, 36, 76, 53].contains(event.keyCode) || event.charactersIgnoringModifiers == "p" { onKey(event) }
+        let character = event.charactersIgnoringModifiers
+        if [125, 126, 36, 76, 53].contains(event.keyCode) || character == toggleKey { onKey(event) }
+        if let index = items.firstIndex(where: { $0.cap != nil && $0.cap == character }) {
+            onKey(event)
+            return pick(index)
+        }
         switch event.keyCode {
         case 125, 126:
             let position = highlighted.flatMap(choices.firstIndex) ?? (event.keyCode == 125 ? -1 : choices.count)
@@ -319,7 +346,7 @@ final class RatioMenu: NSView {
         case 36, 76:
             if let highlighted { pick(highlighted) }
         case 53: close()
-        case _ where event.charactersIgnoringModifiers == "p": close()
+        case _ where character == toggleKey: close()
         default:
             close()
             super.keyDown(with: event)

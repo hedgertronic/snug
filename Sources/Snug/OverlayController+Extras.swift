@@ -79,13 +79,31 @@ extension OverlayController {
 
     private func swatch(_ color: SRGBColor) -> NSColor { NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1) }
 
-    func copyColor() {
-        guard let color = pickedColor else { return }
+    /// Copies `color`, or the pointer's color or the selection's average, in the chosen format, and closes the overlay.
+    func copyColor(_ color: SRGBColor? = nil) {
+        guard let color = color ?? pickedColor else { return }
         let text = colorFormat.string(for: color)
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
         dismiss()
         Toast.show(message: "Copied", detail: text, color: swatch(color))
+    }
+
+    /// U on a selection: the menu under the Colors button, with the selection's average (what C copies) and its five main colors, each
+    /// copied by its row or its 1-6 key. The colors are worked out off main, since they take over 5 ms on a large selection.
+    func showColorsMenu() {
+        guard let rect = selection?.rect, let image else { return }
+        Task {
+            let (average, palette) = await Task.detached { (ColorFormat.average(of: image, in: rect), ColorFormat.palette(of: image, in: rect)) }.value
+            guard selection?.rect == rect else { return }
+            let rows = [average] + palette
+            let items = rows.enumerated().map { index, color in
+                RatioMenu.Item(title: colorFormat.string(for: color), on: false, swatch: swatch(color), cap: "\(index + 1)") { [self] in copyColor(color) }
+            }
+            let button = chrome.colors
+            chrome.colorMenu.open(Array(items.prefix(1)) + [RatioMenu.Item(title: "", on: false) {}] + items.dropFirst(), under: view.convert(button.bounds, from: button))
+            refresh()
+        }
     }
 
     func cycleColorFormat() {
@@ -183,12 +201,29 @@ extension OverlayController {
 
     func updateGuides() {
         let guides = view.guides
-        guides.crosshair.isHidden = !defaults.bool(forKey: Pref.crosshair)
+        // Armed recording shows no guides, and brings them back when it ends.
+        let armed = armedRecording != nil
+        guides.crosshair.isHidden = armed || !defaults.bool(forKey: Pref.crosshair)
         let animation = GuidesAnimation(rawValue: defaults.string(forKey: Pref.guidesAnimation)!)!
         let animated = !isHeadless && animation != GuidesAnimation.none
-        guides.setShown(guides.rulers, defaults.bool(forKey: Pref.rulers), from: animation == .slide ? Guides.rulersHiddenTransform : CATransform3DIdentity, animated: animated)
-        guides.setShown(guides.loupe, defaults.bool(forKey: Pref.loupe), from: Guides.loupeHiddenTransform, animated: animated)
+        guides.setShown(guides.rulers, !armed && defaults.bool(forKey: Pref.rulers), from: animation == .slide ? Guides.rulersHiddenTransform : CATransform3DIdentity, animated: animated)
+        guides.setShown(guides.loupe, !armed && defaults.bool(forKey: Pref.loupe), from: Guides.loupeHiddenTransform, animated: animated)
         guides.slidesPlacement = animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        // Hovering with nothing selected or dragged, the Snap tag sits 16 pt below and right of the pointer, or under the loupe's readout,
+        // clamped into the view.
+        defer {
+            let tag = chrome.snapTag
+            if mode == .capture, selection == nil, draggedRect == nil, scrollArea == nil, armedRecording == nil, cutout == nil, image != nil {
+                tag.setTitle("Snap")
+                tag.lit = snapEnabled
+                let point = CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale)
+                let below = guides.readout.isHidden ? CGPoint(x: point.x + 16, y: point.y - 16 - tag.frame.height)
+                    : CGPoint(x: guides.readout.frame.midX - tag.frame.width / 2, y: guides.readout.frame.minY - 6 - tag.frame.height)
+                tag.frame.origin = CGPoint(x: min(max(below.x, 8), view.bounds.width - tag.frame.width - 8),
+                                           y: min(max(below.y, 8), view.bounds.height - topInset - tag.frame.height - 4))
+                tag.isHidden = false
+            }
+        }
         guard !(guides.crosshair.isHidden && guides.rulers.isHidden && guides.loupe.isHidden) else { return }
         // While a drag carries a max side with the pointer, the loupe centers on the last pixel inside the crop, whose max sides round up,
         // so the outline keeps to the center cell's far side as the pointer crosses pixel boundaries.

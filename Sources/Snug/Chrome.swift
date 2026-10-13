@@ -247,6 +247,8 @@ final class BarButton: NSView {
             apply()
         }
     }
+    /// Off, clicks pass through to what is under it.
+    var clicks = true
     private let size: CGFloat
 
     /// `symbol` is an SF Symbol name and its accessibility description.
@@ -281,7 +283,7 @@ final class BarButton: NSView {
 
     override var intrinsicContentSize: NSSize { frame.size }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-    override func hitTest(_ point: NSPoint) -> NSView? { isHidden || !isEnabled || !frame.contains(point) ? nil : self }
+    override func hitTest(_ point: NSPoint) -> NSView? { isHidden || !isEnabled || !clicks || !frame.contains(point) ? nil : self }
     override func mouseDown(with event: NSEvent) { onClick() }
     override func viewDidChangeEffectiveAppearance() { apply() }
 
@@ -405,12 +407,14 @@ final class Chrome {
     let styleToggles = [(Pref.roundCorners, BarButton("Rounded", key: "O")), (Pref.frame, BarButton("Frame", key: "M"))]
     /// The action strip below the hovered element or the selection, or a session's (scroll, armed recording, cut out) controls.
     let strip = Bar()
+    let edit = BarButton("Edit", key: "E")
     let copy = BarButton("Copy", key: "\u{21A9}")
     let save = BarButton("Save", key: "\u{2318}S")
     let text = BarButton("Text", key: "\u{21E7}\u{21A9}")
     let scroll = BarButton("Scroll", key: "G")
     let record = BarButton("Record", key: "V")
-    let cutout = BarButton("Cut out", key: "K")
+    let cutout = BarButton("Subject", key: "K")
+    let colors = BarButton("Colors", key: "U")
     let scrolled = BarButton("Scrolling", key: nil)
     let done = BarButton("Done", key: "\u{21A9}")
     let cancel = BarButton("Cancel", key: "esc")
@@ -423,12 +427,16 @@ final class Chrome {
     let hover = Pill.chip()
     let size = Pill.chip()
     let snap = BarButton("Snap", key: "S")
+    /// Hovering: Snap as a label by the pointer or the loupe's readout, lit when Snap is on. Clicks pass through it.
+    let snapTag = BarButton("Snap", key: "S", height: Chrome.labelHeight)
     /// The ratio readout with P, which opens `ratioMenu`, and the lock with Shift-P, on one surface.
     let ratio = Pill(radius: 8, insets: NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0), spacing: 0)
     let ratioButton = BarButton("", key: "P")
     let ratioDivider = NSTextField("|", size: 12, color: NSColor.chromeText.withAlphaComponent(0.5))
     let lock = BarButton("lock", key: "\u{21E7}P")
     let ratioMenu = RatioMenu()
+    /// U's menu under the Colors button: the selection's average color and its five main colors.
+    let colorMenu = RatioMenu()
     /// The live corner radius with its keys.
     let radius = Pill(radius: 8, insets: NSEdgeInsets(top: 0, left: 8, bottom: 0, right: 3), spacing: 6, height: Chrome.labelHeight)
     /// The keys for this moment, at the bottom.
@@ -458,8 +466,12 @@ final class Chrome {
 
     init() {
         ratio.isClickThrough = false
+        colorMenu.toggleKey = "u"
         snap.surface = true
         snap.isHidden = true
+        snapTag.surface = true
+        snapTag.clicks = false
+        snapTag.isHidden = true
         lock.washes = false
         for button in [copy, done, start] { button.primary = true }
     }
@@ -467,9 +479,9 @@ final class Chrome {
     /// Every button, for the click wiring.
     var buttons: [BarButton] {
         Array(modeButtons.values) + (viewToggles + styleToggles).map(\.1)
-            + [copy, save, text, scroll, record, cutout, done, cancel, cursor, countIn, start, subject, crop, snap, ratioButton, lock]
+            + [edit, copy, save, text, scroll, record, cutout, colors, done, cancel, cursor, countIn, start, subject, crop, snap, ratioButton, lock]
     }
 
     /// Lowest first: the cut-out preview goes under all of them.
-    var all: [NSView] { [upHint, downHint, hover, size, snap, reading, legend] + sideHints + [radius, cornerKeys, list, hints, topBar, strip, status, ratio, ratioMenu, help] }
+    var all: [NSView] { [upHint, downHint, hover, size, snap, snapTag, reading, legend] + sideHints + [radius, cornerKeys, list, hints, topBar, strip, status, ratio, ratioMenu, colorMenu, help] }
 }

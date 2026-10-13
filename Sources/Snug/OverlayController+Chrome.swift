@@ -12,6 +12,8 @@ extension OverlayController {
         cornerChip.surface = true
         chrome.ratioMenu.onClose = { [unowned self] in refresh() }
         chrome.ratioMenu.onKey = { [unowned self] in flash($0) }
+        chrome.colorMenu.onClose = { [unowned self] in refresh() }
+        chrome.colorMenu.onKey = { [unowned self] in flash($0) }
     }
 
     /// Lights the caps of a key just pressed, for 150 ms.
@@ -32,7 +34,7 @@ extension OverlayController {
         guard selection == nil, let hover = view.overlays.hover else { return false }
         let box = view.viewRect(hover)
         // Each attached item and the bridge across the gap between it and the box, as wide as both.
-        let attached = [chrome.hover, chrome.snap, chrome.radius, chrome.strip].filter { !$0.isHidden }.flatMap { item in
+        let attached = [chrome.hover, chrome.radius, chrome.strip].filter { !$0.isHidden }.flatMap { item in
             let left = max(box.minX, item.frame.minX), right = min(box.maxX, item.frame.maxX)
             let span = item.frame.union(box)
             return [item.frame] + (right > left ? [CGRect(x: left, y: span.minY, width: right - left, height: span.height)] : [])
@@ -64,6 +66,7 @@ extension OverlayController {
     /// The keys line: each hint is a label and its key caps, shown in that order.
     private var hints: [(keys: [String], label: String)] {
         if !chrome.ratioMenu.isHidden { return [(["\u{2191}", "\u{2193}"], "pick"), (["\u{21A9}"], "choose"), (["esc"], "close")] }
+        if !chrome.colorMenu.isHidden { return [(["\u{2191}", "\u{2193}"], "pick"), (["\u{21A9}", "1-6"], "copy"), (["esc"], "close")] }
         if cutout != nil { return [(["K", "esc"], "back")] }
         if scrollArea != nil { return [([], "Scroll the app under the outline")] }
         if let armed = armedRecording {
@@ -74,7 +77,7 @@ extension OverlayController {
         case .text: [(["Drag"], "select text"), (["\u{21A9}"], "copy"), (["\u{21E7}", "\u{21A9}"], "rows"), (["Tab"], "links, codes"), (["\u{2325}", "\u{21A9}"], "translate"), (["F"], "all text"), (["C"], "color"), (["?"], "all keys")]
         case .capture where selection != nil:
             [(["\u{2190}\u{2192}"], "move"), (["\u{2325}"], "grow"), (["\u{2325}\u{2318}"], "shrink"), (["\u{2318}"], "edge out"), (["\u{2318}\u{21E7}"], "edge in"), (["+", "-"], "all sides"), (["\u{2318}Z"], "undo")]
-        case .capture: [(["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["\u{2190}", "\u{2192}"], "next"), (["F"], "full screen"), (["W"], "window"), (["?"], "all keys")]
+        case .capture: [(["\u{2191}", "\u{2193}"], "bigger / smaller"), (["\u{2190}", "\u{2192}"], "next"), (["F"], "full screen"), (["W"], "window"), (["?"], "all keys")]
         }
     }
 
@@ -128,7 +131,7 @@ extension OverlayController {
         if c.hints.appearance?.name != look?.name {
             for item in c.all + [cornerChip, view.guides.readout] where item !== c.help { item.appearance = look }
         }
-        for item in [c.hover, c.size, c.snap, c.ratio, c.radius, c.legend, c.reading, c.status, c.strip] { item.isHidden = true }
+        for item in [c.hover, c.size, c.snap, c.snapTag, c.ratio, c.radius, c.legend, c.reading, c.status, c.strip] { item.isHidden = true }
         c.help.frame = bounds
         c.help.layoutPanel()
 
@@ -147,8 +150,8 @@ extension OverlayController {
         // The object's chips and strip, filled before the keys line, which leaves out what the strip shows, and attached to the object
         // once the bar and keys line are placed.
         var attachment: (box: CGRect, strip: Bool, left: [NSView], right: [NSView])?
-        func sizeChip(_ rect: CGRect) -> Pill {
-            let text = (rect == extent ? "Full screen  " : "") + "\(Int(rect.width)) x \(Int(rect.height))" + (armedRecording == nil ? additions(rect) : "")
+        func sizeChip(_ rect: CGRect, drag: String = "") -> Pill {
+            let text = (rect == extent ? "Full screen  " : "") + "\(Int(rect.width)) x \(Int(rect.height))" + (armedRecording == nil ? additions(rect) : "") + drag
             c.size.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText)] }
             return c.size
         }
@@ -157,9 +160,9 @@ extension OverlayController {
             c.radius.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText), KeyCap("["), KeyCap("]")] }
             return c.radius
         }
-        /// The capture strip: Copy, Save, and Text, then Scroll, Record, and Cut out, which are faded when they cannot run on `area`.
-        func captureStrip(_ area: CGRect) {
-            c.strip.show([[c.copy, c.save, c.text], [c.scroll, c.record, c.cutout]])
+        /// The capture strip: Edit in its own pill while hovering, then Copy, Save, and Text, then Scroll, Record, and Subject (and Colors, once selected), which are faded when they cannot run on `area`.
+        func captureStrip(_ area: CGRect, hovering: Bool = false) {
+            c.strip.show((hovering ? [[c.edit]] : []) + [[c.copy, c.save, c.text], [c.scroll, c.record, c.cutout] + (hovering ? [] : [c.colors])])
             c.scroll.isEnabled = (scrollFrames != nil || displayID != nil) && area != extent && windows.contains { $0.insetBy(dx: -2, dy: -2).contains(area) }
             c.record.isEnabled = displayID != nil
         }
@@ -183,10 +186,11 @@ extension OverlayController {
             c.strip.show(armed.remaining == nil ? [[c.cursor, c.countIn], [c.cancel, c.start]] : [[c.cancel]])
             attachment = (view.viewRect(rect), true, [sizeChip(rect)], [])
         } else if mode == .capture, let rect = overlays.selection ?? overlays.preview ?? overlays.ghost {
-            // A drag or selection: its size and Snap, which reads Snapped or Exact once released; a selection adds the ratio and radius.
+            // A drag shows its size, then Snapped when the snap preview is showing and Exact when it is not. A selection shows its size
+            // and Snap, which reads Snapped or Exact, then the ratio and radius.
             let snapped = selection.map { $0.fits.count > 1 && $0.rect != $0.exact }
             c.snap.setTitle(snapped.map { $0 ? "Snapped" : "Exact" } ?? "Snap")
-            c.snap.lit = snapped ?? (snapEnabled && !bypassSnap)
+            c.snap.lit = snapped ?? false
             var right: [NSView] = []
             if editing {
                 c.ratioButton.setTitle(ratioReadout)
@@ -195,9 +199,9 @@ extension OverlayController {
                 right = [c.ratio, radiusChip(rect)]
                 captureStrip(rect)
             }
-            attachment = (view.viewRect(rect), editing, [sizeChip(rect), c.snap], right)
+            attachment = (view.viewRect(rect), editing, selection == nil ? [sizeChip(rect, drag: overlays.preview == nil ? "  Exact" : "  Snapped")] : [sizeChip(rect), c.snap], right)
         } else if mode == .capture, let rect = overlays.hover {
-            // Hovering: the element's name and size, and Snap; the radius once `[` or `]` changed it.
+            // Hovering: the element's name and size; the radius once `[` or `]` changed it.
             let hovered = session!.selected!
             let isWindow = hovered.kind == .window
             let index = isWindow ? Int(hovered.id.dropFirst("window-".count))! : 0
@@ -210,10 +214,8 @@ extension OverlayController {
             c.hover.show("\(name)|\(size)") {
                 [NSTextField(name, size: 12, weight: .semibold, color: .chromeText), NSTextField(size, size: 12, mono: true, color: NSColor.chromeText.withAlphaComponent(0.65))]
             }
-            c.snap.setTitle("Snap")
-            c.snap.lit = snapEnabled
-            captureStrip(rect)
-            attachment = (view.viewRect(rect), true, [c.hover, c.snap] + (editedRadii[rect] == nil ? [] : [radiusChip(rect)]), [])
+            captureStrip(rect, hovering: true)
+            attachment = (view.viewRect(rect), true, [c.hover] + (editedRadii[rect] == nil ? [] : [radiusChip(rect)]), [])
         }
 
         // The keys line, unless B hid it, or nothing is left once hints a visible strip button already shows (its title and key) drop.

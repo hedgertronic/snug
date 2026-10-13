@@ -160,16 +160,23 @@ extension DebugRun {
         require(overlay.window.isVisible && overlay.armedRecording == nil, "V does nothing on an opened image, which has no display to record")
         overlay.dismiss()
 
-        // Armed, C copies the selection's color as everywhere: it closes the overlay, records nothing, and leaves the count-in alone.
+        // Armed, the loupe, crosshair and rulers are hidden and C does nothing; Esc brings the guides back.
+        for key in [Pref.loupe, Pref.rulers, Pref.crosshair] { defaults.set(true, forKey: key) }
         open()
         select(CGRect(x: 600, y: 300, width: 400, height: 200))
+        let guides = overlay.view.guides
+        func guidesHidden() -> [Bool] { [guides.loupe.isHidden || guides.loupe.opacity == 0, guides.rulers.isHidden || guides.rulers.opacity == 0, guides.crosshair.isHidden] }
+        require(guidesHidden() == [false, false, false], "the guides show before arming: \(guidesHidden())")
         key(9, "v")
         overlay.pasteboard.clearContents()
         let countIn = defaults.integer(forKey: Pref.recordCountIn)
         key(8, "c")
-        let average = ColorFormat(rawValue: defaults.string(forKey: Pref.colorFormat)!)!.string(for: ColorFormat.average(of: image, in: CGRect(x: 600, y: 300, width: 400, height: 200)))
-        require(!overlay.window.isVisible && overlay.armedRecording == nil && requests.count == count && defaults.integer(forKey: Pref.recordCountIn) == countIn
-                && overlay.pasteboard.string(forType: .string) == average, "C while armed copies the selection's color \(average) and records nothing: \(overlay.pasteboard.string(forType: .string) ?? "nothing")")
+        require(overlay.window.isVisible && overlay.armedRecording != nil && requests.count == count && defaults.integer(forKey: Pref.recordCountIn) == countIn
+                && overlay.pasteboard.string(forType: .string) == nil, "C while armed does nothing: \(overlay.pasteboard.string(forType: .string) ?? "nothing")")
+        require(guidesHidden() == [true, true, true] && guides.readout.isHidden, "armed hides the loupe, rulers, crosshair and readout: \(guidesHidden())")
+        key(53, "\u{1B}")
+        require(overlay.armedRecording == nil && guidesHidden() == [false, false, false] && !guides.readout.isHidden, "Esc brings the guides back: \(guidesHidden())")
+        overlay.dismiss()
 
         // A 3 s count-in shows 3, 2, 1 over the selection; the request comes 3 s after Return, with the overlay already closed.
         defaults.set(3, forKey: Pref.recordCountIn)

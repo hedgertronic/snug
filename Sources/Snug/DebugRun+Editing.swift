@@ -72,7 +72,7 @@ extension DebugRun {
 
         // The key map: hints and the help table list the new keys.
         open()
-        require(texts(in: overlay.chrome.hints).contains("edit"), "the hover hint row offers E")
+        require(!texts(in: overlay.chrome.hints).contains("edit"), "the hover keys line leaves E to the Edit button")
         let helpKeys = HelpSheet.columns.flatMap(\.rows).map(\.keys)
         require(["Cmd-Shift-S", "E / Shift-click", "Option-arrow", "Shift-click", "Shift-drag handle", "Shift-move", "P", "M", "=", "O"].allSatisfy(helpKeys.contains), "the help table lists the new keys")
         require(!["Cmd-1/2", "Corner dot"].contains(where: helpKeys.contains) && HelpSheet.columns.flatMap(\.rows).contains { $0.keys == "O" && $0.action == "Rounded corners" },
