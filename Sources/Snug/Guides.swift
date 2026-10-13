@@ -13,9 +13,8 @@ final class Guides {
     static let loupeSize: CGFloat = 104
     static let loupePixels = 11
     static let rulerThickness: CGFloat = 18
-    private static let readoutHeight: CGFloat = 32
     private static let readoutGap: CGFloat = 8
-    /// The readout may stick out this far on each side of the loupe's disc.
+    /// The loupe's placement keeps this much clear on each side of the disc for the readout, which may be wider and then shifts into the view.
     static let readoutOverhang: CGFloat = 30
     /// One duration and curve for every loupe and ruler transition. The outro plays the intro backward, so its curve is the intro's mirrored.
     static let transitionDuration: CFTimeInterval = 0.18
@@ -52,11 +51,14 @@ final class Guides {
     private let centerHalo = CAShapeLayer()
     private let centerWhite = CAShapeLayer()
     let centerAccent = CAShapeLayer()
-    /// Under the loupe, on the chip surface: the swatch and hex value of the pixel at the pointer, then "copy" and the C cap. The overlay
-    /// view holds it; `update` moves it with the loupe and changes the swatch and value in place.
+    /// Under the loupe, on the chip surface: the swatch, hex value and pixel coordinates of the pixel at the pointer, then "copy" and the C
+    /// cap. The overlay view holds it; `update` moves it with the loupe and changes the swatch and texts in place, laying the chip out
+    /// again when the coordinates gain or lose a digit.
     let readout = Pill.chip()
     private let swatch = NSView(frame: CGRect(x: 0, y: 0, width: 12, height: 12))
     private let hex = NSTextField("#000000", size: 12, mono: true, color: .chromeText)
+    private let coordinates = NSTextField("x 0  y 0", size: 11, mono: true, color: .chromeText.withAlphaComponent(0.7))
+    private lazy var readoutViews = [swatch, hex, coordinates, NSTextField("copy", size: 12, weight: .medium, color: .chromeText), KeyCap("C")]
     private var tickKey: [CGFloat] = []
     /// Whether a change of the loupe's placement slides, and the loupe's offset from the pointer at the last update (nil until it first shows).
     var slidesPlacement = false
@@ -98,7 +100,7 @@ final class Guides {
         for layer in [bands, spans, hairline, ticks, numbers, widthLabel, heightLabel, marks, carets] + flags { rulers.addSublayer(layer) }
 
         let size = Self.loupeSize
-        let tall = size + Self.readoutGap + Self.readoutHeight
+        let tall = size + Self.readoutGap + Chrome.labelHeight
         loupe.bounds = CGRect(x: 0, y: 0, width: size, height: tall)
         ring.frame = CGRect(x: -0.5, y: tall - size - 0.5, width: size + 1, height: size + 1)
         ring.cornerRadius = size / 2 + 0.5
@@ -142,7 +144,7 @@ final class Guides {
         swatch.layer!.cornerRadius = 3
         swatch.layer!.borderColor = NSColor.white.withAlphaComponent(0.5).cgColor
         swatch.layer!.borderWidth = 0.5
-        readout.show("readout") { [swatch, hex, NSTextField("copy", size: 12, weight: .medium, color: .chromeText), KeyCap("C")] }
+        readout.show("readout") { readoutViews }
         readout.isHidden = true
         for layer in [magnified, grid, edges, centerHalo, centerWhite, centerAccent] { disc.addSublayer(layer) }
         for layer in [ring, disc] { loupe.addSublayer(layer) }
@@ -191,7 +193,7 @@ final class Guides {
     /// whose frame, readout included, lies inside the view under the inset and clear of every `avoiding` frame. With none free it takes the first
     /// pushed inside the view. The result is on whole device pixels so the magnified cells stay crisp.
     static func loupeOrigin(point: CGPoint, bounds: CGRect, topInset: CGFloat, scale: CGFloat, avoiding: [CGRect]) -> CGPoint {
-        let size = loupeSize, tall = size + readoutGap + readoutHeight, gap: CGFloat = 10
+        let size = loupeSize, tall = size + readoutGap + Chrome.labelHeight, gap: CGFloat = 10
         let usable = CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height - topInset - 4)
         let xs = [point.x + gap, point.x - gap - size], ys = [point.y - gap - tall, point.y + gap]
         let frames = ys.flatMap { y in xs.map { CGRect(x: $0 - readoutOverhang, y: y, width: size + 2 * readoutOverhang, height: tall) } }
@@ -334,6 +336,9 @@ final class Guides {
             let color = ColorFormat.average(of: image, in: CGRect(x: column, y: row, width: 1, height: 1))
             swatch.layer!.backgroundColor = CGColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1)
             hex.stringValue = ColorFormat.hex.string(for: color)
+            coordinates.stringValue = "x \(column)  y \(row)"
+            coordinates.sizeToFit()
+            readout.show("readout \(coordinates.stringValue.count)") { readoutViews }
             let origin = Self.loupeOrigin(point: point, bounds: bounds, topInset: topInset, scale: scale, avoiding: avoiding)
             let offset = CGPoint(x: origin.x - point.x, y: origin.y - point.y)
             // A flip to the pointer's other side (past a bar or a screen edge) slides from the old offset to the new one. Only the offset animates,
@@ -351,7 +356,7 @@ final class Guides {
             }
             loupeOffset = offset
             loupe.position = CGPoint(x: origin.x + Self.loupeSize / 2, y: origin.y + loupe.bounds.height / 2)
-            readout.frame.origin = CGPoint(x: (origin.x + (Self.loupeSize - readout.frame.width) / 2).rounded(), y: (origin.y + (Self.readoutHeight - readout.frame.height) / 2).rounded())
+            readout.frame.origin = CGPoint(x: min(max((origin.x + (Self.loupeSize - readout.frame.width) / 2).rounded(), 4), bounds.width - readout.frame.width - 4), y: (origin.y + (Chrome.labelHeight - readout.frame.height) / 2).rounded())
         }
     }
 }

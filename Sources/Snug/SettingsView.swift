@@ -242,8 +242,7 @@ private struct AppearancePane: View {
                 }
             }
             caption("Highlight")
-            HighlightPreview(color: Color(nsColor: Highlight.color(hex: highlightColor)), fill: highlightFill, fade: highlightFade, glow: highlightGlow)
-                .frame(height: 104)
+            OverlayPreview(color: Highlight.color(hex: highlightColor), fill: highlightFill, fade: highlightFade, glow: highlightGlow)
             Card {
                 LabeledContent("Color") { ColorMenu(hex: $highlightColor).fixedSize() }
                 slider("Fill", value: $highlightFill, range: 0...0.3)
@@ -424,33 +423,102 @@ private struct KeyCapView: NSViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, nsView cap: KeyCap, context: Context) -> CGSize? { context.coordinator.size }
 }
 
-/// The highlight on a sample rectangle: the dim, the optional fill and glow, the hairline, and the ring.
-struct HighlightPreview: View {
-    let color: Color
+/// The overlay's chrome in its light and dark looks side by side: a frozen-screen mock with the dim, the highlight, a chip, and a top-bar
+/// pill with one lit toggle. The chrome is the overlay's own `Pill`, `BarButton`, and `KeyCap`, each sample forced to one appearance.
+struct OverlayPreview: View {
+    let color: NSColor
     let fill: Double
     let fade: Double
     let glow: Double
 
     var body: some View {
-        Canvas { context, size in
-            let sample = CGRect(origin: .zero, size: size).insetBy(dx: 40, dy: 20)
-            let shape = Path(roundedRect: sample, cornerRadius: 10)
-            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(white: 0.92)))
-            for row in 0..<4 {
-                context.fill(Path(CGRect(x: 8, y: 10 + CGFloat(row) * 22, width: size.width - 16, height: 8)), with: .color(Color(white: 0.78)))
-            }
-            var dim = Path(CGRect(origin: .zero, size: size))
-            dim.addPath(shape)
-            context.fill(dim, with: .color(.black.opacity(fade)), style: FillStyle(eoFill: true))
-            context.fill(shape, with: .color(color.opacity(fill)))
-            context.drawLayer { layer in
-                layer.addFilter(.shadow(color: color.opacity(min(1, 1.6 * glow)), radius: 4 + 14 * glow))
-                layer.stroke(shape, with: .color(color), lineWidth: 1.5)
-            }
-            context.stroke(Path(roundedRect: sample.insetBy(dx: -2.25, dy: -2.25), cornerRadius: 12.25), with: .color(color.opacity(0.28)), lineWidth: 3)
+        HStack(spacing: 8) {
+            ForEach([false, true], id: \.self) { Sample(dark: $0, color: color, fill: fill, fade: fade, glow: glow) }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary))
+        .frame(height: 140)
+    }
+
+    private struct Sample: NSViewRepresentable {
+        let dark: Bool
+        let color: NSColor
+        let fill: Double
+        let fade: Double
+        let glow: Double
+
+        func makeNSView(context: Context) -> SampleView { SampleView(dark: dark) }
+
+        func updateNSView(_ view: SampleView, context: Context) {
+            Chrome.tint = color
+            view.color = color
+            view.fill = fill
+            view.fade = fade
+            view.glow = glow
+        }
+    }
+
+    private final class SampleView: NSView {
+        var color = NSColor.controlAccentColor { didSet { loupe.apply(); rulers.apply(); needsDisplay = true } }
+        var fill = 0.0 { didSet { needsDisplay = true } }
+        var fade = 0.0 { didSet { needsDisplay = true } }
+        var glow = 0.0 { didSet { needsDisplay = true } }
+        private let dark: Bool
+        private let chip = Pill.chip()
+        private let bar = Bar()
+        private let loupe = BarButton("Loupe", key: "L")
+        private let rulers = BarButton("Rulers", key: nil)
+        private var sample: CGRect { CGRect(x: 24, y: 10, width: bounds.width - 48, height: 50) }
+
+        init(dark: Bool) {
+            self.dark = dark
+            super.init(frame: .zero)
+            appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+            wantsLayer = true
+            layer!.cornerRadius = 6
+            layer!.masksToBounds = true
+            layer!.borderWidth = 0.5
+            layer!.borderColor = NSColor.separatorColor.cgColor
+            loupe.lit = true
+            bar.show([[loupe, rulers]])
+            chip.show("chip") { [NSTextField("Window 640 x 400", size: 12, mono: true, color: .chromeText)] }
+            addSubview(chip)
+            addSubview(bar)
+        }
+
+        required init?(coder: NSCoder) { fatalError() }
+
+        override func layout() {
+            super.layout()
+            chip.frame.origin = CGPoint(x: sample.minX, y: sample.maxY + 6)
+            bar.frame.origin = CGPoint(x: ((bounds.width - bar.frame.width) / 2).rounded(), y: bounds.height - 8 - bar.frame.height)
+        }
+
+        override func draw(_ dirtyRect: NSRect) {
+            (dark ? NSColor(white: 0.16, alpha: 1) : NSColor(white: 0.92, alpha: 1)).setFill()
+            bounds.fill()
+            (dark ? NSColor(white: 0.28, alpha: 1) : NSColor(white: 0.78, alpha: 1)).setFill()
+            for row in 0..<2 { CGRect(x: 8, y: 12 + CGFloat(row) * 12, width: bounds.width - 16, height: 5).fill() }
+            let shape = NSBezierPath(roundedRect: sample, xRadius: 10, yRadius: 10)
+            let dim = NSBezierPath(rect: bounds)
+            dim.append(shape)
+            dim.windingRule = .evenOdd
+            NSColor.black.withAlphaComponent(fade).setFill()
+            dim.fill()
+            color.withAlphaComponent(fill).setFill()
+            shape.fill()
+            NSGraphicsContext.saveGraphicsState()
+            let shadow = NSShadow()
+            shadow.shadowColor = color.withAlphaComponent(min(1, 1.6 * glow))
+            shadow.shadowBlurRadius = 4 + 14 * glow
+            shadow.set()
+            color.setStroke()
+            shape.lineWidth = 1.5
+            shape.stroke()
+            NSGraphicsContext.restoreGraphicsState()
+            let ring = NSBezierPath(roundedRect: sample.insetBy(dx: -2.25, dy: -2.25), xRadius: 12.25, yRadius: 12.25)
+            ring.lineWidth = 3
+            color.withAlphaComponent(0.28).setStroke()
+            ring.stroke()
+        }
     }
 }
 

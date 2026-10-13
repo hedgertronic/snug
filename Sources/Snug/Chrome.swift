@@ -38,10 +38,13 @@ final class Pill: NSView {
     private let insets: NSEdgeInsets
     private let spacing: CGFloat
     private let vertical: Bool
+    /// A horizontal pill's fixed height, with its views centered in it; nil fits the views and the insets.
+    private let height: CGFloat?
     /// nil is the chrome surface: its fill, hairline, and shadow in the current look.
     private let fill: NSColor?
 
-    init(fill: NSColor? = nil, radius: CGFloat, insets: NSEdgeInsets, spacing: CGFloat, vertical: Bool = false) {
+    init(fill: NSColor? = nil, radius: CGFloat, insets: NSEdgeInsets, spacing: CGFloat, vertical: Bool = false, height: CGFloat? = nil) {
+        self.height = height
         self.insets = insets
         self.spacing = spacing
         self.vertical = vertical
@@ -95,7 +98,7 @@ final class Pill: NSView {
         let inner = vertical
             ? CGSize(width: items.map(\.frame.width).max()!, height: items.reduce(gaps) { $0 + $1.frame.height })
             : CGSize(width: items.reduce(gaps) { $0 + $1.frame.width }, height: items.map(\.frame.height).max()!)
-        frame.size = CGSize(width: inner.width + insets.left + insets.right, height: inner.height + insets.top + insets.bottom)
+        frame.size = CGSize(width: inner.width + insets.left + insets.right, height: height ?? inner.height + insets.top + insets.bottom)
         if fill == nil { layer!.shadowPath = CGPath(roundedRect: bounds, cornerWidth: layer!.cornerRadius, cornerHeight: layer!.cornerRadius, transform: nil) }
         var offset = vertical ? frame.height - insets.top : insets.left
         for item in items {
@@ -104,15 +107,15 @@ final class Pill: NSView {
                 item.frame.origin = CGPoint(x: insets.left + (inner.width - item.frame.width) / 2, y: offset)
                 offset -= spacing
             } else {
-                item.frame.origin = CGPoint(x: offset, y: insets.bottom + (inner.height - item.frame.height) / 2)
+                item.frame.origin = CGPoint(x: offset, y: insets.bottom + (frame.height - insets.top - insets.bottom - item.frame.height) / 2)
                 offset += item.frame.width + spacing
             }
             if item.superview !== self { addSubview(item) }
         }
     }
 
-    /// An object chip: one line on the surface, 26 pt tall.
-    static func chip() -> Pill { Pill(radius: 8, insets: NSEdgeInsets(top: 5, left: 8, bottom: 5, right: 8), spacing: 8) }
+    /// An object chip: one line on the surface, a label tier pill, with or without a key cap in it.
+    static func chip() -> Pill { Pill(radius: 8, insets: NSEdgeInsets(top: 0, left: 8, bottom: 0, right: 8), spacing: 8, height: Chrome.labelHeight) }
 }
 
 /// The key cap: the key's glyph on a raised key. Idle it is neutral; `pressed` fills it with the tint (for a moment after its key, or
@@ -356,7 +359,7 @@ final class Bar: NSView {
         self.groups.forEach { $0.removeFromSuperview() }
         var x: CGFloat = 0
         self.groups = groups.map { buttons in
-            let pill = Pill(radius: 11, insets: NSEdgeInsets(top: 3, left: 3, bottom: 3, right: 3), spacing: 2)
+            let pill = Pill(radius: 11, insets: NSEdgeInsets(top: 3, left: 3, bottom: 3, right: 3), spacing: 2, height: Chrome.controlHeight)
             pill.isClickThrough = false
             pill.show(key + "\(x)") { buttons }
             pill.frame.origin.x = x
@@ -371,6 +374,10 @@ final class Bar: NSView {
 /// All the overlay's on-screen chrome. `OverlayController.refreshChrome` positions and fills it.
 @MainActor
 final class Chrome {
+    /// The two pill heights. Controls (the top bar's groups, the action strip, the keys line, the recording pills) and labels (the chip row,
+    /// the loupe's readout) keep theirs with or without a key cap inside.
+    static let controlHeight: CGFloat = 32
+    static let labelHeight: CGFloat = 26
     /// The highlight color: the primary button, pressed caps, lit toggles, the highlighted menu row. Set on each refresh.
     static var tint = NSColor.controlAccentColor
     /// The look `SnugOverlayAppearance` picks for the chrome; nil follows the system.
@@ -423,9 +430,9 @@ final class Chrome {
     let lock = BarButton("lock", key: "\u{21E7}P")
     let ratioMenu = RatioMenu()
     /// The live corner radius with its keys.
-    let radius = Pill(radius: 8, insets: NSEdgeInsets(top: 3, left: 8, bottom: 3, right: 3), spacing: 6)
+    let radius = Pill(radius: 8, insets: NSEdgeInsets(top: 0, left: 8, bottom: 0, right: 3), spacing: 6, height: Chrome.labelHeight)
     /// The keys for this moment, at the bottom.
-    let hints = Pill(radius: 11, insets: NSEdgeInsets(top: 7, left: 14, bottom: 7, right: 14), spacing: 14)
+    let hints = Pill(radius: 11, insets: NSEdgeInsets(top: 0, left: 14, bottom: 0, right: 14), spacing: 14, height: Chrome.controlHeight)
     /// Key caps at the top-left corners of the faint outlines of what Up and Down would select.
     let upHint = KeyCap("\u{2191}")
     let downHint = KeyCap("\u{2193}")
