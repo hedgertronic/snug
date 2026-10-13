@@ -212,8 +212,9 @@ private struct GeneralPane: View {
     }
 }
 
-/// The highlight (live preview, color menu, fill, fade, glow) and the toast.
+/// The overlay's appearance, the highlight (live preview, color menu, fill, fade, glow) and the toast.
 private struct AppearancePane: View {
+    @AppStorage(Pref.overlayAppearance) private var overlayAppearance = "system"
     @AppStorage(Pref.highlightColor) private var highlightColor = ""
     @AppStorage(Pref.highlightFill) private var highlightFill = 0.0
     @AppStorage(Pref.highlightFade) private var highlightFade = 0.42
@@ -227,6 +228,19 @@ private struct AppearancePane: View {
 
     var body: some View {
         Pane {
+            caption("Overlay")
+            Card {
+                LabeledContent("Appearance") {
+                    Picker("Appearance", selection: $overlayAppearance) {
+                        Text("System").tag("system")
+                        Text("Light").tag("light")
+                        Text("Dark").tag("dark")
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                }
+            }
             caption("Highlight")
             HighlightPreview(color: Color(nsColor: Highlight.color(hex: highlightColor)), fill: highlightFill, fade: highlightFade, glow: highlightGlow)
                 .frame(height: 104)
