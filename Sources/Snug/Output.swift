@@ -34,6 +34,8 @@ enum Pref {
     static let highlightFill = "SnugHighlightFill"
     static let highlightFade = "SnugHighlightFade"
     static let highlightGlow = "SnugHighlightGlow"
+    /// The overlay chrome's look: "system" follows macOS, "light" and "dark" force one.
+    static let overlayAppearance = "SnugOverlayAppearance"
     /// Whether the toast shows a thumbnail of the capture, and where the toast sits: bottomCenter, bottomRight, or topRight.
     static let toastPreview = "SnugToastPreview"
     static let toastPosition = "SnugToastPosition"
@@ -80,6 +82,7 @@ enum Pref {
             highlightFill: 0.0,
             highlightFade: 0.42,
             highlightGlow: 0.5,
+            overlayAppearance: "system",
             guidesAnimation: GuidesAnimation.fade.rawValue,
             toastPreview: true,
             toastPosition: "bottomCenter",

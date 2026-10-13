@@ -129,4 +129,43 @@ extension OverlayController {
         selection!.resize(side, to: CGPoint(x: from.x + direction.x * distance, y: from.y + direction.y * distance), ratio: lockedRatio)
         carryRadii(from: old)
     }
+
+    /// `+` / `-`: every side moves out (or in, with a negative count) by `pixels` image pixels, within the extent and the minimum size.
+    /// A locked ratio holds: each corner follows the larger travel from the opposite one.
+    func growSides(by pixels: CGFloat) {
+        guard let old = selection?.rect else { return }
+        selection!.resize(.topLeft, to: CGPoint(x: old.minX - pixels, y: old.minY - pixels), ratio: lockedRatio)
+        let grown = selection!.rect
+        selection!.resize(.bottomRight, to: CGPoint(x: grown.maxX + pixels, y: grown.maxY + pixels), ratio: lockedRatio)
+        carryRadii(from: old)
+    }
+
+    /// Command-arrow moves the side facing the arrow outward to the next pixel edge along it, up to the extent; Command-Shift-arrow
+    /// moves it inward, keeping the minimum size. The search steps away from the side 128 px at a time, so a near edge is found
+    /// without scanning to the extent. A sharp edge reads as a run of neighboring positions, so each run counts once, at its middle,
+    /// and the run the side sits on is skipped. With no edge in the way, nothing moves.
+    func moveSideToEdge(keyCode: UInt16, outward: Bool) {
+        guard let image, let rect = selection?.rect else { return }
+        let vertical = keyCode == 123 || keyCode == 124
+        let maxSide = keyCode == 124 || keyCode == 125
+        let (low, high) = vertical ? (rect.minX, rect.maxX) : (rect.minY, rect.maxY)
+        let side = maxSide ? high : low
+        let limit = outward ? (maxSide ? (vertical ? extent.maxX : extent.maxY) : 0)
+            : maxSide ? low + AreaSelection.minimumSize : high - AreaSelection.minimumSize
+        let direction: CGFloat = limit > side ? 1 : -1
+        var start = side
+        while (limit - start) * direction > 0 {
+            let end = direction > 0 ? min(start + 128, limit) : max(start - 128, limit)
+            // 2 px past each end, so a run at either end is whole. Cancellation is the only error and a key press is never cancelled.
+            let found = try! SmartSnap().edges(in: image, of: rect, vertical: vertical, near: (start + end) / 2, band: Int(abs(end - start) / 2) + 2, limit: .max)
+            var runs: [[CGFloat]] = []
+            for position in found.sorted() {
+                if let last = runs.last?.last, position - last <= 1 { runs[runs.count - 1].append(position) } else { runs.append([position]) }
+            }
+            let edges = runs.map { $0[$0.count / 2] }.filter { abs($0 - side) > 1 && ($0 - start) * direction > 0 && ($0 - end) * direction <= 0 }
+            if let edge = edges.min(by: { abs($0 - side) < abs($1 - side) }) { return nudgeSide(keyCode: keyCode, outward: outward, by: abs(edge - side)) }
+            start = end
+        }
+        beep()
+    }
 }

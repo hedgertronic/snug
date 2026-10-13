@@ -308,11 +308,13 @@ extension DebugRun {
         let helpActions = Dictionary(helpRows.map { ($0.keys, $0.action) }, uniquingKeysWith: { $1 })
         require(helpActions["P"] == "Ratio menu" && helpActions["Shift-P"] == "Lock the ratio" && helpActions["W"] == "Capture the window"
                     && helpActions["K"] == "Cut-out preview" && helpActions["Cut-out: Tab"] == "Next subject (Shift: back)" && helpActions["V"] == "Arm recording, hover or selection"
-                    && helpActions["Armed: Return / V"] == "Start recording" && helpActions["Armed: H"] == "Cursor on / off" && helpActions["Armed: C"] == "Count-in off, 3 s, 5 s"
-                    && helpActions["Capture hotkey"] == "Stop recording" && helpActions["G"] == "Scrolling capture, hover or selection" && helpActions["Cut-out: C"] == "Crop to subject"
+                    && helpActions["Armed: Return / V"] == "Start recording" && helpActions["Armed: H"] == "Cursor on / off" && helpActions["Armed: I"] == "Count-in off, 3 s, 5 s"
+                    && helpActions["Capture hotkey"] == "Stop recording" && helpActions["G"] == "Scrolling capture, hover or selection" && helpActions["Cut-out: S"] == "Crop to subject"
+                    && helpActions["Cmd-arrow"] == "Side out to an edge" && helpActions["Cmd-Shift-arrow"] == "Side in to an edge"
+                    && helpActions["+ / -"] == "All sides 1 px (Option: 10)" && helpActions["Shift-Return"] == "Copy the text"
                     && helpActions["Tab"] == "Walk out (Shift: in)"
                     && !helpRows.contains { $0.action.contains("Aspect ratio lock") },
-                "the sheet lists the ratio menu and lock, W, the cut-out keys, G and V on a hover, the recording keys, Tab without other fits, and no P cycle")
+                "the sheet lists the ratio menu and lock, W, the cut-out keys, G and V on a hover, the recording keys, Cmd-arrow, + and -, Shift-Return on a hover, Tab without other fits, and no P cycle")
         require(sheet.contains("Esc or ? closes this.") || sheet.contains { $0.hasSuffix("Esc or ? closes this.") }, "the sheet says how to close it")
         let panel = help.panel.frame
         require(panel.width == 900 && help.bounds.insetBy(dx: 1, dy: 1).contains(panel), "the sheet panel is 900 pt wide and inside the screen \(panel)")

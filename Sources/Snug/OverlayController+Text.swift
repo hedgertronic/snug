@@ -238,10 +238,10 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         }
     }
 
-    /// Capture, Shift-Return / Option-Return on a released selection: reads its text, then copies it (tab-separated when it has
-    /// columns) or its translation.
+    /// Capture, Shift-Return / Option-Return on a released selection (Shift-Return also on the hovered element): reads its text, then
+    /// copies it (tab-separated when it has columns) or its translation.
     func copySelectionText(translating: Bool) {
-        guard let rect = selection?.rect, let image else { return }
+        guard let rect = selection?.rect ?? hoverRect, let image else { return beep() }
         guard !waitsForWarmUp(translating ? "Option-Return" : "Shift-Return", { self.copySelectionText(translating: translating) }) else { return }
         text.reading = rect
         textTask = Task {

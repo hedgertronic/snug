@@ -384,6 +384,66 @@ extension DebugRun {
         require(overlay.selection?.rect == CGRect(x: drawn.minX, y: drawn.minY, width: drawn.width - 1, height: drawn.height), "Option-Command-Right shrinks a drawn selection's right side")
         overlay.dismiss()
 
+        // Cmd-arrow moves that side out to the next edge, then the next, then the extent; Cmd-Shift-arrow moves it back in, and stops short of
+        // the minimum size. The fixture is a 1200 x 800 white image with a gray panel (200-1000, 150-650) holding a dark one (400-800, 300-500).
+        let panels = CGContext(data: nil, width: 1200, height: 800, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                               bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        for (gray, rect) in [(1.0, CGRect(x: 0, y: 0, width: 1200, height: 800)), (0.63, CGRect(x: 200, y: 150, width: 800, height: 500)),
+                             (0.24, CGRect(x: 400, y: 300, width: 400, height: 200))] {
+            panels.setFillColor(CGColor(gray: gray, alpha: 1))
+            panels.fill(rect)
+        }
+        overlay.dismiss()
+        overlay.present(image: panels.makeImage()!, frame: CGRect(x: frame.minX, y: frame.minY, width: 600, height: 400), displayID: nil)
+        overlay.detectionTask?.cancel()
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: CGRect(x: 450, y: 350, width: 300, height: 100))
+        var rights: [CGFloat] = []
+        for _ in 0..<4 {
+            key(right, "", .command)
+            rights.append(overlay.selection!.rect.maxX)
+        }
+        require(rights == [800, 1000, 1200, 1200], "Cmd-Right takes the right side to the dark panel's edge, the gray panel's, then the extent, then stays: \(rights)")
+        for _ in 0..<3 {
+            key(right, "", [.command, .shift])
+            rights.append(overlay.selection!.rect.maxX)
+        }
+        require(rights.suffix(3) == [1000, 800, 800], "Cmd-Shift-Right takes it back in edge by edge and stops before the minimum size: \(rights)")
+        key(left, "", .command)
+        key(down, "", .command)
+        var tops: [CGFloat] = []
+        for _ in 0..<3 {
+            key(up, "", .command)
+            tops.append(overlay.selection!.rect.minY)
+        }
+        rect = overlay.selection!.rect
+        require(tops == [300, 150, 0] && rect == CGRect(x: 400, y: 0, width: 400, height: 500),
+                "Cmd-Left, Cmd-Down and Cmd-Up move the other sides to their next edges: \(tops) \(rect)")
+        overlay.dismiss()
+        // One press's cost on the page: a tall selection whose search reaches across most of the screen.
+        open()
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: CGRect(x: 20, y: 100, width: 40, height: 1400))
+        let pressed = ContinuousClock.now
+        key(right, "", .command)
+        print("Cmd-Right on a 40 x 1400 px selection: \(String(format: "%.1f", pressed.duration(to: .now).milliseconds)) ms, right side to \(overlay.selection!.rect.maxX)")
+        overlay.dismiss()
+
+        // + and - move every side out or in by 1 px, Option 10 px, within the extent and the minimum size.
+        open()
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: a)
+        var sides: [CGRect] = []
+        for (character, flags) in [("+", NSEvent.ModifierFlags.shift), ("+", [.shift, .option]), ("-", []), ("-", .option)] {
+            key(character == "+" ? 24 : 27, character, flags)
+            sides.append(overlay.selection!.rect)
+        }
+        require(sides == [a.insetBy(dx: -1, dy: -1), a.insetBy(dx: -11, dy: -11), a.insetBy(dx: -10, dy: -10), a],
+                "+ and - grow and shrink all four sides by 1 px, Option 10 px: \(sides)")
+        for _ in 0..<30 { key(27, "-", .option) }
+        require(overlay.selection!.rect.height == AreaSelection.minimumSize, "- stops at the minimum size: \(overlay.selection!.rect)")
+        key(3, "f")
+        key(24, "+", .shift)
+        require(overlay.selection?.rect == overlay.extent, "+ stops at the extent")
+        overlay.dismiss()
+
         // Cmd-Shift-S: Save As writes where the panel (here the seam) says, with the usual name offered, and closes the overlay.
         var offered: URL?
         overlay.chooseSaveURL = { suggested in

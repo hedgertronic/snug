@@ -311,7 +311,7 @@ extension DebugRun {
             key(48, "\t")
             key(48, "\t")
             try snapshot("cutout-preview-subject")
-            key(8, "c")
+            key(1, "s")
             try snapshot("cutout-preview-subject-cropped")
             defaults.removeObject(forKey: Pref.cutoutCrop)
             overlay.dismiss()
