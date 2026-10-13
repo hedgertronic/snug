@@ -692,6 +692,8 @@ final class OverlayController {
         case (_, false, _) where shift && !hovering && character.lowercased() == "p": toggleRatioLock()
         case (_, false, "p") where !hovering: showRatioMenu()
         case (_, false, "="): applyRadiusToAll()
+        case (_, false, "+") where !hovering: growSides(by: option ? 10 : 1)
+        case (_, false, "-") where !hovering: growSides(by: option ? -10 : -1)
         case (123...126, _, _) where option && !hovering: nudgeSide(keyCode: event.keyCode, outward: !command, by: step)
         case (123...126, true, _) where !hovering: moveSideToEdge(keyCode: event.keyCode, outward: !shift)
         case (_, true, "s") where hovering: clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true)

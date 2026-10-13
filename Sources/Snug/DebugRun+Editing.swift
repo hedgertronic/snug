@@ -420,6 +420,23 @@ extension DebugRun {
                 "Cmd-Left, Cmd-Down and Cmd-Up move the other sides to their next edges: \(tops) \(rect)")
         overlay.dismiss()
 
+        // + and - move every side out or in by 1 px, Option 10 px, within the extent and the minimum size.
+        open()
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: a)
+        var sides: [CGRect] = []
+        for (character, flags) in [("+", NSEvent.ModifierFlags.shift), ("+", [.shift, .option]), ("-", []), ("-", .option)] {
+            key(character == "+" ? 24 : 27, character, flags)
+            sides.append(overlay.selection!.rect)
+        }
+        require(sides == [a.insetBy(dx: -1, dy: -1), a.insetBy(dx: -11, dy: -11), a.insetBy(dx: -10, dy: -10), a],
+                "+ and - grow and shrink all four sides by 1 px, Option 10 px: \(sides)")
+        for _ in 0..<30 { key(27, "-", .option) }
+        require(overlay.selection!.rect.height == AreaSelection.minimumSize, "- stops at the minimum size: \(overlay.selection!.rect)")
+        key(3, "f")
+        key(24, "+", .shift)
+        require(overlay.selection?.rect == overlay.extent, "+ stops at the extent")
+        overlay.dismiss()
+
         // Cmd-Shift-S: Save As writes where the panel (here the seam) says, with the usual name offered, and closes the overlay.
         var offered: URL?
         overlay.chooseSaveURL = { suggested in
