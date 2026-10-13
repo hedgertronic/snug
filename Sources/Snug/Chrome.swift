@@ -14,9 +14,11 @@ extension NSColor {
     /// The chrome's colors in its dark and light looks, resolved by the appearance they are drawn in. The surface is more opaque than
     /// the mocks' 84%, which sat on a background blur this flat fill does not have.
     static let chromeText = look(dark: .white.withAlphaComponent(0.92), light: .black.withAlphaComponent(0.86))
-    static let chromeSurface = look(dark: NSColor(srgbRed: 38 / 255, green: 38 / 255, blue: 42 / 255, alpha: 0.92),
+    static let chromeSurface = look(dark: NSColor(srgbRed: 48 / 255, green: 48 / 255, blue: 53 / 255, alpha: 0.96),
                                     light: NSColor(srgbRed: 246 / 255, green: 246 / 255, blue: 248 / 255, alpha: 0.92))
-    static let chromeHairline = look(dark: .white.withAlphaComponent(0.14), light: .black.withAlphaComponent(0.12))
+    static let chromeHairline = look(dark: .white.withAlphaComponent(0.22), light: .black.withAlphaComponent(0.12))
+    /// The ring around a color swatch, so dark colors show on the dark surface and light ones on the light surface.
+    static let swatchEdge = look(dark: .white.withAlphaComponent(0.5), light: .black.withAlphaComponent(0.3))
     static let capFill = look(dark: .white.withAlphaComponent(0.16), light: .white)
     static let capEdge = look(dark: .black.withAlphaComponent(0.45), light: .black.withAlphaComponent(0.18))
 

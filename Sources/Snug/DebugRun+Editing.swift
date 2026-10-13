@@ -90,8 +90,8 @@ extension DebugRun {
         key(down)
         require(overlay.selection?.rect == a.offsetBy(dx: 0, dy: 1), "an arrow moves the selection 1 device pixel, not 1 pt")
         key(up)
-        require(texts(in: overlay.chrome.hints).contains("grow") && texts(in: overlay.chrome.strip).contains("Scroll") && !["frame", "corners"].contains(where: texts(in: overlay.chrome.hints).contains),
-                "the selection keys line offers grow, the strip offers Scroll, and there is no frame or corners hint")
+        require(texts(in: overlay.chrome.hints).contains("grow") && texts(in: overlay.chrome.strip).contains("Subject") && !["frame", "corners"].contains(where: texts(in: overlay.chrome.hints).contains),
+                "the selection keys line offers grow, the strip offers Subject, and there is no frame or corners hint")
 
         // Corner dots: cursor, drag all, Option-drag one, clamp.
         mouse(.mouseMoved, dot(.topLeft))

@@ -271,8 +271,8 @@ final class RatioMenu: NSView {
                     swatch.wantsLayer = true
                     swatch.layer!.cornerRadius = 3
                     swatch.layer!.backgroundColor = color.cgColor
-                    swatch.layer!.borderWidth = 0.5
-                    effectiveAppearance.performAsCurrentDrawingAppearance { swatch.layer!.borderColor = NSColor.chromeHairline.cgColor }
+                    swatch.layer!.borderWidth = 1
+                    effectiveAppearance.performAsCurrentDrawingAppearance { swatch.layer!.borderColor = NSColor.swatchEdge.cgColor }
                     row.addSubview(swatch)
                 }
                 if let key = item.cap {
