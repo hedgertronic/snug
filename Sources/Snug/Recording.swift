@@ -1,6 +1,9 @@
 import AppKit
 import AVFoundation
+import os
 import ScreenCaptureKit
+
+let recordingLog = Logger(subsystem: "com.snug", category: "recording")
 
 extension Pref {
     /// Seconds of the count shown over the area before a recording starts: 0 (off), 3 or 5; I cycles it while armed.
@@ -40,12 +43,15 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     nonisolated static let finishTimeout = Duration.seconds(5)
     /// Space between the outline and the stop reminder.
     static let reminderGap: CGFloat = 8
+    /// Space between the bottom of the visible frame and the stop reminder inside a full-screen area.
+    static let fullScreenInset: CGFloat = 24
 
     let file: URL
-    /// Called on the main actor if the recording fails before `stop`.
+    /// Called on the main actor if the recording fails before `stop`, with no frames written.
     var onFailure: (any Error) -> Void = { _ in }
     /// Called on the main actor when the stream stops without `stop`, as when the system's screen-recording indicator in the menu bar
-    /// stops it; `stop` then waits for the file without stopping the stream again.
+    /// stops it, or when the recording output fails after it wrote frames; `stop` then waits for the file without stopping the stream
+    /// again.
     var onStop: () -> Void = {}
     private var stream: SCStream!
     private var output: SCRecordingOutput!
@@ -70,8 +76,10 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     }
 
     /// Starts recording `area` of the display into `file`. With `showsPanels`, the rest of the display dims, a thin red outline just
-    /// outside the area pulses once as capture starts, and the stop reminder sits outside it.
-    static func start(displayID: CGDirectDisplayID, area: CGRect, file: URL, showsCursor: Bool, showsPanels: Bool, defaults: UserDefaults) async throws -> ScreenRecording {
+    /// outside the area pulses once as capture starts, and the stop reminder sits outside it. The handlers are set before capture starts,
+    /// so no stop or failure is missed.
+    static func start(displayID: CGDirectDisplayID, area: CGRect, file: URL, showsCursor: Bool, showsPanels: Bool, defaults: UserDefaults,
+                      onFailure: @escaping (any Error) -> Void = { _ in }, onStop: @escaping () -> Void = {}) async throws -> ScreenRecording {
         // Ordered in while transparent, so the window server lists them for the filter that leaves them out.
         let dim = showsPanels ? makeDim(around: area, on: displayID, defaults: defaults) : nil
         let outline = showsPanels ? makeOutline(around: area, on: displayID) : nil
@@ -98,6 +106,8 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
             recordingConfiguration.outputFileType = .mov
             recordingConfiguration.videoCodecType = .h264
             recording = try ScreenRecording(file: file, filter: filter, configuration: configuration, recordingConfiguration: recordingConfiguration, panels: panels)
+            recording.onFailure = onFailure
+            recording.onStop = onStop
             try await recording.stream.startCapture()
         } catch {
             // A failed start leaves nothing on screen.
@@ -134,6 +144,7 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
             }
         }
         try await Self.waitForEnd(ended, file: file)
+        recordingLog.notice("stop() returned")
     }
 
     /// Waits for the first end in `ended`: returns on nil, throws the error it carries, or throws a write error naming `file` after
@@ -158,7 +169,9 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     }
 
     nonisolated func stream(_ stream: SCStream, didStopWithError error: any Error) {
+        let failure = error as NSError
         Task { @MainActor in
+            recordingLog.notice("stream stopped, error \(failure.domain, privacy: .public) \(failure.code), stopping \(self.stopping)")
             streamStopped = true
             if !stopping { onStop() }
         }
@@ -168,20 +181,24 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         Task { @MainActor in finished(nil) }
     }
 
-    /// A stop from outside Snug (the system's screen-recording indicator) may end the output with `userStopped`; the file is then as
-    /// complete as after `stop`, so it delivers like one.
+    /// A stop from outside Snug (the system's screen-recording indicator) may end the output with `userStopped`, or with another code
+    /// that arrives before the stream's own stop; once frames are written the file is as complete as after `stop`, so it delivers like
+    /// one. Only an output that fails with nothing written is a failure.
     nonisolated func recordingOutput(_ recordingOutput: SCRecordingOutput, didFailWithError error: any Error) {
-        let stoppedByUser = (error as? SCStreamError)?.code == .userStopped
-        Task { @MainActor in finished(stoppedByUser ? nil : error) }
+        let failure = error as NSError
+        Task { @MainActor in
+            let wroteFrames = output.recordedDuration > .zero
+            recordingLog.notice("output failed, error \(failure.domain, privacy: .public) \(failure.code), frames written \(wroteFrames), stopping \(self.stopping)")
+            finished(wroteFrames || (error as? SCStreamError)?.code == .userStopped ? nil : error, endedByFailure: true)
+        }
     }
 
-    private func finished(_ error: (any Error)?) {
+    private func finished(_ error: (any Error)?, endedByFailure: Bool = false) {
         end.yield(error)
-        if let error, !stopping {
-            ticking?.cancel()
-            panels.forEach { $0.orderOut(nil) }
-            onFailure(error)
-        }
+        guard !stopping, endedByFailure else { return }
+        ticking?.cancel()
+        panels.forEach { $0.orderOut(nil) }
+        if let error { onFailure(error) } else { onStop() }
     }
 
     /// Seconds recorded as minutes and seconds: "0:07", "12:30".
@@ -213,9 +230,11 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         return panel
     }
 
-    /// The outline: a 2 pt red border, the armed outline's color, just outside `area`.
+    /// The outline: a 2 pt red border, the armed outline's color, just outside `area`, or inside the display's edge where `area` reaches it.
     static func makeOutline(around area: CGRect, on displayID: CGDirectDisplayID) -> RecordingPanel {
-        let panel = RecordingPanel(frame: screenFrame(area.insetBy(dx: -3, dy: -3), on: displayID))
+        // Clipped to the display, so an area that reaches an edge gets its outline just inside that edge.
+        let display = CGRect(origin: .zero, size: CGDisplayBounds(displayID).size)
+        let panel = RecordingPanel(frame: screenFrame(area.insetBy(dx: -3, dy: -3).intersection(display), on: displayID))
         let border = NSView(frame: CGRect(origin: .zero, size: panel.frame.size))
         border.wantsLayer = true
         border.layer!.borderWidth = 2
@@ -227,9 +246,11 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
 
     /// The stop reminder: two floating pills 8 pt apart on the chrome surface in the overlay's look, the time recorded so far ("0:12",
     /// counted by `start`), then "stop" and the capture shortcut's key cap (with no shortcut, "Stop from the menu bar"); placed by
-    /// `reminderFrame` within the display's visible frame; nil when it fits neither below nor above the area. The panel draws the
+    /// `reminderFrame` within the display's visible frame. The panel draws the
     /// shadow, since a pill's own would be clipped at the panel's edge.
-    static func makeReminder(around area: CGRect, on displayID: CGDirectDisplayID, defaults: UserDefaults) -> RecordingPanel? {
+    static func makeReminder(around area: CGRect, on displayID: CGDirectDisplayID, defaults: UserDefaults) -> RecordingPanel {
+        // The control height, which both pills take so they match: a zero-width spacer of this height sets each pill's height.
+        let height: CGFloat = 32
         // Sized for "00:00" so the pill holds ten minutes and more; mono digits keep the width.
         let clock = NSTextField("00:00", size: 12, weight: .medium, mono: true, color: .chromeText)
         clock.alignment = .center
@@ -237,8 +258,8 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         let pills = [[clock] as [NSView], [defaults.integer(forKey: Pref.hotKeyCode) < 0
             ? NSTextField("Stop from the menu bar", size: 12, weight: .medium, color: .chromeText)
             : Pill.hint([Shortcut.label(from: defaults)], "stop")]].map { views in
-            let pill = Pill(radius: 11, insets: NSEdgeInsets(top: 7, left: 14, bottom: 7, right: 14), spacing: 0)
-            pill.show("reminder") { views }
+            let pill = Pill(radius: height / 2, insets: NSEdgeInsets(top: 0, left: 14, bottom: 0, right: 14), spacing: 0)
+            pill.show("reminder") { views + [NSView(frame: CGRect(x: 0, y: 0, width: 0, height: height))] }
             return pill
         }
         pills[1].frame.origin.x = pills[0].frame.maxX + 8
@@ -251,8 +272,7 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         let screen = NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value == displayID }!
         let visible = CGRect(x: screen.visibleFrame.minX - screen.frame.minX, y: screen.frame.maxY - screen.visibleFrame.maxY,
                              width: screen.visibleFrame.width, height: screen.visibleFrame.height)
-        guard let frame = reminderFrame(size: pair.frame.size, around: area, within: visible) else { return nil }
-        let panel = RecordingPanel(frame: screenFrame(frame, on: displayID))
+        let panel = RecordingPanel(frame: screenFrame(reminderFrame(size: pair.frame.size, around: area, within: visible), on: displayID))
         panel.hasShadow = true
         panel.contentView = pair
         panel.clock = clock
@@ -260,24 +280,26 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     }
 
     /// Where the stop reminder of `size` goes, in display points with a top-left origin: centered under `area`, `reminderGap` outside
-    /// the outline, or over it when there is no room below within `visible`, and kept inside `visible` sideways. Nil when neither fits,
-    /// as for a full-screen area: the reminder never covers the area.
-    static func reminderFrame(size: CGSize, around area: CGRect, within visible: CGRect) -> CGRect? {
+    /// the outline, or over it when there is no room below within `visible`, and kept inside `visible` sideways. When neither fits, as for
+    /// a full-screen area, it goes inside the area: bottom center, `fullScreenInset` above the bottom of `visible`.
+    static func reminderFrame(size: CGSize, around area: CGRect, within visible: CGRect) -> CGRect {
         let outside = 3 + reminderGap
         let x = min(max(area.midX - size.width / 2, visible.minX), visible.maxX - size.width).rounded()
         let below = CGRect(x: x, y: area.maxY + outside, width: size.width, height: size.height)
         let above = CGRect(x: x, y: area.minY - outside - size.height, width: size.width, height: size.height)
-        return [below, above].first { visible.contains($0) }
+        return [below, above].first { visible.contains($0) } ?? CGRect(x: x, y: visible.maxY - fullScreenInset - size.height, width: size.width, height: size.height)
     }
 
     /// Delivers a finished recording that is already in the save folder: copies its file URL (both after-capture settings copy),
     /// then shows the toast with the first frame; clicking the toast reveals the file.
     static func deliver(_ file: URL, pasteboard: NSPasteboard, defaults: UserDefaults) async throws -> CGImage {
+        recordingLog.notice("deliver started")
         let generator = AVAssetImageGenerator(asset: AVURLAsset(url: file))
         generator.appliesPreferredTrackTransform = true
         let frame = try await generator.image(at: .zero).image
         pasteboard.clearContents()
         pasteboard.writeObjects([file as NSURL])
+        recordingLog.notice("toast shown")
         Toast.show(png: try await Output.png(frame), message: "Copied, saved to \(file.deletingLastPathComponent().lastPathComponent)",
                    detail: file.lastPathComponent, file: file, defaults: defaults)
         return frame
