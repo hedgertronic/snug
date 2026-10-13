@@ -405,6 +405,7 @@ final class Chrome {
     let styleToggles = [(Pref.roundCorners, BarButton("Rounded", key: "O")), (Pref.frame, BarButton("Frame", key: "M")), (Pref.shadow, BarButton("Shadow", key: "D"))]
     /// The action strip below the hovered element or the selection, or a session's (scroll, armed recording, cut out) controls.
     let strip = Bar()
+    let edit = BarButton("Edit", key: "E")
     let copy = BarButton("Copy", key: "\u{21A9}")
     let save = BarButton("Save", key: "\u{2318}S")
     let text = BarButton("Text", key: "\u{21E7}\u{21A9}")
@@ -467,7 +468,7 @@ final class Chrome {
     /// Every button, for the click wiring.
     var buttons: [BarButton] {
         Array(modeButtons.values) + (viewToggles + styleToggles).map(\.1)
-            + [copy, save, text, scroll, record, cutout, done, cancel, cursor, countIn, start, subject, crop, snap, ratioButton, lock]
+            + [edit, copy, save, text, scroll, record, cutout, done, cancel, cursor, countIn, start, subject, crop, snap, ratioButton, lock]
     }
 
     /// Lowest first: the cut-out preview goes under all of them.

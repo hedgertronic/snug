@@ -377,8 +377,8 @@ extension DebugRun {
         mouse(.mouseMoved, aim)
         let hovered = overlay.view.overlays.hover!
         require(hovered != screenWindow && ![CandidateKind.window, .display].contains(overlay.session!.selected!.kind), "hover over geometry selects it, not the window \(hovered)")
-        require(Array(texts(in: overlay.chrome.hover).dropFirst()) == ["\(Int(hovered.width)) x \(Int(hovered.height))"] && texts(in: overlay.chrome.strip).first == "Copy",
-                "the hover chip shows the name and the size, and the strip below starts with Copy: \(texts(in: overlay.chrome.hover))")
+        require(Array(texts(in: overlay.chrome.hover).dropFirst()) == ["\(Int(hovered.width)) x \(Int(hovered.height))"] && texts(in: overlay.chrome.strip).prefix(4) == ["Edit", "E", "Copy", "\u{21A9}"],
+                "the hover chip shows the name and the size, and the strip below starts with Edit, then Copy: \(texts(in: overlay.chrome.hover))")
         let hoverBox = overlay.view.viewRect(hovered)
         require(overlay.chrome.hover.frame.minX == max(hoverBox.minX, 8) && (overlay.chrome.hover.frame.minY == hoverBox.maxY + 8 || hoverBox.contains(overlay.chrome.hover.frame)),
                 "the hover chip is attached to the hovered element's top-left edge: \(overlay.chrome.hover.frame) \(hoverBox)")
@@ -843,12 +843,17 @@ extension DebugRun {
         require(chrome.hover.frame.minX == windowBox.minX && chrome.hover.frame.minY == windowBox.maxY + 8 && chrome.snap.frame.minY == chrome.hover.frame.minY
                     && chrome.snap.frame.minX == chrome.hover.frame.maxX + 6, "the chip row sits on the hovered box's top-left edge: \(chrome.hover.frame) \(chrome.snap.frame) \(windowBox)")
         let captureStrip = ["Copy", "\u{21A9}", "Save", "\u{2318}S", "Text", "\u{21E7}\u{21A9}", "Scroll", "G", "Record", "V", "Subject", "K"]
-        require(texts(in: chrome.strip) == captureStrip && chrome.strip.groups.count == 2 && chrome.copy.primary
-                    && chrome.strip.frame.maxY == windowBox.minY - 8 && chrome.strip.frame.minX == windowBox.minX,
-                "the action strip hangs under the hovered box: Copy, Save, Text, then Scroll, Record, Subject: \(texts(in: chrome.strip)) \(chrome.strip.frame) \(windowBox)")
+        require(texts(in: chrome.strip) == ["Edit", "E"] + captureStrip && chrome.strip.groups.count == 3 && chrome.copy.primary && !chrome.edit.primary && !chrome.edit.lit
+                    && chrome.edit.superview === chrome.strip.groups[0] && chrome.strip.frame.maxY == windowBox.minY - 8 && chrome.strip.frame.minX == windowBox.minX,
+                "the action strip hangs under the hovered box: Edit in its own pill, then Copy, Save, Text, then Scroll, Record, Subject: \(texts(in: chrome.strip)) \(chrome.strip.frame) \(windowBox)")
         require(!chrome.record.isEnabled && chrome.record.alphaValue == 0.25 && overlay.view.hitTest(centerOf(chrome.record)) !== chrome.record && chrome.copy.alphaValue == 1,
                 "with no live display Record is disabled: faded and not clickable")
         require(chrome.all.flatMap(faded).isEmpty, "nothing else in the chrome is faded: \(chrome.all.flatMap(faded))")
+        // The Edit button does what E does: it opens the hovered window as a selection and leaves the strip, and Esc goes back to the hover.
+        chrome.edit.onClick()
+        require(overlay.selection?.rect == window && !texts(in: chrome.strip).contains("Edit"), "clicking Edit opens the hovered window as a selection, with no Edit in the strip: \(String(describing: overlay.selection?.rect))")
+        key(53, "")
+        require(overlay.selection == nil && texts(in: chrome.strip).first == "Edit", "Esc goes back to the hover and its Edit button: \(texts(in: chrome.strip))")
         // The hover holds while the pointer crosses from the element to its strip, so a click reaches Copy; the loupe and crosshair still
         // follow the pointer.
         defaults.set(true, forKey: Pref.loupe)
@@ -873,7 +878,7 @@ extension DebugRun {
         defaults.set(true, forKey: Pref.shadow)
         mouse(.mouseMoved, CGPoint(x: 40, y: 40))
         require(chrome.hover.isHidden && chrome.snap.isHidden && chrome.strip.isHidden, "the chip row and strip go away off the window")
-        require(texts(in: chrome.hints) == ["edit", "E", "bigger / smaller", "\u{2191}", "\u{2193}", "next", "\u{2190}", "\u{2192}", "full screen", "F", "window", "W", "all keys", "?"],
+        require(texts(in: chrome.hints) == ["bigger / smaller", "\u{2191}", "\u{2193}", "next", "\u{2190}", "\u{2192}", "full screen", "F", "window", "W", "all keys", "?"],
                 "the hover keys line has no click capture and names W window after F full screen: \(texts(in: chrome.hints))")
         mouse(.leftMouseDown, rough.origin)
         mouse(.leftMouseDragged, CGPoint(x: rough.midX, y: rough.midY))
@@ -886,7 +891,7 @@ extension DebugRun {
         require(texts(in: chrome.snap) == ["Snapped", "S"] && chrome.snap.lit, "after release on a fit: Snapped, lit")
         require(!top.isHidden && texts(in: chrome.strip) == captureStrip && texts(in: chrome.hints)
                     == ["move", "\u{2190}\u{2192}", "grow", "\u{2325}", "shrink", "\u{2325}\u{2318}", "edge out", "\u{2318}", "edge in", "\u{2318}\u{21E7}", "all sides", "+", "-", "undo", "\u{2318}Z"],
-                "a selection keeps the top bar, has the same strip as hover, and the arrow layers on the keys line: \(texts(in: chrome.hints))")
+                "a selection keeps the top bar, has the strip without Edit, and the arrow layers on the keys line: \(texts(in: chrome.hints))")
         require(chrome.hints.frame.height < 40 && chrome.hints.frame.width <= overlay.view.bounds.width - 16, "the keys line is one line and fits: \(chrome.hints.frame) in \(overlay.view.bounds.width)")
         // The chip row: size and Snap from the selection's left edge, the ratio and radius ending at its right edge (after Snap when they
         // would meet). The ratio chip's readout with P opens the ratio menu, the lock with Shift-P toggles the lock, with no fills of their own.

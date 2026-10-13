@@ -77,7 +77,7 @@ extension OverlayController {
         case .text: [(["Drag"], "select text"), (["\u{21A9}"], "copy"), (["\u{21E7}", "\u{21A9}"], "rows"), (["Tab"], "links, codes"), (["\u{2325}", "\u{21A9}"], "translate"), (["F"], "all text"), (["C"], "color"), (["?"], "all keys")]
         case .capture where selection != nil:
             [(["\u{2190}\u{2192}"], "move"), (["\u{2325}"], "grow"), (["\u{2325}\u{2318}"], "shrink"), (["\u{2318}"], "edge out"), (["\u{2318}\u{21E7}"], "edge in"), (["+", "-"], "all sides"), (["\u{2318}Z"], "undo")]
-        case .capture: [(["E"], "edit"), (["\u{2191}", "\u{2193}"], "bigger / smaller"), (["\u{2190}", "\u{2192}"], "next"), (["F"], "full screen"), (["W"], "window"), (["?"], "all keys")]
+        case .capture: [(["\u{2191}", "\u{2193}"], "bigger / smaller"), (["\u{2190}", "\u{2192}"], "next"), (["F"], "full screen"), (["W"], "window"), (["?"], "all keys")]
         }
     }
 
@@ -162,9 +162,9 @@ extension OverlayController {
             c.radius.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText), KeyCap("["), KeyCap("]")] }
             return c.radius
         }
-        /// The capture strip: Copy, Save, and Text, then Scroll, Record, and Cut out, which are faded when they cannot run on `area`.
-        func captureStrip(_ area: CGRect) {
-            c.strip.show([[c.copy, c.save, c.text], [c.scroll, c.record, c.cutout]])
+        /// The capture strip: Edit in its own pill while hovering, then Copy, Save, and Text, then Scroll, Record, and Subject, which are faded when they cannot run on `area`.
+        func captureStrip(_ area: CGRect, hovering: Bool = false) {
+            c.strip.show((hovering ? [[c.edit]] : []) + [[c.copy, c.save, c.text], [c.scroll, c.record, c.cutout]])
             c.scroll.isEnabled = (scrollFrames != nil || displayID != nil) && area != extent && windows.contains { $0.insetBy(dx: -2, dy: -2).contains(area) }
             c.record.isEnabled = displayID != nil
         }
@@ -217,7 +217,7 @@ extension OverlayController {
             }
             c.snap.setTitle("Snap")
             c.snap.lit = snapEnabled
-            captureStrip(rect)
+            captureStrip(rect, hovering: true)
             attachment = (view.viewRect(rect), true, [c.hover, c.snap] + (editedRadii[rect] == nil ? [] : [radiusChip(rect)]), [])
         }
 
