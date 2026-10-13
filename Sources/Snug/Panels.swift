@@ -250,7 +250,7 @@ final class RatioMenu: NSView {
             if item.title.isEmpty {
                 let line = NSView(frame: CGRect(x: 6, y: (height / 2).rounded(), width: row.frame.width - 12, height: 1))
                 line.wantsLayer = true
-                line.layer!.backgroundColor = NSColor.chromeHairline.cgColor
+                effectiveAppearance.performAsCurrentDrawingAppearance { line.layer!.backgroundColor = NSColor.chromeHairline.cgColor }
                 row.addSubview(line)
             } else {
                 let title = NSTextField(item.title, size: 12, weight: .medium, color: .chromeText)

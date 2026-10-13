@@ -576,15 +576,16 @@ extension DebugRun {
         let preview = overlay.cutout
         require(overlay.window.isVisible && preview != nil && pasteboard.data(forType: .png) == nil, "K on a selection opens the preview and copies nothing")
         require(preview?.rect == iconRect && preview?.subjects.count == 1 && preview!.view.superview === overlay.view
-                && preview!.view.dim.frame == overlay.view.viewRect(iconRect) && preview!.view.subject.frame == preview!.view.dim.frame
-                && preview!.view.outline.frame == preview!.view.dim.frame && (preview!.view.subject.contents as! CGImage).width == Int(iconRect.width)
+                && preview!.view.checker.frame == overlay.view.viewRect(iconRect) && preview!.view.subject.frame == preview!.view.checker.frame
+                && preview!.view.ghost.frame == preview!.view.checker.frame && preview!.view.outline.frame == preview!.view.checker.frame && (preview!.view.subject.contents as! CGImage).width == Int(iconRect.width)
                 && preview!.view.outline.mask!.contents as! CGImage === preview!.subjects[0].outline,
-                "the preview dims the area under the subject's own pixels and outlines the subject, with no checkerboard")
+                "the preview fills the area with the checkerboard and the faint removed pixels under the subject's own pixels, and outlines the subject")
         let sublayers = overlay.view.layer!.sublayers!
         require(sublayers.firstIndex(of: preview!.view.content)! < sublayers.firstIndex(of: overlay.view.guides.root)!,
                 "the preview draws under the guides, so the loupe stays on top of the subject")
-        require(preview!.view.outline.backgroundColor == Highlight.color(hex: "#E5484D").cgColor && preview!.view.dim.backgroundColor?.alpha == 0.42,
-                "the outline is the highlight color and the dim matches the fade: \(String(describing: preview!.view.outline.backgroundColor)), \(String(describing: preview!.view.dim.backgroundColor))")
+        require(preview!.view.outline.backgroundColor == Highlight.color(hex: "#E5484D").cgColor && preview!.view.ghost.opacity == 0.2
+                    && (preview!.view.ghost.contents as! CGImage).width == Int(iconRect.width) && preview!.view.checker.backgroundColor != nil,
+                "the ghost: a checkerboard, the removed pixels at 20%, the outline in the highlight color: \(String(describing: preview!.view.outline.backgroundColor))")
         let ring = preview!.subjects[0].outline
         let ringData = ring.dataProvider!.data!
         let ringAlpha = CFDataGetBytePtr(ringData)!
@@ -607,7 +608,7 @@ extension DebugRun {
         let box = preview!.subjects[0].bounds.offsetBy(dx: iconRect.minX, dy: iconRect.minY)
         key(cKey, "c")
         require(overlay.cutout?.cropped == true && overlay.defaults.bool(forKey: Pref.cutoutCrop) && overlay.view.overlays.selection == box
-                && overlay.cutout!.view.dim.frame == overlay.view.viewRect(box) && overlay.chrome.crop.lit,
+                && overlay.cutout!.view.checker.frame == overlay.view.viewRect(box) && overlay.cutout!.view.ghost.frame == overlay.view.viewRect(box) && overlay.chrome.crop.lit,
                 "C crops to the subject's box \(box) and lights Snap to subject: outlined \(String(describing: overlay.view.overlays.selection))")
         key(kKey, "k")
         require(overlay.cutout == nil && preview!.view.superview == nil && preview!.view.content.superlayer == nil && overlay.selection?.rect == iconRect && texts(in: overlay.chrome.strip).contains("Scroll"),

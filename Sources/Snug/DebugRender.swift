@@ -364,6 +364,27 @@ extension DebugRun {
         try snapshot("recording-count-in")
         overlay.dismiss()
 
+        // The light look: hover, a selection with the pointer inside and the ratio menu open, and armed recording.
+        defaults.set("light", forKey: Pref.overlayAppearance)
+        open()
+        overlay.detectionTask?.cancel()
+        overlay.setWindows([CGRect(x: 300, y: 300, width: 1300, height: 1000)], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, CGPoint(x: 900, y: 700))
+        try snapshot("light-window-hover")
+        overlay.dismiss()
+        open()
+        overlay.selection = AreaSelection(extent: editExtent, exact: editRect)
+        overlay.refresh()
+        mouse(.mouseMoved, CGPoint(x: editRect.midX, y: editRect.midY))
+        try snapshot("light-edit-chrome-pointer-inside")
+        key(35, "p")
+        try snapshot("light-edit-ratio-menu")
+        key(53, "\u{1B}")
+        key(9, "v")
+        try snapshot("light-recording-armed")
+        overlay.dismiss()
+        defaults.removeObject(forKey: Pref.overlayAppearance)
+
         try await renderMenuBarIcons(into: directory)
 
         /// A toast's content on a mid-gray backdrop, since its panel is transparent.
