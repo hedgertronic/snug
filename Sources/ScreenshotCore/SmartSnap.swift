@@ -28,8 +28,8 @@ public struct SmartSnap {
         Int((6 * scale).rounded())
     }
 
-    /// How far a side of a rough drag may move in `suggest`: 12% of the side's length, at most `cap`, and never under 8 points.
-    private static func searchBand(side: CGFloat, scale: CGFloat, cap: Int) -> Int {
+    /// How far a side of a new drag may move to fit a suggestion: 12% of the side's length, at most `cap`, and never under 8 points.
+    public static func searchBand(side: CGFloat, scale: CGFloat, cap: Int = 56) -> Int {
         max(Int((8 * scale).rounded()), min(cap, Int((side * 0.12).rounded())))
     }
 
