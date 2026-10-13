@@ -44,6 +44,8 @@ final class OverlayView: NSView {
         /// Sides a resize snapped to, as zero-width or zero-height rectangles.
         var snappedEdges: [CGRect] = []
         var showsHandles = false
+        /// The selection's accent outline; armed to record, the red outline takes its place.
+        var showsOutline = true
         /// Corner radii in image pixels of the selection (or the snap preview when there is no selection), and of the hovered rectangle.
         var radii = CornerRadii.zero
         var hoverRadii = CornerRadii.zero
@@ -240,7 +242,7 @@ final class OverlayView: NSView {
         levelHintLayer.path = hints
         styleLayer.path = o.styleFrame.map { path($0) }
         ghostLayer.path = o.ghost.map { path($0) }
-        outlineLayer.path = o.selection.map { path($0, radii: o.radii, inset: 0.75) }
+        outlineLayer.path = o.showsOutline ? o.selection.map { path($0, radii: o.radii, inset: 0.75) } : nil
         previewLayer.path = o.preview.map { path($0, radii: o.radii, inset: 0.75) }
         let snapped = CGMutablePath()
         for edge in o.snappedEdges {

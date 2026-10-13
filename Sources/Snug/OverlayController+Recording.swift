@@ -87,11 +87,12 @@ extension OverlayController {
         ScreenRecording.requested(displayID, points, showsCursor)
     }
 
-    /// Armed: the red outline on the selection and the count in its middle, with no handles or action bar.
+    /// Armed: the red outline on the selection, in place of the accent one, and the count in its middle, with no handles or action bar.
     func refreshRecording() {
         guard let armed = armedRecording, let rect = selection?.rect else { return }
         chrome.actionBar.isHidden = true
         view.overlays.showsHandles = false
+        view.overlays.showsOutline = false
         let box = view.viewRect(rect)
         CATransaction.begin()
         CATransaction.setDisableActions(true)

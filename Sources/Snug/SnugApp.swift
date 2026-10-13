@@ -96,7 +96,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         }
         installStatusItem()
         ScreenRecording.requested = { [unowned self] in startRecording(displayID: $0, area: $1, showsCursor: $2) }
-        hotKey = HotKey { [unowned self] in capture() }
+        hotKey = HotKey(id: 1) { [unowned self] in capture() }
         registerHotKey()
         _ = OverlayController.warmVisionInChild(defaults: .standard)
         Task {
@@ -424,8 +424,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         if settingsWindow == nil {
             settingsWindow = SettingsTabs.makeWindow()
         }
+        // `activate` is only a request that macOS may decline or grant later; ordered front regardless, the window comes up over the
+        // active app's windows either way and becomes key once Snug is active.
         NSApp.activate()
         settingsWindow!.makeKeyAndOrderFront(nil)
+        settingsWindow!.orderFrontRegardless()
     }
 
     private func showFirstRun() {

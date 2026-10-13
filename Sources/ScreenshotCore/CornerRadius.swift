@@ -92,8 +92,9 @@ public func windowCornerRadius(in image: CGImage, rect: CGRect) -> CGFloat {
         func gap(_ a: Int, _ b: Int) -> Int { (0..<3).reduce(0) { $0 + abs(Int(bytes[a + $1]) - Int(bytes[b + $1])) } }
         let color = offset(reach, 2)
         guard gap(color, offset(2, reach)) <= 12 else { return nil }
-        // The first 2 lines run along the side, where nearly every pixel is a blend; they carry no shape.
-        let starts = (2..<reach).map { down in
+        // The first 3 lines run along the side, where nearly every pixel is a blend (the third with the light rim macOS draws with a
+        // window's shadow); they carry no shape.
+        let starts = (3..<reach).map { down in
             (down, (0..<(reach - 2)).first { along in (0..<3).allSatisfy { gap(offset(along + $0, down), color) <= 12 } })
         }
         guard !starts.contains(where: { $0.1 == nil }) else { return nil }

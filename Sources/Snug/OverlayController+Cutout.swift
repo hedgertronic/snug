@@ -26,18 +26,20 @@ struct CutoutPreview {
     }
 }
 
-/// Covers the overlay below the chrome while the preview is open, so the pointer cannot edit the selection behind it. Over the frame it
-/// dims the frozen image, then draws the outline (the highlight color through the subject's ring) and the subject's own pixels on top.
+/// Covers the overlay below the chrome while the preview is open, so the pointer cannot edit the selection behind it. Its `content`, in
+/// the overlay view's layer under the guides so the loupe stays on top, dims the frozen image over the frame, then draws the outline
+/// (the highlight color through the subject's ring) and the subject's own pixels on top.
 final class CutoutView: NSView {
+    let content = CALayer()
     let dim = CALayer()
     let outline = CALayer()
     let subject = CALayer()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        wantsLayer = true
         outline.mask = CALayer()
-        for sublayer in [dim, outline, subject] { layer!.addSublayer(sublayer) }
+        content.frame = frame
+        for sublayer in [dim, outline, subject] { content.addSublayer(sublayer) }
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -53,6 +55,10 @@ extension OverlayController {
     func showCutout(_ subjects: [CutoutSubject], in rect: CGRect, radii: CornerRadii) {
         let preview = CutoutView(frame: view.bounds)
         view.addSubview(preview, positioned: .below, relativeTo: chrome.all.first)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        view.layer!.insertSublayer(preview.content, below: view.guides.root)
+        CATransaction.commit()
         let highlight = view.highlight
         view.effectiveAppearance.performAsCurrentDrawingAppearance {
             preview.dim.backgroundColor = NSColor.black.withAlphaComponent(highlight?.fade ?? 0.42).cgColor
@@ -80,6 +86,10 @@ extension OverlayController {
 
     func closeCutout() {
         cutout?.view.removeFromSuperview()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        cutout?.view.content.removeFromSuperlayer()
+        CATransaction.commit()
         cutout = nil
     }
 

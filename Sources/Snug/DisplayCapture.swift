@@ -9,7 +9,9 @@ protocol CaptureExcluded {}
 extension OverlayWindow: CaptureExcluded {}
 extension Toast: CaptureExcluded {}
 
-/// Captures the display under the pointer at full pixel resolution.
+/// Captures the display under the pointer at full pixel resolution. Display shots take an `SCScreenshotConfiguration`: with an
+/// `SCStreamConfiguration`, a display capture on macOS 27 leaves out every window's shadow (measured against `screencapture`), so a
+/// window in front cast no shadow on the windows behind it.
 enum DisplayCapture {
     /// The window IDs of Snug's marked windows.
     @MainActor
@@ -31,13 +33,13 @@ enum DisplayCapture {
         signposter.endInterval("shareable content", listing)
         let filter = filter(for: displayID, in: content, excluding: await excludedWindowIDs())
         let info = SCShareableContent.info(for: filter)
-        let configuration = SCStreamConfiguration()
+        let configuration = SCScreenshotConfiguration()
         configuration.width = Int((info.contentRect.width * CGFloat(info.pointPixelScale)).rounded())
         configuration.height = Int((info.contentRect.height * CGFloat(info.pointPixelScale)).rounded())
         configuration.showsCursor = false
         let shot = signposter.beginInterval("screenshot")
         defer { signposter.endInterval("screenshot", shot) }
-        return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+        return try await SCScreenshotManager.captureScreenshot(contentFilter: filter, configuration: configuration).sdrImage!
     }
 
     /// One area of the display, `area` in display points with a top-left origin, at full pixel resolution, without Snug's windows.
@@ -46,12 +48,12 @@ enum DisplayCapture {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         let filter = filter(for: displayID, in: content, excluding: await excludedWindowIDs())
         let scale = CGFloat(SCShareableContent.info(for: filter).pointPixelScale)
-        let configuration = SCStreamConfiguration()
+        let configuration = SCScreenshotConfiguration()
         configuration.sourceRect = area
         configuration.width = Int((area.width * scale).rounded())
         configuration.height = Int((area.height * scale).rounded())
         configuration.showsCursor = false
-        return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+        return try await SCScreenshotManager.captureScreenshot(contentFilter: filter, configuration: configuration).sdrImage!
     }
 
     /// One window as macOS captures it: real rounded corners and, unless `shadow` is false, its shadow, on a transparent

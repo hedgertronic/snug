@@ -55,15 +55,16 @@ extension OverlayController {
         return true
     }
 
+    /// The stitched image takes the area's corner radii (Rounded, or edited with [ and ]) and Frame, as a crop of the area would.
     private func finishScroll() {
-        guard let stitcher else { return }
-        let (scale, copy, save) = (scale, true, afterCaptureSaves)
+        guard let stitcher, let scrollArea else { return }
+        let (scale, framed, radii, copy, save) = (scale, framed, cornerRadii(of: scrollArea), true, afterCaptureSaves)
         dismiss()
         commitTask = Task { [pasteboard, defaults] in
             do {
                 let image = await stitcher.image()
-                try await Output.deliver(image, crop: CGRect(x: 0, y: 0, width: image.width, height: image.height), framed: false, scale: scale,
-                                         copy: copy, save: save, pasteboard: pasteboard, defaults: defaults)
+                try await Output.deliver(image, crop: CGRect(x: 0, y: 0, width: image.width, height: image.height), framed: framed, scale: scale,
+                                         cornerRadii: radii, copy: copy, save: save, pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
             }

@@ -126,6 +126,12 @@ extension DebugRun {
         require(hovered != nil, "a window is hovered")
         key(9, "v")
         require(overlay.window.isVisible && overlay.armedRecording != nil && overlay.selection?.rect == hovered, "V on a hovered element arms it as the selection")
+        // One outline: the stroked shapes around the armed area are the red one alone.
+        let box = overlay.view.viewRect(hovered!)
+        let outlines = overlay.view.layer!.sublayers!.compactMap { $0 as? CAShapeLayer }.filter {
+            $0.strokeColor != nil && $0.path.map { $0.boundingBox.insetBy(dx: -4, dy: -4).contains(box.insetBy(dx: 4, dy: 4)) && box.insetBy(dx: -4, dy: -4).contains($0.boundingBox) } == true
+        }
+        require(outlines.count == 1 && outlines[0] === overlay.armedRecording!.outline, "armed from hover, one outline: \(outlines.map { $0.strokeColor! })")
         key(9, "v")
         require(!overlay.window.isVisible && requests.last == CGRect(x: hovered!.minX / scale, y: hovered!.minY / scale, width: hovered!.width / scale, height: hovered!.height / scale),
                 "V twice on a hovered element records it: \(String(describing: requests.last)) \(hovered!)")

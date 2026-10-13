@@ -580,6 +580,9 @@ extension DebugRun {
                 && preview!.view.outline.frame == preview!.view.dim.frame && (preview!.view.subject.contents as! CGImage).width == Int(iconRect.width)
                 && preview!.view.outline.mask!.contents as! CGImage === preview!.subjects[0].outline,
                 "the preview dims the area under the subject's own pixels and outlines the subject, with no checkerboard")
+        let sublayers = overlay.view.layer!.sublayers!
+        require(sublayers.firstIndex(of: preview!.view.content)! < sublayers.firstIndex(of: overlay.view.guides.root)!,
+                "the preview draws under the guides, so the loupe stays on top of the subject")
         require(preview!.view.outline.backgroundColor == Highlight.color(hex: "#E5484D").cgColor && preview!.view.dim.backgroundColor?.alpha == 0.42,
                 "the outline is the highlight color and the dim matches the fade: \(String(describing: preview!.view.outline.backgroundColor)), \(String(describing: preview!.view.dim.backgroundColor))")
         let ring = preview!.subjects[0].outline
@@ -606,7 +609,7 @@ extension DebugRun {
                 && overlay.cutout!.view.dim.frame == overlay.view.viewRect(box) && texts(in: overlay.chrome.hints).prefix(3) == ["Subject", "crop on", "C"],
                 "C crops to the subject's box \(box): outlined \(String(describing: overlay.view.overlays.selection)), hints \(texts(in: overlay.chrome.hints))")
         key(kKey, "k")
-        require(overlay.cutout == nil && preview!.view.superview == nil && overlay.selection?.rect == iconRect && !overlay.chrome.actionBar.isHidden,
+        require(overlay.cutout == nil && preview!.view.superview == nil && preview!.view.content.superlayer == nil && overlay.selection?.rect == iconRect && !overlay.chrome.actionBar.isHidden,
                 "K again goes back to the selection: preview \(overlay.cutout != nil), view in overlay \(preview!.view.superview != nil), selection \(String(describing: overlay.selection?.rect)), action bar hidden \(overlay.chrome.actionBar.isHidden)")
         let secondK = await previewCutout()
         require(overlay.cutout != nil, "K opens the preview again")
