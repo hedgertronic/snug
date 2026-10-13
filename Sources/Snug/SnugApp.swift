@@ -239,7 +239,6 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         capture.setShortcut(from: defaults)
         menu.addItem(withTitle: "Capture Text", action: #selector(copyTextFromMenu), keyEquivalent: "")
         menu.addItem(withTitle: "Repeat Last Area", action: #selector(repeatLastArea), keyEquivalent: "")
-        menu.addItem(withTitle: "Open Image...", action: #selector(openImage), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
         menu.addItem(withTitle: "About Snug", action: #selector(showAbout), keyEquivalent: "")
@@ -396,16 +395,6 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 NSApp.presentError(error)
             }
         }
-    }
-
-    @objc private func openImage() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        NSApp.activate()
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        let source = CGImageSourceCreateWithURL(url as CFURL, nil)!
-        let image = CGImageSourceCreateImageAtIndex(source, 0, nil)!
-        overlay.present(image: image, frame: imageFrame(for: image), displayID: nil)
     }
 
     // MARK: Windows
