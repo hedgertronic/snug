@@ -545,8 +545,10 @@ final class OverlayController {
         pointer = point
         let finished = interaction
         interaction = .none
-        // A handle drag, move, corner drag or Shift-click union is one undo step; a fresh drag starts the history over in `release`.
+        // A handle drag, move, corner drag or Shift-click union is one undo step; a fresh drag starts the history over in `release`. A
+        // button click's release reaches here without its press, so only a press on the overlay itself counts.
         if case .drawing = finished {} else if let pressState { recordEdit(from: pressState) }
+        pressState = nil
         snappedEdges = []
         edgeFramesTask?.cancel()
         switch finished {

@@ -503,6 +503,16 @@ extension DebugRun {
                 "Cmd-Shift-Z comes back step by step to the rounded, resized selection: \(redone.map(\.0))")
         drag(from: CGPoint(x: 200, y: 200), by: CGPoint(x: 300, y: 300))
         require(overlay.undoStack.isEmpty && overlay.redoStack.isEmpty, "a fresh drag starts the history over")
+        // A real click on a chip button is one step too; its release, which reaches the overlay, leaves the history alone.
+        key(right)
+        let lockChip = overlay.chrome.lock
+        let lockPoint = lockChip.convert(CGPoint(x: lockChip.bounds.midX, y: lockChip.bounds.midY), to: overlay.view)
+        let lockPixel = CGPoint(x: lockPoint.x * scale, y: (overlay.view.bounds.height - lockPoint.y) * scale)
+        mouse(.leftMouseDown, lockPixel)
+        mouse(.leftMouseUp, lockPixel)
+        require(overlay.ratioLocked && overlay.undoStack.count == 2, "clicking the lock chip locks the ratio as one more undo step: \(overlay.undoStack.count)")
+        key(6, "z", .command)
+        require(!overlay.ratioLocked && overlay.undoStack.count == 1, "Cmd-Z undoes the lock click")
         overlay.dismiss()
 
         // With Frame on, the size chip adds what the delivered image adds around the selection.
