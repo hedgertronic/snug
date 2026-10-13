@@ -120,7 +120,21 @@ extension OverlayController {
                 }
             }
         }
+        let small = small()
+        fillsTask = Task {
+            let built = await Task.detached { FlatFills(await small.value) }.value
+            guard !Task.isCancelled else { return }
+            fills = built
+        }
         requestAccessibility(at: pointer)
+    }
+
+    /// Adds the small uniform fill under `pixel` (a pill, chip or input the geometry pass skips for its size) to the session, once.
+    func addFill(at pixel: CGPoint) {
+        let factor = CGFloat(Int(scale))
+        guard let fill = fills?.region(at: CGPoint(x: pixel.x / factor, y: pixel.y / factor))?.scaled(by: factor),
+              !session!.candidates.contains(where: { $0.id == fill.id }) else { return }
+        session!.merge([fill])
     }
 
     func buildSession() {
