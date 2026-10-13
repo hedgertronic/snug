@@ -247,6 +247,8 @@ final class BarButton: NSView {
             apply()
         }
     }
+    /// Off, clicks pass through to what is under it.
+    var clicks = true
     private let size: CGFloat
 
     /// `symbol` is an SF Symbol name and its accessibility description.
@@ -281,7 +283,7 @@ final class BarButton: NSView {
 
     override var intrinsicContentSize: NSSize { frame.size }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-    override func hitTest(_ point: NSPoint) -> NSView? { isHidden || !isEnabled || !frame.contains(point) ? nil : self }
+    override func hitTest(_ point: NSPoint) -> NSView? { isHidden || !isEnabled || !clicks || !frame.contains(point) ? nil : self }
     override func mouseDown(with event: NSEvent) { onClick() }
     override func viewDidChangeEffectiveAppearance() { apply() }
 
@@ -424,6 +426,8 @@ final class Chrome {
     let hover = Pill.chip()
     let size = Pill.chip()
     let snap = BarButton("Snap", key: "S")
+    /// Hovering: Snap as a label by the pointer or the loupe's readout, lit when Snap is on. Clicks pass through it.
+    let snapTag = BarButton("Snap", key: "S", height: Chrome.labelHeight)
     /// The ratio readout with P, which opens `ratioMenu`, and the lock with Shift-P, on one surface.
     let ratio = Pill(radius: 8, insets: NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0), spacing: 0)
     let ratioButton = BarButton("", key: "P")
@@ -461,6 +465,9 @@ final class Chrome {
         ratio.isClickThrough = false
         snap.surface = true
         snap.isHidden = true
+        snapTag.surface = true
+        snapTag.clicks = false
+        snapTag.isHidden = true
         lock.washes = false
         for button in [copy, done, start] { button.primary = true }
     }
@@ -472,5 +479,5 @@ final class Chrome {
     }
 
     /// Lowest first: the cut-out preview goes under all of them.
-    var all: [NSView] { [upHint, downHint, hover, size, snap, reading, legend] + sideHints + [radius, cornerKeys, list, hints, topBar, strip, status, ratio, ratioMenu, help] }
+    var all: [NSView] { [upHint, downHint, hover, size, snap, snapTag, reading, legend] + sideHints + [radius, cornerKeys, list, hints, topBar, strip, status, ratio, ratioMenu, help] }
 }

@@ -191,6 +191,21 @@ extension OverlayController {
         guides.setShown(guides.rulers, !armed && defaults.bool(forKey: Pref.rulers), from: animation == .slide ? Guides.rulersHiddenTransform : CATransform3DIdentity, animated: animated)
         guides.setShown(guides.loupe, !armed && defaults.bool(forKey: Pref.loupe), from: Guides.loupeHiddenTransform, animated: animated)
         guides.slidesPlacement = animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        // Hovering with nothing selected or dragged, the Snap tag sits 16 pt below and right of the pointer, or under the loupe's readout,
+        // clamped into the view.
+        defer {
+            let tag = chrome.snapTag
+            if mode == .capture, selection == nil, draggedRect == nil, scrollArea == nil, armedRecording == nil, cutout == nil, image != nil {
+                tag.setTitle("Snap")
+                tag.lit = snapEnabled
+                let point = CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale)
+                let below = guides.readout.isHidden ? CGPoint(x: point.x + 16, y: point.y - 16 - tag.frame.height)
+                    : CGPoint(x: guides.readout.frame.midX - tag.frame.width / 2, y: guides.readout.frame.minY - 6 - tag.frame.height)
+                tag.frame.origin = CGPoint(x: min(max(below.x, 8), view.bounds.width - tag.frame.width - 8),
+                                           y: min(max(below.y, 8), view.bounds.height - topInset - tag.frame.height - 4))
+                tag.isHidden = false
+            }
+        }
         guard !(guides.crosshair.isHidden && guides.rulers.isHidden && guides.loupe.isHidden) else { return }
         // While a drag carries a max side with the pointer, the loupe centers on the last pixel inside the crop, whose max sides round up,
         // so the outline keeps to the center cell's far side as the pointer crosses pixel boundaries.

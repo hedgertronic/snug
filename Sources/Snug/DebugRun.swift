@@ -559,7 +559,7 @@ enum DebugRun {
         key(1, "s")
         require(!defaults.bool(forKey: Pref.snap) && overlay.snapPreview == nil && overlay.view.overlays.preview == nil, "S during a drag clears the preview at once")
         let snap = overlay.chrome.snap
-        require(texts(in: snap) == ["Snap", "S"] && !snap.lit, "the Snap chip turns plain: \(texts(in: snap))")
+        require(texts(in: overlay.chrome.size).last!.hasSuffix("Exact"), "with snap off the dragging size chip reads Exact: \(texts(in: overlay.chrome.size))")
         key(1, "s")
         try await waitFor("the analysis restarts when S turns snap on mid-drag") { overlay.snapPreview != nil }
         require(overlay.snapPreview == live, "S during a drag starts the analysis for the current drag")

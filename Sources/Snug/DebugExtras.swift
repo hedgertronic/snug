@@ -105,7 +105,7 @@ extension DebugRun {
         // With Rulers on, the top bar sits below the top ruler's band and nothing clamps into the left ruler's.
         let topRuler = CGRect(x: 0, y: view.bounds.height - overlay.topInset - Guides.rulerThickness, width: view.bounds.width, height: Guides.rulerThickness)
         let leftRuler = CGRect(x: 0, y: 0, width: Guides.rulerThickness, height: view.bounds.height)
-        let edgeChrome = [overlay.chrome.topBar, overlay.chrome.hints, overlay.chrome.strip, overlay.chrome.hover, overlay.chrome.snap].filter { !$0.isHidden }
+        let edgeChrome = [overlay.chrome.topBar, overlay.chrome.hints, overlay.chrome.strip, overlay.chrome.hover, overlay.chrome.snapTag].filter { !$0.isHidden }
         require(edgeChrome.allSatisfy { !$0.frame.intersects(topRuler) && !$0.frame.intersects(leftRuler) } && overlay.chrome.topBar.frame.maxY == topRuler.minY - 8,
                 "with Rulers on, the top bar sits 8 pt under the top ruler and no chrome covers a ruler: \(edgeChrome.map(\.frame)) \(topRuler)")
         let controls = overlay.chrome.topBar.groups + [overlay.chrome.hints, overlay.chrome.strip].filter { !$0.isHidden }
@@ -689,7 +689,7 @@ extension DebugRun {
         require(overlay.view.overlays.hover != nil && !overlay.view.overlays.dimsAll && overlay.view.dimLayer.fillRule == .evenOdd && dimBox() == overlay.view.bounds,
                 "a hovered element cuts an even-odd hole in the dim")
         for _ in 0..<20 where overlay.session!.selected!.kind != .display { key(up, "") }
-        let fullChips = [overlay.chrome.hover, overlay.chrome.snap, overlay.chrome.strip]
+        let fullChips = [overlay.chrome.hover, overlay.chrome.snapTag, overlay.chrome.strip]
         require(overlay.view.overlays.hover == extent && overlay.view.dimLayer.path?.isEmpty != false && texts(in: overlay.chrome.hover).first == "Full screen"
                     && fullChips.allSatisfy { !$0.isHidden && overlay.view.bounds.contains($0.frame) && !$0.frame.intersects(overlay.chrome.topBar.frame) },
                 "the full display walked out to dims nothing, and its chips and strip sit on screen clear of the top bar: \(fullChips.map(\.frame))")
@@ -836,12 +836,25 @@ extension DebugRun {
         require(defaults.bool(forKey: Pref.shadow) && overlay.windowShadow(option: false) && !overlay.windowShadow(option: true), "the Shadow button turns it back on, and Option-click then drops it")
         let window = CGRect(x: 300, y: 300, width: 400, height: 200)
         overlay.setWindows([window], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        defaults.set(false, forKey: Pref.loupe)
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
         let windowBox = overlay.view.viewRect(window)
-        require(texts(in: chrome.hover) == ["Browser", "400 x 200"] && texts(in: chrome.snap) == ["Snap", "S"] && chrome.snap.lit,
-                "hovering a window shows the chip row: its title and size (a frozen run crops windows, so no shadow), then Snap, lit: \(texts(in: chrome.hover)) \(texts(in: chrome.snap))")
-        require(chrome.hover.frame.minX == windowBox.minX && chrome.hover.frame.minY == windowBox.maxY + 8 && chrome.snap.frame.minY == chrome.hover.frame.minY
-                    && chrome.snap.frame.minX == chrome.hover.frame.maxX + 6, "the chip row sits on the hovered box's top-left edge: \(chrome.hover.frame) \(chrome.snap.frame) \(windowBox)")
+        require(texts(in: chrome.hover) == ["Browser", "400 x 200"] && chrome.snap.isHidden,
+                "hovering a window shows the chip row: its title and size (a frozen run crops windows, so no shadow), and no Snap chip: \(texts(in: chrome.hover))")
+        require(chrome.hover.frame.minX == windowBox.minX && chrome.hover.frame.minY == windowBox.maxY + 8, "the chip row sits on the hovered box's top-left edge: \(chrome.hover.frame) \(windowBox)")
+        // The Snap tag: label tier, lit with Snap on, 16 pt below and right of the pointer, plain with Snap off, and clicks pass through it.
+        let tag = chrome.snapTag, pointerView = CGPoint(x: overlay.pointer.x / overlay.scale, y: overlay.view.bounds.height - overlay.pointer.y / overlay.scale)
+        require(!tag.isHidden && texts(in: tag) == ["Snap", "S"] && tag.lit && tag.frame.height == Chrome.labelHeight
+                    && tag.frame.minX == pointerView.x + 16 && tag.frame.maxY == pointerView.y - 16,
+                "hover shows the Snap tag, lit, label height, 16 pt below and right of the pointer: \(tag.frame) \(pointerView)")
+        require(overlay.view.hitTest(centerOf(tag)) !== tag, "clicks pass through the Snap tag")
+        key(1, "s")
+        require(!tag.lit && !defaults.bool(forKey: Pref.snap), "S turns the tag plain")
+        key(1, "s")
+        require(tag.lit, "S turns the tag lit again")
+        mouse(.mouseMoved, CGPoint(x: extent.width - 2, y: extent.height - 2))
+        require(overlay.view.bounds.contains(tag.frame), "at the screen corner the Snap tag is clamped into the view: \(tag.frame)")
+        mouse(.mouseMoved, CGPoint(x: 400, y: 400))
         let captureStrip = ["Copy", "\u{21A9}", "Save", "\u{2318}S", "Text", "\u{21E7}\u{21A9}", "Scroll", "G", "Record", "V", "Subject", "K"]
         require(texts(in: chrome.strip) == ["Edit", "E"] + captureStrip && chrome.strip.groups.count == 3 && chrome.copy.primary && !chrome.edit.primary && !chrome.edit.lit
                     && chrome.edit.superview === chrome.strip.groups[0] && chrome.strip.frame.maxY == windowBox.minY - 8 && chrome.strip.frame.minX == windowBox.minX,
@@ -858,6 +871,9 @@ extension DebugRun {
         // follow the pointer.
         defaults.set(true, forKey: Pref.loupe)
         defaults.set(true, forKey: Pref.crosshair)
+        mouse(.mouseMoved, CGPoint(x: 400, y: 400))
+        require(!readout.isHidden && tag.frame.maxY == readout.frame.minY - 6 && abs(tag.frame.midX - readout.frame.midX) <= 1,
+                "with the loupe showing, the Snap tag sits under its readout: \(tag.frame) \(readout.frame)")
         mouse(.mouseMoved, viewPixel(CGPoint(x: centerOf(chrome.copy).x, y: windowBox.minY - 4)))
         let heldLoupe = overlay.view.guides.loupe.position, heldCrosshair = overlay.view.guides.crosshair.path
         mouse(.mouseMoved, viewPixel(centerOf(chrome.copy)))
@@ -877,16 +893,16 @@ extension DebugRun {
         overlay.refresh()
         defaults.set(true, forKey: Pref.shadow)
         mouse(.mouseMoved, CGPoint(x: 40, y: 40))
-        require(chrome.hover.isHidden && chrome.snap.isHidden && chrome.strip.isHidden, "the chip row and strip go away off the window")
+        require(chrome.hover.isHidden && chrome.strip.isHidden && !tag.isHidden, "the chip row and strip go away off the window, and the Snap tag stays with the pointer")
         require(texts(in: chrome.hints) == ["bigger / smaller", "\u{2191}", "\u{2193}", "next", "\u{2190}", "\u{2192}", "full screen", "F", "window", "W", "all keys", "?"],
                 "the hover keys line has no click capture and names W window after F full screen: \(texts(in: chrome.hints))")
         mouse(.leftMouseDown, rough.origin)
         mouse(.leftMouseDragged, CGPoint(x: rough.midX, y: rough.midY))
         mouse(.leftMouseDragged, CGPoint(x: rough.maxX, y: rough.maxY))
-        require(!chrome.size.isHidden && texts(in: chrome.snap) == ["Snap", "S"] && chrome.snap.lit && chrome.strip.isHidden, "a drag shows the size and Snap chips and no strip")
+        require(!chrome.size.isHidden && chrome.snap.isHidden && tag.isHidden && chrome.strip.isHidden && texts(in: chrome.size).last!.hasSuffix("Exact"), "a drag shows the size chip, Exact before a preview, and no Snap chip, tag or strip: \(texts(in: chrome.size))")
         for _ in 0..<9000 where overlay.snapPreview == nil { try await Task.sleep(for: .milliseconds(10)) }
         let fit = overlay.snapPreview!
-        require(texts(in: chrome.size) == ["\(Int(fit.width)) x \(Int(fit.height))"], "a snap preview shows its size")
+        require(texts(in: chrome.size) == ["\(Int(fit.width)) x \(Int(fit.height))  Snapped"], "a snap preview shows its size and Snapped: \(texts(in: chrome.size))")
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.snap) == ["Snapped", "S"] && chrome.snap.lit, "after release on a fit: Snapped, lit")
         require(!top.isHidden && texts(in: chrome.strip) == captureStrip && texts(in: chrome.hints)
@@ -1073,7 +1089,7 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
         require(chrome.radius.isHidden, "a hover with its measured radius shows no radius chip")
         key(30, "]")
-        let hoverChips = [chrome.hover, chrome.snap, chrome.radius]
+        let hoverChips = [chrome.hover, chrome.snapTag, chrome.radius]
         let covering = overlay.view.subviews.filter { view in !view.isHidden && !hoverChips.contains(view) && hoverChips.contains { $0.frame.intersects(view.frame) } && view !== overlay.view.liveText }
         require(texts(in: chrome.radius) == ["r 1", "[", "]"] && chrome.radius.frame.minY == chrome.hover.frame.minY && covering.isEmpty,
                 "] on a hovered element shows its radius in the chip row, uncovered: \(texts(in: chrome.radius)) covered by \(covering.map { "\(type(of: $0)) \($0.frame)" })")
