@@ -78,6 +78,9 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         let reminder = showsPanels ? makeReminder(around: area, on: displayID, defaults: defaults) : nil
         let panels = [dim, outline, reminder].compactMap(\.self)
         panels.forEach { $0.orderFrontRegardless() }
+        // The dim shows at once, so the screen stays dimmed from the overlay's close through the stream's start; Snug is left out of
+        // the video by application whether or not a window is listed yet.
+        dim?.alphaValue = 1
         let recording: ScreenRecording
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
