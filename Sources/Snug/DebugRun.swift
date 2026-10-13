@@ -193,9 +193,18 @@ enum DebugRun {
         try await waitFor("preview before Esc") { overlay.snapPreview != nil }
         release(rough)
         pasteboard.clearContents()
+        let released = overlay.selection!
+        key(escape)
+        require(overlay.window.isVisible && overlay.selection == nil && overlay.session != nil, "Esc on a released selection drops it back to hover: \(String(describing: overlay.selection))")
+        key(6, "z", .command)
+        require(overlay.selection == released, "Cmd-Z brings the dropped selection back: \(String(describing: overlay.selection))")
+        key(6, "z", [.command, .shift])
+        require(overlay.selection == nil && overlay.window.isVisible, "Cmd-Shift-Z drops it again")
+        key(6, "z", .command)
+        key(escape)
         key(escape)
         await overlay.commitTask?.value
-        require(!overlay.window.isVisible && pasteboard.data(forType: .png) == nil, "Esc closes without writing")
+        require(!overlay.window.isVisible && pasteboard.data(forType: .png) == nil, "a second Esc in hover closes without writing")
         let afterEsc = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
         require(afterEsc.count == 1, "Esc saves nothing")
 

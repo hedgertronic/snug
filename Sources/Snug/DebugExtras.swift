@@ -1029,7 +1029,9 @@ extension DebugRun {
         key(46, "m")
         require(!overlay.framed && !frameButton.lit, "M turns Frame off on a released selection")
         key(53, "")
-        require(chrome.strip.isHidden && chrome.size.isHidden && chrome.snap.isHidden && chrome.ratio.isHidden, "Esc takes the strip and chips away")
+        require(overlay.window.isVisible && overlay.selection == nil && chrome.ratio.isHidden, "the first Esc drops the selection back to hover")
+        key(53, "")
+        require(chrome.strip.isHidden && chrome.size.isHidden && chrome.snap.isHidden && chrome.ratio.isHidden, "a second Esc takes the strip and chips away")
 
         // The strip's Text button runs Shift-Return, queued here behind a warm-up that never ends so no text recognition runs. The chips
         // and strip anchor to the selection's edges: a new radius moves none of them.
