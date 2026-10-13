@@ -137,8 +137,13 @@ final class OverlayController {
     var ratioReadout: String {
         (draggedRect ?? selection?.rect).map { RatioLock.readout(for: $0.size) } ?? ""
     }
-    /// Shift is down: with a selection open, the element under the pointer is outlined for a union.
+    /// Shift is down: with a selection open, once the pointer moves outside the selection, the element under it is outlined for a union.
     var shiftHeld = false
+    /// The pointer moved (or clicked) since Shift went down.
+    private var movedWithShift = false
+    /// With a selection open, Shift held, and the pointer moved since then and outside the selection, the hover outlines the element
+    /// under the pointer for a union.
+    private var unionHover: Bool { shiftHeld && movedWithShift && selection.map { !$0.rect.contains(pointer) } ?? false }
     /// Save As: the file to write, given the usual name in the save folder; nil cancels. Debug runs answer without a panel.
     var chooseSaveURL: (URL) -> URL? = { suggested in
         NSApp.activate()
@@ -343,6 +348,7 @@ final class OverlayController {
         let shift = event.modifierFlags.contains(.shift)
         if shift != shiftHeld, image != nil {
             shiftHeld = shift
+            movedWithShift = false
             updateHover(pixel: pointer)
         }
         refresh()
@@ -353,6 +359,7 @@ final class OverlayController {
         optionHeld = event.modifierFlags.contains(.option)
         commandHeld = event.modifierFlags.contains(.command)
         shiftHeld = event.modifierFlags.contains(.shift)
+        movedWithShift = shiftHeld
         let wasInside = selection?.rect.contains(pointer)
         pointer = view.pixelPoint(event)
         // On the top bar, or crossing from the hovered element to its chips or strip, the hover holds so their buttons can be clicked;
@@ -397,7 +404,7 @@ final class OverlayController {
     /// anchor stops following the pointer while a level holds).
     private func updateHover(pixel: CGPoint) {
         guard case .none = interaction else { return }
-        guard selection == nil || shiftHeld else {
+        guard selection == nil || unionHover else {
             if view.overlays.hover != nil { refresh() }
             return
         }
@@ -441,6 +448,8 @@ final class OverlayController {
                 return updateCursor()
             }
             if shiftHeld {
+                // A Shift-click counts as a move: it outlines and takes the element under the pointer.
+                movedWithShift = true
                 updateHover(pixel: point)
                 if let hovered = hoverRect, !selection.rect.contains(point) { return growSelection(toInclude: hovered) }
             }
@@ -911,7 +920,7 @@ final class OverlayController {
         overlays.selection = selection?.rect
         overlays.snappedEdges = snappedEdges
         overlays.showsHandles = selection != nil
-        if selection == nil || shiftHeld, case .none = interaction { overlays.hover = hoverRect }
+        if selection == nil || unionHover, case .none = interaction { overlays.hover = hoverRect }
         if mode == .text, let picked = text.picked { overlays.hover = text.items![picked].bounds }
         // While hovering, faint outlines show what Up and Down would select, unless that is nothing, the display, or within 4 pt of the hover.
         if mode == .capture, selection == nil, let hover = overlays.hover, let session {

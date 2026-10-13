@@ -195,7 +195,27 @@ extension DebugRun {
         require(overlay.selection?.rect == a && pasteboard.data(forType: .png) == nil, "Shift-click opens the hovered element instead of copying it")
         try await waitFor("Shift-click carries the radii") { overlay.editedRadii[a] == CornerRadii(radius) }
 
-        // With a selection open, Shift outlines the element under the pointer and Shift-click grows to the union.
+        // With a selection open, Shift outlines the element under the pointer only once the pointer moves outside the selection: not for a
+        // Shift-arrow with the pointer inside, nor for Shift going down outside until the pointer moves.
+        func shift(_ down: Bool) {
+            overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: down ? .shift : [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!)
+        }
+        let unionStart = overlay.selection!.rect
+        mouse(.mouseMoved, CGPoint(x: unionStart.midX, y: unionStart.midY))
+        shift(true)
+        key(right, "", .shift)
+        let insideOutline = overlay.view.overlays.hover
+        key(left, "", .shift)
+        shift(false)
+        mouse(.mouseMoved, insideB)
+        shift(true)
+        let unmovedOutline = overlay.view.overlays.hover
+        mouse(.mouseMoved, CGPoint(x: insideB.x + 4, y: insideB.y), .shift)
+        let movedOutline = overlay.view.overlays.hover
+        shift(false)
+        require(insideOutline == nil && unmovedOutline == nil && movedOutline == b && overlay.selection?.rect == unionStart,
+                "Shift draws no union outline inside the selection or before the pointer moves, and does once it moves outside: \(String(describing: movedOutline))")
         mouse(.mouseMoved, insideB)
         require(overlay.view.overlays.hover == nil, "without Shift an open selection draws no hover")
         mouse(.mouseMoved, insideB, .shift)
