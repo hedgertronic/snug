@@ -3,7 +3,7 @@ import CoreImage.CIFilterBuiltins
 import Vision
 
 extension Pref {
-    /// Whether the cut-out output is trimmed to the subject (C in the preview); off, it keeps the selection's size.
+    /// Whether the cut-out output is trimmed to the subject (S in the preview); off, it keeps the selection's size.
     static let cutoutCrop = "SnugCutoutCrop"
 }
 

@@ -78,7 +78,7 @@ extension OverlayController {
 
     private func swatch(_ color: SRGBColor) -> NSColor { NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1) }
 
-    private func copyColor() {
+    func copyColor() {
         guard let color = pickedColor else { return }
         let text = colorFormat.string(for: color)
         pasteboard.clearContents()
@@ -87,7 +87,7 @@ extension OverlayController {
         Toast.show(message: "Copied", detail: text, color: swatch(color))
     }
 
-    private func cycleColorFormat() {
+    func cycleColorFormat() {
         guard let color = pickedColor else { return }
         let next = colorFormat.next
         defaults.set(next.rawValue, forKey: Pref.colorFormat)

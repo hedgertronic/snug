@@ -536,7 +536,7 @@ extension DebugRun {
         require(!overlay.window.isVisible, "Esc again closes")
 
         // K cuts the selection or the hovered element out with Vision's foreground mask and previews it in place: the area outside the
-        // subject dimmed and the subject outlined in the highlight color, C crops to the subject, Return copies, Cmd-S saves, K or Esc go
+        // subject dimmed and the subject outlined in the highlight color, S crops to the subject, C copies the color, Return copies, Cmd-S saves, K or Esc go
         // back. With no subject the overlay stays open with a notice. The fixtures are the background removal spike's (notes/cutout/fixtures).
         // Shadow and Frame start off, so the output is the area's size until a check turns them on.
         suffix = ""
@@ -602,21 +602,22 @@ extension DebugRun {
         mouse(.leftMouseUp, CGPoint(x: iconRect.midX + 40, y: iconRect.midY + 40))
         key(fKey, "f")
         require(overlay.cutout != nil && overlay.selection == nil && overlay.view.overlays.selection == iconRect, "the pointer and other keys do nothing while previewing")
-        // C crops to the subject's box: the outlined frame and the dim move to it, and the choice is remembered.
+        // S crops to the subject's box: the outlined frame and the dim move to it, and the choice is remembered; Snap stays as it was.
         let box = preview!.subjects[0].bounds.offsetBy(dx: iconRect.minX, dy: iconRect.minY)
-        key(cKey, "c")
+        key(sKey, "s")
+        require(!overlay.defaults.bool(forKey: Pref.snap), "S in the preview leaves Snap off")
         require(overlay.cutout?.cropped == true && overlay.defaults.bool(forKey: Pref.cutoutCrop) && overlay.view.overlays.selection == box
                 && overlay.cutout!.view.dim.frame == overlay.view.viewRect(box) && texts(in: overlay.chrome.hints).prefix(3) == ["Subject", "crop on", "C"],
-                "C crops to the subject's box \(box): outlined \(String(describing: overlay.view.overlays.selection)), hints \(texts(in: overlay.chrome.hints))")
+                "S crops to the subject's box \(box): outlined \(String(describing: overlay.view.overlays.selection)), hints \(texts(in: overlay.chrome.hints))")
         key(kKey, "k")
         require(overlay.cutout == nil && preview!.view.superview == nil && preview!.view.content.superlayer == nil && overlay.selection?.rect == iconRect && !overlay.chrome.actionBar.isHidden,
                 "K again goes back to the selection: preview \(overlay.cutout != nil), view in overlay \(preview!.view.superview != nil), selection \(String(describing: overlay.selection?.rect)), action bar hidden \(overlay.chrome.actionBar.isHidden)")
         let secondK = await previewCutout()
         require(overlay.cutout != nil, "K opens the preview again")
         require(overlay.cutout!.cropped && overlay.view.overlays.selection == box, "the preview opens cropped as last chosen")
-        key(cKey, "c")
+        key(sKey, "s")
         require(overlay.cutout?.cropped == false && !overlay.defaults.bool(forKey: Pref.cutoutCrop) && overlay.view.overlays.selection == iconRect,
-                "C again shows the whole area: \(String(describing: overlay.view.overlays.selection))")
+                "S again shows the whole area: \(String(describing: overlay.view.overlays.selection))")
         key(escape)
         // A second K while the mask runs replaces the first run: one preview, and K goes back to the selection.
         key(kKey, "k")
@@ -718,7 +719,7 @@ extension DebugRun {
         key(tab, "\t")
         require(overlay.cutout?.shown == 1 && texts(in: overlay.chrome.hints).first == "Subject 1 of \(count)"
                 && overlay.cutout!.view.subject.contents as! CGImage === overlay.cutout!.subjects[1].image, "Tab shows the first subject alone: \(texts(in: overlay.chrome.hints))")
-        key(cKey, "c")
+        key(sKey, "s")
         key(tab, "\t", .shift)
         key(tab, "\t", .shift)
         require(overlay.cutout?.shown == count && texts(in: overlay.chrome.hints).first == "Subject \(count) of \(count)", "Shift-Tab steps back and wraps to the last subject")
@@ -731,6 +732,21 @@ extension DebugRun {
         require(one.map { CGFloat($0.width) == alone.width && CGFloat($0.height) == alone.height } == true,
                 "Return copies only the shown subject, cropped to its box: \(String(describing: one.map { "\($0.width)x\($0.height)" }))")
         overlay.defaults.set(false, forKey: Pref.cutoutCrop)
+
+        // C in the preview copies the color under the pointer, as everywhere, and closes the overlay.
+        overlay.present(image: icon, frame: iconFrame, displayID: nil)
+        mouse(.leftMouseDown, iconRect.origin)
+        mouse(.leftMouseDragged, CGPoint(x: iconRect.maxX, y: iconRect.maxY))
+        mouse(.leftMouseUp, CGPoint(x: iconRect.maxX, y: iconRect.maxY))
+        _ = await previewCutout()
+        let colorPoint = CGPoint(x: iconRect.minX + 4, y: iconRect.minY + 4)
+        mouse(.mouseMoved, colorPoint)
+        overlay.defaults.set(ColorFormat.hex.rawValue, forKey: Pref.colorFormat)
+        pasteboard.clearContents()
+        key(cKey, "c")
+        let pointColor = ColorFormat.hex.string(for: ColorFormat.average(of: icon, in: CGRect(origin: colorPoint, size: CGSize(width: 1, height: 1))))
+        require(!overlay.window.isVisible && overlay.cutout == nil && pasteboard.string(forType: .string) == pointColor,
+                "C in the preview copies the color under the pointer \(pointColor): \(pasteboard.string(forType: .string) ?? "nothing")")
 
         overlay.present(image: image, frame: frame, displayID: nil)
         key(fKey, "f")

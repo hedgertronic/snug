@@ -12,7 +12,7 @@ struct CutoutPreview {
     /// All instances first, then each one alone when there are several.
     var subjects: [CutoutSubject]
     var shown = 0
-    /// Whether the output is trimmed to the shown subject's box (C, remembered in `Pref.cutoutCrop`).
+    /// Whether the output is trimmed to the shown subject's box (S, remembered in `Pref.cutoutCrop`).
     var cropped: Bool
     let view: CutoutView
 
@@ -93,8 +93,9 @@ extension OverlayController {
         cutout = nil
     }
 
-    /// While the preview is open: Tab / Shift-Tab step through the subjects, C crops to the subject or not, Return copies the shown one,
-    /// Cmd-S saves it, K or Esc go back to the selection or hover it came from. Other keys do nothing.
+    /// While the preview is open: Tab / Shift-Tab step through the subjects, S crops to the subject or not, Return copies the shown one,
+    /// Cmd-S saves it, C copies the color under the pointer (Shift-C cycles its format), K or Esc go back to the selection or hover it
+    /// came from. Other keys do nothing.
     func handleCutoutKey(_ event: NSEvent) -> Bool {
         let preview = cutout!
         switch (event.keyCode, event.modifierFlags.contains(.command), event.charactersIgnoringModifiers ?? "") {
@@ -104,12 +105,14 @@ extension OverlayController {
         case (48, _, _) where preview.subjects.count > 1:
             let count = preview.subjects.count
             showCutoutSubject((preview.shown + (event.modifierFlags.contains(.shift) ? -1 : 1) + count) % count)
-        case (_, false, "c"):
+        case (_, false, "s"):
             cutout!.cropped.toggle()
             defaults.set(cutout!.cropped, forKey: Pref.cutoutCrop)
             showCutoutSubject(preview.shown)
         case (36, _, _), (76, _, _): deliverCutout(copy: true, save: afterCaptureSaves)
         case (_, true, "s"): deliverCutout(copy: false, save: true)
+        case (_, false, "c"): copyColor()
+        case (_, false, "C"): cycleColorFormat()
         default: break
         }
         refresh()
