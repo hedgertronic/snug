@@ -92,7 +92,7 @@ enum DebugRun {
 
         // Pause-to-snap, release takes the preview.
         open()
-        require(overlay.view.dimLayer.path!.boundingBox == overlay.view.bounds && overlay.view.overlays.dimsAll, "an idle Capture with nothing targeted dims the whole screen")
+        require(overlay.view.dimLayer.path!.isEmpty && !overlay.view.overlays.dimsAll, "the first frame of an opened Capture shows no dim")
         pressDrag(rough)
         require(!overlay.view.dimLayer.path!.isEmpty, "dragging dims everything outside the drag")
         require(overlay.snapPreview == nil, "no preview before the debounce")
@@ -523,9 +523,11 @@ enum DebugRun {
         mouse(.leftMouseUp, CGPoint(x: 846, y: row.midY), .option)
         require(overlay.view.overlays.snappedEdges.isEmpty, "the snapped edge is not drawn after release")
         mouse(.leftMouseDown, CGPoint(x: 846, y: row.midY))
-        mouse(.leftMouseDragged, CGPoint(x: 862, y: row.midY))
-        require(abs(overlay.selection!.rect.maxX - 880) <= 3, "the nearest edge wins: card three's left edge is 18 px away, card two's right edge 22")
-        mouse(.leftMouseUp, CGPoint(x: 862, y: row.midY))
+        mouse(.leftMouseDragged, CGPoint(x: 866, y: row.midY))
+        require(overlay.selection!.rect.maxX == 866 && overlay.view.overlays.snappedEdges.isEmpty, "an edge 14 px away is outside the 6 pt snap band")
+        mouse(.leftMouseDragged, CGPoint(x: 874, y: row.midY))
+        require(abs(overlay.selection!.rect.maxX - 880) <= 3, "card three's left edge, 6 px away, is inside the snap band")
+        mouse(.leftMouseUp, CGPoint(x: 874, y: row.midY))
         mouse(.leftMouseDown, CGPoint(x: 600, y: row.maxY))
         mouse(.leftMouseDragged, CGPoint(x: 600, y: 436))
         require(abs(overlay.selection!.rect.maxY - 430) <= 3, "the bottom side snaps to the cards' bottom edge: \(overlay.selection!.rect.maxY)")

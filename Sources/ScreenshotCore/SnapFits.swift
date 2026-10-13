@@ -6,8 +6,8 @@ public enum SnapFits {
     /// with the smallest total offset first, at most three), then the pixel fits that do not repeat one of them. The best pixel fit
     /// goes ahead of the frames further from the drag than it is (a shape drawn in an image view, whose frame is the image's bounds).
     public static func merge(frames: [CGRect], pixel: [CGRect], drag: CGRect, scale: CGFloat) -> [CGRect] {
-        let bandX = CGFloat(SmartSnap.band(side: drag.width, scale: scale))
-        let bandY = CGFloat(SmartSnap.band(side: drag.height, scale: scale))
+        let bandX = CGFloat(SmartSnap.searchBand(side: drag.width, scale: scale))
+        let bandY = CGFloat(SmartSnap.searchBand(side: drag.height, scale: scale))
         func offset(_ r: CGRect) -> CGFloat {
             abs(r.minX - drag.minX) + abs(r.maxX - drag.maxX) + abs(r.minY - drag.minY) + abs(r.maxY - drag.maxY)
         }

@@ -23,9 +23,13 @@ public struct SmartSnap {
     /// Creates a local rough-drag snapper.
     public init() {}
 
-    /// How far a side may move to snap, in pixels: 12% of the side's length, at most `cap` (56 unless a caller
-    /// knows its rough rectangle is further off), and never under 8 points.
-    public static func band(side: CGFloat, scale: CGFloat, cap: Int = 56) -> Int {
+    /// How far a side may move to snap a resize drag or keep a snap preview: 6 points, in pixels at the capture's `scale`.
+    public static func band(scale: CGFloat) -> Int {
+        Int((6 * scale).rounded())
+    }
+
+    /// How far a side of a new drag may move to fit a suggestion: 12% of the side's length, at most `cap`, and never under 8 points.
+    public static func searchBand(side: CGFloat, scale: CGFloat, cap: Int = 56) -> Int {
         max(Int((8 * scale).rounded()), min(cap, Int((side * 0.12).rounded())))
     }
 
@@ -42,8 +46,8 @@ public struct SmartSnap {
         let rough = roughBounds.standardized.intersection(extent)
         guard !rough.isNull, rough.width >= 16, rough.height >= 16 else { return [] }
 
-        let maxMoveX = Self.band(side: rough.width, scale: scale, cap: cap)
-        let maxMoveY = Self.band(side: rough.height, scale: scale, cap: cap)
+        let maxMoveX = Self.searchBand(side: rough.width, scale: scale, cap: cap)
+        let maxMoveY = Self.searchBand(side: rough.height, scale: scale, cap: cap)
         let crop = CGRect(x: max(0, rough.minX - CGFloat(maxMoveX + 4)),
                           y: max(0, rough.minY - CGFloat(maxMoveY + 4)),
                           width: 0, height: 0)

@@ -133,6 +133,8 @@ final class OverlayController {
     var ratioPortrait: Bool?
     /// The hovered level was walked to with Up, Down or Tab (not picked from the list); it lets go after 4 pt of pointer travel.
     private var walkedLevel = false
+    /// The first hover target has resolved since the overlay opened (see `Overlays.dimResolved`).
+    private var dimResolved = false
     /// The ratio of the rectangle being dragged or selected, with the nearest standard (see `RatioLock.readout`); empty with neither.
     var ratioReadout: String {
         (draggedRect ?? selection?.rect).map { RatioLock.readout(for: $0.size) } ?? ""
@@ -219,6 +221,7 @@ final class OverlayController {
         cancelWork()
         view.liveText.analysis = nil
         smallImage = nil
+        dimResolved = false
         detectionTask?.cancel()
         detected = []
         dockTiles = []
@@ -414,6 +417,7 @@ final class OverlayController {
             if session!.isLocked, !session!.holds(at: pixel) || walkLetGo { session!.toggleLock() }
             if !session!.isLocked { walkedLevel = false }
             session!.hover(at: pixel)
+            dimResolved = true
         }
         refresh()
     }
@@ -521,7 +525,7 @@ final class OverlayController {
         if snapEnabled, !exact, ratio == nil {
             for vertical in [true, false] where vertical ? handle.movesLeft || handle.movesRight : handle.movesTop || handle.movesBottom {
                 let value = vertical ? point.x : point.y
-                let band = SmartSnap.band(side: vertical ? rect.width : rect.height, scale: scale)
+                let band = SmartSnap.band(scale: scale)
                 // Cancellation is the only error here and a drag event is never cancelled.
                 let pixel = try! SmartSnap().edges(in: image, of: rect, vertical: vertical, near: value, band: band)
                 guard let edge = SnapFits.edge(near: value, band: CGFloat(band), frames: edgeFrames, pixel: pixel, vertical: vertical) else { continue }
@@ -715,7 +719,7 @@ final class OverlayController {
         case (_, true, "s") where hovering: clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true)
         case (36, _, _) where shift || option, (76, _, _) where shift || option: copySelectionText(translating: option)
         case (36, _, _), (76, _, _): copy()
-        case (48, _, _) where hovering, (126, _, _) where hovering, (125, _, _) where hovering:
+        case (48, _, _) where hovering, (126, _, _) where hovering || unionHover, (125, _, _) where hovering || unionHover:
             if event.keyCode == 125 || event.keyCode == 48 && shift { session?.shrink() } else { session?.expand() }
             walkedLevel = true
         case (123, false, _) where hovering && !option, (124, false, _) where hovering && !option:
@@ -936,7 +940,8 @@ final class OverlayController {
         }
         if let scrollArea { overlays.selection = scrollArea; overlays.showsHandles = false; overlays.hover = nil }
         if let cutout { overlays.selection = cutout.frame; overlays.showsHandles = false; overlays.hover = nil }
-        overlays.dimsAll = mode == .capture && overlays.selection == nil && overlays.preview == nil && overlays.ghost == nil && overlays.hover == nil
+        overlays.dimResolved = dimResolved
+        overlays.dimsAll = dimResolved && mode == .capture && overlays.selection == nil && overlays.preview == nil && overlays.ghost == nil && overlays.hover == nil
         // The selection is measured once it settles; a dragged handle makes a new rectangle on every event.
         let settled: CGRect? = if case .none = interaction { selection?.rect } else { nil }
         let shown = selection?.rect ?? snapPreview

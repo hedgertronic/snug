@@ -53,7 +53,7 @@ extension DebugRun {
         func pixel(_ x: Int, _ y: Int) -> [Int] { (0..<3).map { Int(raw[y * source.bytesPerRow + x * source.samplesPerPixel + $0]) } }
         func parse(_ hex: String) -> [Int] { [1, 3, 5].map { Int(hex.dropFirst($0).prefix(2), radix: 16)! } }
         func close(_ a: [Int], _ b: [Int], _ tolerance: Int) -> Bool { zip(a, b).allSatisfy { abs($0 - $1) <= tolerance } }
-        let returnKey: UInt16 = 36, up: UInt16 = 126, down: UInt16 = 125
+        let returnKey: UInt16 = 36, up: UInt16 = 126, down: UInt16 = 125, left: UInt16 = 123, right: UInt16 = 124
         require(source.bitsPerSample == 8 && image.colorSpace?.name == CGColorSpace.sRGB, "the fixture is 8-bit sRGB (\(String(describing: image.colorSpace?.name)))")
         let flat = CGPoint(x: 2185, y: 1024)
         let flatBytes = pixel(Int(flat.x), Int(flat.y))
@@ -648,6 +648,23 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: far.x - 1, y: far.y - 1))
         require(outer != nil && overlay.view.overlays.hover == outer, "a level a key picked holds while the pointer stays inside it")
         overlay.dismiss()
+        // Right and Left cycle through peers in reading order and wrap: Right all the way around returns to the start, and Left undoes a Right.
+        open()
+        await overlay.detectionTask?.value
+        overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, aim)
+        let start = overlay.view.overlays.hover
+        var seen: [CGRect?] = []
+        for _ in 0..<overlay.session!.candidates.count + 1 {
+            key(right, "")
+            seen.append(overlay.view.overlays.hover)
+        }
+        require(start != nil && seen.dropLast().contains { $0 != start } && seen.contains { $0 == start }, "Right walks the peers and wraps back to the first: \(String(describing: start)) \(seen)")
+        key(right, "")
+        let ahead = overlay.view.overlays.hover
+        key(left, "")
+        require(overlay.view.overlays.hover == seen.last! && ahead != seen.last!, "Left steps back one peer: \(String(describing: ahead)) \(String(describing: overlay.view.overlays.hover))")
+        overlay.dismiss()
 
         // Dim = not part of the target: with nothing targeted (just opened, or the pointer on a blank stretch of page with no window) the
         // whole screen dims evenly; a hovered element cuts it out; the full display walked out to and Text mode dim nothing.
@@ -657,8 +674,8 @@ extension DebugRun {
         await overlay.detectionTask?.value
         mouse(.mouseMoved, CGPoint(x: 2450, y: 1500))
         let blankDim = (overlay.view.overlays.hover, dimBox())
-        require(openedDim == (true, overlay.view.bounds) && blankDim.0 == nil && blankDim.1 == overlay.view.bounds,
-                "with nothing targeted the dim covers the whole screen: on open \(openedDim), on a blank stretch \(blankDim)")
+        require(openedDim.0 == false && openedDim.1 == .null && blankDim.0 == nil && blankDim.1 == overlay.view.bounds,
+                "the first frame has no dim, and once nothing is targeted the dim covers the whole screen: on open \(openedDim), on a blank stretch \(blankDim)")
         overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, aim)
         require(overlay.view.overlays.hover != nil && !overlay.view.overlays.dimsAll && overlay.view.dimLayer.fillRule == .evenOdd && dimBox() == overlay.view.bounds,
@@ -673,9 +690,9 @@ extension DebugRun {
         key(0, "a")
         overlay.dismiss()
 
-        // Left and Right step to the element beside the hovered one at the same level. On the page the First name and Last name fields
-        // are accessibility elements, as live; pixel geometry sees their row as one region, their parent. Right from Last name beeps and
-        // stays: the cart panel lies to the right but has another parent.
+        // Left and Right step to the next or previous peer, wrapping at the ends. On the page the First name and Last name fields are
+        // accessibility elements, as live; pixel geometry sees their row as one region, their parent. Right from Last name wraps to
+        // First name: the cart panel lies to the right but has another parent.
         open()
         await overlay.detectionTask?.value
         overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
@@ -688,9 +705,9 @@ extension DebugRun {
             key(code, "")
             beside.append(overlay.view.overlays.hover)
         }
-        require(beside == [firstName.bounds, lastName.bounds, firstName.bounds, lastName.bounds, lastName.bounds],
-                "Right steps from First name to Last name, Left back, and Right on Last name stays (the end of its row): \(beside)")
-        mouse(.mouseMoved, CGPoint(x: 645, y: 489))
+        require(beside == [firstName.bounds, lastName.bounds, firstName.bounds, lastName.bounds, firstName.bounds],
+                "Right steps from First name to Last name, Left back, and Right on Last name wraps to First name: \(beside)")
+        mouse(.mouseMoved, CGPoint(x: 660, y: 489))
         require(overlay.view.overlays.hover == firstName.bounds && !overlay.session!.isLocked, "moving the pointer lets go of the picked element")
         overlay.dismiss()
 
