@@ -49,12 +49,13 @@ extension OverlayController {
         Set([(optionHeld, "\u{2325}"), (commandHeld, "\u{2318}"), (shiftHeld, "\u{21E7}")].compactMap { $0.0 ? Character($0.1) : nil })
     }
 
-    /// Every cap is pressed while its key flashes or while exactly its modifiers are held; every button redraws in the current tint.
-    private func lightCaps() {
+    /// Every cap is pressed while its key flashes or while exactly its modifiers are held; with `restyle` (a new tint), every button
+    /// redraws in the current tint.
+    private func lightCaps(restyle: Bool = false) {
         let held = heldGlyphs
         func light(_ view: NSView) {
             if let cap = view as? KeyCap { cap.pressed = chrome.pressed.contains(cap.text) || !held.isEmpty && Set(cap.text) == held }
-            (view as? BarButton)?.apply()
+            if restyle { (view as? BarButton)?.apply() }
             view.subviews.forEach(light)
         }
         (chrome.all + [cornerChip] + chrome.buttons).forEach(light)
@@ -101,7 +102,9 @@ extension OverlayController {
         let overlays = view.overlays
         let released = mode == .capture && selection != nil
         let editing = released && armedRecording == nil
-        Chrome.tint = view.highlight?.color ?? .controlAccentColor
+        let tint = view.highlight?.color ?? .controlAccentColor
+        let restyle = tint != Chrome.tint
+        Chrome.tint = tint
         let look = Chrome.appearance(defaults)
         // The keys sheet keeps its own dark material.
         if c.hints.appearance?.name != look?.name {
@@ -365,6 +368,6 @@ extension OverlayController {
             let x = box.maxX + 12 + width <= bounds.width - 8 ? box.maxX + 12 : (box.minX - 12 - width >= 8 ? box.minX - 12 - width : 12)
             c.list.frame.origin = CGPoint(x: x, y: min(max(box.maxY - height, 8), top - height - 8))
         }
-        lightCaps()
+        lightCaps(restyle: restyle)
     }
 }

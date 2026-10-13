@@ -122,7 +122,7 @@ final class KeyCap: NSView {
     let text: String
     private let label: NSTextField
     var pressed = false {
-        didSet { apply() }
+        didSet { if pressed != oldValue { apply() } }
     }
     var onTint = false {
         didSet { apply() }
