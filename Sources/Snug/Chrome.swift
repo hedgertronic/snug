@@ -402,7 +402,7 @@ final class Chrome {
     let topBar = Bar()
     let modeButtons: [OverlayController.Mode: BarButton] = [.capture: BarButton("Capture", key: "A"), .text: BarButton("Text", key: "T")]
     let viewToggles = [(Pref.loupe, BarButton("Loupe", key: "L")), (Pref.rulers, BarButton("Rulers", key: "R")), (Pref.crosshair, BarButton("Crosshair", key: "X"))]
-    let styleToggles = [(Pref.roundCorners, BarButton("Rounded", key: "O")), (Pref.frame, BarButton("Frame", key: "M")), (Pref.shadow, BarButton("Shadow", key: "D"))]
+    let styleToggles = [(Pref.roundCorners, BarButton("Rounded", key: "O")), (Pref.frame, BarButton("Frame", key: "M"))]
     /// The action strip below the hovered element or the selection, or a session's (scroll, armed recording, cut out) controls.
     let strip = Bar()
     let copy = BarButton("Copy", key: "\u{21A9}")

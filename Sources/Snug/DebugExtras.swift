@@ -786,7 +786,7 @@ extension DebugRun {
             guard !view.isHidden else { return [] }
             return (view.alphaValue < 1 && (view as? BarButton)?.isEnabled != false ? ["\(type(of: view)) \(texts(in: view))"] : []) + view.subviews.flatMap(faded)
         }
-        require(texts(in: top) == ["Capture", "A", "Text", "T", "Loupe", "L", "Rulers", "R", "Crosshair", "X", "Rounded", "O", "Frame", "M", "Shadow", "D"]
+        require(texts(in: top) == ["Capture", "A", "Text", "T", "Loupe", "L", "Rulers", "R", "Crosshair", "X", "Rounded", "O", "Frame", "M"]
                     && top.groups.count == 3 && zip(top.groups, top.groups.dropFirst()).allSatisfy { abs($1.frame.minX - $0.frame.maxX - 8) < 0.01 },
                 "the top bar is three pills 8 pt apart, the modes, view, and style, with key caps: \(texts(in: top))")
         require(top.frame.maxY == overlay.view.bounds.height - overlay.topInset - 8 && abs(top.frame.midX - overlay.view.bounds.midX) <= 0.5 && chrome.hints.frame.minY == 32,
@@ -811,7 +811,7 @@ extension DebugRun {
         overlay.refresh()
         require(barButtons.allSatisfy { $0.cap!.frame.minX >= $0.title.frame.maxX }, "every bar button shows its key cap after its title")
         // Toggles are plain or lit (a tint wash), never faded.
-        let rounded = chrome.styleToggles[0].1, shadow = chrome.styleToggles[2].1
+        let rounded = chrome.styleToggles[0].1
         defaults.set(false, forKey: Pref.roundCorners)
         overlay.refresh()
         require(!rounded.lit && rounded.layer!.backgroundColor == nil && rounded.alphaValue == 1, "with Rounded off its button is plain")
@@ -825,15 +825,8 @@ extension DebugRun {
         require(defaults.bool(forKey: Pref.frame) && frameButton.lit, "M turns Frame on and the Frame button lights")
         frameButton.onClick()
         require(!defaults.bool(forKey: Pref.frame) && !frameButton.lit, "the Frame button turns Frame off")
-        require(defaults.bool(forKey: Pref.shadow) && shadow.lit, "the window shadow defaults to on")
         key(2, "d")
-        require(!defaults.bool(forKey: Pref.shadow) && !shadow.lit, "D turns the window shadow off and the Shadow button follows")
-        require(shadow.cap!.pressed && !frameButton.cap!.pressed, "the D cap flashes when D is pressed")
-        try await Task.sleep(for: .milliseconds(300))
-        require(!shadow.cap!.pressed, "the flash ends")
-        require(overlay.windowShadow(option: false) == false && overlay.windowShadow(option: true), "with the shadow off, Option-click puts it back")
-        shadow.onClick()
-        require(defaults.bool(forKey: Pref.shadow) && overlay.windowShadow(option: false) && !overlay.windowShadow(option: true), "the Shadow button turns it back on, and Option-click then drops it")
+        require(!defaults.bool(forKey: Pref.frame) && !frameButton.lit && chrome.styleToggles.count == 2, "D does nothing and there is no Shadow button")
         let window = CGRect(x: 300, y: 300, width: 400, height: 200)
         overlay.setWindows([window], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
@@ -870,7 +863,6 @@ extension DebugRun {
         require(texts(in: chrome.hover)[1] == "400 x 200  + frame \(framePad) x \(framePad)", "Frame on adds its padding to the hover size: \(texts(in: chrome.hover))")
         defaults.set(false, forKey: Pref.frame)
         overlay.refresh()
-        defaults.set(true, forKey: Pref.shadow)
         mouse(.mouseMoved, CGPoint(x: 40, y: 40))
         require(chrome.hover.isHidden && chrome.snap.isHidden && chrome.strip.isHidden, "the chip row and strip go away off the window")
         require(texts(in: chrome.hints) == ["edit", "E", "bigger / smaller", "\u{2191}", "\u{2193}", "next", "\u{2190}", "\u{2192}", "full screen", "F", "window", "W", "all keys", "?"],

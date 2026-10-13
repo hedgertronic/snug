@@ -119,7 +119,7 @@ final class ActionButton: NSButton {
 @MainActor
 final class HelpSheet: NSView {
     static let columns: [(title: String, rows: [(keys: String, action: String)])] = [
-        ("Capture", [("drag", "Select a region"), ("click", "Element or window"), ("Option-click", "Flip window shadow"), ("Option-drag", "Exact, no snap"),
+        ("Capture", [("drag", "Select a region"), ("click", "Element or window"), ("Option-click", "Flip Frame for this capture"), ("Option-drag", "Exact, no snap"),
                      ("F", "Full screen, or all text"), ("W", "Capture the window"), ("Left / Right", "Next / previous peer (hover)"), ("Return", "Copy"), ("Shift-Return", "Copy the text"), ("Cmd-S", "Save"),
                      ("Cmd-Shift-S", "Save As"), ("E / Shift-click", "Edit as a selection"),
                      ("G", "Scrolling capture, hover or selection"), ("K", "Cut-out preview"), ("Cut-out: Tab", "Next subject (Shift: back)"), ("Cut-out: S", "Crop to subject"),
@@ -132,7 +132,7 @@ final class HelpSheet: NSView {
                              ("Text: drag", "Select text"), ("Text: Return", "Copy selected text"), ("Text: Shift-Return", "Copy as rows"),
                              ("Text: Tab", "Next link, email, phone, code"), ("Text: Cmd-Return", "Open the picked item"), ("Option-Return", "Translate text")]),
         ("Modes, view, recording", [("A", "Capture"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),
-                                    ("X", "Crosshair"), ("D", "Window shadow"), ("O", "Rounded corners"), ("M", "Frame on / off"), ("P", "Ratio menu"),
+                                    ("X", "Crosshair"), ("O", "Rounded corners"), ("M", "Frame: shadow on / off"), ("P", "Ratio menu"),
                                     ("Shift-P", "Lock the ratio"), ("N", "Candidate list"), ("1-5", "Pick from the list (N)"), ("B", "Keys line"), ("?", "This sheet"),
                                     ("V", "Arm recording, hover or selection"), ("Armed: Return / V", "Start recording"), ("Armed: H", "Cursor on / off"), ("Armed: I", "Count-in off, 3 s, 5 s"), ("Capture hotkey", "Stop recording")])
     ]

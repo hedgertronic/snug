@@ -98,7 +98,7 @@ final class OverlayController {
     var windowIDs: [CGWindowID] = []
     /// Per window: a Dock, menu bar, or menu target, cropped from the frozen image instead of captured as a window.
     var windowFrozen: [Bool] = []
-    /// Option is held: a window click inverts the shadow preference.
+    /// Option is held: a click on the hovered object inverts Frame for that capture.
     var optionHeld = false
     /// Command is held: the hint key caps for it fill with the accent.
     var commandHeld = false
@@ -575,7 +575,7 @@ final class OverlayController {
             let rect = drag.rect
             if rect.width < AreaSelection.minimumSize || rect.height < AreaSelection.minimumSize {
                 cancelWork()
-                if !hadSelection { clickHover(shadow: windowShadow(option: event.modifierFlags.contains(.option)), copy: true, save: afterCaptureSaves) }
+                if !hadSelection { clickHover(framed: framed != event.modifierFlags.contains(.option), copy: true, save: afterCaptureSaves) }
             } else {
                 release(rect)
             }
@@ -706,14 +706,14 @@ final class OverlayController {
         let hovering = selection == nil
         switch (event.keyCode, command, character) {
         case (53, _, _): dismiss()
-        case (36, _, _) where hovering && !shift, (76, _, _) where hovering && !shift: clickHover(shadow: windowShadow(option: false), copy: true, save: afterCaptureSaves, takeDisplay: true)
+        case (36, _, _) where hovering && !shift, (76, _, _) where hovering && !shift: clickHover(framed: framed, copy: true, save: afterCaptureSaves, takeDisplay: true)
         case (_, true, _) where shift && character.lowercased() == "s":
-            if hovering { clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true, saveAs: true) } else { save(saveAs: true) }
+            if hovering { clickHover(framed: framed, copy: false, save: true, takeDisplay: true, saveAs: true) } else { save(saveAs: true) }
         case (_, false, "e") where hovering && hoverRect != nil: openAsSelection(hoverRect!)
         case (_, false, "w") where hovering:
             // The frontmost window under the pointer, whatever element inside it is hovered, taken as Return takes a hovered window.
             guard let index = windows.firstIndex(where: { $0.contains(pointer) }) else { return false }
-            clickWindow(index, crop: windows[index], shadow: windowShadow(option: false), copy: true, save: afterCaptureSaves)
+            clickWindow(index, crop: windows[index], framed: framed, copy: true, save: afterCaptureSaves)
         case (_, false, "k"): cutOut()
         case (_, false, "o"): defaults.set(!defaults.bool(forKey: Pref.roundCorners), forKey: Pref.roundCorners)
         case (_, false, _) where shift && !hovering && character.lowercased() == "p": toggleRatioLock()
@@ -723,7 +723,7 @@ final class OverlayController {
         case (_, false, "-") where !hovering: growSides(by: option ? -10 : -1)
         case (123...126, _, _) where option && !hovering: nudgeSide(keyCode: event.keyCode, outward: !command, by: step)
         case (123...126, true, _) where !hovering: moveSideToEdge(keyCode: event.keyCode, outward: !shift)
-        case (_, true, "s") where hovering: clickHover(shadow: windowShadow(option: false), copy: false, save: true, takeDisplay: true)
+        case (_, true, "s") where hovering: clickHover(framed: framed, copy: false, save: true, takeDisplay: true)
         case (36, _, _) where shift || option, (76, _, _) where shift || option: copySelectionText(translating: option)
         case (36, _, _), (76, _, _): copy()
         case (48, _, _) where hovering, (126, _, _) where hovering || unionHover, (125, _, _) where hovering || unionHover:
@@ -770,8 +770,8 @@ final class OverlayController {
 
     func copy() {
         guard let rect = selection?.rect else { return }
-        if !framed, let index = window(matching: rect) {
-            return clickWindow(index, crop: rect, shadow: windowShadow(option: false), copy: true, save: afterCaptureSaves)
+        if let index = window(matching: rect) {
+            return clickWindow(index, crop: rect, framed: framed, copy: true, save: afterCaptureSaves)
         }
         finish(crop: rect, copy: true, save: afterCaptureSaves)
     }
@@ -790,23 +790,23 @@ final class OverlayController {
     /// A click (or Return / Cmd-S) on the hovered rectangle. A window, or anything matching a window's frame, is captured as a window;
     /// the full display becomes a selection on click and is taken directly with `takeDisplay`; anything else is cropped from the
     /// frozen image with its measured corner radius.
-    private func clickHover(shadow: Bool, copy: Bool, save: Bool, takeDisplay: Bool = false, saveAs: Bool = false) {
+    private func clickHover(framed: Bool, copy: Bool, save: Bool, takeDisplay: Bool = false, saveAs: Bool = false) {
         guard let hovered = session?.selected else { return }
         switch hovered.kind {
-        case .window: clickWindow(Int(hovered.id.dropFirst("window-".count))!, crop: hovered.bounds, shadow: shadow, copy: copy, save: save, saveAs: saveAs)
+        case .window: clickWindow(Int(hovered.id.dropFirst("window-".count))!, crop: hovered.bounds, framed: framed, copy: copy, save: save, saveAs: saveAs)
         case .display where !takeDisplay: selection = AreaSelection(extent: extent, exact: extent)
         default:
-            if !framed, let index = window(matching: hovered.bounds) {
-                return clickWindow(index, crop: hovered.bounds, shadow: shadow, copy: copy, save: save, saveAs: saveAs)
+            if let index = window(matching: hovered.bounds) {
+                return clickWindow(index, crop: hovered.bounds, framed: framed, copy: copy, save: save, saveAs: saveAs)
             }
-            finish(crop: hovered.bounds, copy: copy, save: save, saveAs: saveAs)
+            finish(crop: hovered.bounds, framed: framed, copy: copy, save: save, saveAs: saveAs)
         }
     }
 
     /// A live capture takes the window itself like macOS does (rounded corners, shadow, transparent background); a frozen-image run,
     /// the Dock, the menu bar, and menus have no window to capture and crop `crop`.
-    private func clickWindow(_ index: Int, crop rect: CGRect, shadow: Bool, copy: Bool, save: Bool, saveAs: Bool = false) {
-        guard displayID != nil, !windowFrozen.indices.contains(index) || !windowFrozen[index] else { return finish(crop: rect, copy: copy, save: save, saveAs: saveAs) }
+    private func clickWindow(_ index: Int, crop rect: CGRect, framed: Bool, copy: Bool, save: Bool, saveAs: Bool = false) {
+        guard displayID != nil, !windowFrozen.indices.contains(index) || !windowFrozen[index] else { return finish(crop: rect, framed: framed, copy: copy, save: save, saveAs: saveAs) }
         let id = windowIDs[index]
         // A capture that comes back square takes the radius measured on the frozen screen around the window; a shaped one keeps its outline.
         let radius = radii[windows[index]] ?? image.map { windowCornerRadius(in: $0, rect: windows[index]) } ?? 0
@@ -818,7 +818,7 @@ final class OverlayController {
         dismiss()
         commitTask = Task { [pasteboard, defaults] in
             do {
-                let image = roundingWindowCorners(try await DisplayCapture.image(ofWindow: id, shadow: shadow, interior: interior), radius: radius)
+                let image = roundingWindowCorners(try await DisplayCapture.image(ofWindow: id, shadow: framed, interior: interior), radius: radius)
                 let png = try await Output.png(image)
                 let destination = saveAs ? chooseSaveURL(Output.defaultFile(defaults: defaults)) : nil
                 guard !saveAs || destination != nil else { return }
@@ -883,9 +883,9 @@ final class OverlayController {
     }
 
     /// Closes the overlay first, then encodes off main and delivers.
-    func finish(crop: CGRect, copy: Bool, save: Bool, saveAs: Bool = false) {
+    func finish(crop: CGRect, framed: Bool? = nil, copy: Bool, save: Bool, saveAs: Bool = false) {
         guard let image else { return }
-        let framed = framed, scale = scale
+        let framed = framed ?? self.framed, scale = scale
         let container = container(of: crop)
         let edited = editedRadii[crop], rounds = defaults.bool(forKey: Pref.roundCorners)
         let (known, measuring) = (radii[crop].map { (radius: $0, arcs: arcs[crop] ?? .zero) }, radiusTasks[crop])

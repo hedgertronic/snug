@@ -11,9 +11,11 @@ let openLog = Logger(subsystem: "local.snug", category: "open")
 /// UserDefaults keys and their registered defaults.
 enum Pref {
     static let snap = "SnugSnap"
-    /// Whether output sits on a framed card with padding and a shadow (Frame). Replaces the "SnugStyle" string, which `register` migrates once.
+    /// Whether output gets its shadow (Frame): a live window its real macOS shadow, a subject the synthetic window shadow, an area or
+    /// element a padded card with a shadow. Replaces the "SnugStyle" string and the "SnugShadow" bool, which `register` removes.
     static let frame = "SnugFrame"
     private static let legacyStyle = "SnugStyle"
+    private static let legacyShadow = "SnugShadow"
     static let afterCapture = "SnugAfterCapture"
     static let saveFolder = "SnugSaveFolder"
     static let hotKeyCode = "SnugHotKeyCode"
@@ -26,7 +28,6 @@ enum Pref {
     static let guidesAnimation = "SnugGuidesAnimation"
     static let colorFormat = "SnugColorFormat"
     static let candidates = "SnugCandidateList"
-    static let shadow = "SnugShadow"
     static let accessibilityAsked = "SnugAccessibilityAsked"
     /// Whether crops take the corner radius measured on screen (and their window's at shared corners); off, they are square unless
     /// edited with [ and ].
@@ -70,6 +71,8 @@ enum Pref {
             defaults.set(style == "backdrop", forKey: frame)
             defaults.removeObject(forKey: legacyStyle)
         }
+        // Shadow on (its default) with Frame off stays off: Frame keeps its own value, so only the key goes.
+        defaults.removeObject(forKey: legacyShadow)
         defaults.register(defaults: [
             snap: true,
             frame: false,
@@ -79,7 +82,6 @@ enum Pref {
             hotKeyModifiers: Int(NSEvent.ModifierFlags([.control, .shift]).rawValue),
             modeBar: true,
             colorFormat: ColorFormat.hex.rawValue,
-            shadow: true,
             highlightColor: "",
             highlightFill: 0.0,
             highlightFade: 0.42,
@@ -118,9 +120,9 @@ enum Output {
 
     /// Renders a cutout (`OutputFrame.renderCutout`) and encodes a PNG off the main thread.
     @concurrent
-    static func encodeCutout(_ subject: CGImage, bounds: CGRect?, cornerRadii: CornerRadii, framed: Bool, shadow: Bool, scale: CGFloat) async throws
+    static func encodeCutout(_ subject: CGImage, bounds: CGRect?, cornerRadii: CornerRadii, framed: Bool, scale: CGFloat) async throws
         -> (png: Data, width: Int, height: Int) {
-        let rendered = try OutputFrame.renderCutout(subject, bounds: bounds, cornerRadii: cornerRadii, framed: framed, shadow: shadow, scale: scale)
+        let rendered = try OutputFrame.renderCutout(subject, bounds: bounds, cornerRadii: cornerRadii, framed: framed, scale: scale)
         return (try await png(rendered), rendered.width, rendered.height)
     }
 

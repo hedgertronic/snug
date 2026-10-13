@@ -94,11 +94,9 @@ extension DebugRun {
 
         open()
         defaults.set(true, forKey: Pref.frame)
-        defaults.set(false, forKey: Pref.shadow)
         mouse(.mouseMoved, CGPoint(x: 1200, y: 1000))
         try snapshot("bar-frame")
         defaults.set(false, forKey: Pref.frame)
-        defaults.set(true, forKey: Pref.shadow)
         overlay.dismiss()
 
         open()
@@ -330,8 +328,8 @@ extension DebugRun {
         defaults.set(false, forKey: Pref.candidates)
         overlay.dismiss()
 
-        // On a live display a hovered window is captured with its shadow: the hover size adds the shadow's canvas, which Option drops
-        // (or, with Shadow off, adds); Frame takes its place.
+        // On a live display a hovered window is captured with its real shadow when Frame is on: the hover size says "+ frame" with no
+        // numbers, and Option flips it.
         open()
         try snapshot("capture-nothing-targeted")
         try await overlay.detectionTask?.value
@@ -343,7 +341,7 @@ extension DebugRun {
             overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: held ? .option : [], timestamp: ProcessInfo.processInfo.systemUptime,
                 windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
         }
-        let shadowed = "1500 x 1200  + shadow"
+        let framed = "1500 x 1200  + frame"
         var sizes = [texts(in: overlay.chrome.hover).last ?? ""]
         try snapshot("capture-hover-window")
         for _ in 0..<4 where overlay.session?.selected?.kind != .display { key(126, "") }
@@ -352,21 +350,16 @@ extension DebugRun {
         option(true)
         sizes.append(texts(in: overlay.chrome.hover).last ?? "")
         option(false)
-        defaults.set(false, forKey: Pref.shadow)
+        defaults.set(true, forKey: Pref.frame)
         overlay.refresh()
         sizes.append(texts(in: overlay.chrome.hover).last ?? "")
+        try snapshot("capture-hover-window-frame")
         option(true)
         sizes.append(texts(in: overlay.chrome.hover).last ?? "")
         option(false)
-        defaults.set(true, forKey: Pref.shadow)
-        defaults.set(true, forKey: Pref.frame)
-        overlay.refresh()
-        let framePad = Int(2 * OutputFrame.points * overlay.scale)
-        sizes.append(texts(in: overlay.chrome.hover).last ?? "")
-        try snapshot("capture-hover-window-frame")
         defaults.set(false, forKey: Pref.frame)
-        require(sizes == [shadowed, "1500 x 1200", "1500 x 1200", shadowed, "1500 x 1200  + frame \(framePad) x \(framePad)"],
-                "a live window's hover size adds its shadow, Option flips it, and Frame takes its place: \(sizes)")
+        require(sizes == ["1500 x 1200", framed, framed, "1500 x 1200"],
+                "a live window's hover size adds nothing with Frame off and + frame with it on, and Option flips it: \(sizes)")
         overlay.dismiss()
 
         open()
