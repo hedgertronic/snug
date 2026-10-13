@@ -92,7 +92,7 @@ enum DebugRun {
 
         // Pause-to-snap, release takes the preview.
         open()
-        require(overlay.view.dimLayer.path!.isEmpty, "an idle Capture has no dim")
+        require(overlay.view.dimLayer.path!.boundingBox == overlay.view.bounds && overlay.view.overlays.dimsAll, "an idle Capture with nothing targeted dims the whole screen")
         pressDrag(rough)
         require(!overlay.view.dimLayer.path!.isEmpty, "dragging dims everything outside the drag")
         require(overlay.snapPreview == nil, "no preview before the debounce")
