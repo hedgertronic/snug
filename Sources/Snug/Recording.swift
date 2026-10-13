@@ -50,8 +50,7 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     /// Called on the main actor if the recording fails before `stop`, with no frames written.
     var onFailure: (any Error) -> Void = { _ in }
     /// Called on the main actor when the stream stops without `stop`, as when the system's screen-recording indicator in the menu bar
-    /// stops it, or when the recording output fails after it wrote frames; `stop` then waits for the file without stopping the stream
-    /// again.
+    /// stops it, or when the recording output finishes or fails after it wrote frames without `stop`; `stop` then returns on that end.
     var onStop: () -> Void = {}
     private var stream: SCStream!
     private var output: SCRecordingOutput!
@@ -177,8 +176,12 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         }
     }
 
+    /// A stop from the system's screen-recording indicator can end here alone, with no stream stop or failure to follow.
     nonisolated func recordingOutputDidFinishRecording(_ recordingOutput: SCRecordingOutput) {
-        Task { @MainActor in finished(nil) }
+        Task { @MainActor in
+            recordingLog.notice("output finished, stopping \(self.stopping)")
+            finished(nil)
+        }
     }
 
     /// A stop from outside Snug (the system's screen-recording indicator) may end the output with `userStopped`, or with another code
@@ -189,13 +192,14 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         Task { @MainActor in
             let wroteFrames = output.recordedDuration > .zero
             recordingLog.notice("output failed, error \(failure.domain, privacy: .public) \(failure.code), frames written \(wroteFrames), stopping \(self.stopping)")
-            finished(wroteFrames || (error as? SCStreamError)?.code == .userStopped ? nil : error, endedByFailure: true)
+            finished(wroteFrames || (error as? SCStreamError)?.code == .userStopped ? nil : error)
         }
     }
 
-    private func finished(_ error: (any Error)?, endedByFailure: Bool = false) {
+    /// Ends the wait in `stop`; an end that `stop` didn't ask for delivers through `onStop` (or `onFailure` with an error).
+    private func finished(_ error: (any Error)?) {
         end.yield(error)
-        guard !stopping, endedByFailure else { return }
+        guard !stopping else { return }
         ticking?.cancel()
         panels.forEach { $0.orderOut(nil) }
         if let error { onFailure(error) } else { onStop() }
