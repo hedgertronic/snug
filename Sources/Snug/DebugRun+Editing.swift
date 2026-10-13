@@ -419,6 +419,13 @@ extension DebugRun {
         require(tops == [300, 150, 0] && rect == CGRect(x: 400, y: 0, width: 400, height: 500),
                 "Cmd-Left, Cmd-Down and Cmd-Up move the other sides to their next edges: \(tops) \(rect)")
         overlay.dismiss()
+        // One press's cost on the page: a tall selection whose search reaches across most of the screen.
+        open()
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: CGRect(x: 20, y: 100, width: 40, height: 1400))
+        let pressed = ContinuousClock.now
+        key(right, "", .command)
+        print("Cmd-Right on a 40 x 1400 px selection: \(String(format: "%.1f", pressed.duration(to: .now).milliseconds)) ms, right side to \(overlay.selection!.rect.maxX)")
+        overlay.dismiss()
 
         // + and - move every side out or in by 1 px, Option 10 px, within the extent and the minimum size.
         open()
