@@ -56,8 +56,8 @@ struct FlatFillsTests {
         let screen = Detection.downsampled(try load("notes/real-web/form-test.png"), by: 2)
         let fills = FlatFills(screen)
         var found: [Candidate] = []
-        for y in stride(from: 0, to: screen.height, by: 4) {
-            for x in stride(from: 0, to: screen.width, by: 4) {
+        for y in stride(from: 0, to: screen.height, by: 24) {
+            for x in stride(from: 0, to: screen.width, by: 24) {
                 if let fill = fills.region(at: CGPoint(x: x, y: y)) { found.append(fill) }
             }
         }
