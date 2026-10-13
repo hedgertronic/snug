@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import ImageIO
 import Testing
 @testable import ScreenshotCore
 
@@ -19,7 +20,7 @@ struct ScrollStitcherTests {
         return (0..<count).flatMap { row(start + $0) }
     }
 
-    func image(_ bytes: [UInt8]) -> CGImage {
+    func image(_ bytes: [UInt8], width: Int = 160) -> CGImage {
         CGImage(width: width, height: bytes.count / (width * 4), bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: width * 4,
                 space: CGColorSpace(name: CGColorSpace.sRGB)!,
                 bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue),
@@ -133,5 +134,65 @@ struct ScrollStitcherTests {
         let expected = first[..<((header + view) * width * 4)] + (view..<(97 + view)).flatMap(page)
             + [UInt8](repeating: 60, count: footer * width * 4)
         #expect(bytes(await stitcher.image()) == Array(expected))
+    }
+
+    /// A fixed column a third wide over the whole area, as a sticky sidebar: offsets still come from the content beside it.
+    /// The output repeats the sidebar's bottom rows, a known limit, so only the moving columns are compared.
+    @Test func offsetsComeFromTheContentBesideAStickySidebar() async {
+        func withSidebar(_ bytes: [UInt8]) -> [UInt8] {
+            var bytes = bytes
+            for row in header..<(header + view) {
+                for column in 0..<(width / 3) {
+                    let value = UInt8((row * 5 + column * 11) % 200)
+                    bytes.replaceSubrange(((row * width + column) * 4)..<((row * width + column) * 4 + 3), with: [value, value, value])
+                }
+            }
+            return bytes
+        }
+        let stitcher = ScrollStitcher(first: image(withSidebar(textFrame(0, tooltip: nil))))
+        for offset in [9, 20, 33, 41, 80, 86, 88] {
+            #expect(await stitcher.add(image(withSidebar(textFrame(offset, tooltip: nil)))), "offset \(offset)")
+        }
+        let stitched = bytes(await stitcher.image())
+        let expected = textFrame(0, tooltip: nil)[..<((header + view) * width * 4)] + (view..<(88 + view)).flatMap(page)
+            + [UInt8](repeating: 60, count: footer * width * 4)
+        let moving = { (bytes: [UInt8]) in stride(from: 0, to: bytes.count, by: self.width * 4).flatMap { bytes[($0 + self.width / 3 * 4)..<($0 + self.width * 4)] } }
+        #expect(stitched.count == expected.count && moving(stitched) == moving(Array(expected)))
+    }
+
+    /// Real pixels: crops of a web page scrolled under the round 10 fixture's tooltip, pasted 15 px above the area's bottom from the
+    /// third frame on, with a fast jump and a slowing tail. The output is the clean page with the tooltip once, in the latest frame.
+    @Test func aRealTooltipOverARealPageAppearsOnce() async throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        func load(_ path: String) throws -> CGImage {
+            let source = try #require(CGImageSourceCreateWithURL(root.appendingPathComponent(path) as CFURL, nil))
+            return try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        }
+        let page = try load("notes/real-web/form-test.png")
+        let (left, top, areaWidth, areaHeight) = (400, 200, 1000, 600)
+        let (tipWidth, tipHeight) = (324, 16)
+        let tip = bytes(try load("notes/fixtures/round10/scroll-savant-tooltip-repeats.png").cropping(to: CGRect(x: 6, y: 641, width: tipWidth, height: tipHeight))!)
+        let tipTop = areaHeight - 15 - tipHeight
+        func frame(_ offset: Int, tooltip: Bool) -> [UInt8] {
+            var frame = bytes(page.cropping(to: CGRect(x: left, y: top + offset, width: areaWidth, height: areaHeight))!)
+            for row in 0..<tipHeight where tooltip {
+                let start = ((tipTop + row) * areaWidth + 20) * 4
+                frame.replaceSubrange(start..<(start + tipWidth * 4), with: tip[(row * tipWidth * 4)..<((row + 1) * tipWidth * 4)])
+            }
+            return frame
+        }
+        let stitcher = ScrollStitcher(first: image(frame(0, tooltip: false), width: areaWidth))
+        var slowest = Duration.zero
+        for (index, offset) in [40, 80, 120, 160, 310, 330, 340, 346, 350, 352, 353].enumerated() {
+            let next = image(frame(offset, tooltip: index >= 1), width: areaWidth)
+            let start = ContinuousClock.now
+            #expect(await stitcher.add(next), "offset \(offset)")
+            slowest = max(slowest, ContinuousClock.now - start)
+            let (height, image) = (await stitcher.height, await stitcher.image())
+            #expect(height == offset + areaHeight && image.height == height, "offset \(offset): \(height) \(image.height)")
+        }
+        print("slowest add at \(areaWidth) x \(areaHeight): \(slowest)")
+        let expected = bytes(page.cropping(to: CGRect(x: left, y: top, width: areaWidth, height: 353))!) + frame(353, tooltip: true)
+        #expect(bytes(await stitcher.image()) == expected)
     }
 }

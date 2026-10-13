@@ -62,14 +62,15 @@ public actor ScrollStitcher {
         let changed = still.map { $0.count(where: { !$0 }) }
         // The content moved down by `shift` when the new frame's row r shows what the latest frame's row r + shift showed. Only
         // samples that changed in both rows count; one mismatches when it is more than 8 levels off. The fewest mismatches per
-        // compared sample wins, the smaller distance on a tie, and at most 1 in 10 may mismatch (an overlay appearing, say).
+        // compared sample wins, counting one mismatch more so that a shift with few samples cannot win on a lucky zero; the
+        // smaller distance wins a tie. A shift needs 64 compared samples, and at most 1 in 10 may mismatch (an overlay appearing, say).
         var best: (shift: Int, mismatches: Int, compared: Int)?
         for distance in 1..<max(1, band.count - 16) {
             for shift in [distance, -distance] {
                 let overlap = max(band.lowerBound, band.lowerBound - shift)..<min(band.upperBound, band.upperBound - shift)
-                // At most `bound` samples compare, so a shift past `ceiling` mismatches cannot win.
+                // At most `bound` samples compare, so past this many mismatches the shift cannot win.
                 let bound = changed[overlap].reduce(0, +)
-                let ceiling = best.map { $0.mismatches * bound / $0.compared } ?? bound / 10
+                let ceiling = best.map { ($0.mismatches + 1) * bound / $0.compared } ?? bound / 10
                 var mismatches = 0, compared = 0
                 for row in overlap {
                     for column in 0..<64 where !still[row][column] && !still[row + shift][column] {
@@ -78,7 +79,7 @@ public actor ScrollStitcher {
                     }
                     if mismatches > ceiling { break }
                 }
-                if compared >= overlap.count, mismatches * 10 <= compared, best.map({ mismatches * $0.compared < $0.mismatches * compared }) ?? true {
+                if compared >= 64, mismatches * 10 <= compared, best.map({ (mismatches + 1) * $0.compared < ($0.mismatches + 1) * compared }) ?? true {
                     best = (shift, mismatches, compared)
                 }
             }
