@@ -16,6 +16,8 @@ final class Guides {
     private static let readoutGap: CGFloat = 8
     /// The loupe's placement keeps this much clear on each side of the disc for the readout, which may be wider and then shifts into the view.
     static let readoutOverhang: CGFloat = 30
+    /// The gap between the coordinates and the Snap tag, and between the loupe's readout and the pointer cluster under it.
+    static let clusterGap: CGFloat = 6
     /// One duration and curve for every loupe and ruler transition. The outro plays the intro backward, so its curve is the intro's mirrored.
     static let transitionDuration: CFTimeInterval = 0.18
     private static let introCurve = CAMediaTimingFunction(controlPoints: 0.2, 0, 0, 1)
@@ -51,14 +53,12 @@ final class Guides {
     private let centerHalo = CAShapeLayer()
     private let centerWhite = CAShapeLayer()
     let centerAccent = CAShapeLayer()
-    /// Under the loupe, on the chip surface: the swatch, hex value and pixel coordinates of the pixel at the pointer, then "copy" and the C
-    /// cap. The overlay view holds it; `update` moves it with the loupe and changes the swatch and texts in place, laying the chip out
-    /// again when the coordinates gain or lose a digit.
+    /// Under the loupe, on the chip surface: the swatch and hex value of the pixel at the pointer, then "copy" and the C cap. The overlay
+    /// view holds it. `setShown` shows and hides it with the loupe's intended state, and `update` moves it with the loupe and changes the
+    /// swatch and hex in place.
     let readout = Pill.chip()
     private let swatch = NSView(frame: CGRect(x: 0, y: 0, width: 12, height: 12))
     private let hex = NSTextField("#000000", size: 12, mono: true, color: .chromeText)
-    private let coordinates = NSTextField("x 0  y 0", size: 11, mono: true, color: .chromeText.withAlphaComponent(0.7))
-    private lazy var readoutViews = [swatch, hex, coordinates, NSTextField("copy", size: 12, weight: .medium, color: .chromeText), KeyCap("C")]
     private var tickKey: [CGFloat] = []
     /// Whether a change of the loupe's placement slides, and the loupe's offset from the pointer at the last update (nil until it first shows).
     var slidesPlacement = false
@@ -143,7 +143,7 @@ final class Guides {
         swatch.wantsLayer = true
         swatch.layer!.cornerRadius = 3
         swatch.layer!.borderWidth = 0.5
-        readout.show("readout") { readoutViews }
+        readout.show("readout") { [swatch, hex, NSTextField("copy", size: 12, weight: .medium, color: .chromeText), KeyCap("C")] }
         readout.isHidden = true
         for layer in [magnified, grid, edges, centerHalo, centerWhite, centerAccent] { disc.addSublayer(layer) }
         for layer in [ring, disc] { loupe.addSublayer(layer) }
@@ -336,11 +336,6 @@ final class Guides {
             swatch.layer!.backgroundColor = CGColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1)
             swatch.effectiveAppearance.performAsCurrentDrawingAppearance { swatch.layer!.borderColor = NSColor.swatchEdge.cgColor }
             hex.stringValue = ColorFormat.hex.string(for: color)
-            coordinates.stringValue = "x \(column)  y \(row)"
-            coordinates.sizeToFit()
-            // `Pill.show` unhides the chip, so it lays out only while `setShown` has the readout shown: the loupe layer stays visible through
-            // its outro, and a readout shown again there would stay on screen, frozen, once the layer hides.
-            if !readout.isHidden { readout.show("readout \(coordinates.stringValue.count)") { readoutViews } }
             let origin = Self.loupeOrigin(point: point, bounds: bounds, topInset: topInset, scale: scale, avoiding: avoiding)
             let offset = CGPoint(x: origin.x - point.x, y: origin.y - point.y)
             // A flip to the pointer's other side (past a bar or a screen edge) slides from the old offset to the new one. Only the offset animates,

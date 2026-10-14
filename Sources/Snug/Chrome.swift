@@ -431,6 +431,8 @@ final class Chrome {
     let snap = BarButton("Snap", key: "S")
     /// Hovering: Snap as a label by the pointer or the loupe's readout, lit when Snap is on. Clicks pass through it.
     let snapTag = BarButton("Snap", key: "S", height: Chrome.labelHeight)
+    /// Hovering: the pointer pixel's "x 123  y 456", left of the Snap tag. The two are one pointer cluster; clicks pass through.
+    let coordinates = Pill.chip()
     /// The ratio readout with P, which opens `ratioMenu`, and the lock with Shift-P, on one surface.
     let ratio = Pill(radius: 8, insets: NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0), spacing: 0)
     let ratioButton = BarButton("", key: "P")
@@ -485,5 +487,5 @@ final class Chrome {
     }
 
     /// Lowest first: the cut-out preview goes under all of them.
-    var all: [NSView] { [upHint, downHint, hover, size, snap, snapTag, reading, legend] + sideHints + [radius, cornerKeys, list, hints, topBar, strip, status, ratio, ratioMenu, colorMenu, help] }
+    var all: [NSView] { [upHint, downHint, hover, size, snap, snapTag, coordinates, reading, legend] + sideHints + [radius, cornerKeys, list, hints, topBar, strip, status, ratio, ratioMenu, colorMenu, help] }
 }
