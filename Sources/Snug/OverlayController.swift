@@ -146,10 +146,12 @@ final class OverlayController {
     /// With a selection open, Shift held, and the pointer moved since then and outside the selection, the hover outlines the element
     /// under the pointer for a union.
     private var unionHover: Bool { shiftHeld && movedWithShift && selection.map { !$0.rect.contains(pointer) } ?? false }
-    /// Save As: the file to write, given the usual name in the save folder; nil cancels. Debug runs answer without a panel.
+    /// Save As: the file to write, given the usual name in the save folder; nil cancels. The panel sits above the overlay, which is at the
+    /// screen saver level. Debug runs answer without a panel.
     var chooseSaveURL: (URL) -> URL? = { suggested in
         NSApp.activate()
         let panel = NSSavePanel()
+        panel.level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1)
         panel.directoryURL = suggested.deletingLastPathComponent()
         panel.nameFieldStringValue = suggested.lastPathComponent
         panel.allowedContentTypes = [.png]
@@ -833,15 +835,15 @@ final class OverlayController {
         let overlap = windows[..<index].map { $0.intersection(windows[index]) }.reduce(0) { $0 + ($1.isNull ? 0 : $1.width * $1.height) }
         let interior = overlap == 0 ? image?.cropping(to: windows[index]) : nil
         Pref.logHoverLine("window \(id) rect \(windows[index]) overlap in front \(overlap) -> " + (interior == nil ? "captured pixels" : "frozen interior"))
+        let destination = saveAs ? askSaveURL() : nil
+        guard !saveAs || destination != nil else { return }
         dismiss()
         commitTask = Task { [pasteboard, defaults] in
             do {
                 let image = roundingWindowCorners(try await DisplayCapture.image(ofWindow: id, shadow: framed, interior: interior), radius: radius)
                 let png = try await Output.png(image)
-                let destination = saveAs ? chooseSaveURL(Output.defaultFile(defaults: defaults)) : nil
-                guard !saveAs || destination != nil else { return }
-                try Output.publish(png: png, detail: "\(image.width) x \(image.height)  window", copy: copy, save: save, destination: destination,
-                                   pasteboard: pasteboard, defaults: defaults)
+                Output.publish(png: png, detail: "\(image.width) x \(image.height)  window", copy: copy, save: save, destination: destination,
+                               pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
             }
@@ -900,9 +902,23 @@ final class OverlayController {
         editedRadii[rect] = cornerRadii(of: rect).offset(by: points * scale, in: rect.size)
     }
 
-    /// Closes the overlay first, then encodes off main and delivers.
+    /// Asks where Save As writes, with the overlay still up: canceling the panel leaves the overlay and its selection as they were, and
+    /// only a chosen file closes it. The Esc hot key is let go while the panel runs, so Esc cancels the panel, not the overlay.
+    private func askSaveURL() -> URL? {
+        escape?.unregister()
+        let url = chooseSaveURL(Output.defaultFile(defaults: defaults))
+        if url == nil, !isHeadless {
+            try! escape!.register(keyCode: 53, modifiers: [])
+            window.makeKeyAndOrderFront(nil)
+        }
+        return url
+    }
+
+    /// Asks for the Save As file when asked to, then closes the overlay, encodes off main and delivers.
     func finish(crop: CGRect, framed: Bool? = nil, copy: Bool, save: Bool, saveAs: Bool = false) {
         guard let image else { return }
+        let destination = saveAs ? askSaveURL() : nil
+        guard !saveAs || destination != nil else { return }
         let framed = framed ?? self.framed, scale = scale
         let container = container(of: crop)
         let edited = editedRadii[crop], rounds = defaults.bool(forKey: Pref.roundCorners)
@@ -921,8 +937,6 @@ final class OverlayController {
                     let windowRadius = if let windowKnown { windowKnown } else { await windowMeasuring?.value.radius ?? 0 }
                     radii = radii.replacingCorners(sharedWith: container, in: crop, with: windowRadius, arcs: measured.arcs)
                 }
-                let destination = saveAs ? chooseSaveURL(Output.defaultFile(defaults: defaults)) : nil
-                guard !saveAs || destination != nil else { return }
                 try await Output.deliver(image, crop: crop, framed: framed, scale: scale, cornerRadii: edited ?? (rounds ? radii : .zero), copy: copy, save: save,
                                          destination: destination, pasteboard: pasteboard, defaults: defaults)
             } catch {
@@ -932,8 +946,8 @@ final class OverlayController {
     }
 
     /// Shows a failure unless its task was cancelled (Vision reports cancellation with its own error, not
-    /// `CancellationError`). Closes the overlay first so the alert is not hidden under it.
-    /// Debug runs print it and exit instead of opening an alert.
+    /// `CancellationError`) as a red toast with a short reason, the way a failed recording shows (an alert may never show for an
+    /// accessory app). Closes the overlay first. Debug runs print it and exit instead.
     func report(_ error: any Error) {
         guard !Task.isCancelled else { return }
         if isHeadless {
@@ -941,7 +955,7 @@ final class OverlayController {
             exit(EXIT_FAILURE)
         }
         dismiss()
-        NSApp.presentError(error)
+        Toast.show(message: "Capture failed", detail: (error as NSError).localizedFailureReason ?? error.localizedDescription, color: .systemRed)
     }
 
     // MARK: Drawing
