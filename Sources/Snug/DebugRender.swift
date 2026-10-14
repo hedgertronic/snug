@@ -495,7 +495,8 @@ extension DebugRun {
         topRight.set("topRight", forKey: Pref.toastPosition)
         try renderToast("toast-preview-top-right", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: topRight))
         try renderToast("toast-preview-top-right-hover", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: topRight), hovered: true)
-        try renderToast("toast-saved-hover", Toast(png: roundedPNG, message: "Copied, saved to Desktop", detail: "Snug 2026-10-10 at 12.00.00.png", file: URL(fileURLWithPath: "/tmp/Snug.png"), color: nil, defaults: defaults), hovered: true)
+        try renderToast("toast-failed", Toast(png: roundedPNG, message: "Copied, save failed", detail: "You don't have permission.", file: nil, color: .systemRed, defaults: defaults))
+        try renderToast("toast-saved-hover",Toast(png: roundedPNG, message: "Copied, saved to Desktop", detail: "Snug 2026-10-10 at 12.00.00.png", file: URL(fileURLWithPath: "/tmp/Snug.png"), color: nil, defaults: defaults), hovered: true)
         // The recording's stop reminder, in the dark look.
         defaults.set("dark", forKey: Pref.overlayAppearance)
         try renderToast("recording-reminder", ScreenRecording.makeReminder(around: CGRect(x: 300, y: 300, width: 400, height: 200), on: CGMainDisplayID(), defaults: defaults))

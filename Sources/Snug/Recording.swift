@@ -304,17 +304,19 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     }
 
     /// Delivers a finished recording that is already in the save folder: copies its file URL (both after-capture settings copy),
-    /// then shows the toast with the first frame; clicking the toast reveals the file.
+    /// then shows the toast with the first frame; clicking the toast reveals the file. A copy the pasteboard refuses shows a red toast,
+    /// "Saved to ..., copy failed", never "Copied".
     static func deliver(_ file: URL, pasteboard: NSPasteboard, defaults: UserDefaults) async throws -> CGImage {
         recordingLog.notice("deliver started")
         let generator = AVAssetImageGenerator(asset: AVURLAsset(url: file))
         generator.appliesPreferredTrackTransform = true
         let frame = try await generator.image(at: .zero).image
         pasteboard.clearContents()
-        pasteboard.writeObjects([file as NSURL])
+        let copied = pasteboard.writeObjects([file as NSURL])
         recordingLog.notice("toast shown")
-        Toast.show(png: try await Output.png(frame), message: "Copied, saved to \(file.deletingLastPathComponent().lastPathComponent)",
-                   detail: file.lastPathComponent, file: file, defaults: defaults)
+        let message = Output.message(copy: true, save: true, copied: copied, saved: true, folder: file.deletingLastPathComponent().lastPathComponent)
+        Toast.show(png: try await Output.png(frame), message: message, detail: copied ? file.lastPathComponent : "The pasteboard did not accept the file.",
+                   file: file, color: copied ? nil : .systemRed, defaults: defaults)
         return frame
     }
 

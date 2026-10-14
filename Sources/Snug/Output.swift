@@ -126,15 +126,15 @@ enum Output {
         return (try await png(rendered), rendered.width, rendered.height)
     }
 
-    /// Encodes a crop, then copies it to the pasteboard and/or saves it, and shows a toast.
+    /// Encodes a crop, then copies it to the pasteboard and/or saves it, and shows a toast (see `publish`).
     @MainActor
     static func deliver(_ image: CGImage, crop: CGRect, framed: Bool, scale: CGFloat, cornerRadii: CornerRadii = .zero,
                         copy: Bool, save: Bool, destination: URL? = nil, pasteboard: NSPasteboard, defaults: UserDefaults) async throws {
         let id = signposter.beginInterval("encode")
         let output = try await encode(image, crop: crop, framed: framed, scale: scale, cornerRadii: cornerRadii)
         signposter.endInterval("encode", id)
-        try publish(png: output.png, detail: "\(output.width) x \(output.height)" + (framed ? "  frame" : ""), copy: copy, save: save, destination: destination,
-                    pasteboard: pasteboard, defaults: defaults)
+        publish(png: output.png, detail: "\(output.width) x \(output.height)" + (framed ? "  frame" : ""), copy: copy, save: save, destination: destination,
+                pasteboard: pasteboard, defaults: defaults)
     }
 
     /// The usual file for a saved capture: the save folder and a timestamped name.
@@ -144,27 +144,55 @@ enum Output {
         return URL(fileURLWithPath: defaults.string(forKey: Pref.saveFolder)!).appending(path: "Snug \(format.string(from: .now)).png")
     }
 
-    /// Copies a PNG to the pasteboard and/or saves it, and shows a toast. `detail` is the toast's size line for a plain copy.
-    /// A save goes to `destination` (Save As) or the usual file.
+    /// Copies a PNG to the pasteboard and/or saves it, and shows a toast; returns the toast's message and detail. `detail` is the toast's
+    /// size line for a plain copy. A save goes to `destination` (Save As, which the panel already confirmed) or the usual file, which takes a
+    /// numbered name when its own is taken. A write that fails (the pasteboard refusing the image, an unwritable folder) shows a red toast
+    /// with its reason, keeps the capture in it, and names what worked: "Copied, save failed".
     @MainActor
-    static func publish(png: Data, detail: String, copy: Bool, save: Bool, destination: URL? = nil, pasteboard: NSPasteboard, defaults: UserDefaults) throws {
+    @discardableResult
+    static func publish(png: Data, detail: String, copy: Bool, save: Bool, destination: URL? = nil, pasteboard: NSPasteboard, defaults: UserDefaults)
+        -> (message: String, detail: String) {
+        var copied = !copy
         if copy {
             let id = signposter.beginInterval("pasteboard")
             pasteboard.clearContents()
-            pasteboard.setData(png, forType: .png)
+            copied = pasteboard.setData(png, forType: .png)
             signposter.endInterval("pasteboard", id)
         }
         var file: URL?
+        var saveError: (any Error)?
         if save {
-            file = destination ?? defaultFile(defaults: defaults)
-            try png.write(to: file!)
+            do {
+                if let destination {
+                    try png.write(to: destination)
+                    file = destination
+                } else {
+                    file = try UniqueFile.write(png, to: defaultFile(defaults: defaults))
+                }
+            } catch {
+                saveError = error
+            }
         }
         let folder = (file?.deletingLastPathComponent() ?? URL(fileURLWithPath: defaults.string(forKey: Pref.saveFolder)!)).lastPathComponent
-        let (message, detail) = switch (copy, save) {
-        case (true, true): ("Copied, saved to \(folder)", file!.lastPathComponent)
-        case (true, false): ("Copied", detail)
-        default: ("Saved to \(folder)", file!.lastPathComponent)
+        let message = message(copy: copy, save: save, copied: copied, saved: saveError == nil, folder: folder)
+        let failed = !copied || saveError != nil
+        let reason = saveError.map { ($0 as NSError).localizedFailureReason ?? $0.localizedDescription } ?? "The pasteboard did not accept the image."
+        let detail = failed ? reason : save ? file!.lastPathComponent : detail
+        Toast.show(png: png, message: message, detail: detail, file: file, color: failed ? .systemRed : nil, defaults: defaults, pasteboard: pasteboard)
+        return (message, detail)
+    }
+
+    /// The toast's message for what was asked (`copy`, `save`) and what worked (`copied`, `saved`).
+    static func message(copy: Bool, save: Bool, copied: Bool, saved: Bool, folder: String) -> String {
+        switch (copy, save, copied, saved) {
+        case (true, true, true, true): "Copied, saved to \(folder)"
+        case (true, true, true, false): "Copied, save failed"
+        case (true, true, false, true): "Saved to \(folder), copy failed"
+        case (true, true, false, false): "Copy and save failed"
+        case (true, false, true, _): "Copied"
+        case (true, false, false, _): "Copy failed"
+        case (false, _, _, true): "Saved to \(folder)"
+        default: "Save failed"
         }
-        Toast.show(png: png, message: message, detail: detail, file: file, defaults: defaults, pasteboard: pasteboard)
     }
 }
