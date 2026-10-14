@@ -182,9 +182,10 @@ extension OverlayController {
         } else if let armed = armedRecording, let rect = selection?.rect {
             let countIn = defaults.integer(forKey: Pref.recordCountIn)
             c.cursor.lit = defaults.bool(forKey: Pref.recordCursor)
+            c.audio.lit = defaults.bool(forKey: Pref.recordAudio)
             c.countIn.setTitle(countIn > 0 ? "\(countIn)-second count" : "Count-in")
             c.countIn.lit = countIn > 0
-            c.strip.show(armed.remaining == nil ? [[c.cursor, c.countIn], [c.cancel, c.start]] : [[c.cancel]])
+            c.strip.show(armed.remaining == nil ? [[c.cursor, c.audio, c.countIn], [c.cancel, c.start]] : [[c.cancel]])
             attachment = (view.viewRect(rect), true, [sizeChip(rect)], [])
         } else if mode == .capture, let rect = overlays.selection ?? overlays.preview ?? overlays.ghost {
             // A drag shows its size, then Snapped when the snap preview is showing and Exact when it is not. A selection shows its size

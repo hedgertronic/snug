@@ -17,7 +17,7 @@ final class ArmedRecording {
 
 /// Screen recording: V on a released selection, or on the hovered element or window (which becomes the selection), arms recording.
 /// Armed, the selection has a red outline and the loupe, crosshair and rulers are hidden; Return or V starts after the count-in, H shows or
-/// hides the cursor, I cycles the count-in, Esc disarms. H and I save their choice. The overlay closes before the app starts recording the area.
+/// hides the cursor, I cycles the count-in, J records the system's audio or not, Esc disarms. H, I and J save their choice. The overlay closes before the app starts recording the area.
 extension OverlayController {
     func armRecording() {
         guard displayID != nil, let area = selection?.rect ?? session?.selected?.bounds else { return beep() }
@@ -38,8 +38,8 @@ extension OverlayController {
         armedRecording = nil
     }
 
-    /// While armed: Return or V starts the count-in, H switches the cursor, I cycles the count-in Off, 3 s, 5 s, Esc stops a
-    /// running count-in or disarms; other keys do nothing.
+    /// While armed: Return or V starts the count-in, H switches the cursor, I cycles the count-in Off, 3 s, 5 s, J switches system
+    /// audio, Esc stops a running count-in or disarms; other keys do nothing.
     func handleRecordingKey(_ event: NSEvent) -> Bool {
         let armed = armedRecording!
         switch (event.keyCode, event.charactersIgnoringModifiers ?? "") {
@@ -49,6 +49,7 @@ extension OverlayController {
         case (53, _): disarmRecording()
         case (36, _) where armed.remaining == nil, (76, _) where armed.remaining == nil, (_, "v") where armed.remaining == nil: countIn()
         case (_, "h") where armed.remaining == nil: defaults.set(!defaults.bool(forKey: Pref.recordCursor), forKey: Pref.recordCursor)
+        case (_, "j") where armed.remaining == nil: defaults.set(!defaults.bool(forKey: Pref.recordAudio), forKey: Pref.recordAudio)
         case (_, "i") where armed.remaining == nil:
             defaults.set([0: 3, 3: 5][defaults.integer(forKey: Pref.recordCountIn)] ?? 0, forKey: Pref.recordCountIn)
         default: break
@@ -75,7 +76,7 @@ extension OverlayController {
         }
     }
 
-    /// Closes the overlay, then asks the app to record the selection's whole even pixels (H.264 needs even sizes) in display points.
+    /// Closes the overlay, then asks the app to record the selection's whole even pixels (H.264 needs even sizes) in display points, with the saved cursor and audio choices.
     private func recordSelection() {
         guard let displayID, let area = selection?.rect else { return beep() }
         let showsCursor = defaults.bool(forKey: Pref.recordCursor)
@@ -84,7 +85,7 @@ extension OverlayController {
         pixels.size.height -= pixels.height.truncatingRemainder(dividingBy: 2)
         let points = CGRect(x: pixels.minX / scale, y: pixels.minY / scale, width: pixels.width / scale, height: pixels.height / scale)
         dismiss()
-        ScreenRecording.requested(displayID, points, showsCursor)
+        ScreenRecording.requested(displayID, points, showsCursor, defaults.bool(forKey: Pref.recordAudio))
     }
 
     /// Armed: the red outline on the selection, in place of the accent one, and the count in its middle, with no handles.

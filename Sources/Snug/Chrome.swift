@@ -421,6 +421,7 @@ final class Chrome {
     let done = BarButton("Done", key: "\u{21A9}")
     let cancel = BarButton("Cancel", key: "esc")
     let cursor = BarButton("Cursor", key: "H")
+    let audio = BarButton("Audio", key: "J")
     let countIn = BarButton("Count-in", key: "I")
     let start = BarButton("Start", key: "\u{21A9}")
     let subject = BarButton("Subject", key: "Tab")
@@ -481,7 +482,7 @@ final class Chrome {
     /// Every button, for the click wiring.
     var buttons: [BarButton] {
         Array(modeButtons.values) + (viewToggles + styleToggles).map(\.1)
-            + [edit, copy, save, text, scroll, record, cutout, colors, done, cancel, cursor, countIn, start, subject, crop, snap, ratioButton, lock]
+            + [edit, copy, save, text, scroll, record, cutout, colors, done, cancel, cursor, audio, countIn, start, subject, crop, snap, ratioButton, lock]
     }
 
     /// Lowest first: the cut-out preview goes under all of them.
