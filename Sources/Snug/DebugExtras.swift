@@ -127,6 +127,18 @@ extension DebugRun {
                 "the loupe's readout is a chip under the disc with the value, copy, and a C cap: \(texts(in: readout)) \(readout.frame) \(loupeBox)")
         overlay.flash(KeyCap.event(for: "C"))
         require(readoutCap[0].pressed, "C flashes the readout's C cap")
+        // The swatch's ring is the chrome's swatch edge in both looks, so a white pixel reads in light mode.
+        let swatchView = readout.subviews.first { $0.frame.size == CGSize(width: 12, height: 12) }!
+        let readoutLook = readout.appearance
+        for (name, edge) in [(NSAppearance.Name.aqua, NSColor.black.withAlphaComponent(0.3)), (.darkAqua, NSColor.white.withAlphaComponent(0.5))] {
+            readout.appearance = NSAppearance(named: name)
+            mouse(.mouseMoved, CGPoint(x: text.x + 1, y: text.y))
+            mouse(.mouseMoved, text)
+            let ring = NSColor(cgColor: swatchView.layer!.borderColor!)!.usingColorSpace(.sRGB)!, want = edge.usingColorSpace(.sRGB)!
+            require(abs(ring.redComponent - want.redComponent) < 0.01 && abs(ring.alphaComponent - want.alphaComponent) < 0.01,
+                    "\(name.rawValue): the loupe swatch's ring is the swatch edge: \(ring) \(want)")
+        }
+        readout.appearance = readoutLook
         // The loupe's readout and the rulers' text change without a cross-fade once displayed.
         CATransaction.flush()
         require(animations(guides.root).isEmpty, "moving the pointer animates no guide layer: \(animations(guides.root))")

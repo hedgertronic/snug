@@ -142,7 +142,6 @@ final class Guides {
         centerAccent.path = CGPath(rect: middle.insetBy(dx: 2.75, dy: 2.75), transform: nil)
         swatch.wantsLayer = true
         swatch.layer!.cornerRadius = 3
-        swatch.layer!.borderColor = NSColor.white.withAlphaComponent(0.5).cgColor
         swatch.layer!.borderWidth = 0.5
         readout.show("readout") { readoutViews }
         readout.isHidden = true
@@ -335,6 +334,7 @@ final class Guides {
             } : nil
             let color = ColorFormat.average(of: image, in: CGRect(x: column, y: row, width: 1, height: 1))
             swatch.layer!.backgroundColor = CGColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1)
+            swatch.effectiveAppearance.performAsCurrentDrawingAppearance { swatch.layer!.borderColor = NSColor.swatchEdge.cgColor }
             hex.stringValue = ColorFormat.hex.string(for: color)
             coordinates.stringValue = "x \(column)  y \(row)"
             coordinates.sizeToFit()
