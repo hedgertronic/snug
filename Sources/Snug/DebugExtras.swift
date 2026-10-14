@@ -1337,6 +1337,37 @@ extension DebugRun {
         for key in [Pref.rulers, Pref.loupe] { defaults.set(false, forKey: key) }
         try await verifyRecording(image: image, frame: frame, overlay: overlay, require: require)
 
+        // Chrome keeps its distance from the object's outline: 8 pt off it outside, and 8 pt in from it when the screen leaves no room outside.
+        open()
+        overlay.detectionTask?.cancel()
+        /// The distance from `item` to the outline `box`: to the nearest side from inside it, else the larger axis gap (negative when they overlap).
+        func outlineGap(_ item: NSView, _ box: CGRect) -> CGFloat {
+            let f = item.frame
+            if box.contains(f) { return min(f.minX - box.minX, box.maxX - f.maxX, f.minY - box.minY, box.maxY - f.maxY) }
+            return max(f.minX - box.maxX, box.minX - f.maxX, f.minY - box.maxY, box.minY - f.maxY)
+        }
+        let outlineCases = [("middle", CGRect(x: 600, y: 300, width: 1000, height: 600)), ("small", CGRect(x: 600, y: 300, width: 120, height: 80)),
+                         ("left edge", CGRect(x: 0, y: 600, width: 500, height: 300)), ("right edge", CGRect(x: extent.width - 500, y: 600, width: 500, height: 300)),
+                         ("top edge", CGRect(x: 900, y: 0, width: 700, height: 300)), ("bottom edge", CGRect(x: 900, y: extent.height - 300, width: 700, height: 300)),
+                         ("edge to edge", CGRect(x: 0, y: 300, width: extent.width, height: 600)), ("full screen", extent)]
+        for hovering in [false, true] {
+            for (name, rect) in outlineCases {
+                if hovering {
+                    overlay.selection = nil
+                    overlay.setWindows([rect], names: ["Edge"], pointer: CGPoint(x: frame.minX + rect.midX / overlay.scale, y: frame.maxY - rect.midY / overlay.scale))
+                    mouse(.mouseMoved, CGPoint(x: rect.midX, y: rect.midY))
+                } else {
+                    overlay.selection = AreaSelection(extent: extent, exact: rect)
+                    overlay.refresh()
+                }
+                let box = overlay.view.viewRect(rect)
+                let shown: [(String, NSView)] = [("size", chrome.size), ("snap", chrome.snap), ("ratio", chrome.ratio), ("radius", chrome.radius), ("hover", chrome.hover), ("strip", chrome.strip)].filter { !$0.1.isHidden }
+                let gaps = shown.map { ($0.0, outlineGap($0.1, box)) }
+                require(!shown.isEmpty && gaps.allSatisfy { $0.1 >= 8 - 0.01 }, "a \(hovering ? "hovered" : "selected") \(name) object's chrome keeps 8 pt from its outline: \(gaps)")
+            }
+        }
+        overlay.dismiss()
+
         // Hot keys: each handler takes only presses of its own ID (the capture shortcut and the overlay's Esc share the app's target).
         // The presses are Carbon events sent to the app, so nothing is registered system-wide.
         var fired: [UInt32] = []
