@@ -1,18 +1,27 @@
 import Foundation
 import CoreGraphics
 
-/// One accessibility element's frame in global screen points with a top-left origin, its role description, its AX role, and its title.
+/// One accessibility element's frame in global screen points with a top-left origin, its role description, its AX role, and its title;
+/// and its subrole, identifier and description ("" where the element has none).
 public struct AXFrame: Sendable, Equatable {
     public let roleDescription: String
     public let rect: CGRect
     public let role: String
     public let title: String
+    public let subrole: String
+    public let identifier: String
+    /// The element's `AXDescription`.
+    public let elementDescription: String
 
-    public init(roleDescription: String, rect: CGRect, role: String = "", title: String = "") {
+    public init(roleDescription: String, rect: CGRect, role: String = "", title: String = "", subrole: String = "", identifier: String = "",
+                elementDescription: String = "") {
         self.roleDescription = roleDescription
         self.rect = rect
         self.role = role
         self.title = title
+        self.subrole = subrole
+        self.identifier = identifier
+        self.elementDescription = elementDescription
     }
 }
 
