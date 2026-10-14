@@ -146,12 +146,10 @@ final class OverlayController {
     /// With a selection open, Shift held, and the pointer moved since then and outside the selection, the hover outlines the element
     /// under the pointer for a union.
     private var unionHover: Bool { shiftHeld && movedWithShift && selection.map { !$0.rect.contains(pointer) } ?? false }
-    /// Save As: the file to write, given the usual name in the save folder; nil cancels. The panel sits above the overlay, which is at the
-    /// screen saver level. Debug runs answer without a panel.
+    /// Save As: the file to write, given the usual name in the save folder; nil cancels. Debug runs answer without a panel.
     var chooseSaveURL: (URL) -> URL? = { suggested in
         NSApp.activate()
         let panel = NSSavePanel()
-        panel.level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1)
         panel.directoryURL = suggested.deletingLastPathComponent()
         panel.nameFieldStringValue = suggested.lastPathComponent
         panel.allowedContentTypes = [.png]
@@ -903,10 +901,14 @@ final class OverlayController {
     }
 
     /// Asks where Save As writes, with the overlay still up: canceling the panel leaves the overlay and its selection as they were, and
-    /// only a chosen file closes it. The Esc hot key is let go while the panel runs, so Esc cancels the panel, not the overlay.
+    /// only a chosen file closes it. While the panel runs, the overlay drops from the screen saver level to floating, under the modal
+    /// panel whatever level the panel keeps, and the Esc hot key is let go, so Esc cancels the panel, not the overlay.
     private func askSaveURL() -> URL? {
         escape?.unregister()
+        let level = window.level
+        window.level = .floating
         let url = chooseSaveURL(Output.defaultFile(defaults: defaults))
+        window.level = level
         if url == nil, !isHeadless {
             try! escape!.register(keyCode: 53, modifiers: [])
             window.makeKeyAndOrderFront(nil)
