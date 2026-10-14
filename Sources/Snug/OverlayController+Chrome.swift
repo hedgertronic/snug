@@ -160,12 +160,13 @@ extension OverlayController {
             c.radius.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText), KeyCap("["), KeyCap("]")] }
             return c.radius
         }
-        /// The capture strip: Edit in its own pill while hovering, then Copy, Save, and Text, then Scroll and Record (each left out when it
-        /// cannot run on `area`), Subject, and Colors once selected.
-        func captureStrip(_ area: CGRect, hovering: Bool = false) {
+        /// The capture strip: Edit in its own pill, lit once there is a selection, then Copy, Save, and Text, then Scroll and Record (each
+        /// left out when it cannot run on `area`), Subject, and Colors.
+        func captureStrip(_ area: CGRect) {
             let scrolls = (scrollFrames != nil || displayID != nil) && area != extent && windows.contains { $0.insetBy(dx: -2, dy: -2).contains(area) }
-            c.strip.show((hovering ? [[c.edit]] : []) + [[c.copy, c.save, c.text],
-                          (scrolls ? [c.scroll] : []) + (displayID != nil ? [c.record] : []) + [c.cutout] + (hovering ? [] : [c.colors])])
+            c.edit.lit = selection != nil
+            c.strip.show([[c.edit], [c.copy, c.save, c.text],
+                          (scrolls ? [c.scroll] : []) + (displayID != nil ? [c.record] : []) + [c.cutout, c.colors]])
         }
 
         if let cutout {
@@ -215,7 +216,7 @@ extension OverlayController {
             c.hover.show("\(name)|\(size)") {
                 [NSTextField(name, size: 12, weight: .semibold, color: .chromeText), NSTextField(size, size: 12, mono: true, color: NSColor.chromeText.withAlphaComponent(0.65))]
             }
-            captureStrip(rect, hovering: true)
+            captureStrip(rect)
             attachment = (view.viewRect(rect), true, [c.hover] + (editedRadii[rect] == nil ? [] : [radiusChip(rect)]), [])
         }
 

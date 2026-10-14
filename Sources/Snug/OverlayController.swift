@@ -684,8 +684,9 @@ final class OverlayController {
             refresh()
             return true
         }
-        // Esc with a released selection drops it back to hover, as an undo step.
-        if event.keyCode == 53, mode == .capture, selection != nil, chrome.help.isHidden, case .none = interaction {
+        // Esc, or E (the lit Edit button), with a released selection drops it back to hover, as an undo step.
+        let leavesEdit = event.keyCode == 53 || flags.isEmpty && event.charactersIgnoringModifiers == "e"
+        if leavesEdit, mode == .capture, selection != nil, chrome.help.isHidden, case .none = interaction {
             undoStack.append(selectionState)
             redoStack = []
             lastEdit = nil

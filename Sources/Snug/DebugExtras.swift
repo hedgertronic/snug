@@ -900,15 +900,25 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
         let captureStrip = ["Copy", "\u{21A9}", "Save", "\u{2318}S", "Text", "\u{21E7}\u{21A9}", "Scroll", "G", "Record", "V", "Subject", "K"]
         let offline = captureStrip.filter { !["Scroll", "G", "Record", "V"].contains($0) }
-        require(texts(in: chrome.strip) == ["Edit", "E"] + offline && chrome.strip.groups.count == 3 && chrome.copy.primary && !chrome.edit.primary && !chrome.edit.lit
+        require(texts(in: chrome.strip) == ["Edit", "E"] + offline + ["Colors", "U"] && chrome.strip.groups.count == 3 && chrome.copy.primary && !chrome.edit.primary && !chrome.edit.lit
                     && chrome.edit.superview === chrome.strip.groups[0] && chrome.strip.frame.maxY == windowBox.minY - 8 && chrome.strip.frame.minX == windowBox.minX,
-                "the action strip hangs under the hovered box: Edit in its own pill, then Copy, Save, Text, then Subject (no live display, so no Scroll or Record): \(texts(in: chrome.strip)) \(chrome.strip.frame) \(windowBox)")
+                "the action strip hangs under the hovered box: Edit in its own pill, then Copy, Save, Text, then Subject and Colors (no live display, so no Scroll or Record): \(texts(in: chrome.strip)) \(chrome.strip.frame) \(windowBox)")
         require(chrome.all.flatMap(faded).isEmpty, "nothing else in the chrome is faded: \(chrome.all.flatMap(faded))")
-        // The Edit button does what E does: it opens the hovered window as a selection and leaves the strip, and Esc goes back to the hover.
+        // The Edit button does what E does: it opens the hovered window as a selection and stays in the strip, lit; clicking it again, E,
+        // and Esc go back to the hover, and Cmd-Z brings the selection back.
         chrome.edit.onClick()
-        require(overlay.selection?.rect == window && !texts(in: chrome.strip).contains("Edit"), "clicking Edit opens the hovered window as a selection, with no Edit in the strip: \(String(describing: overlay.selection?.rect))")
+        require(overlay.selection?.rect == window && texts(in: chrome.strip).prefix(2) == ["Edit", "E"] && chrome.edit.lit,
+                "clicking Edit opens the hovered window as a selection, with a lit Edit in the strip: \(String(describing: overlay.selection?.rect))")
+        for (name, leave) in [("clicking Edit", { chrome.edit.onClick() }), ("E", { key(14, "e") }), ("Esc", { key(53, "") })] as [(String, () -> Void)] {
+            leave()
+            require(overlay.selection == nil && texts(in: chrome.strip).first == "Edit" && !chrome.edit.lit, "\(name) in edit goes back to the hover and a plain Edit button: \(texts(in: chrome.strip))")
+            key(6, "z", .command)
+            require(overlay.selection?.rect == window && chrome.edit.lit, "Cmd-Z after \(name) brings the selection back: \(String(describing: overlay.selection?.rect))")
+        }
         key(53, "")
-        require(overlay.selection == nil && texts(in: chrome.strip).first == "Edit", "Esc goes back to the hover and its Edit button: \(texts(in: chrome.strip))")
+        key(14, "e")
+        require(overlay.selection?.rect == window, "E in the hover edits the hovered window again")
+        key(53, "")
         // The hover holds while the pointer crosses from the element to its strip, so a click reaches Copy; the loupe and crosshair still
         // follow the pointer.
         defaults.set(true, forKey: Pref.loupe)
@@ -946,9 +956,9 @@ extension DebugRun {
         require(texts(in: chrome.size) == ["\(Int(fit.width)) x \(Int(fit.height))  Snapped"], "a snap preview shows its size and Snapped: \(texts(in: chrome.size))")
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.snap) == ["Snapped", "S"] && chrome.snap.lit, "after release on a fit: Snapped, lit")
-        require(!top.isHidden && texts(in: chrome.strip) == offline + ["Colors", "U"] && texts(in: chrome.hints)
+        require(!top.isHidden && texts(in: chrome.strip) == ["Edit", "E"] + offline + ["Colors", "U"] && chrome.edit.lit && texts(in: chrome.hints)
                     == ["move", "\u{2190}\u{2192}", "grow", "\u{2325}", "shrink", "\u{2325}\u{2318}", "edge out", "\u{2318}", "edge in", "\u{2318}\u{21E7}", "all sides", "+", "-", "undo", "\u{2318}Z"],
-                "a selection keeps the top bar, has the strip without Edit, and the arrow layers on the keys line: \(texts(in: chrome.hints))")
+                "a selection keeps the top bar, has the strip with a lit Edit, and the arrow layers on the keys line: \(texts(in: chrome.hints))")
         require(chrome.hints.frame.height < 40 && chrome.hints.frame.width <= overlay.view.bounds.width - 16, "the keys line is one line and fits: \(chrome.hints.frame) in \(overlay.view.bounds.width)")
         // The chip row: size and Snap from the selection's left edge, the ratio and radius ending at its right edge (after Snap when they
         // would meet). The ratio chip's readout with P opens the ratio menu, the lock with Shift-P toggles the lock, with no fills of their own.
@@ -1174,7 +1184,7 @@ extension DebugRun {
                     && texts(in: chrome.strip).contains("Start"),
                 "armed to record, the ratio, radius, and Snap chips and the edge keys hide, and the strip holds the armed controls")
         key(53, "\u{1B}")
-        require(overlay.armedRecording == nil && texts(in: chrome.strip) == captureStrip.filter { $0 != "Scroll" && $0 != "G" } + ["Colors", "U"] && !chrome.ratio.isHidden, "Esc disarms and brings the editing chrome back: \(texts(in: chrome.strip))")
+        require(overlay.armedRecording == nil && texts(in: chrome.strip) == ["Edit", "E"] + captureStrip.filter { $0 != "Scroll" && $0 != "G" } + ["Colors", "U"] && !chrome.ratio.isHidden, "Esc disarms and brings the editing chrome back: \(texts(in: chrome.strip))")
         overlay.dismiss()
 
         // G: scrolling capture of a released selection inside a window, with frames cut from the fixture as if the page scrolled 300 px.
