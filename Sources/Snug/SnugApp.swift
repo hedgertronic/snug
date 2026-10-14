@@ -397,7 +397,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                                          save: defaults.string(forKey: Pref.afterCapture) == "copyAndSave",
                                          pasteboard: .general, defaults: defaults)
             } catch {
-                NSApp.presentError(error)
+                Toast.show(message: "Capture failed", detail: (error as NSError).localizedFailureReason ?? error.localizedDescription, color: .systemRed)
             }
         }
     }
