@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import simd
 
 /// An sRGB color with components in 0...1.
 public struct SRGBColor: Sendable, Equatable {
@@ -71,9 +72,12 @@ public enum ColorFormat: String, CaseIterable, Sendable {
         return SRGBColor(red: Double(sums[0]) / scale, green: Double(sums[1]) / scale, blue: Double(sums[2]) / scale)
     }
 
-    /// The main colors of `rect` (image pixels, top-left origin), most common first: median cut over a copy of the crop sampled down
-    /// to about 64k pixels. A box is split on its widest channel at that channel's mean, the one with the most pixels times that range first;
-    /// fewer than `count` come back when the region has fewer distinct colors.
+    /// The main colors of `rect` (image pixels, top-left origin), most common first. Median cut over a copy of the crop sampled down to
+    /// about 64k pixels makes 24 buckets (a box is split on its widest channel at that channel's mean, the one with the most pixels times
+    /// that range first). Buckets under 0.1% of the pixels are noise and drop out. Up to `count` bucket means are then chosen in OKLab by
+    /// farthest-point selection: the commonest first, then repeatedly the one whose distance to the chosen ones times the square root of
+    /// its share is largest, stopping when every remaining bucket is within 0.05 of a chosen color. Small accents like a blue row
+    /// survive next to large gray areas; fewer than `count` come back when the region has fewer distinct colors.
     public static func palette(of image: CGImage, in rect: CGRect, count: Int = 5) -> [SRGBColor] {
         let crop = image.cropping(to: rect)!
         let shrink = min(1, (65_536 / Double(crop.width * crop.height)).squareRoot())
@@ -93,17 +97,39 @@ public enum ColorFormat: String, CaseIterable, Sendable {
             let channel = spread.x >= max(spread.y, spread.z) ? 0 : spread.y >= spread.z ? 1 : 2
             return (channel, spread[channel])
         }
-        var boxes = [pixels.indices]
-        while boxes.count < count, let split = boxes.indices.filter({ boxes[$0].count > 1 && widest(boxes[$0]).range > 0 }).max(by: { boxes[$0].count * widest(boxes[$0]).range < boxes[$1].count * widest(boxes[$1]).range }) {
-            let box = boxes.remove(at: split), channel = widest(box).channel
+        var boxes = [(pixels: pixels.indices, widest: widest(pixels.indices))]
+        while boxes.count < 24, let split = boxes.indices.filter({ boxes[$0].pixels.count > 1 && boxes[$0].widest.range > 0 }).max(by: { boxes[$0].pixels.count * boxes[$0].widest.range < boxes[$1].pixels.count * boxes[$1].widest.range }) {
+            let (box, (channel, _)) = boxes.remove(at: split)
             let sum = pixels[box].reduce(SIMD3<Int>.zero, &+)
             let middle = pixels[box].partition { $0[channel] * box.count > sum[channel] }
-            boxes += [box.lowerBound..<middle, middle..<box.upperBound]
+            boxes += [box.lowerBound..<middle, middle..<box.upperBound].map { ($0, widest($0)) }
         }
-        return boxes.sorted { $0.count > $1.count }.map { box in
+        let buckets = boxes.map(\.pixels).filter { $0.count * 1000 >= pixels.count }.sorted { $0.count > $1.count }.map { box -> (color: SRGBColor, lab: SIMD3<Double>, share: Double) in
             let sum = pixels[box].reduce(SIMD3<Int>.zero, &+)
             let scale = Double(box.count) * 255
-            return SRGBColor(red: Double(sum.x) / scale, green: Double(sum.y) / scale, blue: Double(sum.z) / scale)
+            let color = SRGBColor(red: Double(sum.x) / scale, green: Double(sum.y) / scale, blue: Double(sum.z) / scale)
+            return (color, color.oklab, Double(box.count) / Double(pixels.count))
         }
+        var chosen = [0]
+        var gap = buckets.map { simd_distance($0.lab, buckets[0].lab) }
+        while chosen.count < count, let next = buckets.indices.filter({ gap[$0] >= 0.05 }).max(by: { gap[$0] * buckets[$0].share.squareRoot() < gap[$1] * buckets[$1].share.squareRoot() }) {
+            chosen.append(next)
+            gap = zip(gap, buckets).map { min($0, simd_distance($1.lab, buckets[next].lab)) }
+        }
+        return chosen.sorted().map { buckets[$0].color }
+    }
+}
+
+extension SRGBColor {
+    /// The color in OKLab (L, a, b), the space where Euclidean distance tracks perceived difference.
+    var oklab: SIMD3<Double> {
+        let linear = [red, green, blue].map { $0 <= 0.04045 ? $0 / 12.92 : pow(($0 + 0.055) / 1.055, 2.4) }
+        let (r, g, b) = (linear[0], linear[1], linear[2])
+        let l = cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+        let m = cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+        let s = cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+        return SIMD3(0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+                     1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+                     0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s)
     }
 }
