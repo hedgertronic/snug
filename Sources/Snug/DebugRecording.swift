@@ -242,6 +242,9 @@ extension DebugRun {
         require(dim.frame.size == CGDisplayBounds(display).size && dim.ignoresMouseEvents && dimPath.contains(CGPoint(x: 10, y: 10), using: .evenOdd)
                     && !dimPath.contains(CGPoint(x: recordArea.midX, y: displayHeight - recordArea.midY), using: .evenOdd),
                 "the dim panel covers the display, cuts the area out, and is click-through: \(dim.frame)")
+        // NSPanel documents true as its default, but the .nonactivatingPanel style bit makes it false at init, so none of these hide when
+        // the overlay's dismiss hands activation back to the previous app.
+        require([dim, outline, reminder].allSatisfy { !$0.hidesOnDeactivate }, "the recording panels stay on screen when Snug deactivates")
         let excluded = DisplayCapture.excludedWindowIDs()
         let panelIDs = [dim, outline, reminder].map { CGWindowID($0.windowNumber) }
         require(panelIDs.allSatisfy { $0 > 0 && excluded.contains($0) } && !excluded.contains(CGWindowID(settings.windowNumber)),

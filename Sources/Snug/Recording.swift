@@ -78,9 +78,13 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
 
     /// Starts recording `area` of the display into `file`, with the system's audio when `capturesAudio`. With `showsPanels`, the rest of the display dims, a thin red outline just
     /// outside the area pulses once as capture starts, and the stop reminder sits outside it. The handlers are set before capture starts,
-    /// so no stop or failure is missed.
+    /// so no stop or failure is missed. The log gets one line at each step of a start (requested, content fetched, capture started, panels
+    /// visible) with the milliseconds since the request, so a slow start shows where the time went.
     static func start(displayID: CGDirectDisplayID, area: CGRect, file: URL, showsCursor: Bool, capturesAudio: Bool, showsPanels: Bool, defaults: UserDefaults,
                       onFailure: @escaping (any Error) -> Void = { _ in }, onStop: @escaping () -> Void = {}) async throws -> ScreenRecording {
+        let requested = ContinuousClock.now
+        func mark(_ step: String) { recordingLog.notice("start: \(step, privacy: .public) at \(Int(requested.duration(to: .now).milliseconds)) ms, app active \(NSApp.isActive)") }
+        mark("requested")
         // Ordered in while transparent, so the window server lists them for the filter that leaves them out.
         let dim = showsPanels ? makeDim(around: area, on: displayID, defaults: defaults) : nil
         let outline = showsPanels ? makeOutline(around: area, on: displayID) : nil
@@ -93,6 +97,7 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         let recording: ScreenRecording
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+            mark("content fetched")
             let filter = DisplayCapture.filter(for: displayID, in: content, excluding: DisplayCapture.excludedWindowIDs())
             let scale = CGFloat(SCShareableContent.info(for: filter).pointPixelScale)
             let configuration = SCStreamConfiguration()
@@ -111,12 +116,14 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
             recording.onFailure = onFailure
             recording.onStop = onStop
             try await recording.stream.startCapture()
+            mark("capture started")
         } catch {
             // A failed start leaves nothing on screen.
             panels.forEach { $0.orderOut(nil) }
             throw error
         }
         panels.forEach { $0.alphaValue = 1 }
+        mark("panels visible")
         if let clock = reminder?.clock {
             let started = ContinuousClock.now
             recording.ticking = Task {
