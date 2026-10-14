@@ -14,6 +14,7 @@ struct UniqueFileTests {
         let file = folder.appending(path: "Snug 2026-10-14 at 10.00.00.png")
         let written = try (1...3).map { try UniqueFile.write(Data("capture \($0)".utf8), to: file) }
         #expect(written.map(\.lastPathComponent) == ["Snug 2026-10-14 at 10.00.00.png", "Snug 2026-10-14 at 10.00.00 2.png", "Snug 2026-10-14 at 10.00.00 3.png"])
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path).count == 3, "no temporary file is left beside the captures")
         for (index, url) in written.enumerated() { #expect(try Data(contentsOf: url) == Data("capture \(index + 1)".utf8)) }
     }
 

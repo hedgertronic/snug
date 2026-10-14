@@ -955,7 +955,7 @@ final class OverlayController {
             exit(EXIT_FAILURE)
         }
         dismiss()
-        Toast.show(message: "Capture failed", detail: (error as NSError).localizedFailureReason ?? error.localizedDescription, color: .systemRed)
+        Toast.show(message: "Snug could not finish", detail: (error as NSError).localizedFailureReason ?? error.localizedDescription, color: .systemRed)
     }
 
     // MARK: Drawing
