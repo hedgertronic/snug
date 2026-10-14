@@ -670,6 +670,24 @@ extension DebugRun {
         require(overlay.view.overlays.hover == innerLink.bounds && overlay.view.overlays.upHint == outerRow.bounds,
                 "the smaller accessibility frame at the pointer is hovered although a larger one scored higher, and Up reaches the larger: \(String(describing: overlay.view.overlays.hover))")
 
+        // A sidebar: rows of 32 pt stacked edge to edge, as Finder's. The hover chip sits over the row above the hovered one, and only
+        // the strip below the element holds the hover: the pointer moving up a row picks the row it is over.
+        open()
+        await overlay.detectionTask?.value
+        overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        let rowHeight = 32 * overlay.scale
+        let sidebar = (0..<5).map { Candidate(id: "ax-row-\($0)", label: "Row", bounds: CGRect(x: aim.x - 80 * overlay.scale, y: aim.y - 80 * overlay.scale + CGFloat($0) * rowHeight,
+                                                                                            width: 160 * overlay.scale, height: rowHeight), score: AccessibilityBounds.baseScore, kind: .element) }
+        overlay.merge(sidebar)
+        mouse(.mouseMoved, CGPoint(x: sidebar[3].bounds.midX, y: sidebar[3].bounds.midY))
+        require(overlay.view.overlays.hover == sidebar[3].bounds, "the lower sidebar row is hovered")
+        var travel = CGPoint(x: sidebar[3].bounds.midX, y: sidebar[3].bounds.midY)
+        while travel.y > sidebar[2].bounds.midY {
+            travel.y -= overlay.scale
+            mouse(.mouseMoved, travel)
+        }
+        require(overlay.view.overlays.hover == sidebar[2].bounds, "moving up a row hovers the row above, not the chip's row: \(String(describing: overlay.view.overlays.hover)) at \(travel)")
+
         // Up walks out through the parents to the window, then the display; Down walks back in.
         open()
         await overlay.detectionTask?.value
