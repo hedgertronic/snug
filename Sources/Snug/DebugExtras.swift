@@ -190,7 +190,7 @@ extension DebugRun {
             require(close(bytes(shown), [229, 72, 77], 2), "the \(name) is drawn in the highlight color")
         }
         let modeFill = overlay.chrome.modeButtons[.capture]!.layer!.backgroundColor.flatMap { NSColor(cgColor: $0)?.usingColorSpace(.sRGB) }
-        require(modeFill.map { close(bytes($0), [229, 72, 77], 2) } == true, "a new highlight color restyles the buttons: the current mode fills with it")
+        require(modeFill.map { close(bytes($0), [229, 72, 77], 2) } == true, "a new highlight color restyles the buttons: the current mode washes with it")
         defaults.removeObject(forKey: Pref.highlightColor)
         overlay.view.highlight = Highlight(defaults: defaults)
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
@@ -853,7 +853,7 @@ extension DebugRun {
                 overlay.refresh()
                 require(clipped().isEmpty && abs(frameButton.cap!.frame.minX - frameButton.title.frame.maxX - 7) < 0.01 && abs(frameButton.bounds.maxX - frameButton.cap!.frame.maxX - 7) < 0.01,
                         "no bar title clips and the Frame button hugs its cap with Frame \(framed) and \(mode) selected: \(clipped()) \(frameButton.frame)")
-                require(chrome.modeButtons[mode]!.primary && top.groups.count == (mode == .text ? 2 : 3), "the current mode is primary, and Text hides the style pill")
+                require(chrome.modeButtons[mode]!.lit && !chrome.modeButtons[mode]!.primary && chrome.modeButtons.values.filter(\.lit).count == 1 && top.groups.count == (mode == .text ? 2 : 3), "the current mode is lit, the other plain, and Text hides the style pill")
             }
         }
         defaults.set(false, forKey: Pref.frame)
