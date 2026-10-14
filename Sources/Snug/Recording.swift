@@ -10,6 +10,8 @@ extension Pref {
     static let recordCountIn = "SnugRecordCountIn"
     /// Whether recordings show the cursor; H switches it while armed.
     static let recordCursor = "SnugRecordCursor"
+    /// Whether recordings carry the system's audio (no microphone); J switches it while armed. Off until chosen.
+    static let recordAudio = "SnugRecordAudio"
 }
 
 /// A click-through, borderless panel over everything that recordings leave out of the video: the dim, the outline around the area, and
@@ -31,14 +33,14 @@ final class RecordingPanel: NSPanel, CaptureExcluded {
     var clock: NSTextField?
 }
 
-/// A screen recording of one area of a display: H.264 at up to 60 fps, with or without the cursor, and no audio, written to a .mov by
-/// `SCRecordingOutput`. Snug is left out of the video by application (the overlay, the toast, the dim, the outline and the stop
+/// A screen recording of one area of a display: H.264 at up to 60 fps, with or without the cursor, and with the system's audio (never
+/// the microphone, and never Snug's own sound) when asked, written to a .mov by `SCRecordingOutput`. Snug is left out of the video by application (the overlay, the toast, the dim, the outline and the stop
 /// reminder), all but its listed windows that captures do not exclude: Settings and Snug's other windows show.
 @MainActor
 final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelegate {
-    /// The armed overlay hands the display, its area (display points, top-left origin, whole even pixels) and whether the cursor
-    /// shows here once the count-in ends; the app starts the recording. Debug runs replace it.
-    static var requested: (CGDirectDisplayID, CGRect, Bool) -> Void = { _, _, _ in }
+    /// The armed overlay hands the display, its area (display points, top-left origin, whole even pixels), whether the cursor shows
+    /// and whether system audio is recorded, once the count-in ends; the app starts the recording. Debug runs replace it.
+    static var requested: (CGDirectDisplayID, CGRect, Bool, Bool) -> Void = { _, _, _, _ in }
     /// How long `stop` waits for the recording output to finish the file before it fails.
     nonisolated static let finishTimeout = Duration.seconds(5)
     /// Space between the outline and the stop reminder.
@@ -74,11 +76,15 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         try stream.addRecordingOutput(output)
     }
 
-    /// Starts recording `area` of the display into `file`. With `showsPanels`, the rest of the display dims, a thin red outline just
+    /// Starts recording `area` of the display into `file`, with the system's audio when `capturesAudio`. With `showsPanels`, the rest of the display dims, a thin red outline just
     /// outside the area pulses once as capture starts, and the stop reminder sits outside it. The handlers are set before capture starts,
-    /// so no stop or failure is missed.
-    static func start(displayID: CGDirectDisplayID, area: CGRect, file: URL, showsCursor: Bool, showsPanels: Bool, defaults: UserDefaults,
+    /// so no stop or failure is missed. The log gets one line at each step of a start (requested, content fetched, capture started, panels
+    /// visible) with the milliseconds since the request, so a slow start shows where the time went.
+    static func start(displayID: CGDirectDisplayID, area: CGRect, file: URL, showsCursor: Bool, capturesAudio: Bool, showsPanels: Bool, defaults: UserDefaults,
                       onFailure: @escaping (any Error) -> Void = { _ in }, onStop: @escaping () -> Void = {}) async throws -> ScreenRecording {
+        let requested = ContinuousClock.now
+        func mark(_ step: String) { recordingLog.notice("start: \(step, privacy: .public) at \(Int(requested.duration(to: .now).milliseconds)) ms, app active \(NSApp.isActive)") }
+        mark("requested")
         // Ordered in while transparent, so the window server lists them for the filter that leaves them out.
         let dim = showsPanels ? makeDim(around: area, on: displayID, defaults: defaults) : nil
         let outline = showsPanels ? makeOutline(around: area, on: displayID) : nil
@@ -91,6 +97,7 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         let recording: ScreenRecording
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+            mark("content fetched")
             let filter = DisplayCapture.filter(for: displayID, in: content, excluding: DisplayCapture.excludedWindowIDs())
             let scale = CGFloat(SCShareableContent.info(for: filter).pointPixelScale)
             let configuration = SCStreamConfiguration()
@@ -99,7 +106,8 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
             configuration.height = Int((area.height * scale).rounded())
             configuration.minimumFrameInterval = CMTime(value: 1, timescale: 60)
             configuration.showsCursor = showsCursor
-            configuration.capturesAudio = false
+            configuration.capturesAudio = capturesAudio
+            configuration.excludesCurrentProcessAudio = true
             let recordingConfiguration = SCRecordingOutputConfiguration()
             recordingConfiguration.outputURL = file
             recordingConfiguration.outputFileType = .mov
@@ -108,12 +116,14 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
             recording.onFailure = onFailure
             recording.onStop = onStop
             try await recording.stream.startCapture()
+            mark("capture started")
         } catch {
             // A failed start leaves nothing on screen.
             panels.forEach { $0.orderOut(nil) }
             throw error
         }
         panels.forEach { $0.alphaValue = 1 }
+        mark("panels visible")
         if let clock = reminder?.clock {
             let started = ContinuousClock.now
             recording.ticking = Task {
