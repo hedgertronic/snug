@@ -89,13 +89,14 @@ extension OverlayController {
         Toast.show(message: "Copied", detail: text, color: swatch(color))
     }
 
-    /// U on a selection: the menu under the Colors button, with the selection's average (what C copies) and its five main colors, each
-    /// copied by its row or its 1-6 key. The colors are worked out off main, since they take over 5 ms on a large selection.
+    /// U on a selection, or on the hovered element (the rectangle Return would copy): the menu under the Colors button, with the area's
+    /// average (what C copies) and its five main colors, each copied by its row or its 1-6 key. The colors are worked out off main,
+    /// since they take over 5 ms on a large selection.
     func showColorsMenu() {
-        guard let rect = selection?.rect, let image else { return }
+        guard let rect = selection?.rect ?? hoverRect, let image else { return }
         Task {
             let (average, palette) = await Task.detached { (ColorFormat.average(of: image, in: rect), ColorFormat.palette(of: image, in: rect)) }.value
-            guard selection?.rect == rect else { return }
+            guard (selection?.rect ?? hoverRect) == rect else { return }
             let rows = [average] + palette
             let items = rows.enumerated().map { index, color in
                 RatioMenu.Item(title: colorFormat.string(for: color), on: false, swatch: swatch(color), cap: "\(index + 1)") { [self] in copyColor(color) }

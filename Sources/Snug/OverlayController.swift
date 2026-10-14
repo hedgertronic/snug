@@ -366,7 +366,8 @@ final class OverlayController {
     }
 
     func mouseMoved(_ event: NSEvent) {
-        guard image != nil, armedRecording == nil else { return }
+        // The Colors menu is anchored to the hovered element's strip: while it is open the hover stays where it was.
+        guard image != nil, armedRecording == nil, chrome.colorMenu.isHidden else { return }
         optionHeld = event.modifierFlags.contains(.option)
         commandHeld = event.modifierFlags.contains(.command)
         shiftHeld = event.modifierFlags.contains(.shift)
@@ -733,7 +734,7 @@ final class OverlayController {
             guard let index = windows.firstIndex(where: { $0.contains(pointer) }) else { return false }
             clickWindow(index, crop: windows[index], framed: framed, copy: true, save: afterCaptureSaves)
         case (_, false, "k"): cutOut()
-        case (_, false, "u") where !hovering: showColorsMenu()
+        case (_, false, "u"): showColorsMenu()
         case (_, false, "o"): defaults.set(!defaults.bool(forKey: Pref.roundCorners), forKey: Pref.roundCorners)
         case (_, false, _) where shift && !hovering && character.lowercased() == "p": toggleRatioLock()
         case (_, false, "p") where !hovering: showRatioMenu()

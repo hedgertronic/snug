@@ -919,6 +919,23 @@ extension DebugRun {
         key(14, "e")
         require(overlay.selection?.rect == window, "E in the hover edits the hovered window again")
         key(53, "")
+        // U in the hover opens the Colors menu for the hovered element's rectangle, under the hover strip's Colors button; the menu holds
+        // the hover while the pointer moves away under it, and Esc closes it and keeps the hover.
+        let hoverFormat = ColorFormat(rawValue: defaults.string(forKey: Pref.colorFormat)!)!
+        let hoverColors = ([ColorFormat.average(of: image, in: window)] + ColorFormat.palette(of: image, in: window)).map(hoverFormat.string)
+        key(32, "u")
+        for _ in 0..<1000 where chrome.colorMenu.isHidden { try await Task.sleep(for: .milliseconds(10)) }
+        let colorsButton = overlay.view.convert(chrome.colors.bounds, from: chrome.colors)
+        require(!chrome.colorMenu.isHidden && overlay.selection == nil && chrome.colorMenu.items.map(\.title).filter { !$0.isEmpty } == hoverColors
+                    && chrome.colorMenu.panel.frame.minX == min(max(colorsButton.minX, 8), overlay.view.bounds.width - chrome.colorMenu.panel.frame.width - 8) && chrome.colorMenu.panel.frame.maxY <= colorsButton.minY,
+                "U in the hover opens the Colors menu for the hovered window under the strip's Colors button: \(chrome.colorMenu.items.map(\.title)) \(hoverColors)")
+        let stripBefore = chrome.strip.frame
+        mouse(.mouseMoved, CGPoint(x: 40, y: 40))
+        require(!chrome.colorMenu.isHidden && overlay.view.overlays.hover == window && chrome.strip.frame == stripBefore,
+                "the pointer moving away under the open menu leaves the hover and its strip where they are: \(String(describing: overlay.view.overlays.hover)) \(chrome.strip.frame)")
+        key(53, "\u{1B}")
+        require(chrome.colorMenu.isHidden && overlay.window.isVisible && overlay.selection == nil, "Esc closes the hover's Colors menu and keeps the overlay")
+        mouse(.mouseMoved, CGPoint(x: 400, y: 400))
         // The hover holds while the pointer crosses from the element to its strip, so a click reaches Copy; the loupe and crosshair still
         // follow the pointer.
         defaults.set(true, forKey: Pref.loupe)
