@@ -338,7 +338,9 @@ final class Guides {
             hex.stringValue = ColorFormat.hex.string(for: color)
             coordinates.stringValue = "x \(column)  y \(row)"
             coordinates.sizeToFit()
-            readout.show("readout \(coordinates.stringValue.count)") { readoutViews }
+            // `Pill.show` unhides the chip, so it lays out only while `setShown` has the readout shown: the loupe layer stays visible through
+            // its outro, and a readout shown again there would stay on screen, frozen, once the layer hides.
+            if !readout.isHidden { readout.show("readout \(coordinates.stringValue.count)") { readoutViews } }
             let origin = Self.loupeOrigin(point: point, bounds: bounds, topInset: topInset, scale: scale, avoiding: avoiding)
             let offset = CGPoint(x: origin.x - point.x, y: origin.y - point.y)
             // A flip to the pointer's other side (past a bar or a screen edge) slides from the old offset to the new one. Only the offset animates,

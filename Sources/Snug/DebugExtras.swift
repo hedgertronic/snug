@@ -276,6 +276,17 @@ extension DebugRun {
         require(guides.loupe.frame.minY == 0 && slides().isEmpty, "a loupe pinned at the bottom edge follows the pointer without sliding: \(guides.loupe.frame) \(slides().count)")
         guides.slidesPlacement = false
         guides.loupe.removeAllAnimations()
+        // Turning the loupe off (L, or V arming) hides its readout at once. The animated outro keeps the loupe layer visible for 0.18 s, and an
+        // update during it, like a pointer move, must not show the readout again: it would stay frozen once the layer hides.
+        require(!guides.readout.isHidden, "the readout shows with the loupe")
+        guides.setShown(guides.loupe, false, from: Guides.loupeHiddenTransform, animated: true)
+        require(!guides.loupe.isHidden && guides.readout.isHidden, "an animated hide starts the outro and hides the readout")
+        place(CGPoint(x: 500, y: 300))
+        place(CGPoint(x: 520, y: 310))
+        require(!guides.loupe.isHidden && guides.readout.isHidden, "updates during the loupe's outro leave the readout hidden")
+        guides.setShown(guides.loupe, true, from: Guides.loupeHiddenTransform, animated: false)
+        guides.loupe.removeAllAnimations()
+        require(!guides.readout.isHidden, "showing the loupe again shows the readout")
         overlay.dismiss()
 
         // Animation variants: fade (the default) scales the loupe and fades the rulers without a slide, slide moves them in, none flips at once.
