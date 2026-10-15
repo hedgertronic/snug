@@ -232,6 +232,16 @@ extension DebugRun {
         let cornerPoint = CGPoint(x: viewBounds.width - 4, y: viewBounds.height - 4)
         let cornerOrigin = Guides.loupeOrigin(point: cornerPoint, bounds: viewBounds, topInset: 0, scale: overlay.scale, avoiding: [])
         require(cornerOrigin.x + Guides.loupeSize + 8 <= viewBounds.width && cornerOrigin.x < cornerPoint.x, "at the right edge the loupe goes left of the pointer")
+        // The pointer cluster hangs under the readout, so a chip there moves the loupe, and at the bottom edge the loupe keeps the cluster's
+        // depth above it.
+        let middlePoint = CGPoint(x: 600, y: 400)
+        let freeOrigin = Guides.loupeOrigin(point: middlePoint, bounds: viewBounds, topInset: 0, scale: overlay.scale, avoiding: [])
+        let clusterZone = CGRect(x: freeOrigin.x, y: freeOrigin.y - Guides.clusterDepth + 4, width: 40, height: 10)
+        let movedOrigin = Guides.loupeOrigin(point: middlePoint, bounds: viewBounds, topInset: 0, scale: overlay.scale, avoiding: [clusterZone])
+        require(freeOrigin.x == middlePoint.x + 10 && movedOrigin != freeOrigin,
+                "a chip in the space under the readout, where the cluster hangs, moves the loupe: \(freeOrigin) \(movedOrigin) \(clusterZone)")
+        require(Guides.loupeOrigin(point: CGPoint(x: 600, y: 20), bounds: viewBounds, topInset: 0, scale: overlay.scale, avoiding: []).y >= Guides.clusterDepth,
+                "at the bottom edge the loupe keeps room under its readout for the cluster")
 
         // The loupe and rulers use one duration and curve, and each outro is its intro backward.
         for hidden in [Guides.loupeHiddenTransform, Guides.rulersHiddenTransform] {
@@ -262,7 +272,24 @@ extension DebugRun {
             let covered = [barChrome.topBar, barChrome.hints, barChrome.strip].filter { !$0.isHidden && guides.loupe.frame.intersects($0.frame) }
             require(covered.isEmpty, "the loupe with the pointer at y \(y) covers no bar: \(guides.loupe.frame) \(covered.map(\.frame))")
         }
-        // A flip at the screen's right edge slides: the model position follows the pointer at once, and an additive animation carries the
+        // Nor over a chip: with a selection's chips showing (size, Snap, ratio, radius, and the "move" legend), a sweep of the pointer left of
+        // the selection, where a free placement always exists, never puts the loupe or its readout over a visible chip.
+        overlay.dismiss()
+        open()
+        drag(CGRect(x: 1200, y: 900, width: 500, height: 300))
+        let chipRow = [barChrome.hover, barChrome.size, barChrome.snap, barChrome.ratio, barChrome.radius, barChrome.status, barChrome.reading, barChrome.legend, barChrome.colorMenu, barChrome.ratioMenu]
+        require(chipRow.filter { !$0.isHidden }.count >= 3, "the selection shows its chip row: \(chipRow.filter { !$0.isHidden }.map(\.frame))")
+        var swept = 0
+        for y in stride(from: 500, through: 1100, by: 50) {
+            for x in stride(from: 600, through: 1100, by: 100) {
+                mouse(.mouseMoved, CGPoint(x: x, y: y))
+                let covered = chipRow.filter { !$0.isHidden && ($0.frame.intersects(guides.loupe.frame) || $0.frame.intersects(guides.readout.frame)) }
+                require(covered.isEmpty, "the loupe with the pointer at \(x), \(y) covers no chip: \(guides.loupe.frame) \(guides.readout.frame) \(covered.map { "\(chipRow.firstIndex(of: $0)!) \(texts(in: $0)) \($0.frame)" }) view \(overlay.view.bounds)")
+                swept += 1
+            }
+        }
+        require(swept > 50, "swept \(swept) pointer positions")
+        // A flip near the screen's right edge (where the readout and cluster no longer fit on the right) slides: the model position follows the pointer at once, and an additive animation carries the
         // loupe from its old offset to the new one. A move that keeps the placement adds no slide, and nothing slides while sliding is off.
         func place(_ point: CGPoint) {
             guides.update(point: point, pixel: CGPoint(x: 800, y: 600), image: image, bounds: viewBounds, scale: overlay.scale, topInset: 0, selected: nil, dragging: false, avoiding: [])
@@ -273,7 +300,7 @@ extension DebugRun {
         guides.loupe.removeAllAnimations()
         require(!guides.slidesPlacement, "headless runs never slide the loupe")
         place(CGPoint(x: 400, y: 300))
-        place(CGPoint(x: viewBounds.width - 20, y: 300))
+        place(CGPoint(x: viewBounds.width - Guides.readoutOverhang - 8, y: 300))
         require(slides().isEmpty, "with sliding off a flip moves the loupe at once")
         guides.slidesPlacement = true
         place(CGPoint(x: 400, y: 300))
@@ -288,7 +315,7 @@ extension DebugRun {
         guides.loupe.removeAllAnimations()
         guides.update(point: CGPoint(x: 400, y: 60), pixel: CGPoint(x: 800, y: 600), image: image, bounds: viewBounds, scale: overlay.scale, topInset: 0, selected: nil, dragging: false, avoiding: [viewBounds])
         guides.update(point: CGPoint(x: 400, y: 70), pixel: CGPoint(x: 800, y: 600), image: image, bounds: viewBounds, scale: overlay.scale, topInset: 0, selected: nil, dragging: false, avoiding: [viewBounds])
-        require(guides.loupe.frame.minY == 0 && slides().isEmpty, "a loupe pinned at the bottom edge follows the pointer without sliding: \(guides.loupe.frame) \(slides().count)")
+        require(guides.loupe.frame.minY == Guides.clusterDepth && slides().isEmpty, "a loupe pinned above the bottom edge, with room for its pointer cluster, follows the pointer without sliding: \(guides.loupe.frame) \(slides().count)")
         guides.slidesPlacement = false
         guides.loupe.removeAllAnimations()
         // Turning the loupe off (L, or V arming) hides its readout at once. The animated outro keeps the loupe layer visible for 0.18 s, and an
