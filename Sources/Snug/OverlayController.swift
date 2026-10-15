@@ -166,9 +166,12 @@ final class OverlayController {
     var fillsTask: Task<Void, Never>?
     /// The Dock's icon tiles read from the frozen image, labeled by the Dock's item titles.
     var dockTiles: [Candidate] = []
-    /// The running accessibility lookup and when the last one started (throttle).
+    /// The running accessibility lookup and when the last one started (throttle), the pixel it looked up, and the repeat of a request
+    /// the throttle dropped.
     var accessibilityTask: Task<Void, Error>?
     var accessibilityStarted: ContinuousClock.Instant?
+    var accessibilityPixel: CGPoint?
+    var accessibilityRetry: Task<Void, Error>?
     /// The frames each accessibility candidate came from (its element and ancestors, innermost first) and when they were read, by its
     /// rectangle; Copy for Agent reads them.
     var accessibilityObservations: [CGRect: (frames: [AXFrame], observedAt: Date)] = [:]
@@ -373,7 +376,8 @@ final class OverlayController {
     }
 
     func mouseMoved(_ event: NSEvent) {
-        guard image != nil, armedRecording == nil else { return }
+        // The Colors menu is anchored to the hovered element's strip: while it is open the hover stays where it was.
+        guard image != nil, armedRecording == nil, chrome.colorMenu.isHidden else { return }
         optionHeld = event.modifierFlags.contains(.option)
         commandHeld = event.modifierFlags.contains(.command)
         shiftHeld = event.modifierFlags.contains(.shift)
@@ -691,8 +695,9 @@ final class OverlayController {
             refresh()
             return true
         }
-        // Esc with a released selection drops it back to hover, as an undo step.
-        if event.keyCode == 53, mode == .capture, selection != nil, chrome.help.isHidden, case .none = interaction {
+        // Esc, or E (the lit Edit button), with a released selection drops it back to hover, as an undo step.
+        let leavesEdit = event.keyCode == 53 || flags.isEmpty && event.charactersIgnoringModifiers == "e"
+        if leavesEdit, mode == .capture, selection != nil, chrome.help.isHidden, case .none = interaction {
             undoStack.append(selectionState)
             redoStack = []
             lastEdit = nil
@@ -740,7 +745,7 @@ final class OverlayController {
             guard let index = windows.firstIndex(where: { $0.contains(pointer) }) else { return false }
             clickWindow(index, crop: windows[index], framed: framed, copy: true, save: afterCaptureSaves)
         case (_, false, "k"): cutOut()
-        case (_, false, "u") where !hovering: showColorsMenu()
+        case (_, false, "u"): showColorsMenu()
         case (_, false, "o"): defaults.set(!defaults.bool(forKey: Pref.roundCorners), forKey: Pref.roundCorners)
         case (_, false, _) where shift && !hovering && character.lowercased() == "p": toggleRatioLock()
         case (_, false, "p") where !hovering: showRatioMenu()
@@ -841,15 +846,15 @@ final class OverlayController {
         let overlap = windows[..<index].map { $0.intersection(windows[index]) }.reduce(0) { $0 + ($1.isNull ? 0 : $1.width * $1.height) }
         let interior = overlap == 0 ? image?.cropping(to: windows[index]) : nil
         Pref.logHoverLine("window \(id) rect \(windows[index]) overlap in front \(overlap) -> " + (interior == nil ? "captured pixels" : "frozen interior"))
+        let destination = saveAs ? askSaveURL() : nil
+        guard !saveAs || destination != nil else { return }
         dismiss()
         commitTask = Task { [pasteboard, defaults] in
             do {
                 let image = roundingWindowCorners(try await DisplayCapture.image(ofWindow: id, shadow: framed, interior: interior), radius: radius)
                 let png = try await Output.png(image)
-                let destination = saveAs ? chooseSaveURL(Output.defaultFile(defaults: defaults)) : nil
-                guard !saveAs || destination != nil else { return }
-                try Output.publish(png: png, detail: "\(image.width) x \(image.height)  window", copy: copy, save: save, destination: destination,
-                                   pasteboard: pasteboard, defaults: defaults)
+                Output.publish(png: png, detail: "\(image.width) x \(image.height)  window", copy: copy, save: save, destination: destination,
+                               pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
             }
@@ -908,9 +913,27 @@ final class OverlayController {
         editedRadii[rect] = cornerRadii(of: rect).offset(by: points * scale, in: rect.size)
     }
 
-    /// Closes the overlay first, then encodes off main and delivers.
+    /// Asks where Save As writes, with the overlay still up: canceling the panel leaves the overlay and its selection as they were, and
+    /// only a chosen file closes it. While the panel runs, the overlay drops from the screen saver level to floating, under the modal
+    /// panel whatever level the panel keeps, and the Esc hot key is let go, so Esc cancels the panel, not the overlay.
+    private func askSaveURL() -> URL? {
+        escape?.unregister()
+        let level = window.level
+        window.level = .floating
+        let url = chooseSaveURL(Output.defaultFile(defaults: defaults))
+        window.level = level
+        if url == nil, !isHeadless {
+            try! escape!.register(keyCode: 53, modifiers: [])
+            window.makeKeyAndOrderFront(nil)
+        }
+        return url
+    }
+
+    /// Asks for the Save As file when asked to, then closes the overlay, encodes off main and delivers.
     func finish(crop: CGRect, framed: Bool? = nil, copy: Bool, save: Bool, saveAs: Bool = false) {
         guard let image else { return }
+        let destination = saveAs ? askSaveURL() : nil
+        guard !saveAs || destination != nil else { return }
         let framed = framed ?? self.framed, scale = scale
         let container = container(of: crop)
         let edited = editedRadii[crop], rounds = defaults.bool(forKey: Pref.roundCorners)
@@ -929,8 +952,6 @@ final class OverlayController {
                     let windowRadius = if let windowKnown { windowKnown } else { await windowMeasuring?.value.radius ?? 0 }
                     radii = radii.replacingCorners(sharedWith: container, in: crop, with: windowRadius, arcs: measured.arcs)
                 }
-                let destination = saveAs ? chooseSaveURL(Output.defaultFile(defaults: defaults)) : nil
-                guard !saveAs || destination != nil else { return }
                 try await Output.deliver(image, crop: crop, framed: framed, scale: scale, cornerRadii: edited ?? (rounds ? radii : .zero), copy: copy, save: save,
                                          destination: destination, pasteboard: pasteboard, defaults: defaults)
             } catch {
@@ -940,8 +961,8 @@ final class OverlayController {
     }
 
     /// Shows a failure unless its task was cancelled (Vision reports cancellation with its own error, not
-    /// `CancellationError`). Closes the overlay first so the alert is not hidden under it.
-    /// Debug runs print it and exit instead of opening an alert.
+    /// `CancellationError`) as a red toast with a short reason, the way a failed recording shows (an alert may never show for an
+    /// accessory app). Closes the overlay first. Debug runs print it and exit instead.
     func report(_ error: any Error) {
         guard !Task.isCancelled else { return }
         if isHeadless {
@@ -949,7 +970,7 @@ final class OverlayController {
             exit(EXIT_FAILURE)
         }
         dismiss()
-        NSApp.presentError(error)
+        Toast.show(message: "Snug could not finish", detail: (error as NSError).localizedFailureReason ?? error.localizedDescription, color: .systemRed)
     }
 
     // MARK: Drawing
@@ -985,7 +1006,8 @@ final class OverlayController {
         layoutCornerChip()
         overlays.upHintRadii = overlays.upHint.map(cornerRadii) ?? .zero
         overlays.downHintRadii = overlays.downHint.map(cornerRadii) ?? .zero
-        if let rect = selection?.rect, framed { overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, framed: true) }
+        // The padded card of an area or element; a live window's real shadow has no card to preview.
+        if let rect = selection?.rect, framed, !capturesLiveWindow(rect) { overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, framed: true) }
         view.overlays = overlays
         refreshExtras()
         refreshRecording()

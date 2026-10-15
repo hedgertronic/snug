@@ -100,7 +100,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             return
         }
         installStatusItem()
-        ScreenRecording.requested = { [unowned self] in startRecording(displayID: $0, area: $1, showsCursor: $2) }
+        ScreenRecording.requested = { [unowned self] in startRecording(displayID: $0, area: $1, showsCursor: $2, capturesAudio: $3) }
         hotKey = HotKey(id: 1) { [unowned self] in capture() }
         registerHotKey()
         _ = OverlayController.warmVisionInChild(defaults: .standard)
@@ -331,10 +331,10 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     // MARK: Recording
 
     /// Starts the recording and keeps it at once, so the capture hotkey stops it even while the stream is starting.
-    private func startRecording(displayID: CGDirectDisplayID, area: CGRect, showsCursor: Bool) {
+    private func startRecording(displayID: CGDirectDisplayID, area: CGRect, showsCursor: Bool, capturesAudio: Bool) {
         let file = Output.defaultFile(defaults: .standard).deletingPathExtension().appendingPathExtension("mov")
         let start = Task {
-            try await ScreenRecording.start(displayID: displayID, area: area, file: file, showsCursor: showsCursor, showsPanels: true, defaults: .standard,
+            try await ScreenRecording.start(displayID: displayID, area: area, file: file, showsCursor: showsCursor, capturesAudio: capturesAudio, showsPanels: true, defaults: .standard,
                                             onFailure: { [self] error in
                                                 endRecording()
                                                 showRecordingFailure(error)
@@ -400,7 +400,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                                          save: defaults.string(forKey: Pref.afterCapture) == "copyAndSave",
                                          pasteboard: .general, defaults: defaults)
             } catch {
-                NSApp.presentError(error)
+                Toast.show(message: "Capture failed", detail: (error as NSError).localizedFailureReason ?? error.localizedDescription, color: .systemRed)
             }
         }
     }

@@ -28,13 +28,13 @@ extension OverlayController {
         lightCaps()
     }
 
-    /// Whether `point` (view points) is on the top bar, or between the hovered element and its chips or strip: there the
-    /// hover holds, so their buttons can be reached.
+    /// Whether `point` (view points) is on the top bar, or between the hovered element and its strip: there the hover holds, so the
+    /// strip's buttons can be reached. The chips are labels that clicks and hover pass through, so they never hold it.
     func holdsHover(at point: CGPoint) -> Bool {
         guard selection == nil, let hover = view.overlays.hover else { return false }
         let box = view.viewRect(hover)
-        // Each attached item and the bridge across the gap between it and the box, as wide as both.
-        let attached = [chrome.hover, chrome.radius, chrome.strip].filter { !$0.isHidden }.flatMap { item in
+        // The strip and the bridge across the gap between it and the box, as wide as both.
+        let attached = [chrome.strip].filter { !$0.isHidden }.flatMap { item in
             let left = max(box.minX, item.frame.minX), right = min(box.maxX, item.frame.maxX)
             let span = item.frame.union(box)
             return [item.frame] + (right > left ? [CGRect(x: left, y: span.minY, width: right - left, height: span.height)] : [])
@@ -98,6 +98,11 @@ extension OverlayController {
         return "r " + (Set(points).count == 1 ? "\(points[0])" : points.map(String.init).joined(separator: " / "))
     }
 
+    /// Whether a copy of `rect` captures a live window with its real shadow, whose size macOS decides, rather than cropping the frozen screen.
+    func capturesLiveWindow(_ rect: CGRect) -> Bool {
+        window(matching: rect).map { displayID != nil && !(windowFrozen.indices.contains($0) && windowFrozen[$0]) } ?? false
+    }
+
     /// What the output of `rect` adds when Frame is on (flipped by `option`, Option on a hovered object): "  + frame W x H" in output
     /// pixels, the padded card's for an area or element and the window shadow's canvas for a subject; and "  + frame" alone when a
     /// click takes `rect` as a live window with its real shadow, whose size macOS decides per window (a 400 x 523 pt Settings window at
@@ -108,8 +113,7 @@ extension OverlayController {
             let padding = OutputFrame.shadowPadding(scale: scale)
             return "  + frame \(2 * padding.sides) x \(padding.top + padding.bottom)"
         }
-        let live = window(matching: rect).map { displayID != nil && !(windowFrozen.indices.contains($0) && windowFrozen[$0]) } ?? false
-        if live { return "  + frame" }
+        if capturesLiveWindow(rect) { return "  + frame" }
         let crop = rect.integral, output = OutputFrame.rect(around: crop, scale: scale, framed: true).integral
         return "  + frame \(Int(output.width - crop.width)) x \(Int(output.height - crop.height))"
     }
@@ -144,7 +148,7 @@ extension OverlayController {
             c.topBar.show(modes + [c.viewToggles.map(\.1)] + (mode == .text ? [] : [c.styleToggles.map(\.1)]))
             c.topBar.isHidden = c.topBar.frame.width > bounds.width - 16
         }
-        for (current, button) in c.modeButtons { button.primary = current == mode }
+        for (current, button) in c.modeButtons { button.lit = current == mode }
         for (key, button) in c.viewToggles + c.styleToggles { button.lit = defaults.bool(forKey: key) }
 
         // The object's chips and strip, filled before the keys line, which leaves out what the strip shows, and attached to the object
@@ -160,12 +164,13 @@ extension OverlayController {
             c.radius.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText), KeyCap("["), KeyCap("]")] }
             return c.radius
         }
-        /// The capture strip: Edit in its own pill while hovering, then Copy, Agent, Save, and Text, then Scroll and Record (each left out
-        /// when it cannot run on `area`), Subject, and Colors once selected.
-        func captureStrip(_ area: CGRect, hovering: Bool = false) {
+        /// The capture strip: Edit in its own pill, lit once there is a selection, then Copy, Agent, Save, and Text, then Scroll and
+        /// Record (each left out when it cannot run on `area`), Subject, and Colors.
+        func captureStrip(_ area: CGRect) {
             let scrolls = (scrollFrames != nil || displayID != nil) && area != extent && windows.contains { $0.insetBy(dx: -2, dy: -2).contains(area) }
-            c.strip.show((hovering ? [[c.edit]] : []) + [[c.copy, c.agent, c.save, c.text],
-                          (scrolls ? [c.scroll] : []) + (displayID != nil ? [c.record] : []) + [c.cutout] + (hovering ? [] : [c.colors])])
+            c.edit.lit = selection != nil
+            c.strip.show([[c.edit], [c.copy, c.agent, c.save, c.text],
+                          (scrolls ? [c.scroll] : []) + (displayID != nil ? [c.record] : []) + [c.cutout, c.colors]])
         }
 
         if let cutout {
@@ -182,9 +187,10 @@ extension OverlayController {
         } else if let armed = armedRecording, let rect = selection?.rect {
             let countIn = defaults.integer(forKey: Pref.recordCountIn)
             c.cursor.lit = defaults.bool(forKey: Pref.recordCursor)
+            c.audio.lit = defaults.bool(forKey: Pref.recordAudio)
             c.countIn.setTitle(countIn > 0 ? "\(countIn)-second count" : "Count-in")
             c.countIn.lit = countIn > 0
-            c.strip.show(armed.remaining == nil ? [[c.cursor, c.countIn], [c.cancel, c.start]] : [[c.cancel]])
+            c.strip.show(armed.remaining == nil ? [[c.cursor, c.audio, c.countIn], [c.cancel, c.start]] : [[c.cancel]])
             attachment = (view.viewRect(rect), true, [sizeChip(rect)], [])
         } else if mode == .capture, let rect = overlays.selection ?? overlays.preview ?? overlays.ghost {
             // A drag shows its size, then Snapped when the snap preview is showing and Exact when it is not. A selection shows its size
@@ -215,7 +221,7 @@ extension OverlayController {
             c.hover.show("\(name)|\(size)") {
                 [NSTextField(name, size: 12, weight: .semibold, color: .chromeText), NSTextField(size, size: 12, mono: true, color: NSColor.chromeText.withAlphaComponent(0.65))]
             }
-            captureStrip(rect, hovering: true)
+            captureStrip(rect)
             attachment = (view.viewRect(rect), true, [c.hover] + (editedRadii[rect] == nil ? [] : [radiusChip(rect)]), [])
         }
 
@@ -271,29 +277,33 @@ extension OverlayController {
 
         /// Attaches the strip below `box` (above when the bottom has no room, else inside), then the chip row above it (above the strip
         /// when that is above, else inside the top): `left` from the box's left edge, `right` ending at its right edge, or after `left`
-        /// when they would meet, or a row higher when the screen ends first. Only the box's edges place them.
+        /// when they would meet, or a row higher (lower, inside) when the screen ends first. Only the box's edges place them. Outside, chrome
+        /// sits 8 pt off the outline; inside, 8 pt in from it on every side.
         func attach(to box: CGRect, strip: Bool, left: [NSView], right: [NSView] = []) {
             var over = box.maxY + 8
             if strip {
                 let size = c.strip.frame.size
                 let below = box.minY - 8 - size.height
+                let outside = below >= floor || over + size.height <= top - 8
                 let y = below >= floor ? below : over + size.height <= top - 8 ? over : max(box.minY + 8, floor)
-                c.strip.frame.origin = CGPoint(x: min(max(box.minX, leftEdge), bounds.width - size.width - 8), y: y)
+                c.strip.frame.origin = CGPoint(x: min(max(box.minX + (outside ? 0 : 8), leftEdge), bounds.width - size.width - 8), y: y)
                 if y == over { over = c.strip.frame.maxY + 8 }
             }
             guard let height = (left + right).first?.frame.height else { return }
             for chip in left + right { chip.isHidden = false }
-            var y = over + height <= top - 8 ? over : min(box.maxY, top) - 8 - height
-            var x = min(max(box.minX, leftEdge), bounds.width - 8 - left.reduce(-6) { $0 + $1.frame.width + 6 })
+            let inside = over + height > top - 8
+            let inset: CGFloat = inside ? 8 : 0
+            var y = inside ? min(box.maxY, top) - 8 - height : over
+            var x = min(max(box.minX + inset, leftEdge), bounds.width - 8 - left.reduce(-6) { $0 + $1.frame.width + 6 })
             for chip in left {
                 chip.frame.origin = CGPoint(x: x, y: y)
                 x += chip.frame.width + 6
             }
             let width = right.reduce(-6) { $0 + $1.frame.width + 6 }
-            var start = min(max(box.maxX - width, x), bounds.width - 8 - width)
-            if start < x - 0.5 {
-                start = min(max(box.maxX - width, leftEdge), bounds.width - 8 - width)
-                y += height + 6
+            var start = min(max(box.maxX - inset - width, x), bounds.width - 8 - width)
+            if start < x - 0.5 || inside && start + width > box.maxX - inset + 0.5 {
+                start = min(max(box.maxX - inset - width, leftEdge, box.minX + inset), bounds.width - 8 - width)
+                y += inside ? -(height + 6) : height + 6
             }
             for chip in right {
                 chip.frame.origin = CGPoint(x: start, y: y)

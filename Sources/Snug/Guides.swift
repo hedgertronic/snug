@@ -14,8 +14,13 @@ final class Guides {
     static let loupePixels = 11
     static let rulerThickness: CGFloat = 18
     private static let readoutGap: CGFloat = 8
-    /// The loupe's placement keeps this much clear on each side of the disc for the readout, which may be wider and then shifts into the view.
-    static let readoutOverhang: CGFloat = 30
+    /// The loupe's placement keeps this much clear on each side of the disc for what is centered under it, which may be wider and then shifts
+    /// into the view: the readout (163 pt, 30 pt of overhang) and the pointer cluster (up to 206.5 pt with four-digit coordinates).
+    static let readoutOverhang: CGFloat = 52
+    /// The gap between the coordinates and the Snap tag, and between the loupe's readout and the pointer cluster under it.
+    static let clusterGap: CGFloat = 6
+    /// How far the pointer cluster hangs under the loupe's readout.
+    static let clusterDepth = clusterGap + Chrome.labelHeight
     /// One duration and curve for every loupe and ruler transition. The outro plays the intro backward, so its curve is the intro's mirrored.
     static let transitionDuration: CFTimeInterval = 0.18
     private static let introCurve = CAMediaTimingFunction(controlPoints: 0.2, 0, 0, 1)
@@ -51,14 +56,12 @@ final class Guides {
     private let centerHalo = CAShapeLayer()
     private let centerWhite = CAShapeLayer()
     let centerAccent = CAShapeLayer()
-    /// Under the loupe, on the chip surface: the swatch, hex value and pixel coordinates of the pixel at the pointer, then "copy" and the C
-    /// cap. The overlay view holds it; `update` moves it with the loupe and changes the swatch and texts in place, laying the chip out
-    /// again when the coordinates gain or lose a digit.
+    /// Under the loupe, on the chip surface: the swatch and hex value of the pixel at the pointer, then "copy" and the C cap. The overlay
+    /// view holds it. `setShown` shows and hides it with the loupe's intended state, and `update` moves it with the loupe and changes the
+    /// swatch and hex in place.
     let readout = Pill.chip()
     private let swatch = NSView(frame: CGRect(x: 0, y: 0, width: 12, height: 12))
     private let hex = NSTextField("#000000", size: 12, mono: true, color: .chromeText)
-    private let coordinates = NSTextField("x 0  y 0", size: 11, mono: true, color: .chromeText.withAlphaComponent(0.7))
-    private lazy var readoutViews = [swatch, hex, coordinates, NSTextField("copy", size: 12, weight: .medium, color: .chromeText), KeyCap("C")]
     private var tickKey: [CGFloat] = []
     /// Whether a change of the loupe's placement slides, and the loupe's offset from the pointer at the last update (nil until it first shows).
     var slidesPlacement = false
@@ -142,9 +145,8 @@ final class Guides {
         centerAccent.path = CGPath(rect: middle.insetBy(dx: 2.75, dy: 2.75), transform: nil)
         swatch.wantsLayer = true
         swatch.layer!.cornerRadius = 3
-        swatch.layer!.borderColor = NSColor.white.withAlphaComponent(0.5).cgColor
         swatch.layer!.borderWidth = 0.5
-        readout.show("readout") { readoutViews }
+        readout.show("readout") { [swatch, hex, NSTextField("copy", size: 12, weight: .medium, color: .chromeText), KeyCap("C")] }
         readout.isHidden = true
         for layer in [magnified, grid, edges, centerHalo, centerWhite, centerAccent] { disc.addSublayer(layer) }
         for layer in [ring, disc] { loupe.addSublayer(layer) }
@@ -190,21 +192,22 @@ final class Guides {
     }
 
     /// The loupe's lower-left corner for a pointer at `point`: below and to the right of it, or the first of below-left, above-right and above-left
-    /// whose frame, readout included, lies inside the view under the inset and clear of every `avoiding` frame. With none free it takes the first
-    /// pushed inside the view. The result is on whole device pixels so the magnified cells stay crisp.
+    /// whose frame, readout and the pointer cluster's depth under it included, lies inside the view under the inset and clear of every
+    /// `avoiding` frame. With none free it takes the first pushed inside the view. Above the pointer the loupe sits the cluster's depth
+    /// higher, so the cluster hangs between the readout and the pointer. The result is on whole device pixels so the magnified cells stay crisp.
     static func loupeOrigin(point: CGPoint, bounds: CGRect, topInset: CGFloat, scale: CGFloat, avoiding: [CGRect]) -> CGPoint {
         let size = loupeSize, tall = size + readoutGap + Chrome.labelHeight, gap: CGFloat = 10
         let usable = CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height - topInset - 4)
-        let xs = [point.x + gap, point.x - gap - size], ys = [point.y - gap - tall, point.y + gap]
-        let frames = ys.flatMap { y in xs.map { CGRect(x: $0 - readoutOverhang, y: y, width: size + 2 * readoutOverhang, height: tall) } }
+        let xs = [point.x + gap, point.x - gap - size], ys = [point.y - gap - tall, point.y + gap + clusterDepth]
+        let frames = ys.flatMap { y in xs.map { CGRect(x: $0 - readoutOverhang, y: y - clusterDepth, width: size + 2 * readoutOverhang, height: tall + clusterDepth) } }
         let frame = frames.first { candidate in usable.contains(candidate) && !avoiding.contains { candidate.intersects($0) } }
             ?? frames[0].offsetBy(dx: max(usable.minX - frames[0].minX, min(usable.maxX - frames[0].maxX, 0)), dy: max(usable.minY - frames[0].minY, min(usable.maxY - frames[0].maxY, 0)))
-        return CGPoint(x: ((frame.minX + readoutOverhang) * scale).rounded() / scale, y: (frame.minY * scale).rounded() / scale)
+        return CGPoint(x: ((frame.minX + readoutOverhang) * scale).rounded() / scale, y: ((frame.minY + clusterDepth) * scale).rounded() / scale)
     }
 
     /// Repositions the enabled guides. `point` is in view coordinates, `pixel` and `selected` (the selection or the rectangle being drawn)
     /// in image pixels with a top-left origin, and `dragging` says a drag is changing `selected`.
-    /// The top ruler sits below the `topInset` the camera housing covers, and the loupe keeps clear of the `avoiding` frames (the visible bars).
+    /// The top ruler sits below the `topInset` the camera housing covers, and the loupe keeps clear of the `avoiding` frames (the visible bars, chips and menus).
     /// Everything moves in one transaction with implicit actions off, so the loupe, its cells, and the outline never animate against each other.
     func update(point: CGPoint, pixel: CGPoint, image: CGImage?, bounds: CGRect, scale: CGFloat, topInset: CGFloat, selected: CGRect?, dragging: Bool, avoiding: [CGRect]) {
         CATransaction.begin()
@@ -335,10 +338,8 @@ final class Guides {
             } : nil
             let color = ColorFormat.average(of: image, in: CGRect(x: column, y: row, width: 1, height: 1))
             swatch.layer!.backgroundColor = CGColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1)
+            swatch.effectiveAppearance.performAsCurrentDrawingAppearance { swatch.layer!.borderColor = NSColor.swatchEdge.cgColor }
             hex.stringValue = ColorFormat.hex.string(for: color)
-            coordinates.stringValue = "x \(column)  y \(row)"
-            coordinates.sizeToFit()
-            readout.show("readout \(coordinates.stringValue.count)") { readoutViews }
             let origin = Self.loupeOrigin(point: point, bounds: bounds, topInset: topInset, scale: scale, avoiding: avoiding)
             let offset = CGPoint(x: origin.x - point.x, y: origin.y - point.y)
             // A flip to the pointer's other side (past a bar or a screen edge) slides from the old offset to the new one. Only the offset animates,

@@ -1,4 +1,5 @@
 import AppKit
+import ScreenshotCore
 
 /// A small non-activating confirmation: a pill with the message and size, and, when the preview is on, a separate rounded card with a
 /// thumbnail of the capture a gap away (above the pill, or below it at the top right). Each piece has its own shadow. It goes away after
@@ -253,10 +254,21 @@ final class Toast: NSPanel, NSDraggingSource {
         dismiss()
     }
 
-    /// Saves to the save location as Cmd-S does, then shows the saved state.
+    /// Saves to the save location as Cmd-S does (under a numbered name when the usual one is taken), then shows the saved state. A save
+    /// that fails shows its reason in the toast and keeps the Save button.
     @objc private func saveClicked() {
-        let url = Output.defaultFile(defaults: defaults)
-        try! png!.write(to: url)
+        let url: URL
+        do {
+            url = try UniqueFile.write(png!, to: Output.defaultFile(defaults: defaults))
+        } catch {
+            message.stringValue = "Save failed"
+            detail.stringValue = (error as NSError).localizedFailureReason ?? error.localizedDescription
+            detail.isHidden = false
+            message.sizeToFit()
+            detail.sizeToFit()
+            layoutCard()
+            return
+        }
         file = url
         reveals = true
         message.stringValue = "Saved to \(url.deletingLastPathComponent().lastPathComponent)"

@@ -219,8 +219,8 @@ extension Pill {
     }
 }
 
-/// The button: a title then its key cap, after an optional SF Symbol. Plain; `lit`, a toggle that is on (a tint wash and tint text);
-/// `primary`, the state's main action or the current mode (tint fill, white cap); or disabled (`isEnabled` off: faded, no clicks), an
+/// The button: a title then its key cap, after an optional SF Symbol. Plain; `lit`, a toggle that is on or the current mode (a tint
+/// wash and tint text); `primary`, the state's main action (tint fill, white cap); or disabled (`isEnabled` off: faded, no clicks), an
 /// action that cannot run on this object. `surface` gives it the chip surface, for a button that stands alone. The width fits the
 /// title in semibold, so a primary title never clips and the cap follows the text. A nil key has no cap.
 @MainActor
@@ -422,6 +422,7 @@ final class Chrome {
     let done = BarButton("Done", key: "\u{21A9}")
     let cancel = BarButton("Cancel", key: "esc")
     let cursor = BarButton("Cursor", key: "H")
+    let audio = BarButton("Audio", key: "J")
     let countIn = BarButton("Count-in", key: "I")
     let start = BarButton("Start", key: "\u{21A9}")
     let subject = BarButton("Subject", key: "Tab")
@@ -432,6 +433,8 @@ final class Chrome {
     let snap = BarButton("Snap", key: "S")
     /// Hovering: Snap as a label by the pointer or the loupe's readout, lit when Snap is on. Clicks pass through it.
     let snapTag = BarButton("Snap", key: "S", height: Chrome.labelHeight)
+    /// Hovering: the pointer pixel's "x 123  y 456", left of the Snap tag. The two are one pointer cluster; clicks pass through.
+    let coordinates = Pill.chip()
     /// The ratio readout with P, which opens `ratioMenu`, and the lock with Shift-P, on one surface.
     let ratio = Pill(radius: 8, insets: NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0), spacing: 0)
     let ratioButton = BarButton("", key: "P")
@@ -482,9 +485,9 @@ final class Chrome {
     /// Every button, for the click wiring.
     var buttons: [BarButton] {
         Array(modeButtons.values) + (viewToggles + styleToggles).map(\.1)
-            + [edit, copy, agent, save, text, scroll, record, cutout, colors, done, cancel, cursor, countIn, start, subject, crop, snap, ratioButton, lock]
+            + [edit, copy, agent, save, text, scroll, record, cutout, colors, done, cancel, cursor, audio, countIn, start, subject, crop, snap, ratioButton, lock]
     }
 
     /// Lowest first: the cut-out preview goes under all of them.
-    var all: [NSView] { [upHint, downHint, hover, size, snap, snapTag, reading, legend] + sideHints + [radius, cornerKeys, list, hints, topBar, strip, status, ratio, ratioMenu, colorMenu, help] }
+    var all: [NSView] { [upHint, downHint, hover, size, snap, snapTag, coordinates, reading, legend] + sideHints + [radius, cornerKeys, list, hints, topBar, strip, status, ratio, ratioMenu, colorMenu, help] }
 }

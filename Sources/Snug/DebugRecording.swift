@@ -5,10 +5,10 @@ import ScreenshotCore
 
 extension DebugRun {
     /// Part of `--verify-extras-ui`: V and the Record button arm recording of the selection or hovered element; the armed keys start,
-    /// switch the cursor and cancel; the count-in delays the request and the overlay is closed when it fires; `stop`'s wait for the
-    /// file times out; and a finished movie in the save folder is delivered (URL copied, first frame read). A live 1 s recording runs
-    /// only when this process has Screen Recording; without it, ScreenCaptureKit is never touched, since asking could put the
-    /// permission prompt on screen.
+    /// switch the cursor and audio and cancel; the count-in delays the request and the overlay is closed when it fires; `stop`'s wait for the
+    /// file times out; and a finished movie in the save folder is delivered (URL copied, first frame read). Two live 1 s recordings, one
+    /// without and one with system audio, run only when this process has Screen Recording; without it, ScreenCaptureKit is never touched,
+    /// since asking could put the permission prompt on screen.
     static func verifyRecording(image: CGImage, frame: CGRect, overlay: OverlayController, require: (Bool, String) -> Void) async throws {
         func key(_ code: UInt16, _ characters: String) {
             for type in [NSEvent.EventType.keyDown, .keyUp] {
@@ -24,13 +24,15 @@ extension DebugRun {
         // Each request: its area, whether the cursor shows, whether the overlay was still visible, and when it came.
         var requests: [CGRect] = []
         var cursors: [Bool] = []
+        var audios: [Bool] = []
         var overlayShown: [Bool] = []
         var times: [ContinuousClock.Instant] = []
         var displays: Set<CGDirectDisplayID> = []
-        ScreenRecording.requested = { id, area, cursor in
+        ScreenRecording.requested = { id, area, cursor, audio in
             displays.insert(id)
             requests.append(area)
             cursors.append(cursor)
+            audios.append(audio)
             overlayShown.append(overlay.window.isVisible)
             times.append(.now)
         }
@@ -60,9 +62,9 @@ extension DebugRun {
         require(armed!.outline.superlayer != nil && armed!.outline.path != nil && armed!.outline.strokeColor == NSColor.systemRed.cgColor
                 && !overlay.view.overlays.showsHandles && overlay.chrome.topBar.isHidden,
                 "armed: a red outline on the selection, no handles or top bar")
-        require(strip() == ["Cursor", "H", "Count-in", "I", "Cancel", "esc", "Start", "\u{21A9}"] && overlay.chrome.cursor.lit && !overlay.chrome.countIn.lit
-                    && overlay.chrome.start.primary && overlay.chrome.hints.isHidden,
-                "the armed strip: Cursor lit, Count-in plain, Start primary; no keys line, since the strip shows Start and Cancel: \(strip()) \(hints())")
+        require(strip() == ["Cursor", "H", "Audio", "J", "Count-in", "I", "Cancel", "esc", "Start", "\u{21A9}"] && overlay.chrome.cursor.lit && !overlay.chrome.audio.lit
+                    && !overlay.chrome.countIn.lit && overlay.chrome.start.primary && overlay.chrome.hints.isHidden,
+                "the armed strip: Cursor lit, Audio and Count-in plain, Start primary; no keys line, since the strip shows Start and Cancel: \(strip()) \(hints())")
         // Armed near the right edge, the size chip stays over the selection's left edge.
         select(CGRect(x: extent.width - 600, y: 400, width: 560, height: 500))
         let badgeOffset = overlay.chrome.size.frame.minX - overlay.view.viewRect(overlay.selection!.rect).minX
@@ -80,8 +82,8 @@ extension DebugRun {
         require(overlay.view.cursor === cursor && overlay.hoveredCorner == nil, "pointer moves while armed leave the cursor alone: \(String(describing: overlay.view.cursor))")
         key(36, "\r")
         let expected = CGRect(x: 401 / scale, y: 201 / scale, width: 998 / scale, height: 600 / scale)
-        require(!overlay.window.isVisible && requests == [expected] && cursors == [true] && overlayShown == [false] && armed!.outline.superlayer == nil,
-                "Return with no count-in closes the overlay, then records the even-pixel area with the cursor: \(requests) \(overlayShown)")
+        require(!overlay.window.isVisible && requests == [expected] && cursors == [true] && audios == [false] && overlayShown == [false] && armed!.outline.superlayer == nil,
+                "Return with no count-in closes the overlay, then records the even-pixel area with the cursor and no audio: \(requests) \(overlayShown) \(audios)")
 
         // The Record button arms; V starts.
         open()
@@ -111,16 +113,23 @@ extension DebugRun {
                     "the strip shows the count-in set, lit when on: \(strip())")
         }
         require(counts == [3, 5, 0], "I cycles the count-in 3 s, 5 s, off: \(counts)")
+        // J switches system audio, lit when on, and saves it; the next request carries it.
+        key(38, "j")
+        require(strip().contains("Audio") && overlay.chrome.audio.lit && defaults.bool(forKey: Pref.recordAudio), "J turns Audio lit and saves it: \(strip())")
+        overlay.chrome.audio.onClick()
+        require(!overlay.chrome.audio.lit && !defaults.bool(forKey: Pref.recordAudio), "clicking Audio turns it plain and saves it")
+        key(38, "j")
         key(36, "\r")
-        require(cursors.last == false, "H hides the cursor in the recording: \(cursors)")
+        require(cursors.last == false && audios.last == true, "H hides the cursor and J records audio in the recording: \(cursors) \(audios)")
         open()
         select(CGRect(x: 600, y: 300, width: 400, height: 200))
         key(9, "v")
-        require(!overlay.chrome.cursor.lit, "the cursor choice sticks for the next recording: \(strip())")
+        require(!overlay.chrome.cursor.lit && overlay.chrome.audio.lit, "the cursor and audio choices stick for the next recording: \(strip())")
         key(4, "h")
+        key(38, "j")
         key(53, "\u{1B}")
         overlay.dismiss()
-        require(defaults.bool(forKey: Pref.recordCursor), "H again shows the cursor")
+        require(defaults.bool(forKey: Pref.recordCursor) && !defaults.bool(forKey: Pref.recordAudio), "H again shows the cursor and J again turns audio off")
 
         // A hovered window becomes the armed selection; V again starts.
         open()
@@ -208,7 +217,7 @@ extension DebugRun {
                 && requests.count == count + 1, "Esc during the count-in stops it, still armed, and nothing is recorded")
         overlay.dismiss()
         require(displays == [display], "every recording is requested on the overlay's display")
-        ScreenRecording.requested = { _, _, _ in }
+        ScreenRecording.requested = { _, _, _, _ in }
 
         // While recording: a red outline just outside the area, and the stop reminder below it reading the capture shortcut; both are
         // windows Snug's captures leave out, which Settings is not.
@@ -233,6 +242,9 @@ extension DebugRun {
         require(dim.frame.size == CGDisplayBounds(display).size && dim.ignoresMouseEvents && dimPath.contains(CGPoint(x: 10, y: 10), using: .evenOdd)
                     && !dimPath.contains(CGPoint(x: recordArea.midX, y: displayHeight - recordArea.midY), using: .evenOdd),
                 "the dim panel covers the display, cuts the area out, and is click-through: \(dim.frame)")
+        // NSPanel documents true as its default, but the .nonactivatingPanel style bit makes it false at init, so none of these hide when
+        // the overlay's dismiss hands activation back to the previous app.
+        require([dim, outline, reminder].allSatisfy { !$0.hidesOnDeactivate }, "the recording panels stay on screen when Snug deactivates")
         let excluded = DisplayCapture.excludedWindowIDs()
         let panelIDs = [dim, outline, reminder].map { CGWindowID($0.windowNumber) }
         require(panelIDs.allSatisfy { $0 > 0 && excluded.contains($0) } && !excluded.contains(CGWindowID(settings.windowNumber)),
@@ -322,13 +334,25 @@ extension DebugRun {
         }
         let live = FileManager.default.temporaryDirectory.appending(path: "snug-recording-\(UUID().uuidString).mov")
         let area = CGRect(x: 0, y: 0, width: 200, height: 100)
-        let recording = try await ScreenRecording.start(displayID: display, area: area, file: live, showsCursor: true, showsPanels: false, defaults: defaults)
+        let recording = try await ScreenRecording.start(displayID: display, area: area, file: live, showsCursor: true, capturesAudio: false, showsPanels: false, defaults: defaults)
         try await Task.sleep(for: .seconds(1))
         try await recording.stop()
         let recorded = try await movie(live)
+        let silentTracks = try await AVURLAsset(url: live).loadTracks(withMediaType: .audio)
+        require(silentTracks.isEmpty, "a recording made with audio off has no audio track: \(silentTracks.count)")
         let pixelScale = CGFloat(CGDisplayCopyDisplayMode(display)!.pixelWidth) / CGDisplayBounds(display).width
         require(recorded.size == CGSize(width: area.width * pixelScale, height: area.height * pixelScale) && abs(recorded.seconds - 1) < 0.3,
                 "a live 1 s recording of 200 x 100 pt is \(area.width * pixelScale) x \(area.height * pixelScale) px and about 1 s: \(recorded)")
+
+        // The same recording with system audio on: SCRecordingOutput writes an audio track (one, with no microphone).
+        let loud = FileManager.default.temporaryDirectory.appending(path: "snug-recording-audio-\(UUID().uuidString).mov")
+        let withAudio = try await ScreenRecording.start(displayID: display, area: area, file: loud, showsCursor: true, capturesAudio: true, showsPanels: false, defaults: defaults)
+        try await Task.sleep(for: .seconds(1))
+        try await withAudio.stop()
+        let audioTracks = try await AVURLAsset(url: loud).loadTracks(withMediaType: .audio)
+        let audioSeconds = try await audioTracks.first?.load(.timeRange).duration.seconds
+        print("recording audio       \(audioTracks.count) audio track(s), \(audioSeconds.map { String(format: "%.2f", $0) } ?? "none") s")
+        require(audioTracks.count == 1, "a recording made with audio on has one audio track: \(audioTracks.count)")
 
         // `start` orders the panels in while still transparent, before it reads the shareable content: ScreenCaptureKit lists them then.
         [dim, outline, reminder].forEach { $0.orderFrontRegardless() }

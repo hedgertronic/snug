@@ -553,12 +553,67 @@ extension DebugRun {
         key(1, "S", [.command, .shift])
         await overlay.commitTask?.value
         require(pngSize(try? Data(contentsOf: chosen)) == CGSize(width: a.width + 1, height: a.height), "Save As on a selection writes the selection")
-        overlay.chooseSaveURL = { _ in nil }
+        // Canceling the panel comes back to the overlay as it was: the hover, or the same selection, with nothing written or copied.
+        var asked = 0
+        overlay.chooseSaveURL = { _ in asked += 1; return nil }
         try FileManager.default.removeItem(at: chosen)
         open()
+        let task = overlay.commitTask
+        let hovered = overlay.session?.selected?.bounds
         key(1, "S", [.command, .shift])
+        require(asked == 1 && overlay.window.isVisible && overlay.commitTask == task && overlay.session?.selected?.bounds == hovered && hovered != nil,
+                "cancelling Save As on a hover leaves the overlay open on the same element")
+        open()
+        click(insideA, .shift)
+        key(right, "", .option)
+        let selected = overlay.selection?.rect
+        pasteboard.clearContents()
+        key(1, "S", [.command, .shift])
+        require(asked == 2 && overlay.window.isVisible && overlay.commitTask == task && selected != nil && overlay.selection?.rect == selected,
+                "cancelling Save As on a selection leaves the overlay open with the same selection")
+        let folderBefore = Set(try FileManager.default.contentsOfDirectory(atPath: folder.path))
+        key(1, "s", [.command])
         await overlay.commitTask?.value
-        require(!FileManager.default.fileExists(atPath: chosen.path) && !overlay.window.isVisible, "cancelling the save panel writes nothing")
+        let added = try Set(FileManager.default.contentsOfDirectory(atPath: folder.path)).subtracting(folderBefore)
+        require(!FileManager.default.fileExists(atPath: chosen.path) && pasteboard.data(forType: .png) == nil, "cancelling Save As writes nothing and copies nothing")
+        require(added.count == 1 && pngSize(try? Data(contentsOf: folder.appending(path: added.first!))) == selected!.size, "Cmd-S still saves the kept selection after a cancel: \(added)")
+
+        // Output integrity: the usual name never overwrites, and a failed write is named in a red toast's message instead of "Copied".
+        let outputFolder = folder.appending(path: "output")
+        try FileManager.default.createDirectory(at: outputFolder, withIntermediateDirectories: true)
+        defaults.set(outputFolder.path, forKey: Pref.saveFolder)
+        let taken = Output.defaultFile(defaults: defaults)
+        try Data("taken".utf8).write(to: taken)
+        for text in ["first", "second", "third"] {
+            Output.publish(png: Data(text.utf8), detail: "", copy: false, save: true, pasteboard: pasteboard, defaults: defaults)
+        }
+        let saved = try FileManager.default.contentsOfDirectory(atPath: outputFolder.path)
+        let contents = try Set(saved.map { try String(contentsOf: outputFolder.appending(path: $0), encoding: .utf8) })
+        require(saved.count == 4 && contents == ["taken", "first", "second", "third"], "saves in one second keep every capture: \(saved)")
+        require(saved.contains { $0.hasSuffix(" 2.png") }, "a taken default name gets \" 2\" before the extension: \(saved)")
+
+        let blocked = folder.appending(path: "blocked")
+        try FileManager.default.createDirectory(at: blocked, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o500])
+        defaults.set(blocked.path, forKey: Pref.saveFolder)
+        pasteboard.clearContents()
+        let partial = Output.publish(png: Data("kept".utf8), detail: "1 x 1", copy: true, save: true, pasteboard: pasteboard, defaults: defaults)
+        require(partial.message == "Copied, save failed" && !partial.detail.isEmpty && pasteboard.data(forType: .png) == Data("kept".utf8),
+                "Copy and Save on an unwritable folder copies and reports \"Copied, save failed\" with a reason: \(partial)")
+        let saveOnly = Output.publish(png: Data("kept".utf8), detail: "1 x 1", copy: false, save: true, pasteboard: pasteboard, defaults: defaults)
+        require(saveOnly.message == "Save failed" && saveOnly.detail == partial.detail, "Save alone on an unwritable folder reports \"Save failed\": \(saveOnly)")
+        let copyOnly = Output.publish(png: Data("kept".utf8), detail: "1 x 1", copy: true, save: false, pasteboard: pasteboard, defaults: defaults)
+        require(copyOnly.message == "Copied" && copyOnly.detail == "1 x 1", "a plain copy still says Copied: \(copyOnly)")
+        let messages = [(true, true, true, true), (true, true, true, false), (true, true, false, true), (true, true, false, false),
+                        (true, false, true, true), (true, false, false, true), (false, true, true, true), (false, true, true, false)]
+            .map { Output.message(copy: $0.0, save: $0.1, copied: $0.2, saved: $0.3, folder: "F") }
+        require(messages == ["Copied, saved to F", "Copied, save failed", "Saved to F, copy failed", "Copy and save failed",
+                             "Copied", "Copy failed", "Saved to F", "Save failed"], "the toast names what worked and what failed: \(messages)")
+        let toast = Toast(png: Data("kept".utf8), message: "Copied, save failed", detail: "reason", file: nil, color: .systemRed, defaults: defaults)
+        toast.saveButton.performClick(nil)
+        require(toast.message.stringValue == "Save failed" && toast.file == nil, "the toast's Save on an unwritable folder reports instead of crashing")
+        toast.dismiss()
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: blocked.path)
+        defaults.set(folder.path, forKey: Pref.saveFolder)
         return passed
     }
 }

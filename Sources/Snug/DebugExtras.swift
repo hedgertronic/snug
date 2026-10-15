@@ -105,7 +105,7 @@ extension DebugRun {
         // With Rulers on, the top bar sits below the top ruler's band and nothing clamps into the left ruler's.
         let topRuler = CGRect(x: 0, y: view.bounds.height - overlay.topInset - Guides.rulerThickness, width: view.bounds.width, height: Guides.rulerThickness)
         let leftRuler = CGRect(x: 0, y: 0, width: Guides.rulerThickness, height: view.bounds.height)
-        let edgeChrome = [overlay.chrome.topBar, overlay.chrome.hints, overlay.chrome.strip, overlay.chrome.hover, overlay.chrome.snapTag].filter { !$0.isHidden }
+        let edgeChrome = [overlay.chrome.topBar, overlay.chrome.hints, overlay.chrome.strip, overlay.chrome.hover, overlay.chrome.coordinates, overlay.chrome.snapTag].filter { !$0.isHidden }
         require(edgeChrome.allSatisfy { !$0.frame.intersects(topRuler) && !$0.frame.intersects(leftRuler) } && overlay.chrome.topBar.frame.maxY == topRuler.minY - 8,
                 "with Rulers on, the top bar sits 8 pt under the top ruler and no chrome covers a ruler: \(edgeChrome.map(\.frame)) \(topRuler)")
         let controls = overlay.chrome.topBar.groups + [overlay.chrome.hints, overlay.chrome.strip].filter { !$0.isHidden }
@@ -120,13 +120,40 @@ extension DebugRun {
         // hook alone, since a real C copies and closes the overlay).
         let readout = guides.readout, readoutCap = readout.subviews.compactMap { $0 as? KeyCap }.filter { $0.text == "C" }
         let loupeBox = guides.loupe.frame
-        require(!readout.isHidden && readoutCap.count == 1 && texts(in: readout).count == 4 && texts(in: readout)[0].hasPrefix("#")
-                    && texts(in: readout)[1].range(of: #"^x \d+  y \d+$"#, options: .regularExpression) != nil && texts(in: readout)[2] == "copy"
+        require(!readout.isHidden && readoutCap.count == 1 && texts(in: readout).count == 3 && texts(in: readout)[0].hasPrefix("#") && texts(in: readout)[1] == "copy"
                     && readout.frame.height == Chrome.labelHeight && readout.frame.minY >= loupeBox.minY && readout.frame.maxY <= loupeBox.minY + Chrome.labelHeight && abs(readout.frame.midX - loupeBox.midX) <= 1
                     && overlay.view.bounds.contains(readout.frame),
                 "the loupe's readout is a chip under the disc with the value, copy, and a C cap: \(texts(in: readout)) \(readout.frame) \(loupeBox)")
+        // The pointer's pixel is a chip in the Snap tag's cluster, `[x 123  y 456] [Snap S]`: centered under the readout, clicks pass through,
+        // and it follows the pointer with no animation.
+        let coordinates = overlay.chrome.coordinates, snapTag = overlay.chrome.snapTag
+        func passesClicks(_ chip: NSView) -> Bool {
+            let hit = overlay.view.hitTest(chip.convert(CGPoint(x: chip.bounds.midX, y: chip.bounds.midY), to: overlay.view))
+            return !(hit?.isDescendant(of: chip) ?? false)
+        }
+        func clusterMessage() -> String { "\(texts(in: coordinates)) \(coordinates.frame) \(snapTag.frame) \(readout.frame)" }
+        require(!coordinates.isHidden && texts(in: coordinates) == ["x 2061  y 1024"] && coordinates.frame.height == Chrome.labelHeight
+                    && snapTag.frame.minX == coordinates.frame.maxX + Guides.clusterGap && snapTag.frame.minY == coordinates.frame.minY
+                    && coordinates.frame.minY == readout.frame.minY - Guides.clusterGap - Chrome.labelHeight
+                    && abs(coordinates.frame.union(snapTag.frame).midX - readout.frame.midX) <= 1 && passesClicks(coordinates),
+                "the pointer cluster sits centered under the loupe's readout: \(clusterMessage())")
+        mouse(.mouseMoved, CGPoint(x: text.x + 3, y: text.y + 2))
+        require(texts(in: coordinates) == ["x 2064  y 1026"] && coordinates.layer!.animationKeys() == nil, "the coordinates follow the pointer, with no animation: \(clusterMessage())")
+        mouse(.mouseMoved, text)
         overlay.flash(KeyCap.event(for: "C"))
         require(readoutCap[0].pressed, "C flashes the readout's C cap")
+        // The swatch's ring is the chrome's swatch edge in both looks, so a white pixel reads in light mode.
+        let swatchView = readout.subviews.first { $0.frame.size == CGSize(width: 12, height: 12) }!
+        let readoutLook = readout.appearance
+        for (name, edge) in [(NSAppearance.Name.aqua, NSColor.black.withAlphaComponent(0.3)), (.darkAqua, NSColor.white.withAlphaComponent(0.5))] {
+            readout.appearance = NSAppearance(named: name)
+            mouse(.mouseMoved, CGPoint(x: text.x + 1, y: text.y))
+            mouse(.mouseMoved, text)
+            let ring = NSColor(cgColor: swatchView.layer!.borderColor!)!.usingColorSpace(.sRGB)!, want = edge.usingColorSpace(.sRGB)!
+            require(abs(ring.redComponent - want.redComponent) < 0.01 && abs(ring.alphaComponent - want.alphaComponent) < 0.01,
+                    "\(name.rawValue): the loupe swatch's ring is the swatch edge: \(ring) \(want)")
+        }
+        readout.appearance = readoutLook
         // The loupe's readout and the rulers' text change without a cross-fade once displayed.
         CATransaction.flush()
         require(animations(guides.root).isEmpty, "moving the pointer animates no guide layer: \(animations(guides.root))")
@@ -190,7 +217,7 @@ extension DebugRun {
             require(close(bytes(shown), [229, 72, 77], 2), "the \(name) is drawn in the highlight color")
         }
         let modeFill = overlay.chrome.modeButtons[.capture]!.layer!.backgroundColor.flatMap { NSColor(cgColor: $0)?.usingColorSpace(.sRGB) }
-        require(modeFill.map { close(bytes($0), [229, 72, 77], 2) } == true, "a new highlight color restyles the buttons: the current mode fills with it")
+        require(modeFill.map { close(bytes($0), [229, 72, 77], 2) } == true, "a new highlight color restyles the buttons: the current mode washes with it")
         defaults.removeObject(forKey: Pref.highlightColor)
         overlay.view.highlight = Highlight(defaults: defaults)
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
@@ -205,6 +232,16 @@ extension DebugRun {
         let cornerPoint = CGPoint(x: viewBounds.width - 4, y: viewBounds.height - 4)
         let cornerOrigin = Guides.loupeOrigin(point: cornerPoint, bounds: viewBounds, topInset: 0, scale: overlay.scale, avoiding: [])
         require(cornerOrigin.x + Guides.loupeSize + 8 <= viewBounds.width && cornerOrigin.x < cornerPoint.x, "at the right edge the loupe goes left of the pointer")
+        // The pointer cluster hangs under the readout, so a chip there moves the loupe, and at the bottom edge the loupe keeps the cluster's
+        // depth above it.
+        let middlePoint = CGPoint(x: 600, y: 400)
+        let freeOrigin = Guides.loupeOrigin(point: middlePoint, bounds: viewBounds, topInset: 0, scale: overlay.scale, avoiding: [])
+        let clusterZone = CGRect(x: freeOrigin.x, y: freeOrigin.y - Guides.clusterDepth + 4, width: 40, height: 10)
+        let movedOrigin = Guides.loupeOrigin(point: middlePoint, bounds: viewBounds, topInset: 0, scale: overlay.scale, avoiding: [clusterZone])
+        require(freeOrigin.x == middlePoint.x + 10 && movedOrigin != freeOrigin,
+                "a chip in the space under the readout, where the cluster hangs, moves the loupe: \(freeOrigin) \(movedOrigin) \(clusterZone)")
+        require(Guides.loupeOrigin(point: CGPoint(x: 600, y: 20), bounds: viewBounds, topInset: 0, scale: overlay.scale, avoiding: []).y >= Guides.clusterDepth,
+                "at the bottom edge the loupe keeps room under its readout for the cluster")
 
         // The loupe and rulers use one duration and curve, and each outro is its intro backward.
         for hidden in [Guides.loupeHiddenTransform, Guides.rulersHiddenTransform] {
@@ -235,7 +272,24 @@ extension DebugRun {
             let covered = [barChrome.topBar, barChrome.hints, barChrome.strip].filter { !$0.isHidden && guides.loupe.frame.intersects($0.frame) }
             require(covered.isEmpty, "the loupe with the pointer at y \(y) covers no bar: \(guides.loupe.frame) \(covered.map(\.frame))")
         }
-        // A flip at the screen's right edge slides: the model position follows the pointer at once, and an additive animation carries the
+        // Nor over a chip: with a selection's chips showing (size, Snap, ratio, radius, and the "move" legend), a sweep of the pointer left of
+        // the selection, where a free placement always exists, never puts the loupe or its readout over a visible chip.
+        overlay.dismiss()
+        open()
+        drag(CGRect(x: 1200, y: 900, width: 500, height: 300))
+        let chipRow = [barChrome.hover, barChrome.size, barChrome.snap, barChrome.ratio, barChrome.radius, barChrome.status, barChrome.reading, barChrome.legend, barChrome.colorMenu, barChrome.ratioMenu]
+        require(chipRow.filter { !$0.isHidden }.count >= 3, "the selection shows its chip row: \(chipRow.filter { !$0.isHidden }.map(\.frame))")
+        var swept = 0
+        for y in stride(from: 500, through: 1100, by: 50) {
+            for x in stride(from: 600, through: 1100, by: 100) {
+                mouse(.mouseMoved, CGPoint(x: x, y: y))
+                let covered = chipRow.filter { !$0.isHidden && ($0.frame.intersects(guides.loupe.frame) || $0.frame.intersects(guides.readout.frame)) }
+                require(covered.isEmpty, "the loupe with the pointer at \(x), \(y) covers no chip: \(guides.loupe.frame) \(guides.readout.frame) \(covered.map { "\(chipRow.firstIndex(of: $0)!) \(texts(in: $0)) \($0.frame)" }) view \(overlay.view.bounds)")
+                swept += 1
+            }
+        }
+        require(swept > 50, "swept \(swept) pointer positions")
+        // A flip near the screen's right edge (where the readout and cluster no longer fit on the right) slides: the model position follows the pointer at once, and an additive animation carries the
         // loupe from its old offset to the new one. A move that keeps the placement adds no slide, and nothing slides while sliding is off.
         func place(_ point: CGPoint) {
             guides.update(point: point, pixel: CGPoint(x: 800, y: 600), image: image, bounds: viewBounds, scale: overlay.scale, topInset: 0, selected: nil, dragging: false, avoiding: [])
@@ -246,7 +300,7 @@ extension DebugRun {
         guides.loupe.removeAllAnimations()
         require(!guides.slidesPlacement, "headless runs never slide the loupe")
         place(CGPoint(x: 400, y: 300))
-        place(CGPoint(x: viewBounds.width - 20, y: 300))
+        place(CGPoint(x: viewBounds.width - Guides.readoutOverhang - 8, y: 300))
         require(slides().isEmpty, "with sliding off a flip moves the loupe at once")
         guides.slidesPlacement = true
         place(CGPoint(x: 400, y: 300))
@@ -261,9 +315,20 @@ extension DebugRun {
         guides.loupe.removeAllAnimations()
         guides.update(point: CGPoint(x: 400, y: 60), pixel: CGPoint(x: 800, y: 600), image: image, bounds: viewBounds, scale: overlay.scale, topInset: 0, selected: nil, dragging: false, avoiding: [viewBounds])
         guides.update(point: CGPoint(x: 400, y: 70), pixel: CGPoint(x: 800, y: 600), image: image, bounds: viewBounds, scale: overlay.scale, topInset: 0, selected: nil, dragging: false, avoiding: [viewBounds])
-        require(guides.loupe.frame.minY == 0 && slides().isEmpty, "a loupe pinned at the bottom edge follows the pointer without sliding: \(guides.loupe.frame) \(slides().count)")
+        require(guides.loupe.frame.minY == Guides.clusterDepth && slides().isEmpty, "a loupe pinned above the bottom edge, with room for its pointer cluster, follows the pointer without sliding: \(guides.loupe.frame) \(slides().count)")
         guides.slidesPlacement = false
         guides.loupe.removeAllAnimations()
+        // Turning the loupe off (L, or V arming) hides its readout at once. The animated outro keeps the loupe layer visible for 0.18 s, and an
+        // update during it, like a pointer move, must not show the readout again: it would stay frozen once the layer hides.
+        require(!guides.readout.isHidden, "the readout shows with the loupe")
+        guides.setShown(guides.loupe, false, from: Guides.loupeHiddenTransform, animated: true)
+        require(!guides.loupe.isHidden && guides.readout.isHidden, "an animated hide starts the outro and hides the readout")
+        place(CGPoint(x: 500, y: 300))
+        place(CGPoint(x: 520, y: 310))
+        require(!guides.loupe.isHidden && guides.readout.isHidden, "updates during the loupe's outro leave the readout hidden")
+        guides.setShown(guides.loupe, true, from: Guides.loupeHiddenTransform, animated: false)
+        guides.loupe.removeAllAnimations()
+        require(!guides.readout.isHidden, "showing the loupe again shows the readout")
         overlay.dismiss()
 
         // Animation variants: fade (the default) scales the loupe and fades the rulers without a slide, slide moves them in, none flips at once.
@@ -670,6 +735,35 @@ extension DebugRun {
         require(overlay.view.overlays.hover == innerLink.bounds && overlay.view.overlays.upHint == outerRow.bounds,
                 "the smaller accessibility frame at the pointer is hovered although a larger one scored higher, and Up reaches the larger: \(String(describing: overlay.view.overlays.hover))")
 
+        // A sidebar: rows of 32 pt stacked edge to edge, as Finder's. The hover chip sits over the row above the hovered one, and only
+        // the strip below the element holds the hover: the pointer moving up a row picks the row it is over.
+        open()
+        await overlay.detectionTask?.value
+        overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        let rowHeight = 32 * overlay.scale
+        let sidebar = (0..<5).map { Candidate(id: "ax-row-\($0)", label: "Row", bounds: CGRect(x: flat.x - 80 * overlay.scale, y: flat.y - 80 * overlay.scale + CGFloat($0) * rowHeight,
+                                                                                            width: 160 * overlay.scale, height: rowHeight), score: AccessibilityBounds.baseScore, kind: .element) }
+        let outline = Candidate(id: "ax-outline", label: "Outline", bounds: CGRect(x: sidebar[0].bounds.minX, y: sidebar[0].bounds.minY, width: 160 * overlay.scale, height: 5 * rowHeight)
+            .insetBy(dx: -8 * overlay.scale, dy: -8 * overlay.scale), score: AccessibilityBounds.baseScore, kind: .element)
+        // Only the rows and their outline are candidates: no pixel geometry or flat fills join the hover.
+        overlay.detected = []
+        await overlay.fillsTask?.value
+        overlay.fills = nil
+        overlay.buildSession()
+        overlay.merge([outline] + sidebar)
+        mouse(.mouseMoved, CGPoint(x: sidebar[3].bounds.midX, y: sidebar[3].bounds.midY))
+        require(overlay.view.overlays.hover == sidebar[3].bounds, "the lower sidebar row is hovered")
+        var travel = CGPoint(x: sidebar[3].bounds.midX, y: sidebar[3].bounds.midY)
+        while travel.y > sidebar[2].bounds.midY {
+            travel.y -= overlay.scale
+            mouse(.mouseMoved, travel)
+        }
+        require(overlay.view.overlays.hover == sidebar[2].bounds, "moving up a row hovers the row above, not the chip's row: \(String(describing: overlay.view.overlays.hover)) at \(travel)")
+        key(right, "")
+        require(overlay.view.overlays.hover == sidebar[3].bounds, "Right steps to the next row, which the walk holds: \(String(describing: overlay.view.overlays.hover))")
+        for _ in 0..<4 { key(left, "") }
+        require(overlay.view.overlays.hover == sidebar[4].bounds, "Left wraps from the first row to the last: \(String(describing: overlay.view.overlays.hover))")
+
         // Up walks out through the parents to the window, then the display; Down walks back in.
         open()
         await overlay.detectionTask?.value
@@ -739,7 +833,7 @@ extension DebugRun {
         require(overlay.view.overlays.hover != nil && !overlay.view.overlays.dimsAll && overlay.view.dimLayer.fillRule == .evenOdd && dimBox() == overlay.view.bounds,
                 "a hovered element cuts an even-odd hole in the dim")
         for _ in 0..<20 where overlay.session!.selected!.kind != .display { key(up, "") }
-        let fullChips = [overlay.chrome.hover, overlay.chrome.snapTag, overlay.chrome.strip]
+        let fullChips = [overlay.chrome.hover, overlay.chrome.coordinates, overlay.chrome.snapTag, overlay.chrome.strip]
         require(overlay.view.overlays.hover == extent && overlay.view.dimLayer.path?.isEmpty != false && texts(in: overlay.chrome.hover).first == "Full screen"
                     && fullChips.allSatisfy { !$0.isHidden && overlay.view.bounds.contains($0.frame) && !$0.frame.intersects(overlay.chrome.topBar.frame) },
                 "the full display walked out to dims nothing, and its chips and strip sit on screen clear of the top bar: \(fullChips.map(\.frame))")
@@ -853,7 +947,7 @@ extension DebugRun {
                 overlay.refresh()
                 require(clipped().isEmpty && abs(frameButton.cap!.frame.minX - frameButton.title.frame.maxX - 7) < 0.01 && abs(frameButton.bounds.maxX - frameButton.cap!.frame.maxX - 7) < 0.01,
                         "no bar title clips and the Frame button hugs its cap with Frame \(framed) and \(mode) selected: \(clipped()) \(frameButton.frame)")
-                require(chrome.modeButtons[mode]!.primary && top.groups.count == (mode == .text ? 2 : 3), "the current mode is primary, and Text hides the style pill")
+                require(chrome.modeButtons[mode]!.lit && !chrome.modeButtons[mode]!.primary && chrome.modeButtons.values.filter(\.lit).count == 1 && top.groups.count == (mode == .text ? 2 : 3), "the current mode is lit, the other plain, and Text hides the style pill")
             }
         }
         defaults.set(false, forKey: Pref.frame)
@@ -885,37 +979,67 @@ extension DebugRun {
         require(texts(in: chrome.hover) == ["Browser", "400 x 200"] && chrome.snap.isHidden,
                 "hovering a window shows the chip row: its title and size (a frozen run crops windows, so no shadow), and no Snap chip: \(texts(in: chrome.hover))")
         require(chrome.hover.frame.minX == windowBox.minX && chrome.hover.frame.minY == windowBox.maxY + 8, "the chip row sits on the hovered box's top-left edge: \(chrome.hover.frame) \(windowBox)")
-        // The Snap tag: label tier, lit with Snap on, 16 pt below and right of the pointer, plain with Snap off, and clicks pass through it.
+        // The pointer cluster: the coordinates, then the Snap tag, both label tier, 16 pt below and right of the pointer. The tag is lit with
+        // Snap on and plain with it off, and clicks pass through both.
         let tag = chrome.snapTag, pointerView = CGPoint(x: overlay.pointer.x / overlay.scale, y: overlay.view.bounds.height - overlay.pointer.y / overlay.scale)
         require(!tag.isHidden && texts(in: tag) == ["Snap", "S"] && tag.lit && tag.frame.height == Chrome.labelHeight
-                    && tag.frame.minX == pointerView.x + 16 && tag.frame.maxY == pointerView.y - 16,
-                "hover shows the Snap tag, lit, label height, 16 pt below and right of the pointer: \(tag.frame) \(pointerView)")
-        require(overlay.view.hitTest(centerOf(tag)) !== tag, "clicks pass through the Snap tag")
+                    && !coordinates.isHidden && texts(in: coordinates).count == 1 && coordinates.frame.height == Chrome.labelHeight
+                    && coordinates.frame.minX == pointerView.x + 16 && coordinates.frame.maxY == pointerView.y - 16
+                    && tag.frame.minX == coordinates.frame.maxX + Guides.clusterGap && tag.frame.minY == coordinates.frame.minY,
+                "hover shows the coordinates and the lit Snap tag, label height, 16 pt below and right of the pointer: \(coordinates.frame) \(tag.frame) \(pointerView)")
+        require(overlay.view.hitTest(centerOf(tag)) !== tag && overlay.view.hitTest(centerOf(coordinates)) !== coordinates.subviews.first, "clicks pass through the Snap tag and the coordinates")
         key(1, "s")
         require(!tag.lit && !defaults.bool(forKey: Pref.snap), "S turns the tag plain")
         key(1, "s")
         require(tag.lit, "S turns the tag lit again")
         mouse(.mouseMoved, CGPoint(x: extent.width - 2, y: extent.height - 2))
-        require(overlay.view.bounds.contains(tag.frame), "at the screen corner the Snap tag is clamped into the view: \(tag.frame)")
+        require(overlay.view.bounds.contains(tag.frame.union(coordinates.frame)), "at the screen corner the pointer cluster is clamped into the view: \(coordinates.frame) \(tag.frame)")
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
         let captureStrip = ["Copy", "\u{21A9}", "Agent", "\u{2318}\u{21A9}", "Save", "\u{2318}S", "Text", "\u{21E7}\u{21A9}", "Scroll", "G", "Record", "V", "Subject", "K"]
         let offline = captureStrip.filter { !["Scroll", "G", "Record", "V"].contains($0) }
-        require(texts(in: chrome.strip) == ["Edit", "E"] + offline && chrome.strip.groups.count == 3 && chrome.copy.primary && !chrome.edit.primary && !chrome.edit.lit
+        require(texts(in: chrome.strip) == ["Edit", "E"] + offline + ["Colors", "U"] && chrome.strip.groups.count == 3 && chrome.copy.primary && !chrome.edit.primary && !chrome.edit.lit
                     && chrome.edit.superview === chrome.strip.groups[0] && chrome.strip.frame.maxY == windowBox.minY - 8 && chrome.strip.frame.minX == windowBox.minX,
-                "the action strip hangs under the hovered box: Edit in its own pill, then Copy, Agent, Save, Text, then Subject (no live display, so no Scroll or Record): \(texts(in: chrome.strip)) \(chrome.strip.frame) \(windowBox)")
+                "the action strip hangs under the hovered box: Edit in its own pill, then Copy, Agent, Save, Text, then Subject and Colors (no live display, so no Scroll or Record): \(texts(in: chrome.strip)) \(chrome.strip.frame) \(windowBox)")
         require(chrome.all.flatMap(faded).isEmpty, "nothing else in the chrome is faded: \(chrome.all.flatMap(faded))")
-        // The Edit button does what E does: it opens the hovered window as a selection and leaves the strip, and Esc goes back to the hover.
+        // The Edit button does what E does: it opens the hovered window as a selection and stays in the strip, lit; clicking it again, E,
+        // and Esc go back to the hover, and Cmd-Z brings the selection back.
         chrome.edit.onClick()
-        require(overlay.selection?.rect == window && !texts(in: chrome.strip).contains("Edit"), "clicking Edit opens the hovered window as a selection, with no Edit in the strip: \(String(describing: overlay.selection?.rect))")
+        require(overlay.selection?.rect == window && texts(in: chrome.strip).prefix(2) == ["Edit", "E"] && chrome.edit.lit,
+                "clicking Edit opens the hovered window as a selection, with a lit Edit in the strip: \(String(describing: overlay.selection?.rect))")
+        for (name, leave) in [("clicking Edit", { chrome.edit.onClick() }), ("E", { key(14, "e") }), ("Esc", { key(53, "") })] as [(String, () -> Void)] {
+            leave()
+            require(overlay.selection == nil && texts(in: chrome.strip).first == "Edit" && !chrome.edit.lit, "\(name) in edit goes back to the hover and a plain Edit button: \(texts(in: chrome.strip))")
+            key(6, "z", .command)
+            require(overlay.selection?.rect == window && chrome.edit.lit, "Cmd-Z after \(name) brings the selection back: \(String(describing: overlay.selection?.rect))")
+        }
         key(53, "")
-        require(overlay.selection == nil && texts(in: chrome.strip).first == "Edit", "Esc goes back to the hover and its Edit button: \(texts(in: chrome.strip))")
+        key(14, "e")
+        require(overlay.selection?.rect == window, "E in the hover edits the hovered window again")
+        key(53, "")
+        // U in the hover opens the Colors menu for the hovered element's rectangle, under the hover strip's Colors button; the menu holds
+        // the hover while the pointer moves away under it, and Esc closes it and keeps the hover.
+        let hoverFormat = ColorFormat(rawValue: defaults.string(forKey: Pref.colorFormat)!)!
+        let hoverColors = ([ColorFormat.average(of: image, in: window)] + ColorFormat.palette(of: image, in: window)).map(hoverFormat.string)
+        key(32, "u")
+        for _ in 0..<1000 where chrome.colorMenu.isHidden { try await Task.sleep(for: .milliseconds(10)) }
+        let colorsButton = overlay.view.convert(chrome.colors.bounds, from: chrome.colors)
+        require(!chrome.colorMenu.isHidden && overlay.selection == nil && chrome.colorMenu.items.map(\.title).filter { !$0.isEmpty } == hoverColors
+                    && chrome.colorMenu.panel.frame.minX == min(max(colorsButton.minX, 8), overlay.view.bounds.width - chrome.colorMenu.panel.frame.width - 8) && chrome.colorMenu.panel.frame.maxY <= colorsButton.minY,
+                "U in the hover opens the Colors menu for the hovered window under the strip's Colors button: \(chrome.colorMenu.items.map(\.title)) \(hoverColors)")
+        let stripBefore = chrome.strip.frame
+        mouse(.mouseMoved, CGPoint(x: 40, y: 40))
+        require(!chrome.colorMenu.isHidden && overlay.view.overlays.hover == window && chrome.strip.frame == stripBefore,
+                "the pointer moving away under the open menu leaves the hover and its strip where they are: \(String(describing: overlay.view.overlays.hover)) \(chrome.strip.frame)")
+        key(53, "\u{1B}")
+        require(chrome.colorMenu.isHidden && overlay.window.isVisible && overlay.selection == nil, "Esc closes the hover's Colors menu and keeps the overlay")
+        mouse(.mouseMoved, CGPoint(x: 400, y: 400))
         // The hover holds while the pointer crosses from the element to its strip, so a click reaches Copy; the loupe and crosshair still
         // follow the pointer.
         defaults.set(true, forKey: Pref.loupe)
         defaults.set(true, forKey: Pref.crosshair)
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
-        require(!readout.isHidden && tag.frame.maxY == readout.frame.minY - 6 && abs(tag.frame.midX - readout.frame.midX) <= 1,
-                "with the loupe showing, the Snap tag sits under its readout: \(tag.frame) \(readout.frame)")
+        require(!readout.isHidden && tag.frame.maxY == readout.frame.minY - Guides.clusterGap && abs(tag.frame.union(coordinates.frame).midX - readout.frame.midX) <= 1,
+                "with the loupe showing, the pointer cluster sits under its readout: \(coordinates.frame) \(tag.frame) \(readout.frame)")
         mouse(.mouseMoved, viewPixel(CGPoint(x: centerOf(chrome.copy).x, y: windowBox.minY - 4)))
         let heldLoupe = overlay.view.guides.loupe.position, heldCrosshair = overlay.view.guides.crosshair.path
         mouse(.mouseMoved, viewPixel(centerOf(chrome.copy)))
@@ -946,9 +1070,9 @@ extension DebugRun {
         require(texts(in: chrome.size) == ["\(Int(fit.width)) x \(Int(fit.height))  Snapped"], "a snap preview shows its size and Snapped: \(texts(in: chrome.size))")
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.snap) == ["Snapped", "S"] && chrome.snap.lit, "after release on a fit: Snapped, lit")
-        require(!top.isHidden && texts(in: chrome.strip) == offline + ["Colors", "U"] && texts(in: chrome.hints)
+        require(!top.isHidden && texts(in: chrome.strip) == ["Edit", "E"] + offline + ["Colors", "U"] && chrome.edit.lit && texts(in: chrome.hints)
                     == ["move", "\u{2190}\u{2192}", "grow", "\u{2325}", "shrink", "\u{2325}\u{2318}", "edge out", "\u{2318}", "edge in", "\u{2318}\u{21E7}", "all sides", "+", "-", "undo", "\u{2318}Z"],
-                "a selection keeps the top bar, has the strip without Edit, and the arrow layers on the keys line: \(texts(in: chrome.hints))")
+                "a selection keeps the top bar, has the strip with a lit Edit, and the arrow layers on the keys line: \(texts(in: chrome.hints))")
         require(chrome.hints.frame.height < 40 && chrome.hints.frame.width <= overlay.view.bounds.width - 16, "the keys line is one line and fits: \(chrome.hints.frame) in \(overlay.view.bounds.width)")
         // The chip row: size and Snap from the selection's left edge, the ratio and radius ending at its right edge (after Snap when they
         // would meet). The ratio chip's readout with P opens the ratio menu, the lock with Shift-P toggles the lock, with no fills of their own.
@@ -1174,7 +1298,7 @@ extension DebugRun {
                     && texts(in: chrome.strip).contains("Start"),
                 "armed to record, the ratio, radius, and Snap chips and the edge keys hide, and the strip holds the armed controls")
         key(53, "\u{1B}")
-        require(overlay.armedRecording == nil && texts(in: chrome.strip) == captureStrip.filter { $0 != "Scroll" && $0 != "G" } + ["Colors", "U"] && !chrome.ratio.isHidden, "Esc disarms and brings the editing chrome back: \(texts(in: chrome.strip))")
+        require(overlay.armedRecording == nil && texts(in: chrome.strip) == ["Edit", "E"] + captureStrip.filter { $0 != "Scroll" && $0 != "G" } + ["Colors", "U"] && !chrome.ratio.isHidden, "Esc disarms and brings the editing chrome back: \(texts(in: chrome.strip))")
         overlay.dismiss()
 
         // G: scrolling capture of a released selection inside a window, with frames cut from the fixture as if the page scrolled 300 px.
@@ -1310,6 +1434,55 @@ extension DebugRun {
         for key in [Pref.rulers, Pref.loupe] { defaults.set(false, forKey: key) }
         try await verifyAgentHandoff(image: image, frame: frame, overlay: overlay, require: require)
         try await verifyRecording(image: image, frame: frame, overlay: overlay, require: require)
+
+        // Chrome keeps its distance from the object's outline: 8 pt off it outside, and 8 pt in from it when the screen leaves no room outside.
+        open()
+        overlay.detectionTask?.cancel()
+        /// The distance from `item` to the outline `box`: to the nearest side from inside it, else the larger axis gap (negative when they overlap).
+        func outlineGap(_ item: NSView, _ box: CGRect) -> CGFloat {
+            let f = item.frame
+            if box.contains(f) { return min(f.minX - box.minX, box.maxX - f.maxX, f.minY - box.minY, box.maxY - f.maxY) }
+            return max(f.minX - box.maxX, box.minX - f.maxX, f.minY - box.maxY, box.minY - f.maxY)
+        }
+        let outlineCases = [("middle", CGRect(x: 600, y: 300, width: 1000, height: 600)), ("small", CGRect(x: 600, y: 300, width: 120, height: 80)),
+                         ("left edge", CGRect(x: 0, y: 600, width: 500, height: 300)), ("right edge", CGRect(x: extent.width - 500, y: 600, width: 500, height: 300)),
+                         ("top edge", CGRect(x: 900, y: 0, width: 700, height: 300)), ("bottom edge", CGRect(x: 900, y: extent.height - 300, width: 700, height: 300)),
+                         ("edge to edge", CGRect(x: 0, y: 300, width: extent.width, height: 600)), ("full screen", extent)]
+        for hovering in [false, true] {
+            for (name, rect) in outlineCases {
+                if hovering {
+                    overlay.selection = nil
+                    overlay.setWindows([rect], names: ["Edge"], pointer: CGPoint(x: frame.minX + rect.midX / overlay.scale, y: frame.maxY - rect.midY / overlay.scale))
+                    mouse(.mouseMoved, CGPoint(x: rect.midX, y: rect.midY))
+                } else {
+                    overlay.selection = AreaSelection(extent: extent, exact: rect)
+                    overlay.refresh()
+                }
+                let box = overlay.view.viewRect(rect)
+                let shown: [(String, NSView)] = [("size", chrome.size), ("snap", chrome.snap), ("ratio", chrome.ratio), ("radius", chrome.radius), ("hover", chrome.hover), ("strip", chrome.strip)].filter { !$0.1.isHidden }
+                let gaps = shown.map { ($0.0, outlineGap($0.1, box)) }
+                require(!shown.isEmpty && gaps.allSatisfy { $0.1 >= 8 - 0.01 }, "a \(hovering ? "hovered" : "selected") \(name) object's chrome keeps 8 pt from its outline: \(gaps)")
+            }
+        }
+        overlay.dismiss()
+
+        // The dashed Frame preview is the padded card of an area or element; on a selection that matches a live window the output is the
+        // window's real shadow, so no card is drawn. A frozen window or an imported image crops, so it keeps the card.
+        let framedWindow = CGRect(x: 600, y: 300, width: 1000, height: 600)
+        defaults.set(true, forKey: Pref.frame)
+        for (name, display, frozen, card) in [("a live window", CGMainDisplayID() as CGDirectDisplayID?, false, false), ("a frozen window", CGMainDisplayID(), true, true), ("a window of an imported image", nil, false, true)] {
+            overlay.present(image: image, frame: frame, displayID: display)
+            overlay.detectionTask?.cancel()
+            overlay.setWindows([framedWindow], names: ["Window"], ids: [1], frozen: [frozen], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+            overlay.selection = AreaSelection(extent: extent, exact: framedWindow)
+            overlay.refresh()
+            require((overlay.view.overlays.styleFrame != nil) == card, "with Frame on, the preview on \(name) draws the card: \(card)")
+            overlay.selection = AreaSelection(extent: extent, exact: framedWindow.insetBy(dx: 40, dy: 40))
+            overlay.refresh()
+            require(overlay.view.overlays.styleFrame == OutputFrame.rect(around: framedWindow.insetBy(dx: 40, dy: 40), scale: overlay.scale, framed: true), "an area inside \(name) keeps the card preview")
+            overlay.dismiss()
+        }
+        defaults.set(false, forKey: Pref.frame)
 
         // Hot keys: each handler takes only presses of its own ID (the capture shortcut and the overlay's Esc share the app's target).
         // The presses are Carbon events sent to the app, so nothing is registered system-wide.

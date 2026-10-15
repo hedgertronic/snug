@@ -59,6 +59,7 @@ extension OverlayController {
         accessibilityTask?.cancel()
         accessibilityTask = nil
         accessibilityStarted = nil
+        accessibilityPixel = nil
         session = nil
         detected = []
         dockTiles = []
@@ -89,13 +90,14 @@ extension OverlayController {
         Toast.show(message: "Copied", detail: text, color: swatch(color))
     }
 
-    /// U on a selection: the menu under the Colors button, with the selection's average (what C copies) and its five main colors, each
-    /// copied by its row or its 1-6 key. The colors are worked out off main, since they take over 5 ms on a large selection.
+    /// U on a selection, or on the hovered element (the rectangle Return would copy): the menu under the Colors button, with the area's
+    /// average (what C copies) and its five main colors, each copied by its row or its 1-6 key. The colors are worked out off main,
+    /// since they take over 5 ms on a large selection.
     func showColorsMenu() {
-        guard let rect = selection?.rect, let image else { return }
+        guard let rect = selection?.rect ?? hoverRect, let image else { return }
         Task {
             let (average, palette) = await Task.detached { (ColorFormat.average(of: image, in: rect), ColorFormat.palette(of: image, in: rect)) }.value
-            guard selection?.rect == rect else { return }
+            guard (selection?.rect ?? hoverRect) == rect else { return }
             let rows = [average] + palette
             let items = rows.enumerated().map { index, color in
                 RatioMenu.Item(title: colorFormat.string(for: color), on: false, swatch: swatch(color), cap: "\(index + 1)") { [self] in copyColor(color) }
@@ -165,32 +167,51 @@ extension OverlayController {
         refresh()
     }
 
-    /// While the capture is live and Accessibility is allowed, asks the window under `pixel` for the elements there, off main,
-    /// at most about every 150 ms. Nothing happens without permission, in debug runs, or when the lookup finds nothing.
+    /// While the capture is live and Accessibility is allowed, asks the window under `pixel` for the elements there and for the hovered
+    /// element's peers (Left and Right step among them), off main, at most about every 150 ms. A request the throttle drops comes
+    /// again once it ends, at the pointer, unless the pointer is on the pixel the last lookup used. Nothing happens without
+    /// permission, in debug runs, or when the lookup finds nothing.
     func requestAccessibility(at pixel: CGPoint) {
-        guard displayID != nil, !isHeadless, AXIsProcessTrusted(), accessibilityTask == nil,
-              accessibilityStarted.map({ $0.duration(to: .now) >= .milliseconds(150) }) ?? true,
+        guard displayID != nil, !isHeadless, AXIsProcessTrusted(),
               let index = windows.firstIndex(where: { $0.contains(pixel) }), windowIDs.indices.contains(index),
               AccessibilityBounds.looksUp(inWindowNamed: windowNames[index], frozen: windowFrozen[index]) else { return }
+        guard accessibilityTask == nil, accessibilityStarted.map({ $0.duration(to: .now) >= .milliseconds(150) }) ?? true else {
+            accessibilityRetry?.cancel()
+            accessibilityRetry = Task {
+                try await Task.sleep(for: .milliseconds(160))
+                if mode == .capture, session != nil, pointerPixel != accessibilityPixel { requestAccessibility(at: pointer) }
+            }
+            return
+        }
         accessibilityStarted = .now
+        accessibilityPixel = CGPoint(x: pixel.x.rounded(.down), y: pixel.y.rounded(.down))
         let id = windowIDs[index]
         let primaryHeight = NSScreen.screens[0].frame.height
         let origin = CGPoint(x: window.frame.minX, y: primaryHeight - window.frame.maxY)
         let point = AccessibilityBounds.point(forPixel: pixel, displayOrigin: origin, scale: scale)
-        let (scale, extent, image) = (scale, extent, image!)
+        let (scale, extent, image, windows) = (scale, extent, image!, windows)
         accessibilityTask = Task {
             defer { accessibilityTask = nil }
             let info = CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]]
             guard let pid = info?.first?[kCGWindowOwnerPID as String] as? Int32 else { return }
-            let frames = await Accessibility.frames(at: point, pid: pid)
+            let began = ContinuousClock.now
+            let (frames, peers) = await Accessibility.framesAndPeers(at: point, pid: pid)
+            let lookup = began.duration(to: .now)
             guard !Task.isCancelled, mode == .capture else { return }
             let found = StageManager.visibleThumbnails(try await AccessibilityBounds.candidates(frames: AccessibilityBounds.hoverLevel(frames), displayOrigin: origin,
                                                                                                 scale: scale, extent: extent), frames: frames, in: image, scale: scale)
+            // A peer nobody hit can sit under another window: only those whose center is in this window's visible part count.
+            let peerFound = StageManager.visibleThumbnails(try await AccessibilityBounds.peerCandidates(peers, displayOrigin: origin, scale: scale, extent: extent),
+                                                           frames: frames, in: image, scale: scale)
+                .filter { peer in windows.firstIndex { $0.contains(CGPoint(x: peer.bounds.midX, y: peer.bounds.midY)) } == index }
             Pref.logHoverLine("hover \(point) scale \(scale) frames " + frames.map { "\($0.role) '\($0.roleDescription)' '\($0.title)' \($0.rect)" }.joined(separator: " | ")
-                + " -> " + found.map { "\($0.label) \($0.bounds)" }.joined(separator: " | "))
-            let grown = found.map { $0.grownToBorder(in: image) }
-            for candidate in grown { accessibilityObservations[candidate.bounds] = (frames, .now) }
-            if !grown.isEmpty { merge(grown) }
+                + " -> " + found.map { "\($0.label) \($0.bounds)" }.joined(separator: " | ") + " | lookup with \(peers.count) peers \(lookup), \(peerFound.count) candidates")
+            guard !found.isEmpty else { return }
+            let grown = await Task.detached { (found + peerFound).map { $0.grownToBorder(in: image) } }.value
+            guard !Task.isCancelled, session != nil else { return }
+            // The hit element's chain covers its own candidates; a peer's AX data comes from a hit test at copy time.
+            for candidate in grown.prefix(found.count) { accessibilityObservations[candidate.bounds] = (frames, .now) }
+            merge(grown)
         }
     }
 
@@ -211,18 +232,25 @@ extension OverlayController {
         guides.setShown(guides.rulers, !armed && defaults.bool(forKey: Pref.rulers), from: animation == .slide ? Guides.rulersHiddenTransform : CATransform3DIdentity, animated: animated)
         guides.setShown(guides.loupe, !armed && defaults.bool(forKey: Pref.loupe), from: Guides.loupeHiddenTransform, animated: animated)
         guides.slidesPlacement = animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        // Hovering with nothing selected or dragged, the Snap tag sits 16 pt below and right of the pointer, or under the loupe's readout,
-        // clamped into the view.
+        // Hovering with nothing selected or dragged, the pointer cluster `[x 123  y 456] [Snap S]` sits 16 pt below and right of the pointer, or
+        // centered under the loupe's readout, clamped into the view.
         defer {
-            let tag = chrome.snapTag
-            if mode == .capture, selection == nil, draggedRect == nil, scrollArea == nil, armedRecording == nil, cutout == nil, image != nil {
+            let (tag, coordinates) = (chrome.snapTag, chrome.coordinates)
+            let hovering = mode == .capture && selection == nil && draggedRect == nil && scrollArea == nil && armedRecording == nil && cutout == nil && image != nil
+            coordinates.isHidden = !hovering
+            if hovering {
                 tag.setTitle("Snap")
                 tag.lit = snapEnabled
+                let text = "x \(Int(pointerPixel.x))  y \(Int(pointerPixel.y))"
+                coordinates.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText)] }
+                let width = coordinates.frame.width + Guides.clusterGap + tag.frame.width
                 let point = CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale)
                 let below = guides.readout.isHidden ? CGPoint(x: point.x + 16, y: point.y - 16 - tag.frame.height)
-                    : CGPoint(x: guides.readout.frame.midX - tag.frame.width / 2, y: guides.readout.frame.minY - 6 - tag.frame.height)
-                tag.frame.origin = CGPoint(x: min(max(below.x, 8), view.bounds.width - tag.frame.width - 8),
-                                           y: min(max(below.y, 8), view.bounds.height - topInset - tag.frame.height - 4))
+                    : CGPoint(x: guides.readout.frame.midX - width / 2, y: guides.readout.frame.minY - Guides.clusterGap - tag.frame.height)
+                let origin = CGPoint(x: min(max(below.x, 8), view.bounds.width - width - 8),
+                                     y: min(max(below.y, 8), view.bounds.height - topInset - tag.frame.height - 4))
+                coordinates.frame.origin = origin
+                tag.frame.origin = CGPoint(x: origin.x + coordinates.frame.width + Guides.clusterGap, y: origin.y)
                 tag.isHidden = false
             }
         }
@@ -237,6 +265,7 @@ extension OverlayController {
         guides.update(point: CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale), pixel: pixel,
                       image: image, bounds: view.bounds, scale: scale, topInset: topInset,
                       selected: draggedRect ?? selection?.rect, dragging: draggedRect != nil,
-                      avoiding: [chrome.topBar, chrome.strip, chrome.hints, chrome.list].filter { !$0.isHidden }.map(\.frame))
+                      avoiding: [chrome.topBar, chrome.strip, chrome.hints, chrome.list, chrome.hover, chrome.size, chrome.snap, chrome.ratio, chrome.radius, chrome.status,
+                                 chrome.reading, chrome.legend, chrome.colorMenu, chrome.ratioMenu].filter { !$0.isHidden }.map(\.frame))
     }
 }

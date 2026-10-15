@@ -75,10 +75,18 @@ public enum AccessibilityBounds {
         var clipped = frames
         for index in frames.indices.reversed() {
             if let viewport = frames[(index + 1)...].indices.first(where: { ["AXScrollArea", "AXWebArea"].contains(frames[$0].role) }) {
-                clipped[index] = AXFrame(roleDescription: frames[index].roleDescription, rect: frames[index].rect.intersection(clipped[viewport].rect), role: frames[index].role, title: frames[index].title)
+                let frame = frames[index]
+                clipped[index] = AXFrame(roleDescription: frame.roleDescription, rect: frame.rect.intersection(clipped[viewport].rect), role: frame.role, title: frame.title,
+                                         subrole: frame.subrole, identifier: frame.identifier, elementDescription: frame.elementDescription)
             }
         }
         return clipped.filter { !$0.rect.isNull && !$0.rect.isEmpty }
+    }
+
+    /// A frame (global points) in image pixels: the display's origin and scale applied, clipped to `extent`, to whole pixels.
+    public static func pixels(of rect: CGRect, displayOrigin: CGPoint, scale: CGFloat, extent: CGRect) -> CGRect {
+        CGRect(x: (rect.minX - displayOrigin.x) * scale, y: (rect.minY - displayOrigin.y) * scale, width: rect.width * scale, height: rect.height * scale)
+            .intersection(extent).integral
     }
 
     /// Candidates from `frames` (innermost element first, window last), in image pixels clipped to `extent` and to scroll viewports.
@@ -88,9 +96,7 @@ public enum AccessibilityBounds {
         var output: [Candidate] = []
         var inner: CGRect?
         for (index, frame) in clippedToViewports(frames.filter { [$0.rect.minX, $0.rect.minY, $0.rect.width, $0.rect.height].allSatisfy(\.isFinite) }).enumerated() {
-            let r = frame.rect
-            let pixels = CGRect(x: (r.minX - displayOrigin.x) * scale, y: (r.minY - displayOrigin.y) * scale,
-                                width: r.width * scale, height: r.height * scale).intersection(extent).integral
+            let pixels = pixels(of: frame.rect, displayOrigin: displayOrigin, scale: scale, extent: extent)
             guard !pixels.isNull, pixels.width >= 8, pixels.height >= 8, pixels != extent else { continue }
             let tolerance = paddingTolerance * scale
             if let inner, abs(pixels.minX - inner.minX) <= tolerance, abs(pixels.minY - inner.minY) <= tolerance,
@@ -100,6 +106,30 @@ public enum AccessibilityBounds {
             let label = frame.roleDescription.isEmpty ? "Element" : frame.roleDescription.capitalized
             output.append(Candidate(id: "ax-\(Int(pixels.minX))-\(Int(pixels.minY))-\(Int(pixels.width))-\(Int(pixels.height))", label: label,
                                     bounds: pixels, score: baseScore - Double(index) * 0.01, kind: .element))
+        }
+        return output
+    }
+
+    /// The most siblings fetched around the hovered element.
+    public static let maximumPeers = 64
+
+    /// Where the hovered element's peers hang: the index in `frames` (innermost element first, window last) of the outermost element
+    /// whose frame is only padding around the hovered one (the innermost `hoverLevel` frame), which is the one that has siblings.
+    /// Finder's sidebar row is a 159 pt wide `AXRow` around a 139 pt `AXCell`: the cell is what hovers, and its parent row has the
+    /// other rows as siblings. The run stops below the window. Nil when nothing hovers.
+    public static func peerLevel(_ frames: [AXFrame]) -> Int? {
+        guard let hovered = hoverLevel(frames).first, var level = frames.firstIndex(of: hovered) else { return nil }
+        while level + 1 < frames.count, frames[level + 1].role != "AXWindow", frames[level + 1].rect.isNear(frames[level].rect, within: paddingTolerance) { level += 1 }
+        return level
+    }
+
+    /// The candidates of the hovered element's peers. Each chain is one sibling's frames, innermost first, then the shared ancestors up to
+    /// the window, so a sibling is converted, clipped to its scroll viewport and collapsed to its padding-free level (its cell, not its
+    /// row) as the hovered element is, and the peers share its depth. Only the first candidate of each chain is kept.
+    public static func peerCandidates(_ chains: [[AXFrame]], displayOrigin: CGPoint, scale: CGFloat, extent: CGRect) async throws -> [Candidate] {
+        var output: [Candidate] = []
+        for chain in chains {
+            output += try await candidates(frames: hoverLevel(chain), displayOrigin: displayOrigin, scale: scale, extent: extent).prefix(1)
         }
         return output
     }

@@ -1,4 +1,6 @@
 import CoreGraphics
+import Foundation
+import ImageIO
 import Testing
 @testable import ScreenshotCore
 
@@ -105,5 +107,41 @@ struct ColorFormatTests {
     @Test func paletteReadsOnlyTheRect() {
         let image = stripes([((1, 0, 0), 10), ((0, 0, 1), 10)], height: 10)
         #expect(ColorFormat.palette(of: image, in: CGRect(x: 10, y: 0, width: 10, height: 10)).map(ColorFormat.hex.string) == ["#0000FF"])
+    }
+
+    @Test func paletteOfAFlatGrayIsOneColor() {
+        let palette = ColorFormat.palette(of: stripes([((0.5, 0.5, 0.5), 30)], height: 30), in: CGRect(x: 0, y: 0, width: 30, height: 30))
+        #expect(palette.map(ColorFormat.hex.string) == ["#808080"])
+    }
+
+    @Test func paletteOfTwoColorsIsThoseTwo() {
+        let image = stripes([((0.9, 0.9, 0.9), 70), ((0.1, 0.1, 0.1), 30)], height: 10)
+        #expect(ColorFormat.palette(of: image, in: CGRect(x: 0, y: 0, width: 100, height: 10)).map(ColorFormat.hex.string) == ["#E6E6E6", "#1A1A1A"])
+    }
+
+    @Test func paletteKeepsASmallAccentAndMergesNearDuplicates() {
+        let image = stripes([((0.5, 0.5, 0.5), 900), ((0.52, 0.52, 0.52), 60), ((0, 0, 1), 40)], height: 10)
+        #expect(ColorFormat.palette(of: image, in: CGRect(x: 0, y: 0, width: 1000, height: 10)).map(ColorFormat.hex.string) == ["#808080", "#0000FF"])
+    }
+
+    @Test func paletteDropsBucketsUnderATenthOfAPercent() {
+        let image = stripes([((0.5, 0.5, 0.5), 1999), ((1, 0, 0), 1)], height: 1)
+        #expect(ColorFormat.palette(of: image, in: CGRect(x: 0, y: 0, width: 2000, height: 1)).map(ColorFormat.hex.string) == ["#808080"])
+    }
+
+    /// The dark Finder window with a blue selected row and blue sidebar icons: its median-cut colors were all grays.
+    @Test func paletteOfTheFinderSidebarIncludesTheBlue() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let source = try #require(CGImageSourceCreateWithURL(root.appendingPathComponent("notes/fixtures/round12/finder-sidebar.png") as CFURL, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        let palette = ColorFormat.palette(of: image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        let hexes = palette.map(ColorFormat.hex.string)
+        // OKLab hue 230-290 degrees is blue; the sidebar's own bluish gray has chroma near 0.03, a blue accent well above 0.1.
+        let blues = palette.filter { color in
+            let lab = color.oklab, hue = (atan2(lab.z, lab.y) * 180 / .pi + 360).truncatingRemainder(dividingBy: 360)
+            return (230...290).contains(hue) && (lab.y * lab.y + lab.z * lab.z).squareRoot() > 0.1
+        }
+        #expect(!blues.isEmpty, "no blue in \(hexes)")
+        #expect(palette.count == 5, "\(hexes)")
     }
 }
