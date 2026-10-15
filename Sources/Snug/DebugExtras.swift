@@ -898,11 +898,11 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: extent.width - 2, y: extent.height - 2))
         require(overlay.view.bounds.contains(tag.frame), "at the screen corner the Snap tag is clamped into the view: \(tag.frame)")
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
-        let captureStrip = ["Copy", "\u{21A9}", "Save", "\u{2318}S", "Text", "\u{21E7}\u{21A9}", "Scroll", "G", "Record", "V", "Subject", "K"]
+        let captureStrip = ["Copy", "\u{21A9}", "Agent", "\u{2318}\u{21A9}", "Save", "\u{2318}S", "Text", "\u{21E7}\u{21A9}", "Scroll", "G", "Record", "V", "Subject", "K"]
         let offline = captureStrip.filter { !["Scroll", "G", "Record", "V"].contains($0) }
         require(texts(in: chrome.strip) == ["Edit", "E"] + offline && chrome.strip.groups.count == 3 && chrome.copy.primary && !chrome.edit.primary && !chrome.edit.lit
                     && chrome.edit.superview === chrome.strip.groups[0] && chrome.strip.frame.maxY == windowBox.minY - 8 && chrome.strip.frame.minX == windowBox.minX,
-                "the action strip hangs under the hovered box: Edit in its own pill, then Copy, Save, Text, then Subject (no live display, so no Scroll or Record): \(texts(in: chrome.strip)) \(chrome.strip.frame) \(windowBox)")
+                "the action strip hangs under the hovered box: Edit in its own pill, then Copy, Agent, Save, Text, then Subject (no live display, so no Scroll or Record): \(texts(in: chrome.strip)) \(chrome.strip.frame) \(windowBox)")
         require(chrome.all.flatMap(faded).isEmpty, "nothing else in the chrome is faded: \(chrome.all.flatMap(faded))")
         // The Edit button does what E does: it opens the hovered window as a selection and leaves the strip, and Esc goes back to the hover.
         chrome.edit.onClick()
