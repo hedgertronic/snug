@@ -210,18 +210,25 @@ extension OverlayController {
         guides.setShown(guides.rulers, !armed && defaults.bool(forKey: Pref.rulers), from: animation == .slide ? Guides.rulersHiddenTransform : CATransform3DIdentity, animated: animated)
         guides.setShown(guides.loupe, !armed && defaults.bool(forKey: Pref.loupe), from: Guides.loupeHiddenTransform, animated: animated)
         guides.slidesPlacement = animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        // Hovering with nothing selected or dragged, the Snap tag sits 16 pt below and right of the pointer, or under the loupe's readout,
-        // clamped into the view.
+        // Hovering with nothing selected or dragged, the pointer cluster `[x 123  y 456] [Snap S]` sits 16 pt below and right of the pointer, or
+        // centered under the loupe's readout, clamped into the view.
         defer {
-            let tag = chrome.snapTag
-            if mode == .capture, selection == nil, draggedRect == nil, scrollArea == nil, armedRecording == nil, cutout == nil, image != nil {
+            let (tag, coordinates) = (chrome.snapTag, chrome.coordinates)
+            let hovering = mode == .capture && selection == nil && draggedRect == nil && scrollArea == nil && armedRecording == nil && cutout == nil && image != nil
+            coordinates.isHidden = !hovering
+            if hovering {
                 tag.setTitle("Snap")
                 tag.lit = snapEnabled
+                let text = "x \(Int(pointerPixel.x))  y \(Int(pointerPixel.y))"
+                coordinates.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText)] }
+                let width = coordinates.frame.width + Guides.clusterGap + tag.frame.width
                 let point = CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale)
                 let below = guides.readout.isHidden ? CGPoint(x: point.x + 16, y: point.y - 16 - tag.frame.height)
-                    : CGPoint(x: guides.readout.frame.midX - tag.frame.width / 2, y: guides.readout.frame.minY - 6 - tag.frame.height)
-                tag.frame.origin = CGPoint(x: min(max(below.x, 8), view.bounds.width - tag.frame.width - 8),
-                                           y: min(max(below.y, 8), view.bounds.height - topInset - tag.frame.height - 4))
+                    : CGPoint(x: guides.readout.frame.midX - width / 2, y: guides.readout.frame.minY - Guides.clusterGap - tag.frame.height)
+                let origin = CGPoint(x: min(max(below.x, 8), view.bounds.width - width - 8),
+                                     y: min(max(below.y, 8), view.bounds.height - topInset - tag.frame.height - 4))
+                coordinates.frame.origin = origin
+                tag.frame.origin = CGPoint(x: origin.x + coordinates.frame.width + Guides.clusterGap, y: origin.y)
                 tag.isHidden = false
             }
         }
@@ -236,6 +243,7 @@ extension OverlayController {
         guides.update(point: CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale), pixel: pixel,
                       image: image, bounds: view.bounds, scale: scale, topInset: topInset,
                       selected: draggedRect ?? selection?.rect, dragging: draggedRect != nil,
-                      avoiding: [chrome.topBar, chrome.strip, chrome.hints, chrome.list].filter { !$0.isHidden }.map(\.frame))
+                      avoiding: [chrome.topBar, chrome.strip, chrome.hints, chrome.list, chrome.hover, chrome.size, chrome.snap, chrome.ratio, chrome.radius, chrome.status,
+                                 chrome.reading, chrome.legend, chrome.colorMenu, chrome.ratioMenu].filter { !$0.isHidden }.map(\.frame))
     }
 }
