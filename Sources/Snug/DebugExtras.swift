@@ -1308,6 +1308,7 @@ extension DebugRun {
         require(guides2.bands.path!.boundingBox.maxY == overlay.view.bounds.height, "without an inset the top ruler sits at the top edge")
         overlay.dismiss()
         for key in [Pref.rulers, Pref.loupe] { defaults.set(false, forKey: key) }
+        try await verifyAgentHandoff(image: image, frame: frame, overlay: overlay, require: require)
         try await verifyRecording(image: image, frame: frame, overlay: overlay, require: require)
 
         // Hot keys: each handler takes only presses of its own ID (the capture shortcut and the overlay's Esc share the app's target).
