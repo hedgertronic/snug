@@ -188,7 +188,9 @@ extension OverlayController {
                                                                                                 scale: scale, extent: extent), frames: frames, in: image, scale: scale)
             Pref.logHoverLine("hover \(point) scale \(scale) frames " + frames.map { "\($0.role) '\($0.roleDescription)' '\($0.title)' \($0.rect)" }.joined(separator: " | ")
                 + " -> " + found.map { "\($0.label) \($0.bounds)" }.joined(separator: " | "))
-            if !found.isEmpty { merge(found.map { $0.grownToBorder(in: image) }) }
+            let grown = found.map { $0.grownToBorder(in: image) }
+            for candidate in grown { accessibilityObservations[candidate.bounds] = (frames, .now) }
+            if !grown.isEmpty { merge(grown) }
         }
     }
 

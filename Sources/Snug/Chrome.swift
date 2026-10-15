@@ -411,6 +411,7 @@ final class Chrome {
     let strip = Bar()
     let edit = BarButton("Edit", key: "E")
     let copy = BarButton("Copy", key: "\u{21A9}")
+    let agent = BarButton("Agent", key: "\u{2318}\u{21A9}")
     let save = BarButton("Save", key: "\u{2318}S")
     let text = BarButton("Text", key: "\u{21E7}\u{21A9}")
     let scroll = BarButton("Scroll", key: "G")
@@ -481,7 +482,7 @@ final class Chrome {
     /// Every button, for the click wiring.
     var buttons: [BarButton] {
         Array(modeButtons.values) + (viewToggles + styleToggles).map(\.1)
-            + [edit, copy, save, text, scroll, record, cutout, colors, done, cancel, cursor, countIn, start, subject, crop, snap, ratioButton, lock]
+            + [edit, copy, agent, save, text, scroll, record, cutout, colors, done, cancel, cursor, countIn, start, subject, crop, snap, ratioButton, lock]
     }
 
     /// Lowest first: the cut-out preview goes under all of them.

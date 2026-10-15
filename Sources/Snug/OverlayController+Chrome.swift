@@ -160,11 +160,11 @@ extension OverlayController {
             c.radius.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText), KeyCap("["), KeyCap("]")] }
             return c.radius
         }
-        /// The capture strip: Edit in its own pill while hovering, then Copy, Save, and Text, then Scroll and Record (each left out when it
-        /// cannot run on `area`), Subject, and Colors once selected.
+        /// The capture strip: Edit in its own pill while hovering, then Copy, Agent, Save, and Text, then Scroll and Record (each left out
+        /// when it cannot run on `area`), Subject, and Colors once selected.
         func captureStrip(_ area: CGRect, hovering: Bool = false) {
             let scrolls = (scrollFrames != nil || displayID != nil) && area != extent && windows.contains { $0.insetBy(dx: -2, dy: -2).contains(area) }
-            c.strip.show((hovering ? [[c.edit]] : []) + [[c.copy, c.save, c.text],
+            c.strip.show((hovering ? [[c.edit]] : []) + [[c.copy, c.agent, c.save, c.text],
                           (scrolls ? [c.scroll] : []) + (displayID != nil ? [c.record] : []) + [c.cutout] + (hovering ? [] : [c.colors])])
         }
 

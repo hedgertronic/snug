@@ -120,7 +120,7 @@ final class ActionButton: NSButton {
 final class HelpSheet: NSView {
     static let columns: [(title: String, rows: [(keys: String, action: String)])] = [
         ("Capture", [("drag", "Select a region"), ("click", "Element or window"), ("Option-click", "Flip Frame for this capture"), ("Option-drag", "Exact, no snap"),
-                     ("F", "Full screen, or all text"), ("W", "Capture the window"), ("Left / Right", "Next / previous peer (hover)"), ("Return", "Copy"), ("Shift-Return", "Copy the text"), ("Cmd-S", "Save"),
+                     ("F", "Full screen, or all text"), ("W", "Capture the window"), ("Left / Right", "Next / previous peer (hover)"), ("Return", "Copy"), ("Shift-Return", "Copy the text"), ("Cmd-Return", "Copy for an agent"), ("Cmd-S", "Save"),
                      ("Cmd-Shift-S", "Save As"), ("E / Shift-click", "Edit as a selection"),
                      ("G", "Scrolling capture, hover or selection"), ("K", "Subject preview"), ("Subject: Tab", "Next subject (Shift: back)"), ("Subject: S", "Crop to subject"),
                      ("C", "Copy color"), ("Shift-C", "Cycle color format"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
