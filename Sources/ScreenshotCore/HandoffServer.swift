@@ -12,6 +12,10 @@ public struct HandoffServer: Sendable {
     public static let protocolVersions = ["2024-11-05", "2025-03-26", "2025-06-18"]
     /// The largest side `zoom` returns, in pixels.
     public static let zoomLimit = 2000
+    /// The largest image `get_capture` returns as is: the long side the Anthropic API keeps without downsampling, and bytes under its 5 MB
+    /// limit once base64 grows them by a third.
+    public static let imageSide = 1568
+    public static let imageBytes = 3_750_000
 
     public init(store: HandoffStore, version: String) {
         self.store = store
@@ -36,7 +40,8 @@ public struct HandoffServer: Sendable {
             + "resolution, and its manifest (app, window, the element's accessibility role and title, its ancestors, and coordinates). Pass "
             + "the id from the user's \"[Snug capture ID: ...]\" reference, or \"latest\" for the newest capture. Image pixel (x, y) is the "
             + "global screen point (geometry.crop_global.x + x / image.scale, geometry.crop_global.y + y / image.scale). Snug never takes a new "
-            + "screenshot: an expired or removed capture is an error.",
+            + "screenshot: an expired or removed capture is an error. A capture over \(imageSide) px on its long side or 3.75 MB "
+            + "comes back as a smaller copy, with returned_image giving its size and scale_to_capture; zoom returns full resolution.",
          "inputSchema": ["type": "object", "properties": ["id": ["type": "string", "description": "A capture id, or \"latest\"."]], "required": ["id"]]],
         ["name": "zoom",
          "description": "Returns a crop of a capture's stored image, in image pixels, at most \(zoomLimit) px a side. Pixel (u, v) of the crop "
@@ -86,10 +91,33 @@ public struct HandoffServer: Sendable {
             switch name {
             case "get_capture":
                 let manifest = try resolve(arguments["id"] as! String)
-                let json = try manifest.json()
-                return ["content": [["type": "image", "data": try store.png(of: manifest).base64EncodedString(), "mimeType": "image/png"],
-                                    ["type": "text", "text": String(decoding: json, as: UTF8.self)]],
-                        "structuredContent": try JSONSerialization.jsonObject(with: json)]
+                var png = try store.png(of: manifest)
+                var structured = try JSONSerialization.jsonObject(with: manifest.json()) as! [String: Any]
+                var note: [[String: Any]] = []
+                let (width, height) = (manifest.image.width, manifest.image.height)
+                // Clients reject or shrink large images: past the limits the result is a smaller copy, and `zoom` gives full resolution.
+                if max(width, height) > Self.imageSide || png.count > Self.imageBytes {
+                    let image = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithData(png as CFData, nil)!, 0, nil)!
+                    var side = min(Self.imageSide, max(width, height))
+                    var size = (width: 0, height: 0)
+                    repeat {
+                        let factor = Double(side) / Double(max(width, height))
+                        size = (max(1, Int((Double(width) * factor).rounded())), max(1, Int((Double(height) * factor).rounded())))
+                        let context = CGContext(data: nil, width: size.width, height: size.height, bitsPerComponent: 8, bytesPerRow: 0,
+                                                space: image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+                        context.interpolationQuality = .high
+                        context.draw(image, in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
+                        png = Self.png(context.makeImage()!)
+                        side = side * 3 / 4
+                    } while png.count > Self.imageBytes
+                    let scale = Double(width) / Double(size.width)
+                    structured["returned_image"] = ["width": size.width, "height": size.height, "scale_to_capture": scale]
+                    note = [["type": "text", "text": "This image is a downscaled copy: \(size.width) x \(size.height) of the capture's \(width) x \(height) pixels, "
+                                + "one returned pixel to \(String(format: "%.3f", scale)) capture pixels (returned_image). Call zoom for full resolution."]]
+                }
+                return ["content": [["type": "image", "data": png.base64EncodedString(), "mimeType": "image/png"],
+                                    ["type": "text", "text": encode(structured)]] + note,
+                        "structuredContent": structured]
             case "zoom":
                 let manifest = try resolve(arguments["id"] as! String)
                 let values = ["x", "y", "width", "height"].map { arguments[$0] as? Int }
@@ -101,12 +129,8 @@ public struct HandoffServer: Sendable {
                 }
                 let source = CGImageSourceCreateWithData(try store.png(of: manifest) as CFData, nil)!
                 let crop = CGImageSourceCreateImageAtIndex(source, 0, nil)!.cropping(to: CGRect(x: x, y: y, width: w, height: h))!
-                let data = NSMutableData()
-                let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil)!
-                CGImageDestinationAddImage(destination, crop, nil)
-                precondition(CGImageDestinationFinalize(destination))
                 let offset: [String: Any] = ["capture_id": manifest.captureId, "offset": ["x": x, "y": y], "width": w, "height": h]
-                return ["content": [["type": "image", "data": (data as Data).base64EncodedString(), "mimeType": "image/png"],
+                return ["content": [["type": "image", "data": Self.png(crop).base64EncodedString(), "mimeType": "image/png"],
                                     ["type": "text", "text": encode(offset)]],
                         "structuredContent": offset]
             case "list_captures":
@@ -145,5 +169,13 @@ public struct HandoffServer: Sendable {
 
     private func encode(_ object: [String: Any]) -> String {
         String(decoding: try! JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes]), as: UTF8.self)
+    }
+
+    private static func png(_ image: CGImage) -> Data {
+        let data = NSMutableData()
+        let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(destination, image, nil)
+        precondition(CGImageDestinationFinalize(destination))
+        return data as Data
     }
 }

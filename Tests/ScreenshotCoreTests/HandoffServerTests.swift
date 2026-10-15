@@ -82,6 +82,25 @@ final class HandoffServerTests {
         #expect((byId["structuredContent"] as! [String: Any])["capture_id"] as? String == "AAAAAAAA")
     }
 
+    @Test func aLargeCaptureComesBackDownscaledAndSaysSo() throws {
+        let small = try call("get_capture", #"{"id":"AAAAAAAA"}"#)
+        #expect((small["structuredContent"] as! [String: Any])["returned_image"] == nil && (small["content"] as! [[String: Any]]).count == 2)
+        var manifest = handoffManifest(id: "WWWWWWWW", capturedAt: .now)
+        manifest.image = .init(width: 3000, height: 200, scale: 2)
+        try server.store.write(png: handoffPNG(width: 3000, height: 200), manifest: manifest)
+        let large = try call("get_capture", #"{"id":"WWWWWWWW"}"#)
+        let content = large["content"] as! [[String: Any]]
+        let png = try image(content[0])
+        #expect((png.width, png.height) == (1568, 105))
+        let returned = (large["structuredContent"] as! [String: Any])["returned_image"] as! [String: Any]
+        #expect(returned["width"] as? Int == 1568 && returned["height"] as? Int == 105 && returned["scale_to_capture"] as? Double == 3000.0 / 1568)
+        let text = try JSONSerialization.jsonObject(with: Data((content[1]["text"] as! String).utf8)) as! [String: Any]
+        #expect(text["capture_id"] as? String == "WWWWWWWW" && text["returned_image"] != nil)
+        #expect(content.count == 3 && (content[2]["text"] as! String).contains("Call zoom for full resolution"))
+        let zoom = try call("zoom", #"{"id":"WWWWWWWW","x":1000,"y":0,"width":2000,"height":200}"#)
+        #expect(try image((zoom["content"] as! [[String: Any]])[0]).width == 2000)
+    }
+
     @Test func expiredRemovedAndUnknownCapturesAreErrors() throws {
         #expect(errorCode(try call("get_capture", #"{"id":"CCCCCCCC"}"#)) == "capture_expired")
         #expect(errorCode(try call("get_capture", #"{"id":"DDDDDDDD"}"#)) == "capture_expired")
