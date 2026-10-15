@@ -28,13 +28,13 @@ extension OverlayController {
         lightCaps()
     }
 
-    /// Whether `point` (view points) is on the top bar, or between the hovered element and its chips or strip: there the
-    /// hover holds, so their buttons can be reached.
+    /// Whether `point` (view points) is on the top bar, or between the hovered element and its strip: there the hover holds, so the
+    /// strip's buttons can be reached. The chips are labels that clicks and hover pass through, so they never hold it.
     func holdsHover(at point: CGPoint) -> Bool {
         guard selection == nil, let hover = view.overlays.hover else { return false }
         let box = view.viewRect(hover)
-        // Each attached item and the bridge across the gap between it and the box, as wide as both.
-        let attached = [chrome.hover, chrome.radius, chrome.strip].filter { !$0.isHidden }.flatMap { item in
+        // The strip and the bridge across the gap between it and the box, as wide as both.
+        let attached = [chrome.strip].filter { !$0.isHidden }.flatMap { item in
             let left = max(box.minX, item.frame.minX), right = min(box.maxX, item.frame.maxX)
             let span = item.frame.union(box)
             return [item.frame] + (right > left ? [CGRect(x: left, y: span.minY, width: right - left, height: span.height)] : [])
