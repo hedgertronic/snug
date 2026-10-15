@@ -39,7 +39,8 @@ enum SettingsTabs {
     static let panes: [(title: String, symbol: String, view: AnyView)] = [
         ("General", "gearshape", AnyView(GeneralPane())),
         ("Appearance", "paintpalette", AnyView(AppearancePane())),
-        ("Keys", "keyboard", AnyView(KeysPane()))
+        ("Keys", "keyboard", AnyView(KeysPane())),
+        ("Agent", "sparkles", AnyView(AgentPane()))
     ]
 
     static func makeController() -> NSTabViewController {
@@ -621,6 +622,71 @@ struct ShortcutRecorder: NSViewRepresentable {
             defaults.set(Int(event.keyCode), forKey: Pref.hotKeyCode)
             defaults.set(Int(modifiers.rawValue), forKey: Pref.hotKeyModifiers)
             window?.makeFirstResponder(nil)
+        }
+    }
+}
+
+/// Copy for Agent: the captures kept for agents, with Delete All, and the command that adds Snug's MCP server to Claude Code. Snug adds
+/// it nowhere by itself.
+private struct AgentPane: View {
+    @State private var captures: (count: Int, bytes: Int) = (0, 0)
+    @State private var confirming = false
+    private let store = HandoffStore(defaults: .standard)
+    private let command = "claude mcp add snug -- " + { $0.contains(" ") ? "'\($0)'" : $0 }(Bundle.main.executablePath!) + " --mcp"
+
+    var body: some View {
+        Pane {
+            Text("Cmd-Return in the overlay copies a capture for an agent, with the app, window and element it shows. Captures are kept 7 days, up to 500 MB.")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+            Card {
+                LabeledContent {
+                    Button("Delete All...") { confirming = true }.disabled(captures.count == 0)
+                } label: {
+                    detailed("Agent captures", captures.count == 0 ? "None"
+                        : "\(captures.count) kept, \(ByteCountFormatter.string(fromByteCount: Int64(captures.bytes), countStyle: .file))")
+                }
+                .padding(.vertical, 4)
+            }
+            caption("MCP server")
+            Card {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Agents read your captures through Snug's MCP server. To add it to Claude Code, run:")
+                    HStack(spacing: 8) {
+                        Text(command).font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                        Spacer(minLength: 0)
+                        Button("Copy") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(command, forType: .string)
+                        }
+                    }
+                }
+                .padding(.vertical, 10)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .onAppear(perform: load)
+        .confirmationDialog("Delete all agent captures?", isPresented: $confirming) {
+            Button("Delete All", role: .destructive) {
+                do {
+                    try store.removeAll()
+                } catch {
+                    NSApp.presentError(error)
+                }
+                load()
+            }
+        } message: {
+            Text("Agents can no longer read them.")
+        }
+    }
+
+    private func load() {
+        do {
+            let ids = try store.manifests().map(\.captureId)
+            captures = (ids.count, try ids.reduce(0) { $0 + (try store.bytes(of: $1)) })
+        } catch {
+            NSApp.presentError(error)
         }
     }
 }
