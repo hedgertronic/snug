@@ -676,9 +676,16 @@ extension DebugRun {
         await overlay.detectionTask?.value
         overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         let rowHeight = 32 * overlay.scale
-        let sidebar = (0..<5).map { Candidate(id: "ax-row-\($0)", label: "Row", bounds: CGRect(x: aim.x - 80 * overlay.scale, y: aim.y - 80 * overlay.scale + CGFloat($0) * rowHeight,
+        let sidebar = (0..<5).map { Candidate(id: "ax-row-\($0)", label: "Row", bounds: CGRect(x: flat.x - 80 * overlay.scale, y: flat.y - 80 * overlay.scale + CGFloat($0) * rowHeight,
                                                                                             width: 160 * overlay.scale, height: rowHeight), score: AccessibilityBounds.baseScore, kind: .element) }
-        overlay.merge(sidebar)
+        let outline = Candidate(id: "ax-outline", label: "Outline", bounds: CGRect(x: sidebar[0].bounds.minX, y: sidebar[0].bounds.minY, width: 160 * overlay.scale, height: 5 * rowHeight)
+            .insetBy(dx: -8 * overlay.scale, dy: -8 * overlay.scale), score: AccessibilityBounds.baseScore, kind: .element)
+        // Only the rows and their outline are candidates: no pixel geometry or flat fills join the hover.
+        overlay.detected = []
+        await overlay.fillsTask?.value
+        overlay.fills = nil
+        overlay.buildSession()
+        overlay.merge([outline] + sidebar)
         mouse(.mouseMoved, CGPoint(x: sidebar[3].bounds.midX, y: sidebar[3].bounds.midY))
         require(overlay.view.overlays.hover == sidebar[3].bounds, "the lower sidebar row is hovered")
         var travel = CGPoint(x: sidebar[3].bounds.midX, y: sidebar[3].bounds.midY)
@@ -687,6 +694,10 @@ extension DebugRun {
             mouse(.mouseMoved, travel)
         }
         require(overlay.view.overlays.hover == sidebar[2].bounds, "moving up a row hovers the row above, not the chip's row: \(String(describing: overlay.view.overlays.hover)) at \(travel)")
+        key(right, "")
+        require(overlay.view.overlays.hover == sidebar[3].bounds, "Right steps to the next row, which the walk holds: \(String(describing: overlay.view.overlays.hover))")
+        for _ in 0..<4 { key(left, "") }
+        require(overlay.view.overlays.hover == sidebar[4].bounds, "Left wraps from the first row to the last: \(String(describing: overlay.view.overlays.hover))")
 
         // Up walks out through the parents to the window, then the display; Down walks back in.
         open()

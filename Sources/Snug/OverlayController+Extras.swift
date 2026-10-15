@@ -166,9 +166,10 @@ extension OverlayController {
         refresh()
     }
 
-    /// While the capture is live and Accessibility is allowed, asks the window under `pixel` for the elements there, off main,
-    /// at most about every 150 ms. A request the throttle drops comes again once it ends, at the pointer, unless the pointer is on the
-    /// pixel the last lookup used. Nothing happens without permission, in debug runs, or when the lookup finds nothing.
+    /// While the capture is live and Accessibility is allowed, asks the window under `pixel` for the elements there and for the hovered
+    /// element's peers (Left and Right step among them), off main, at most about every 150 ms. A request the throttle drops comes
+    /// again once it ends, at the pointer, unless the pointer is on the pixel the last lookup used. Nothing happens without
+    /// permission, in debug runs, or when the lookup finds nothing.
     func requestAccessibility(at pixel: CGPoint) {
         guard displayID != nil, !isHeadless, AXIsProcessTrusted(),
               let index = windows.firstIndex(where: { $0.contains(pixel) }), windowIDs.indices.contains(index),
@@ -187,18 +188,27 @@ extension OverlayController {
         let primaryHeight = NSScreen.screens[0].frame.height
         let origin = CGPoint(x: window.frame.minX, y: primaryHeight - window.frame.maxY)
         let point = AccessibilityBounds.point(forPixel: pixel, displayOrigin: origin, scale: scale)
-        let (scale, extent, image) = (scale, extent, image!)
+        let (scale, extent, image, windows) = (scale, extent, image!, windows)
         accessibilityTask = Task {
             defer { accessibilityTask = nil }
             let info = CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]]
             guard let pid = info?.first?[kCGWindowOwnerPID as String] as? Int32 else { return }
-            let frames = await Accessibility.frames(at: point, pid: pid)
+            let began = ContinuousClock.now
+            let (frames, peers) = await Accessibility.framesAndPeers(at: point, pid: pid)
+            let lookup = began.duration(to: .now)
             guard !Task.isCancelled, mode == .capture else { return }
             let found = StageManager.visibleThumbnails(try await AccessibilityBounds.candidates(frames: AccessibilityBounds.hoverLevel(frames), displayOrigin: origin,
                                                                                                 scale: scale, extent: extent), frames: frames, in: image, scale: scale)
+            // A peer nobody hit can sit under another window: only those whose center is in this window's visible part count.
+            let peerFound = StageManager.visibleThumbnails(try await AccessibilityBounds.peerCandidates(peers, displayOrigin: origin, scale: scale, extent: extent),
+                                                           frames: frames, in: image, scale: scale)
+                .filter { peer in windows.firstIndex { $0.contains(CGPoint(x: peer.bounds.midX, y: peer.bounds.midY)) } == index }
             Pref.logHoverLine("hover \(point) scale \(scale) frames " + frames.map { "\($0.role) '\($0.roleDescription)' '\($0.title)' \($0.rect)" }.joined(separator: " | ")
-                + " -> " + found.map { "\($0.label) \($0.bounds)" }.joined(separator: " | "))
-            if !found.isEmpty { merge(found.map { $0.grownToBorder(in: image) }) }
+                + " -> " + found.map { "\($0.label) \($0.bounds)" }.joined(separator: " | ") + " | lookup with \(peers.count) peers \(lookup), \(peerFound.count) candidates")
+            guard !found.isEmpty else { return }
+            let grown = await Task.detached { (found + peerFound).map { $0.grownToBorder(in: image) } }.value
+            guard !Task.isCancelled, session != nil else { return }
+            merge(grown)
         }
     }
 
