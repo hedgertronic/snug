@@ -366,7 +366,8 @@ final class OverlayController {
     }
 
     func mouseMoved(_ event: NSEvent) {
-        guard image != nil, armedRecording == nil else { return }
+        // The Colors menu is anchored to the hovered element's strip: while it is open the hover stays where it was.
+        guard image != nil, armedRecording == nil, chrome.colorMenu.isHidden else { return }
         optionHeld = event.modifierFlags.contains(.option)
         commandHeld = event.modifierFlags.contains(.command)
         shiftHeld = event.modifierFlags.contains(.shift)
@@ -684,8 +685,9 @@ final class OverlayController {
             refresh()
             return true
         }
-        // Esc with a released selection drops it back to hover, as an undo step.
-        if event.keyCode == 53, mode == .capture, selection != nil, chrome.help.isHidden, case .none = interaction {
+        // Esc, or E (the lit Edit button), with a released selection drops it back to hover, as an undo step.
+        let leavesEdit = event.keyCode == 53 || flags.isEmpty && event.charactersIgnoringModifiers == "e"
+        if leavesEdit, mode == .capture, selection != nil, chrome.help.isHidden, case .none = interaction {
             undoStack.append(selectionState)
             redoStack = []
             lastEdit = nil
@@ -732,7 +734,7 @@ final class OverlayController {
             guard let index = windows.firstIndex(where: { $0.contains(pointer) }) else { return false }
             clickWindow(index, crop: windows[index], framed: framed, copy: true, save: afterCaptureSaves)
         case (_, false, "k"): cutOut()
-        case (_, false, "u") where !hovering: showColorsMenu()
+        case (_, false, "u"): showColorsMenu()
         case (_, false, "o"): defaults.set(!defaults.bool(forKey: Pref.roundCorners), forKey: Pref.roundCorners)
         case (_, false, _) where shift && !hovering && character.lowercased() == "p": toggleRatioLock()
         case (_, false, "p") where !hovering: showRatioMenu()
@@ -993,7 +995,8 @@ final class OverlayController {
         layoutCornerChip()
         overlays.upHintRadii = overlays.upHint.map(cornerRadii) ?? .zero
         overlays.downHintRadii = overlays.downHint.map(cornerRadii) ?? .zero
-        if let rect = selection?.rect, framed { overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, framed: true) }
+        // The padded card of an area or element; a live window's real shadow has no card to preview.
+        if let rect = selection?.rect, framed, !capturesLiveWindow(rect) { overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, framed: true) }
         view.overlays = overlays
         refreshExtras()
         refreshRecording()

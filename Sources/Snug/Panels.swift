@@ -121,7 +121,7 @@ final class HelpSheet: NSView {
     static let columns: [(title: String, rows: [(keys: String, action: String)])] = [
         ("Capture", [("drag", "Select a region"), ("click", "Element or window"), ("Option-click", "Flip Frame for this capture"), ("Option-drag", "Exact, no snap"),
                      ("F", "Full screen, or all text"), ("W", "Capture the window"), ("Left / Right", "Next / previous peer (hover)"), ("Return", "Copy"), ("Shift-Return", "Copy the text"), ("Cmd-S", "Save"),
-                     ("Cmd-Shift-S", "Save As"), ("E / Shift-click", "Edit as a selection"),
+                     ("Cmd-Shift-S", "Save As"), ("E / Shift-click", "Edit; E again: back"),
                      ("G", "Scrolling capture, hover or selection"), ("K", "Subject preview"), ("Subject: Tab", "Next subject (Shift: back)"), ("Subject: S", "Crop to subject"),
                      ("C", "Copy color"), ("Shift-C", "Cycle color format"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
         ("Adjust and text", [("Tab", "Walk out (Shift: in)"), ("Arrows", "Nudge 1 px (Shift: 10 px)"), ("Option-arrow", "Grow one side 1 px"), ("Option-Cmd-arrow", "Shrink one side 1 px"),

@@ -190,7 +190,7 @@ extension DebugRun {
             require(close(bytes(shown), [229, 72, 77], 2), "the \(name) is drawn in the highlight color")
         }
         let modeFill = overlay.chrome.modeButtons[.capture]!.layer!.backgroundColor.flatMap { NSColor(cgColor: $0)?.usingColorSpace(.sRGB) }
-        require(modeFill.map { close(bytes($0), [229, 72, 77], 2) } == true, "a new highlight color restyles the buttons: the current mode fills with it")
+        require(modeFill.map { close(bytes($0), [229, 72, 77], 2) } == true, "a new highlight color restyles the buttons: the current mode washes with it")
         defaults.removeObject(forKey: Pref.highlightColor)
         overlay.view.highlight = Highlight(defaults: defaults)
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
@@ -853,7 +853,7 @@ extension DebugRun {
                 overlay.refresh()
                 require(clipped().isEmpty && abs(frameButton.cap!.frame.minX - frameButton.title.frame.maxX - 7) < 0.01 && abs(frameButton.bounds.maxX - frameButton.cap!.frame.maxX - 7) < 0.01,
                         "no bar title clips and the Frame button hugs its cap with Frame \(framed) and \(mode) selected: \(clipped()) \(frameButton.frame)")
-                require(chrome.modeButtons[mode]!.primary && top.groups.count == (mode == .text ? 2 : 3), "the current mode is primary, and Text hides the style pill")
+                require(chrome.modeButtons[mode]!.lit && !chrome.modeButtons[mode]!.primary && chrome.modeButtons.values.filter(\.lit).count == 1 && top.groups.count == (mode == .text ? 2 : 3), "the current mode is lit, the other plain, and Text hides the style pill")
             }
         }
         defaults.set(false, forKey: Pref.frame)
@@ -900,15 +900,42 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
         let captureStrip = ["Copy", "\u{21A9}", "Save", "\u{2318}S", "Text", "\u{21E7}\u{21A9}", "Scroll", "G", "Record", "V", "Subject", "K"]
         let offline = captureStrip.filter { !["Scroll", "G", "Record", "V"].contains($0) }
-        require(texts(in: chrome.strip) == ["Edit", "E"] + offline && chrome.strip.groups.count == 3 && chrome.copy.primary && !chrome.edit.primary && !chrome.edit.lit
+        require(texts(in: chrome.strip) == ["Edit", "E"] + offline + ["Colors", "U"] && chrome.strip.groups.count == 3 && chrome.copy.primary && !chrome.edit.primary && !chrome.edit.lit
                     && chrome.edit.superview === chrome.strip.groups[0] && chrome.strip.frame.maxY == windowBox.minY - 8 && chrome.strip.frame.minX == windowBox.minX,
-                "the action strip hangs under the hovered box: Edit in its own pill, then Copy, Save, Text, then Subject (no live display, so no Scroll or Record): \(texts(in: chrome.strip)) \(chrome.strip.frame) \(windowBox)")
+                "the action strip hangs under the hovered box: Edit in its own pill, then Copy, Save, Text, then Subject and Colors (no live display, so no Scroll or Record): \(texts(in: chrome.strip)) \(chrome.strip.frame) \(windowBox)")
         require(chrome.all.flatMap(faded).isEmpty, "nothing else in the chrome is faded: \(chrome.all.flatMap(faded))")
-        // The Edit button does what E does: it opens the hovered window as a selection and leaves the strip, and Esc goes back to the hover.
+        // The Edit button does what E does: it opens the hovered window as a selection and stays in the strip, lit; clicking it again, E,
+        // and Esc go back to the hover, and Cmd-Z brings the selection back.
         chrome.edit.onClick()
-        require(overlay.selection?.rect == window && !texts(in: chrome.strip).contains("Edit"), "clicking Edit opens the hovered window as a selection, with no Edit in the strip: \(String(describing: overlay.selection?.rect))")
+        require(overlay.selection?.rect == window && texts(in: chrome.strip).prefix(2) == ["Edit", "E"] && chrome.edit.lit,
+                "clicking Edit opens the hovered window as a selection, with a lit Edit in the strip: \(String(describing: overlay.selection?.rect))")
+        for (name, leave) in [("clicking Edit", { chrome.edit.onClick() }), ("E", { key(14, "e") }), ("Esc", { key(53, "") })] as [(String, () -> Void)] {
+            leave()
+            require(overlay.selection == nil && texts(in: chrome.strip).first == "Edit" && !chrome.edit.lit, "\(name) in edit goes back to the hover and a plain Edit button: \(texts(in: chrome.strip))")
+            key(6, "z", .command)
+            require(overlay.selection?.rect == window && chrome.edit.lit, "Cmd-Z after \(name) brings the selection back: \(String(describing: overlay.selection?.rect))")
+        }
         key(53, "")
-        require(overlay.selection == nil && texts(in: chrome.strip).first == "Edit", "Esc goes back to the hover and its Edit button: \(texts(in: chrome.strip))")
+        key(14, "e")
+        require(overlay.selection?.rect == window, "E in the hover edits the hovered window again")
+        key(53, "")
+        // U in the hover opens the Colors menu for the hovered element's rectangle, under the hover strip's Colors button; the menu holds
+        // the hover while the pointer moves away under it, and Esc closes it and keeps the hover.
+        let hoverFormat = ColorFormat(rawValue: defaults.string(forKey: Pref.colorFormat)!)!
+        let hoverColors = ([ColorFormat.average(of: image, in: window)] + ColorFormat.palette(of: image, in: window)).map(hoverFormat.string)
+        key(32, "u")
+        for _ in 0..<1000 where chrome.colorMenu.isHidden { try await Task.sleep(for: .milliseconds(10)) }
+        let colorsButton = overlay.view.convert(chrome.colors.bounds, from: chrome.colors)
+        require(!chrome.colorMenu.isHidden && overlay.selection == nil && chrome.colorMenu.items.map(\.title).filter { !$0.isEmpty } == hoverColors
+                    && chrome.colorMenu.panel.frame.minX == min(max(colorsButton.minX, 8), overlay.view.bounds.width - chrome.colorMenu.panel.frame.width - 8) && chrome.colorMenu.panel.frame.maxY <= colorsButton.minY,
+                "U in the hover opens the Colors menu for the hovered window under the strip's Colors button: \(chrome.colorMenu.items.map(\.title)) \(hoverColors)")
+        let stripBefore = chrome.strip.frame
+        mouse(.mouseMoved, CGPoint(x: 40, y: 40))
+        require(!chrome.colorMenu.isHidden && overlay.view.overlays.hover == window && chrome.strip.frame == stripBefore,
+                "the pointer moving away under the open menu leaves the hover and its strip where they are: \(String(describing: overlay.view.overlays.hover)) \(chrome.strip.frame)")
+        key(53, "\u{1B}")
+        require(chrome.colorMenu.isHidden && overlay.window.isVisible && overlay.selection == nil, "Esc closes the hover's Colors menu and keeps the overlay")
+        mouse(.mouseMoved, CGPoint(x: 400, y: 400))
         // The hover holds while the pointer crosses from the element to its strip, so a click reaches Copy; the loupe and crosshair still
         // follow the pointer.
         defaults.set(true, forKey: Pref.loupe)
@@ -946,9 +973,9 @@ extension DebugRun {
         require(texts(in: chrome.size) == ["\(Int(fit.width)) x \(Int(fit.height))  Snapped"], "a snap preview shows its size and Snapped: \(texts(in: chrome.size))")
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.snap) == ["Snapped", "S"] && chrome.snap.lit, "after release on a fit: Snapped, lit")
-        require(!top.isHidden && texts(in: chrome.strip) == offline + ["Colors", "U"] && texts(in: chrome.hints)
+        require(!top.isHidden && texts(in: chrome.strip) == ["Edit", "E"] + offline + ["Colors", "U"] && chrome.edit.lit && texts(in: chrome.hints)
                     == ["move", "\u{2190}\u{2192}", "grow", "\u{2325}", "shrink", "\u{2325}\u{2318}", "edge out", "\u{2318}", "edge in", "\u{2318}\u{21E7}", "all sides", "+", "-", "undo", "\u{2318}Z"],
-                "a selection keeps the top bar, has the strip without Edit, and the arrow layers on the keys line: \(texts(in: chrome.hints))")
+                "a selection keeps the top bar, has the strip with a lit Edit, and the arrow layers on the keys line: \(texts(in: chrome.hints))")
         require(chrome.hints.frame.height < 40 && chrome.hints.frame.width <= overlay.view.bounds.width - 16, "the keys line is one line and fits: \(chrome.hints.frame) in \(overlay.view.bounds.width)")
         // The chip row: size and Snap from the selection's left edge, the ratio and radius ending at its right edge (after Snap when they
         // would meet). The ratio chip's readout with P opens the ratio menu, the lock with Shift-P toggles the lock, with no fills of their own.
@@ -1174,7 +1201,7 @@ extension DebugRun {
                     && texts(in: chrome.strip).contains("Start"),
                 "armed to record, the ratio, radius, and Snap chips and the edge keys hide, and the strip holds the armed controls")
         key(53, "\u{1B}")
-        require(overlay.armedRecording == nil && texts(in: chrome.strip) == captureStrip.filter { $0 != "Scroll" && $0 != "G" } + ["Colors", "U"] && !chrome.ratio.isHidden, "Esc disarms and brings the editing chrome back: \(texts(in: chrome.strip))")
+        require(overlay.armedRecording == nil && texts(in: chrome.strip) == ["Edit", "E"] + captureStrip.filter { $0 != "Scroll" && $0 != "G" } + ["Colors", "U"] && !chrome.ratio.isHidden, "Esc disarms and brings the editing chrome back: \(texts(in: chrome.strip))")
         overlay.dismiss()
 
         // G: scrolling capture of a released selection inside a window, with frames cut from the fixture as if the page scrolled 300 px.
@@ -1309,6 +1336,55 @@ extension DebugRun {
         overlay.dismiss()
         for key in [Pref.rulers, Pref.loupe] { defaults.set(false, forKey: key) }
         try await verifyRecording(image: image, frame: frame, overlay: overlay, require: require)
+
+        // Chrome keeps its distance from the object's outline: 8 pt off it outside, and 8 pt in from it when the screen leaves no room outside.
+        open()
+        overlay.detectionTask?.cancel()
+        /// The distance from `item` to the outline `box`: to the nearest side from inside it, else the larger axis gap (negative when they overlap).
+        func outlineGap(_ item: NSView, _ box: CGRect) -> CGFloat {
+            let f = item.frame
+            if box.contains(f) { return min(f.minX - box.minX, box.maxX - f.maxX, f.minY - box.minY, box.maxY - f.maxY) }
+            return max(f.minX - box.maxX, box.minX - f.maxX, f.minY - box.maxY, box.minY - f.maxY)
+        }
+        let outlineCases = [("middle", CGRect(x: 600, y: 300, width: 1000, height: 600)), ("small", CGRect(x: 600, y: 300, width: 120, height: 80)),
+                         ("left edge", CGRect(x: 0, y: 600, width: 500, height: 300)), ("right edge", CGRect(x: extent.width - 500, y: 600, width: 500, height: 300)),
+                         ("top edge", CGRect(x: 900, y: 0, width: 700, height: 300)), ("bottom edge", CGRect(x: 900, y: extent.height - 300, width: 700, height: 300)),
+                         ("edge to edge", CGRect(x: 0, y: 300, width: extent.width, height: 600)), ("full screen", extent)]
+        for hovering in [false, true] {
+            for (name, rect) in outlineCases {
+                if hovering {
+                    overlay.selection = nil
+                    overlay.setWindows([rect], names: ["Edge"], pointer: CGPoint(x: frame.minX + rect.midX / overlay.scale, y: frame.maxY - rect.midY / overlay.scale))
+                    mouse(.mouseMoved, CGPoint(x: rect.midX, y: rect.midY))
+                } else {
+                    overlay.selection = AreaSelection(extent: extent, exact: rect)
+                    overlay.refresh()
+                }
+                let box = overlay.view.viewRect(rect)
+                let shown: [(String, NSView)] = [("size", chrome.size), ("snap", chrome.snap), ("ratio", chrome.ratio), ("radius", chrome.radius), ("hover", chrome.hover), ("strip", chrome.strip)].filter { !$0.1.isHidden }
+                let gaps = shown.map { ($0.0, outlineGap($0.1, box)) }
+                require(!shown.isEmpty && gaps.allSatisfy { $0.1 >= 8 - 0.01 }, "a \(hovering ? "hovered" : "selected") \(name) object's chrome keeps 8 pt from its outline: \(gaps)")
+            }
+        }
+        overlay.dismiss()
+
+        // The dashed Frame preview is the padded card of an area or element; on a selection that matches a live window the output is the
+        // window's real shadow, so no card is drawn. A frozen window or an imported image crops, so it keeps the card.
+        let framedWindow = CGRect(x: 600, y: 300, width: 1000, height: 600)
+        defaults.set(true, forKey: Pref.frame)
+        for (name, display, frozen, card) in [("a live window", CGMainDisplayID() as CGDirectDisplayID?, false, false), ("a frozen window", CGMainDisplayID(), true, true), ("a window of an imported image", nil, false, true)] {
+            overlay.present(image: image, frame: frame, displayID: display)
+            overlay.detectionTask?.cancel()
+            overlay.setWindows([framedWindow], names: ["Window"], ids: [1], frozen: [frozen], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+            overlay.selection = AreaSelection(extent: extent, exact: framedWindow)
+            overlay.refresh()
+            require((overlay.view.overlays.styleFrame != nil) == card, "with Frame on, the preview on \(name) draws the card: \(card)")
+            overlay.selection = AreaSelection(extent: extent, exact: framedWindow.insetBy(dx: 40, dy: 40))
+            overlay.refresh()
+            require(overlay.view.overlays.styleFrame == OutputFrame.rect(around: framedWindow.insetBy(dx: 40, dy: 40), scale: overlay.scale, framed: true), "an area inside \(name) keeps the card preview")
+            overlay.dismiss()
+        }
+        defaults.set(false, forKey: Pref.frame)
 
         // Hot keys: each handler takes only presses of its own ID (the capture shortcut and the overlay's Esc share the app's target).
         // The presses are Carbon events sent to the app, so nothing is registered system-wide.
