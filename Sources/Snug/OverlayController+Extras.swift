@@ -59,6 +59,7 @@ extension OverlayController {
         accessibilityTask?.cancel()
         accessibilityTask = nil
         accessibilityStarted = nil
+        accessibilityPixel = nil
         session = nil
         detected = []
         dockTiles = []
@@ -166,13 +167,22 @@ extension OverlayController {
     }
 
     /// While the capture is live and Accessibility is allowed, asks the window under `pixel` for the elements there, off main,
-    /// at most about every 150 ms. Nothing happens without permission, in debug runs, or when the lookup finds nothing.
+    /// at most about every 150 ms. A request the throttle drops comes again once it ends, at the pointer, unless the pointer is on the
+    /// pixel the last lookup used. Nothing happens without permission, in debug runs, or when the lookup finds nothing.
     func requestAccessibility(at pixel: CGPoint) {
-        guard displayID != nil, !isHeadless, AXIsProcessTrusted(), accessibilityTask == nil,
-              accessibilityStarted.map({ $0.duration(to: .now) >= .milliseconds(150) }) ?? true,
+        guard displayID != nil, !isHeadless, AXIsProcessTrusted(),
               let index = windows.firstIndex(where: { $0.contains(pixel) }), windowIDs.indices.contains(index),
               AccessibilityBounds.looksUp(inWindowNamed: windowNames[index], frozen: windowFrozen[index]) else { return }
+        guard accessibilityTask == nil, accessibilityStarted.map({ $0.duration(to: .now) >= .milliseconds(150) }) ?? true else {
+            accessibilityRetry?.cancel()
+            accessibilityRetry = Task {
+                try await Task.sleep(for: .milliseconds(160))
+                if mode == .capture, session != nil, pointerPixel != accessibilityPixel { requestAccessibility(at: pointer) }
+            }
+            return
+        }
         accessibilityStarted = .now
+        accessibilityPixel = CGPoint(x: pixel.x.rounded(.down), y: pixel.y.rounded(.down))
         let id = windowIDs[index]
         let primaryHeight = NSScreen.screens[0].frame.height
         let origin = CGPoint(x: window.frame.minX, y: primaryHeight - window.frame.maxY)

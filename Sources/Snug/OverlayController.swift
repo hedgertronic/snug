@@ -166,9 +166,12 @@ final class OverlayController {
     var fillsTask: Task<Void, Never>?
     /// The Dock's icon tiles read from the frozen image, labeled by the Dock's item titles.
     var dockTiles: [Candidate] = []
-    /// The running accessibility lookup and when the last one started (throttle).
+    /// The running accessibility lookup and when the last one started (throttle), the pixel it looked up, and the repeat of a request
+    /// the throttle dropped.
     var accessibilityTask: Task<Void, Error>?
     var accessibilityStarted: ContinuousClock.Instant?
+    var accessibilityPixel: CGPoint?
+    var accessibilityRetry: Task<Void, Error>?
     var previousApp: NSRunningApplication?
     /// Esc as a global hot key while the overlay is up (never in debug runs): Snug may not be active, as when the shortcut opened the
     /// overlay over another app's open menu, and then a plain Esc would go to that app. A press reaches the overlay as its Esc key.
