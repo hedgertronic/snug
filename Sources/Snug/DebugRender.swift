@@ -604,7 +604,7 @@ extension DebugRun {
             field.keyDown(with: escape)
             precondition(!field.recording && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode, "Esc stops recording and keeps the shortcut")
         }
-        precondition(tabs.tabViewItems.map(\.label) == ["General", "Appearance", "Keys"], "Settings tabs: \(tabs.tabViewItems.map(\.label))")
+        precondition(tabs.tabViewItems.map(\.label) == ["General", "Appearance", "Keys", "Agent"], "Settings tabs: \(tabs.tabViewItems.map(\.label))")
         let window = SettingsTabs.makeWindow()
         let tabController = window.contentViewController as! NSTabViewController
         for (index, item) in tabController.tabViewItems.enumerated() {

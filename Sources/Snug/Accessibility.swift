@@ -10,7 +10,7 @@ enum Accessibility {
     private static let peerBudget = Duration.milliseconds(100)
 
     /// The frames of the element at `point` (global points, top-left origin) in `pid`'s app and its parents up to the window,
-    /// innermost first. Empty without permission, on a timeout, when nothing is there, or for Snug's own windows: AX against
+    /// innermost first, each with its role, title, subrole, identifier and description. Empty without permission, on a timeout, when nothing is there, or for Snug's own windows: AX against
     /// its own pid runs in this process, off main, and AppKit's hit test there trips the MainActor isolation check.
     @concurrent
     static func frames(at point: CGPoint, pid: pid_t) async -> [AXFrame] {
@@ -79,7 +79,14 @@ enum Accessibility {
         AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role)
         var title: CFTypeRef?
         AXUIElementCopyAttributeValue(element, kAXTitleAttribute as CFString, &title)
-        return AXFrame(roleDescription: description as? String ?? "", rect: CGRect(origin: position, size: size), role: role as? String ?? "", title: title as? String ?? "")
+        var subrole: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXSubroleAttribute as CFString, &subrole)
+        var identifier: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXIdentifierAttribute as CFString, &identifier)
+        var elementDescription: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXDescriptionAttribute as CFString, &elementDescription)
+        return AXFrame(roleDescription: description as? String ?? "", rect: CGRect(origin: position, size: size), role: role as? String ?? "", title: title as? String ?? "",
+                       subrole: subrole as? String ?? "", identifier: identifier as? String ?? "", elementDescription: elementDescription as? String ?? "")
     }
 
     private static func children(of element: AXUIElement, _ attribute: String) -> [AXUIElement]? {

@@ -209,6 +209,8 @@ extension OverlayController {
             guard !found.isEmpty else { return }
             let grown = await Task.detached { (found + peerFound).map { $0.grownToBorder(in: image) } }.value
             guard !Task.isCancelled, session != nil else { return }
+            // The hit element's chain covers its own candidates; a peer's AX data comes from a hit test at copy time.
+            for candidate in grown.prefix(found.count) { accessibilityObservations[candidate.bounds] = (frames, .now) }
             merge(grown)
         }
     }

@@ -21,6 +21,7 @@ enum DebugRun {
         let defaults = UserDefaults(suiteName: scratch.appending(path: "prefs").path)!
         Pref.register(in: defaults)
         defaults.set(folder.path, forKey: Pref.saveFolder)
+        defaults.set(scratch.appending(path: "agent").path, forKey: Pref.agentFolder)
         overlay.defaults = defaults
         overlay.pasteboard = NSPasteboard.withUniqueName()
         return folder

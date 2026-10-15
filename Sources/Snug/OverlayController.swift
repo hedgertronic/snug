@@ -172,6 +172,11 @@ final class OverlayController {
     var accessibilityStarted: ContinuousClock.Instant?
     var accessibilityPixel: CGPoint?
     var accessibilityRetry: Task<Void, Error>?
+    /// The frames each accessibility candidate came from (its element and ancestors, innermost first) and when they were read, by its
+    /// rectangle; Copy for Agent reads them.
+    var accessibilityObservations: [CGRect: (frames: [AXFrame], observedAt: Date)] = [:]
+    /// When `present` froze the pixels.
+    var frozenAt = Date.now
     var previousApp: NSRunningApplication?
     /// Esc as a global hot key while the overlay is up (never in debug runs): Snug may not be active, as when the shortcut opened the
     /// overlay over another app's open menu, and then a plain Esc would go to that app. A press reaches the overlay as its Esc key.
@@ -234,6 +239,8 @@ final class OverlayController {
         fills = nil
         dockTiles = []
         accessibilityTask?.cancel()
+        accessibilityObservations = [:]
+        frozenAt = .now
         let start = ContinuousClock.now
         let shown = signposter.beginInterval("overlay shown")
         self.image = image
@@ -728,6 +735,7 @@ final class OverlayController {
         let hovering = selection == nil
         switch (event.keyCode, command, character) {
         case (53, _, _): dismiss()
+        case (36, true, _) where !shift && !option, (76, true, _) where !shift && !option: copyForAgent()
         case (36, _, _) where hovering && !shift, (76, _, _) where hovering && !shift: clickHover(framed: framed, copy: true, save: afterCaptureSaves, takeDisplay: true)
         case (_, true, _) where shift && character.lowercased() == "s":
             if hovering { clickHover(framed: framed, copy: false, save: true, takeDisplay: true, saveAs: true) } else { save(saveAs: true) }
