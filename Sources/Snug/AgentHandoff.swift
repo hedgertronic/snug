@@ -43,7 +43,7 @@ extension OverlayController {
                     (await Accessibility.frames(at: CGPoint(x: global.midX, y: global.midY), pid: pid), .now)
                 } else { nil }
                 let target = HandoffManifest.Target(kind: kind, label: label, provenance: provenance, frames: read?.frames ?? [], observedAt: read?.observedAt,
-                                                    crop: global, display: display)
+                                                    crop: global, display: display, tolerance: max(4, 6 / scale))
                 var warnings: [HandoffManifest.Warning] = []
                 if !live || !AXIsProcessTrusted() { warnings.append(.accessibilityUnavailable) }
                 if let observed = target.observedAt, observed.timeIntervalSince(capturedAt) > HandoffManifest.staleAfter { warnings.append(.accessibilityStale) }

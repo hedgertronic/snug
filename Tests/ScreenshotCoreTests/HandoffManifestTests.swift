@@ -77,6 +77,13 @@ struct HandoffManifestTests {
         let clipped = HandoffManifest.Target(kind: .element, label: "Row", provenance: .geometry, frames: offscreen, observedAt: .now,
                                              crop: CGRect(x: 0, y: 100, width: 150, height: 20), display: display)
         #expect(clipped.role == "AXRow")
+        // A row scrolled half under its scroll area's top edge is compared where it shows; its ancestors keep their own frames.
+        let scrolled = [AXFrame(roleDescription: "row", rect: CGRect(x: 100, y: 190, width: 200, height: 40), role: "AXRow", title: "Downloads"),
+                        AXFrame(roleDescription: "outline", rect: CGRect(x: 100, y: 0, width: 200, height: 1000), role: "AXOutline"),
+                        AXFrame(roleDescription: "scroll area", rect: CGRect(x: 100, y: 210, width: 200, height: 400), role: "AXScrollArea")]
+        let row = HandoffManifest.Target(kind: .element, label: "Row", provenance: .accessibility, frames: scrolled, observedAt: .now,
+                                         crop: CGRect(x: 100, y: 210, width: 200, height: 20), display: display)
+        #expect(row.title == "Downloads" && row.ancestors?.map(\.frame) == [.init(scrolled[1].rect), .init(scrolled[2].rect)])
     }
 
     @Test func theReferenceIsOneASCIILineWithNoScreenTextBrackets() {

@@ -123,12 +123,20 @@ public struct HandoffManifest: Codable, Sendable, Equatable {
         public var observedAt: Date?
 
         /// A target with the Accessibility fields of the innermost of `frames` (innermost first, global points) whose frame, clipped to
-        /// `display`, is within `tolerance` points of `crop` on every side, and the frames after it as its ancestors; its provenance is
-        /// then `accessibility`. Without such a frame it has no Accessibility fields and keeps `provenance`.
+        /// its scroll viewports (as hover candidates are) and to `display`, is within `tolerance` points of `crop` on every side, and the
+        /// frames after it, unclipped, as its ancestors; its provenance is then `accessibility`. Without such a frame it has no
+        /// Accessibility fields and keeps `provenance`.
         public init(kind: Kind, label: String, provenance: Provenance, frames: [AXFrame], observedAt: Date?, crop: CGRect, display: CGRect,
                     tolerance: CGFloat = 4) {
             (self.kind, self.label, self.provenance) = (kind, label, provenance)
-            guard let index = frames.firstIndex(where: { $0.rect.intersection(display).isNear(crop, within: tolerance) }) else { return }
+            // Outermost first, so each viewport is already clipped to its own.
+            var visible = frames.map { $0.rect.intersection(display) }
+            for index in frames.indices.reversed() {
+                if let viewport = frames.indices.dropFirst(index + 1).first(where: { ["AXScrollArea", "AXWebArea"].contains(frames[$0].role) }) {
+                    visible[index] = visible[index].intersection(visible[viewport])
+                }
+            }
+            guard let index = visible.firstIndex(where: { $0.isNear(crop, within: tolerance) }) else { return }
             let element = frames[index]
             let known = { (value: String) in value.isEmpty ? nil : value }
             role = known(element.role)
