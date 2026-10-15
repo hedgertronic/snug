@@ -1368,6 +1368,24 @@ extension DebugRun {
         }
         overlay.dismiss()
 
+        // The dashed Frame preview is the padded card of an area or element; on a selection that matches a live window the output is the
+        // window's real shadow, so no card is drawn. A frozen window or an imported image crops, so it keeps the card.
+        let framedWindow = CGRect(x: 600, y: 300, width: 1000, height: 600)
+        defaults.set(true, forKey: Pref.frame)
+        for (name, display, frozen, card) in [("a live window", CGMainDisplayID() as CGDirectDisplayID?, false, false), ("a frozen window", CGMainDisplayID(), true, true), ("a window of an imported image", nil, false, true)] {
+            overlay.present(image: image, frame: frame, displayID: display)
+            overlay.detectionTask?.cancel()
+            overlay.setWindows([framedWindow], names: ["Window"], ids: [1], frozen: [frozen], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+            overlay.selection = AreaSelection(extent: extent, exact: framedWindow)
+            overlay.refresh()
+            require((overlay.view.overlays.styleFrame != nil) == card, "with Frame on, the preview on \(name) draws the card: \(card)")
+            overlay.selection = AreaSelection(extent: extent, exact: framedWindow.insetBy(dx: 40, dy: 40))
+            overlay.refresh()
+            require(overlay.view.overlays.styleFrame == OutputFrame.rect(around: framedWindow.insetBy(dx: 40, dy: 40), scale: overlay.scale, framed: true), "an area inside \(name) keeps the card preview")
+            overlay.dismiss()
+        }
+        defaults.set(false, forKey: Pref.frame)
+
         // Hot keys: each handler takes only presses of its own ID (the capture shortcut and the overlay's Esc share the app's target).
         // The presses are Carbon events sent to the app, so nothing is registered system-wide.
         var fired: [UInt32] = []

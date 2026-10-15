@@ -979,7 +979,8 @@ final class OverlayController {
         layoutCornerChip()
         overlays.upHintRadii = overlays.upHint.map(cornerRadii) ?? .zero
         overlays.downHintRadii = overlays.downHint.map(cornerRadii) ?? .zero
-        if let rect = selection?.rect, framed { overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, framed: true) }
+        // The padded card of an area or element; a live window's real shadow has no card to preview.
+        if let rect = selection?.rect, framed, !capturesLiveWindow(rect) { overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, framed: true) }
         view.overlays = overlays
         refreshExtras()
         refreshRecording()
