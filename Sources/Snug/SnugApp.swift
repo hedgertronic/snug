@@ -22,6 +22,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     private var iconObservation: NSKeyValueObservation?
 
     static func main() {
+        if CommandLine.arguments.contains("--mcp") { MCPServer.run() }
         let app = NSApplication.shared
         let delegate = SnugApp()
         app.delegate = delegate
