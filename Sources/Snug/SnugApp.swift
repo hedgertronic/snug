@@ -322,7 +322,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 if overlay.image === image { overlay.setWindows(windows.map(\.rect), names: windows.map(\.name), ids: windows.map(\.id), frozen: windows.map(\.frozen), pointer: NSEvent.mouseLocation) }
             } catch is CancellationError {
             } catch {
-                NSApp.presentError(error)
+                Toast.show(message: "Capture failed", detail: error.localizedDescription, color: .systemRed)
             }
         }
     }
