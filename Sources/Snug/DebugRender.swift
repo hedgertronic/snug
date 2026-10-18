@@ -218,6 +218,17 @@ extension DebugRun {
             overlay.refresh()
             try snapshot("selection-corner-focused-\(name)")
         }
+        // The loupe on the hovered bottom-right corner's chip, on the strip, and on the chip row: it draws above them all.
+        overlay.focusedCorner = nil
+        defaults.set(true, forKey: Pref.loupe)
+        func pixel(at view: NSView) -> CGPoint { CGPoint(x: view.frame.midX * overlay.scale, y: (overlay.view.bounds.height - view.frame.midY) * overlay.scale) }
+        for (name, at) in [("corner-chip", { overlay.cornerRadii(of: rounded).dot(of: .bottomRight, in: rounded, minimumInset: 8 * overlay.scale) }),
+                           ("strip", { pixel(at: overlay.chrome.strip) }), ("chips", { pixel(at: overlay.chrome.size) })] {
+            mouse(.mouseMoved, CGPoint(x: rounded.midX, y: rounded.midY))
+            mouse(.mouseMoved, at())
+            try snapshot("loupe-over-\(name)")
+        }
+        defaults.set(false, forKey: Pref.loupe)
         overlay.dismiss()
 
         open()

@@ -7,6 +7,11 @@ enum GuidesAnimation: String {
     case fade, slide, none
 }
 
+/// The overlay view's top subview: it holds the loupe and its readout over all the chrome, at the overlay's bounds. Clicks and hover pass through.
+final class LoupeHost: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
 /// Loupe, rulers, and crosshair layers. Each is hidden when its toggle is off and costs nothing then.
 @MainActor
 final class Guides {
@@ -32,7 +37,9 @@ final class Guides {
     private static let flagFont = NSFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
     private static let digitWidth = ("0" as NSString).size(withAttributes: [.font: numberFont]).width
 
+    /// The crosshair and rulers, over the outlines and under the chrome.
     let root = CALayer()
+    let host = LoupeHost()
     let crosshair = CAShapeLayer()
     let rulers = CALayer()
     let loupe = CALayer()
@@ -82,10 +89,12 @@ final class Guides {
     }
 
     init() {
-        for layer in [crosshair, rulers, loupe] {
-            layer.isHidden = true
-            root.addSublayer(layer)
-        }
+        for layer in [crosshair, rulers, loupe] { layer.isHidden = true }
+        root.addSublayer(crosshair)
+        root.addSublayer(rulers)
+        host.wantsLayer = true
+        host.layer!.addSublayer(loupe)
+        host.addSubview(readout)
         crosshair.lineWidth = 1
         // X shows and hides the crosshair at once; only the loupe and rulers animate, per `GuidesAnimation`.
         crosshair.actions = ["hidden": NSNull()]

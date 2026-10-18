@@ -556,6 +556,7 @@ final class Chrome {
             + [edit, copy, save, scroll, record, cutout, colors, done, cancel, cursor, audio, countIn, start, subject, crop, snap, ratioButton, lock]
     }
 
-    /// Lowest first: the cut-out preview goes under all of them.
-    var all: [NSView] { [upHint, downHint, hover, size, snap, snapTag, coordinates, reading, legend] + sideHints + [radius, cornerKeys, list, topBar, strip, toolTip, status, ratio, ratioMenu, colorMenu, help] }
+    /// Lowest first, in tiers: the hint caps, the chips, the strip and settings bar with their tool tip and menus, then the keys sheet.
+    /// The cut-out preview goes under all of them, and the loupe over them.
+    var all: [NSView] { [upHint, downHint, hover, size, snap, ratio, radius, status, reading, legend] + sideHints + [cornerKeys, snapTag, coordinates, list, topBar, strip, toolTip, ratioMenu, colorMenu, help] }
 }

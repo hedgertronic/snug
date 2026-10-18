@@ -230,9 +230,11 @@ final class OverlayController {
         view.controller = self
         view.liveText.delegate = self
         window.contentView = view
+        // Bottom to top: the hint caps, the chips, the strip and settings bar with their menus, the keys sheet, then the loupe.
         chrome.all.forEach(view.addSubview)
         cornerChip.isHidden = true
-        view.addSubview(cornerChip)
+        view.addSubview(cornerChip, positioned: .below, relativeTo: chrome.topBar)
+        view.addSubview(view.guides.host)
         wireChrome()
     }
 
