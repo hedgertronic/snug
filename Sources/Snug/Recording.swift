@@ -159,7 +159,13 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
                 do { try await stream!.stopCapture() } catch { end.yield(error) }
             }
         }
-        try await Self.waitForEnd(ended, file: file)
+        do {
+            try await Self.waitForEnd(ended, file: file)
+        } catch {
+            // A recording that failed to finish stays recoverable at a visible name.
+            if FileManager.default.fileExists(atPath: temporary.path) { _ = try UniqueFile.move(temporary, to: file) }
+            throw error
+        }
         recordingLog.notice("stop() returned")
         return try UniqueFile.move(temporary, to: file)
     }
