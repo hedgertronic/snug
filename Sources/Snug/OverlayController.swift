@@ -101,6 +101,8 @@ final class OverlayController {
     let chrome = Chrome()
     /// Points at the top of the screen the camera housing covers; chrome stays below it.
     var topInset: CGFloat = 0
+    /// Points at the bottom of the screen a Dock there takes (0 when it is hidden or on a side); the settings bar sits above it.
+    var bottomInset: CGFloat = 0
     var extent = CGRect.zero
     var windows: [CGRect] = []
     var windowNames: [String] = []
@@ -260,7 +262,9 @@ final class OverlayController {
         windowNames = []
         windowIDs = []
         windowFrozen = []
-        topInset = NSScreen.screens.first { $0.frame == frame }?.safeAreaInsets.top ?? 0
+        let screen = NSScreen.screens.first { $0.frame == frame }
+        topInset = screen?.safeAreaInsets.top ?? 0
+        bottomInset = screen.map { $0.visibleFrame.minY - $0.frame.minY } ?? 0
         previousApp = displayID == nil || isHeadless ? nil : NSWorkspace.shared.frontmostApplication
         pointer = CGPoint(x: (NSEvent.mouseLocation.x - frame.minX) * scale, y: (frame.maxY - NSEvent.mouseLocation.y) * scale)
         view.scale = scale

@@ -1585,6 +1585,11 @@ extension DebugRun {
         let halfHeight = overlay.view.bounds.height / 2, topLine = overlay.view.bounds.height - overlay.topInset - 8
         mouse(.mouseMoved, CGPoint(x: extent.midX, y: extent.midY))
         require(top.frame.minY == 8 && !chrome.barAtTop, "the settings bar sits at the bottom")
+        overlay.bottomInset = 70
+        overlay.refresh()
+        require(top.frame.minY == 78 && !chrome.barAtTop, "a Dock at the bottom puts the settings bar 8 pt above it: \(top.frame)")
+        overlay.bottomInset = 0
+        overlay.refresh()
         mouse(.mouseMoved, CGPoint(x: extent.midX, y: extent.height - 20))
         require(top.frame.minY == 8 && !chrome.barAtTop, "the pointer near the bar leaves it there")
         overlay.setWindows([CGRect(x: 600, y: extent.height - 420, width: 1200, height: 410)], names: ["Low window"], pointer: CGPoint(x: frame.minX, y: frame.maxY))

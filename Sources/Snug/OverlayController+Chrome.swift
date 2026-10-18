@@ -302,12 +302,12 @@ extension OverlayController {
             attachment = (view.viewRect(rect), true, [c.hover] + (editedRadii[rect] == nil ? [] : [radiusChip(rect)]), [])
         }
 
-        // The settings bar sits 8 pt above the bottom edge. It moves under the menu bar or notch while a drag, preview, or selection is
+        // The settings bar sits 8 pt above the bottom edge, or above a Dock there. It moves under the menu bar or notch while a drag, preview, or selection is
         // within 24 pt of it there and not there.
         let objects = [overlays.ghost, overlays.preview, overlays.selection].compactMap { $0 }.map(view.viewRect)
         let barSize = c.topBar.frame.size
         func barFrame(atTop: Bool) -> CGRect {
-            CGRect(x: ((bounds.width - barSize.width) / 2).rounded(), y: atTop ? topEdge - 8 - barSize.height : 8, width: barSize.width, height: barSize.height)
+            CGRect(x: ((bounds.width - barSize.width) / 2).rounded(), y: atTop ? topEdge - 8 - barSize.height : bottomInset + 8, width: barSize.width, height: barSize.height)
         }
         let barAtTop = !c.topBar.isHidden && objects.contains {
             $0.intersects(barFrame(atTop: false).insetBy(dx: -24, dy: -24)) && !$0.intersects(barFrame(atTop: true).insetBy(dx: -24, dy: -24))
