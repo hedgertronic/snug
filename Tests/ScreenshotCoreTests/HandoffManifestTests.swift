@@ -20,8 +20,7 @@ func handoffPNG(width: Int = 40, height: Int = 20) -> Data {
 }
 
 /// A manifest for an element captured at `capturedAt` (whole milliseconds, so it survives the JSON's precision).
-func handoffManifest(id: String = HandoffManifest.newId(), capturedAt: Date = Date(timeIntervalSince1970: 1_791_000_000.125),
-                     lifetime: TimeInterval = HandoffStore.lifetime) -> HandoffManifest {
+func handoffManifest(id: String = HandoffManifest.newId(), capturedAt: Date = Date(timeIntervalSince1970: 1_791_000_000.125)) -> HandoffManifest {
     let display = CGRect(x: -1512, y: 0, width: 1512, height: 982)
     let crop = CGRect(x: 200, y: 100, width: 472, height: 88)
     let frames = [AXFrame(roleDescription: "row", rect: CGRect(x: -1412, y: 50, width: 236, height: 44), role: "AXRow", title: "Documents",
@@ -29,7 +28,7 @@ func handoffManifest(id: String = HandoffManifest.newId(), capturedAt: Date = Da
                   AXFrame(roleDescription: "outline", rect: CGRect(x: -1420, y: 20, width: 260, height: 600), role: "AXOutline"),
                   AXFrame(roleDescription: "standard window", rect: CGRect(x: -1430, y: 0, width: 900, height: 700), role: "AXWindow", title: "Finder")]
     return HandoffManifest(
-        captureId: id, capturedAt: capturedAt, expiresAt: capturedAt.addingTimeInterval(lifetime),
+        captureId: id, capturedAt: capturedAt,
         image: .init(width: 472, height: 88, scale: 2),
         geometry: .init(cropPixels: crop, scale: 2, displayId: 3, displayFrame: display),
         source: .init(app: "Finder", bundleId: "com.apple.finder", pid: 512, windowId: 9001, windowTitle: "Recents", windowFrame: CGRect(x: -1430, y: 0, width: 900, height: 700)),
@@ -44,7 +43,7 @@ struct HandoffManifestTests {
         let json = try manifest.json()
         #expect(try HandoffManifest(json: json) == manifest)
         let object = try JSONSerialization.jsonObject(with: json) as! [String: Any]
-        #expect(object["schema_version"] as? Int == 1 && object["capture_id"] as? String == manifest.captureId)
+        #expect(object["schema_version"] as? Int == 2 && object["expires_at"] == nil && object["capture_id"] as? String == manifest.captureId)
         #expect(object["captured_at"] as? String == "2026-10-03T04:00:00.125Z")
         let geometry = object["geometry"] as! [String: Any]
         #expect(geometry["display_id"] as? Int == 3)
@@ -132,56 +131,32 @@ struct HandoffManifestTests {
 struct HandoffStoreTests {
     let store = HandoffStore(root: FileManager.default.temporaryDirectory.appending(path: "snug-handoff-\(UUID().uuidString)"))
 
-    func write(_ manifest: HandoffManifest, now: Date) throws {
-        try store.write(png: handoffPNG(), manifest: manifest, now: now)
-    }
-
     @Test func aWriteLeavesOnlyTheBundle() throws {
         defer { try? FileManager.default.removeItem(at: store.root) }
         let manifest = handoffManifest(id: "AAAAAAAA")
-        try write(manifest, now: manifest.capturedAt)
+        try store.write(png: handoffPNG(), manifest: manifest)
         #expect(try FileManager.default.contentsOfDirectory(atPath: store.root.path) == ["AAAAAAAA"])
         #expect(try Set(FileManager.default.contentsOfDirectory(atPath: store.root.appending(path: "AAAAAAAA").path)) == ["capture.png", "manifest.json"])
-        #expect(try store.lookup("AAAAAAAA", now: manifest.capturedAt) == .found(manifest))
+        #expect(try store.current() == manifest)
         #expect(try store.png(of: manifest) == handoffPNG())
     }
 
-    @Test func expiredBundlesGoFirstAndLookUpAsExpired() throws {
+    @Test func eachWriteReplacesEveryOtherBundle() throws {
         defer { try? FileManager.default.removeItem(at: store.root) }
-        let start = Date(timeIntervalSince1970: 1_791_000_000)
-        try write(handoffManifest(id: "AAAAAAAA", capturedAt: start, lifetime: 60), now: start)
-        try write(handoffManifest(id: "BBBBBBBB", capturedAt: start.addingTimeInterval(10)), now: start.addingTimeInterval(10))
-        #expect(try store.lookup("AAAAAAAA", now: start.addingTimeInterval(61)) == .expired)
-        try write(handoffManifest(id: "CCCCCCCC", capturedAt: start.addingTimeInterval(120)), now: start.addingTimeInterval(120))
-        #expect(try store.manifests().map(\.captureId) == ["CCCCCCCC", "BBBBBBBB"])
-        #expect(try store.lookup("AAAAAAAA") == .expired && store.lookup("DDDDDDDD") == .notFound && store.lookup("not-an-id") == .notFound)
-    }
-
-    @Test func theCapRemovesTheOldestButNeverTheNewBundle() throws {
-        defer { try? FileManager.default.removeItem(at: store.root) }
-        let start = Date(timeIntervalSince1970: 1_791_000_000)
-        var capped = store
-        let ids = ["AAAAAAAA", "BBBBBBBB", "CCCCCCCC"]
-        for (offset, id) in ids.enumerated() {
-            try capped.write(png: handoffPNG(), manifest: handoffManifest(id: id, capturedAt: start.addingTimeInterval(Double(offset))), now: start)
-        }
-        let bundle = try store.bytes(of: "AAAAAAAA")
-        capped.byteCap = bundle * 2 + 1
-        try capped.write(png: handoffPNG(), manifest: handoffManifest(id: "DDDDDDDD", capturedAt: start.addingTimeInterval(3)), now: start)
-        #expect(try store.manifests().map(\.captureId) == ["DDDDDDDD", "CCCCCCCC"])
-        #expect(try store.lookup("AAAAAAAA") == .expired && store.lookup("BBBBBBBB") == .expired)
-        capped.byteCap = 1
-        try capped.write(png: handoffPNG(), manifest: handoffManifest(id: "EEEEEEEE", capturedAt: start.addingTimeInterval(4)), now: start)
-        #expect(try store.manifests().map(\.captureId) == ["EEEEEEEE"])
-    }
-
-    @Test func removingAllLeavesOnlyTheRemovedList() throws {
-        defer { try? FileManager.default.removeItem(at: store.root) }
-        let manifest = handoffManifest(id: "AAAAAAAA")
-        try write(manifest, now: manifest.capturedAt)
+        try store.write(png: handoffPNG(), manifest: handoffManifest(id: "AAAAAAAA"))
         try FileManager.default.createDirectory(at: store.root.appending(path: ".BBBBBBBB.partial"), withIntermediateDirectories: false)
-        try store.removeAll()
-        #expect(try FileManager.default.contentsOfDirectory(atPath: store.root.path) == ["removed"])
-        #expect(try store.lookup("AAAAAAAA") == .expired && store.manifests().isEmpty)
+        let newer = handoffManifest(id: "CCCCCCCC", capturedAt: Date(timeIntervalSince1970: 1_791_000_100))
+        try store.write(png: handoffPNG(), manifest: newer)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: store.root.path) == ["CCCCCCCC"])
+        #expect(try store.current() == newer)
+    }
+
+    @Test func clearingLeavesNoCapture() throws {
+        defer { try? FileManager.default.removeItem(at: store.root) }
+        try store.clear()
+        #expect(try store.current() == nil)
+        try store.write(png: handoffPNG(), manifest: handoffManifest(id: "AAAAAAAA"))
+        try store.clear()
+        #expect(try FileManager.default.contentsOfDirectory(atPath: store.root.path).isEmpty && store.current() == nil)
     }
 }

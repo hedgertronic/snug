@@ -4,7 +4,7 @@ import ImageIO
 import UniformTypeIdentifiers
 
 /// The MCP server's requests, one JSON-RPC 2.0 message per line: `initialize`, `ping`, `tools/list` and `tools/call` for the read-only
-/// tools `get_capture`, `zoom` and `list_captures` over a `HandoffStore`. It never captures.
+/// tools `get_capture` and `zoom` over a `HandoffStore`. It never captures.
 public struct HandoffServer: Sendable {
     public let store: HandoffStore
     public let version: String
@@ -38,9 +38,10 @@ public struct HandoffServer: Sendable {
         ["name": "get_capture",
          "description": "Returns a screenshot the user handed you with Snug's Copy for Agent (Cmd-Return): the image, unstyled and at full "
             + "resolution, and its manifest (app, window, the element's accessibility role and title, its ancestors, and coordinates). Pass "
-            + "the id from the user's \"[Snug capture ID: ...]\" reference, or \"latest\" for the newest capture. Image pixel (x, y) is the "
-            + "global screen point (geometry.crop_global.x + x / image.scale, geometry.crop_global.y + y / image.scale). Snug never takes a new "
-            + "screenshot: an expired or removed capture is an error. A capture over \(imageSide) px on its long side or 3.75 MB "
+            + "the id from the user's \"[Snug capture ID: ...]\" reference, or \"latest\" for the current capture. Only the most "
+            + "recent capture is kept: the next Copy for Agent replaces it. Image pixel (x, y) is the global screen point "
+            + "(geometry.crop_global.x + x / image.scale, geometry.crop_global.y + y / image.scale). Snug never takes a new "
+            + "screenshot: a replaced capture is an error. A capture over \(imageSide) px on its long side or 3.75 MB "
             + "comes back as a smaller copy, with returned_image giving its size and scale_to_capture; zoom returns full resolution.",
          "inputSchema": ["type": "object", "properties": ["id": ["type": "string", "description": "A capture id, or \"latest\"."]], "required": ["id"]]],
         ["name": "zoom",
@@ -49,10 +50,7 @@ public struct HandoffServer: Sendable {
          "inputSchema": ["type": "object", "properties": ["id": ["type": "string", "description": "A capture id, or \"latest\"."],
                                                           "x": ["type": "integer"], "y": ["type": "integer"],
                                                           "width": ["type": "integer"], "height": ["type": "integer"]],
-                         "required": ["id", "x", "y", "width", "height"]]],
-        ["name": "list_captures",
-         "description": "Lists the captures that haven't expired, newest first: id, time, app and target.",
-         "inputSchema": ["type": "object", "properties": [String: Any]()]]
+                         "required": ["id", "x", "y", "width", "height"]]]
     ] }
 
     /// The response line to `line`, or nil for a notification.
@@ -69,7 +67,7 @@ public struct HandoffServer: Sendable {
                  "capabilities": ["tools": ["listChanged": false]],
                  "serverInfo": ["name": "snug", "version": version],
                  "instructions": "Snug is a macOS screenshot app. The user points at something on screen and presses Cmd-Return to hand it to "
-                    + "you; the pasted reference names a capture id. Read it with get_capture. Captures expire after 7 days."]
+                    + "you; the pasted reference names a capture id. Read it with get_capture. Only the most recent capture is kept."]
             case "ping": [:]
             case "tools/list": ["tools": Self.tools]
             case "tools/call": try call(params)
@@ -86,7 +84,7 @@ public struct HandoffServer: Sendable {
     private func call(_ params: [String: Any]) throws -> [String: Any] {
         let arguments = params["arguments"] as? [String: Any] ?? [:]
         let name = params["name"] as? String
-        guard name == "list_captures" || arguments["id"] is String else { throw RequestError(code: -32602, message: "Invalid params: id must be a string") }
+        guard arguments["id"] is String else { throw RequestError(code: -32602, message: "Invalid params: id must be a string") }
         do {
             switch name {
             case "get_capture":
@@ -133,13 +131,6 @@ public struct HandoffServer: Sendable {
                 return ["content": [["type": "image", "data": Self.png(crop).base64EncodedString(), "mimeType": "image/png"],
                                     ["type": "text", "text": encode(offset)]],
                         "structuredContent": offset]
-            case "list_captures":
-                let now = Date.now
-                let captures = try store.manifests().filter { $0.expiresAt > now }.map { manifest -> [String: Any] in
-                    ["id": manifest.captureId, "captured_at": Date.ISO8601FormatStyle(includingFractionalSeconds: true).format(manifest.capturedAt),
-                     "app": manifest.source?.app ?? NSNull(), "target": manifest.target.label]
-                }
-                return ["content": [["type": "text", "text": encode(["captures": captures])]], "structuredContent": ["captures": captures]]
             default:
                 throw RequestError(code: -32602, message: "Unknown tool: \(name ?? "none")")
             }
@@ -149,22 +140,14 @@ public struct HandoffServer: Sendable {
         }
     }
 
-    /// The manifest for a capture id (any case) or "latest", the newest capture that hasn't expired.
+    /// The current capture, for its id (any case) or "latest". Any other well-formed id was replaced by a newer capture.
     private func resolve(_ id: String) throws -> HandoffManifest {
-        if id == "latest" {
-            let now = Date.now
-            guard let newest = try store.manifests().first(where: { $0.expiresAt > now }) else {
-                throw ToolError(code: "capture_not_found", message: "There are no captures. Ask the user to press Cmd-Return in Snug.")
-            }
-            return newest
+        guard let current = try store.current() else {
+            throw ToolError(code: "capture_not_found", message: "There is no capture. Ask the user to press Cmd-Return in Snug.")
         }
-        switch try store.lookup(id.uppercased()) {
-        case .found(let manifest): return manifest
-        case .expired:
-            throw ToolError(code: "capture_expired", message: "Capture \(id) has expired or was deleted. Ask the user for a new capture.")
-        case .notFound:
-            throw ToolError(code: "capture_not_found", message: "There is no capture \(id).")
-        }
+        if id == "latest" || id.uppercased() == current.captureId { return current }
+        guard HandoffManifest.isId(id.uppercased()) else { throw ToolError(code: "capture_not_found", message: "There is no capture \(id).") }
+        throw ToolError(code: "capture_replaced", message: "Capture \(id) was replaced by a newer capture. Ask the user to copy it again.")
     }
 
     private func encode(_ object: [String: Any]) -> String {
