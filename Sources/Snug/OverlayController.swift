@@ -20,7 +20,9 @@ final class OverlayWindow: NSWindow {
     var textPress: (point: CGPoint, anchor: Range<String.Index>?)?
 
     override func sendEvent(_ event: NSEvent) {
-        guard !(contentView as! OverlayView).liveText.isHidden, [.leftMouseDown, .leftMouseDragged, .leftMouseUp].contains(event.type) else {
+        // A click on a chrome button goes to the button, so it never clears or changes the text selection it acts on.
+        guard !(contentView as! OverlayView).liveText.isHidden, [.leftMouseDown, .leftMouseDragged, .leftMouseUp].contains(event.type),
+              !(contentView!.hitTest(event.locationInWindow) is BarButton) else {
             return super.sendEvent(event)
         }
         sendTextMouse(event)

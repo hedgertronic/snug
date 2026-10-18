@@ -223,7 +223,28 @@ extension OverlayController {
             c.strip.show([[c.edit], [c.copy, c.save], (scrolls ? [c.scroll] : []) + (displayID != nil ? [c.record] : []) + [c.cutout, c.colors]])
         }
 
-        if let cutout {
+        /// The Text strip: Copy, whose label the modifiers held change (Shift alone: Rows, Option alone: Translate) and which at rest
+        /// shows a faded Shift and Option; any other combination dims it.
+        func textStrip() {
+            let copy: (title: String, key: String, faded: String)? = switch heldGlyphs {
+            case []: ("Copy", "\u{21A9}", "\u{21E7}\u{2325}")
+            case ["\u{21E7}"]: ("Rows", "\u{21E7}\u{21A9}", "")
+            case ["\u{2325}"]: ("Translate", "\u{2325}\u{21A9}", "")
+            default: nil
+            }
+            c.copy.setTitle(copy?.title ?? "Copy")
+            c.copy.setKeys(copy?.key ?? "\u{21A9}", faded: copy?.faded ?? "")
+            c.copy.isEnabled = copy != nil
+            c.stripSlack = Chrome.widest.text - c.copy.frame.width
+            c.strip.show([[c.copy]])
+        }
+
+        if mode == .text {
+            if let box = textSelectionBox {
+                textStrip()
+                attachment = (box, true, [], [])
+            }
+        } else if let cutout {
             let subjects = cutout.subjects.count > 1 ? [c.subject] : []
             c.subject.setTitle(cutout.label)
             c.crop.lit = cutout.cropped

@@ -461,7 +461,8 @@ final class Chrome {
     let styleToggles = [(Pref.roundCorners, BarButton("Rounded", key: "O")), (Pref.frame, BarButton("Frame", key: "M"))]
     /// Opens the keys sheet, as ? does: the permanent route to every shortcut.
     let keys = BarButton("", key: "?")
-    /// The action strip below the hovered element or the selection, or a session's (scroll, armed recording, cut out) controls.
+    /// The action strip below the hovered element, the selection or the selected text, or a session's (scroll, armed recording, cut
+    /// out) controls.
     let strip = Bar()
     let edit = BarButton("Edit", key: "E")
     /// Copy and Save fold their alternates under the modifiers (`OverlayController.captureStrip`): Agent, Text, Translate, Save As.
@@ -481,9 +482,10 @@ final class Chrome {
     /// How much wider Copy and Save get under the modifiers than now, at most: the strip's left edge is clamped with it, so a label
     /// change never moves the edge.
     var stripSlack: CGFloat = 0
-    static let widest: (copy: CGFloat, save: CGFloat) = (
+    static let widest: (copy: CGFloat, save: CGFloat, text: CGFloat) = (
         [("Copy", "\u{21A9}", "\u{2318}"), ("Agent", "\u{2318}\u{21A9}", ""), ("Text", "\u{21E7}\u{21A9}", ""), ("Translate", "\u{2325}\u{21A9}", "")].map { width($0) }.max()!,
-        [("Save", "\u{2318}S", "\u{21E7}"), ("Save As", "\u{21E7}\u{2318}S", "")].map { width($0) }.max()!)
+        [("Save", "\u{2318}S", "\u{21E7}"), ("Save As", "\u{21E7}\u{2318}S", "")].map { width($0) }.max()!,
+        [("Copy", "\u{21A9}", "\u{21E7}\u{2325}"), ("Rows", "\u{21E7}\u{21A9}", ""), ("Translate", "\u{2325}\u{21A9}", "")].map { width($0) }.max()!)
     private static func width(_ variant: (title: String, key: String, faded: String)) -> CGFloat {
         let button = BarButton(variant.title, key: nil)
         button.setKeys(variant.key, faded: variant.faded)

@@ -285,7 +285,15 @@ extension DebugRun {
             try await waitFor("Live Text") { liveText.analysis != nil }
             let all = liveText.text
             liveText.selectedRanges = [all.range(of: "Product name")!.lowerBound..<all.range(of: "Second product")!.upperBound]
+            overlay.refresh()
             try snapshot("text")
+            // The Text strip under a one-line selection, with Shift held: Rows.
+            liveText.selectedRanges = [all.range(of: "Billing address")!]
+            overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: .shift, timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!)
+            try snapshot("text-selected-strip")
+            overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!)
             overlay.targetLanguage = Locale.Language(identifier: "de")
             overlay.translationStatus = { _, _ in .supported }
             key(36, "\r", .option)

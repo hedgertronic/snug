@@ -112,6 +112,72 @@ extension DebugRun {
         overlay.dismiss()
         require(liveText.analysis == nil, "closing drops the analysis")
 
+        // A text selection gets a strip under it: Copy with faded Shift and Option, relabeled by them (Shift: Rows, Option: Translate).
+        // Its box is Live Text's: the selected glyphs' union, which lands on accurate OCR's line boxes within 3 pt.
+        try await open()
+        func textFlags(_ modifiers: NSEvent.ModifierFlags) {
+            overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!)
+        }
+        func pointBox(_ pixels: CGRect) -> CGRect {
+            CGRect(x: pixels.minX / overlay.scale, y: overlay.view.bounds.height - pixels.maxY / overlay.scale, width: pixels.width / overlay.scale, height: pixels.height / overlay.scale)
+        }
+        func near(_ a: CGRect, _ b: CGRect, _ tolerance: CGFloat = 3) -> Bool {
+            abs(a.minX - b.minX) <= tolerance && abs(a.minY - b.minY) <= tolerance && abs(a.maxX - b.maxX) <= tolerance && abs(a.maxY - b.maxY) <= tolerance
+        }
+        let strip = overlay.chrome.strip
+        let fullText = liveText.text
+        liveText.selectedRanges = [fullText.range(of: "Product name")!]
+        overlay.refresh()
+        let productBox = overlay.textSelectionBox!
+        require(near(productBox, pointBox(productName)) && !strip.isHidden && texts(in: strip) == ["Copy", "\u{21E7}", "\u{2325}", "\u{21A9}"]
+                    && overlay.chrome.copy.caps.map(\.faded) == [true, true, false] && strip.frame.maxY == productBox.minY - 8 && strip.frame.minX == productBox.minX,
+                "a text selection's box is its line and a strip hangs under it, Copy with faded Shift and Option: \(productBox) \(pointBox(productName)) \(texts(in: strip)) \(strip.frame)")
+        let restLeft = strip.frame.minX
+        for (held, title, glyph) in [(NSEvent.ModifierFlags.shift, "Rows", "\u{21E7}"), (.option, "Translate", "\u{2325}")] {
+            textFlags(held)
+            require(texts(in: strip) == [title, glyph, "\u{21A9}"] && overlay.chrome.copy.isEnabled && overlay.chrome.copy.caps.first!.pressed && strip.frame.minX == restLeft,
+                    "holding \(glyph) relabels Copy \(title), lights its cap and keeps the strip's left edge: \(texts(in: strip))")
+        }
+        textFlags(.command)
+        require(!overlay.chrome.copy.isEnabled && texts(in: strip) == ["Copy", "\u{21A9}"], "Command has no Text meaning: Copy dims")
+        textFlags([])
+        require(texts(in: strip) == ["Copy", "\u{21E7}", "\u{2325}", "\u{21A9}"] && overlay.chrome.copy.isEnabled, "releasing restores the strip")
+        // Real drags, forward and backward, and a selection across both columns.
+        for (from, to) in [(CGPoint(x: billing.minX + 4, y: billing.midY), CGPoint(x: billing.maxX - 2, y: billing.midY)),
+                           (CGPoint(x: billing.maxX - 2, y: billing.midY), CGPoint(x: billing.minX + 4, y: billing.midY))] {
+            textDrag(from: from, to: to)
+            let box = overlay.textSelectionBox
+            require(liveText.selectedText == "Billing address" && box.map { near($0, pointBox(billing), 4) } == true && !strip.isHidden,
+                    "a drag \(from.x < to.x ? "forward" : "backward") over Billing address boxes its line: \(liveText.selectedText.debugDescription) \(String(describing: box)) \(pointBox(billing))")
+        }
+        liveText.selectedRanges = [fullText.range(of: "Billing address")!.lowerBound..<fullText.range(of: "Product name")!.upperBound]
+        overlay.refresh()
+        let columns = overlay.textSelectionBox!
+        require(columns.minX <= pointBox(billing).minX + 3 && columns.maxX >= pointBox(productName).maxX - 3 && columns.maxY >= pointBox(billing).maxY - 3,
+                "a selection across both columns boxes both: \(columns)")
+        // A click on Copy with Shift held, the strip over text, copies the selection as rows; the click never reaches Live Text.
+        textDrag(from: CGPoint(x: billing.minX + 4, y: billing.midY), to: CGPoint(x: billing.maxX - 2, y: billing.midY))
+        textFlags(.shift)
+        let copyCenter = overlay.chrome.copy.convert(CGPoint(x: overlay.chrome.copy.bounds.midX, y: overlay.chrome.copy.bounds.midY), to: overlay.view)
+        let copyPixel = CGPoint(x: copyCenter.x * overlay.scale, y: (overlay.view.bounds.height - copyCenter.y) * overlay.scale)
+        require(liveText.hasText(at: topLeft(copyPixel)), "the strip's Copy under Billing address lies over text: \(strip.frame) \(copyPixel)")
+        pasteboard.clearContents()
+        mouse(.leftMouseDown, copyPixel, .shift)
+        mouse(.leftMouseUp, copyPixel, .shift)
+        await overlay.textTask?.value
+        let clicked = pasteboard.string(forType: .string)
+        textFlags([])
+        overlay.dismiss()
+        try await open()
+        textDrag(from: CGPoint(x: billing.minX + 4, y: billing.midY), to: CGPoint(x: billing.maxX - 2, y: billing.midY))
+        pasteboard.clearContents()
+        key(returnKey, "\r", .shift)
+        await overlay.textTask?.value
+        require(clicked?.hasPrefix("Billing address") == true && clicked == pasteboard.string(forType: .string),
+                "a Shift-click on the strip's Rows copies what Shift-Return copies: \(String(describing: clicked)) \(String(describing: pasteboard.string(forType: .string)))")
+        overlay.dismiss()
+
         // While Vision's warm-up child runs (a 2 s sleep stands in for it), Text mode says text recognition is getting ready, and
         // Shift-Return and Tab say they will run when it is, then run.
         func warmUpChild() throws {
