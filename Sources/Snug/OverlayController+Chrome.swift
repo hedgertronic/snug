@@ -176,8 +176,8 @@ extension OverlayController {
         }
         let fading: [NSView] = [c.hover, c.size, c.snap, c.ratio, c.radius, c.reading, c.status, c.strip]
         let wasShown = fading.map { !$0.isHidden }
-        // The strip moves only from where it showed, and not while a drag moves the selection under it. Its views and their frames now,
-        // and each one's subviews (a button's caps), to animate from once the strip is laid out.
+        // The strip moves only from where it showed, against the same outline (checked once it is placed), and not while a drag moves the
+        // selection under it. Its views and their frames now, and each one's subviews (a button's caps), to animate from once it is laid out.
         let stripMoves = motion && !c.strip.isHidden && draggedRect == nil
         func tree(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(tree) }
         let stripBefore = stripMoves ? tree(c.strip).map { ($0, $0.frame, $0.subviews) } : []
@@ -397,8 +397,8 @@ extension OverlayController {
         // 4. the radius chip row (ratio and radius): ending at the object's right edge, or a row past the size chips (`attach`);
         // 5. the "All corners" chip of the hovered or focused corner, its keys stacked under it (over it at the bottom corners): outside the
         //    corner beside the selection's side, then inside the corner;
-        // 6. the legend with the arrow keys around it like a D-pad: centered in the selection and kept on the screen, then below each
-        //    item placed so far, from the top down, then above each, from the bottom up;
+        // 6. the legend with the arrow keys around it like a D-pad: centered in the selection and kept on the screen, then just below
+        //    each item placed so far that sits lower, nearest first, then just above each that sits higher, nearest first;
         // 7. the hint caps: inside the top-left corner of their outlines, then inside the bottom-left.
         let screen = CGRect(x: 4, y: 4, width: bounds.width - 8, height: topEdge - 8)
         var placed = [c.topBar, c.strip].filter { !$0.isHidden }.map(\.frame)
@@ -461,9 +461,9 @@ extension OverlayController {
             c.sideHints[3].frame.origin = CGPoint(x: center.x - down.width / 2, y: c.legend.frame.minY - gap - down.height)
             // The down cap is the group's lowest view, so its origin's y is the group's.
             let lowest = c.sideHints[3]
-            let below = placed.sorted { $0.maxY > $1.maxY }.map { CGPoint(x: lowest.frame.minX, y: $0.minY - gap - group.height) }
-            let above = placed.sorted { $0.minY < $1.minY }.map { CGPoint(x: lowest.frame.minX, y: $0.maxY + gap) }
-            settle([lowest, c.legend] + c.sideHints.prefix(3), [lowest.frame.origin] + below + above)
+            let below = placed.map { $0.minY - gap - group.height }.filter { $0 <= origin.y }.sorted(by: >)
+            let above = placed.map { $0.maxY + gap }.filter { $0 >= origin.y }.sorted()
+            settle([lowest, c.legend] + c.sideHints.prefix(3), ([origin.y] + below + above).map { CGPoint(x: lowest.frame.minX, y: $0) })
         }
 
         // The key caps of the faint outlines.

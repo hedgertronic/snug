@@ -1454,7 +1454,8 @@ extension DebugRun {
         }
         let edgeCases = [("large", large), ("small", CGRect(x: 600, y: 300, width: 120, height: 80)), ("left", CGRect(x: 0, y: 600, width: 500, height: 300)),
                          ("right", CGRect(x: extent.width - 500, y: 600, width: 500, height: 300)), ("top", CGRect(x: 900, y: 0, width: 700, height: 300)),
-                         ("bottom", CGRect(x: 900, y: extent.height - 300, width: 700, height: 300)), ("full", extent)]
+                         ("bottom", CGRect(x: 900, y: extent.height - 300, width: 700, height: 300)),
+                         ("small bottom", CGRect(x: 600, y: extent.height - 160, width: 120, height: 80)), ("full", extent)]
         for (name, rect) in edgeCases {
             overlay.topInset = name == "full" ? 38 : 0
             overlay.selection = AreaSelection(extent: extent, exact: rect)
@@ -1462,8 +1463,12 @@ extension DebugRun {
             mouse(.mouseMoved, CGPoint(x: 40, y: 40))
             mouse(.mouseMoved, CGPoint(x: rect.midX, y: rect.midY))
             chromeClear("the \(name) selection")
-            require(!chrome.ratio.isHidden && chrome.sideHints.allSatisfy { !$0.isHidden } && chrome.barAtTop == (name == "bottom"),
-                    "the \(name) selection shows the ratio chip and the edge keys, with the bar \(name == "bottom" ? "at the top" : "at the bottom")")
+            require(!chrome.ratio.isHidden && chrome.sideHints.allSatisfy { !$0.isHidden } && chrome.barAtTop == name.hasSuffix("bottom"),
+                    "the \(name) selection shows the ratio chip and the edge keys, with the bar \(name.hasSuffix("bottom") ? "at the top" : "at the bottom")")
+            // The arrow keys and legend stay by the selection and its chrome: within a chip row's height of them.
+            let dpad = chrome.sideHints.map(\.frame).reduce(chrome.legend.frame) { $0.union($1) }
+            let attached = [chrome.strip, chrome.size, chrome.ratio].map(\.frame).reduce(overlay.view.viewRect(rect)) { $0.union($1) }
+            require(dpad.insetBy(dx: 0, dy: -40).intersects(attached), "the \(name) selection's arrow keys stay by it: \(dpad) by \(attached)")
             if name == "large" {
                 let group = chrome.sideHints.map(\.frame).reduce(chrome.legend.frame) { $0.union($1) }
                 require(overlay.view.viewRect(rect).contains(group), "in the large selection the arrow caps and the legend sit inside it: \(group)")

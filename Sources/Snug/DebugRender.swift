@@ -170,7 +170,8 @@ extension DebugRun {
         key(53, "\u{1B}")
         let edgeRects = [("small", CGRect(x: 600, y: 300, width: 120, height: 80)), ("left", CGRect(x: 0, y: 600, width: 500, height: 300)),
                          ("right", CGRect(x: editExtent.width - 500, y: 600, width: 500, height: 300)), ("top", CGRect(x: 900, y: 0, width: 700, height: 300)),
-                         ("bottom", CGRect(x: 900, y: editExtent.height - 300, width: 700, height: 300)), ("full", editExtent)]
+                         ("bottom", CGRect(x: 900, y: editExtent.height - 300, width: 700, height: 300)),
+                         ("small-bottom", CGRect(x: 600, y: editExtent.height - 160, width: 120, height: 80)), ("full", editExtent)]
         for (name, rect) in edgeRects {
             overlay.selection = AreaSelection(extent: editExtent, exact: rect)
             overlay.refresh()
