@@ -209,7 +209,7 @@ extension DebugRun {
             require(close(bytes(shown), [229, 72, 77], 2), "the \(name) is drawn in the highlight color")
         }
         let modeFill = overlay.chrome.modeButtons[.capture]!.layer!.backgroundColor.flatMap { NSColor(cgColor: $0)?.usingColorSpace(.sRGB) }
-        require(modeFill.map { close(bytes($0), [229, 72, 77], 2) } == true, "a new highlight color restyles the buttons: the current mode washes with it")
+        require(modeFill.map { close(bytes($0), [229, 72, 77], 2) } == true, "a new highlight color restyles the buttons: the current mode fills with it")
         defaults.removeObject(forKey: Pref.highlightColor)
         overlay.view.highlight = Highlight(defaults: defaults)
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
@@ -488,7 +488,7 @@ extension DebugRun {
         mouse(.mouseMoved, aim)
         let hovered = overlay.view.overlays.hover!
         require(hovered != screenWindow && ![CandidateKind.window, .display].contains(overlay.session!.selected!.kind), "hover over geometry selects it, not the window \(hovered)")
-        require(Array(texts(in: overlay.chrome.hover).dropFirst()) == ["\(Int(hovered.width)) x \(Int(hovered.height))"] && texts(in: overlay.chrome.strip).prefix(5) == ["Edit", "E", "Copy", "\u{2318}", "\u{21A9}"],
+        require(Array(texts(in: overlay.chrome.hover).dropFirst()) == ["\(Int(hovered.width)) x \(Int(hovered.height))"] && texts(in: overlay.chrome.strip).prefix(4) == ["Edit", "E", "Copy", "\u{21A9}"],
                 "the hover chip shows the name and the size, and the strip below starts with Edit, then Copy: \(texts(in: overlay.chrome.hover))")
         let hoverBox = overlay.view.viewRect(hovered)
         require(overlay.chrome.hover.frame.minX == max(hoverBox.minX, 8) && (overlay.chrome.hover.frame.minY == hoverBox.maxY + 8 || hoverBox.contains(overlay.chrome.hover.frame)),
@@ -965,7 +965,8 @@ extension DebugRun {
                 overlay.refresh()
                 require(clipped().isEmpty && abs(frameButton.caps[0].frame.minX - frameButton.title.frame.maxX - 7) < 0.01 && abs(frameButton.bounds.maxX - frameButton.caps.last!.frame.maxX - 7) < 0.01,
                         "no bar title clips and the Frame button hugs its cap with Frame \(framed) and \(mode) selected: \(clipped()) \(frameButton.frame)")
-                require(chrome.modeButtons[mode]!.lit && !chrome.modeButtons[mode]!.primary && chrome.modeButtons.values.filter(\.lit).count == 1 && top.groups.count == (mode == .text ? 3 : 4), "the current mode is lit, the other plain, and Text hides the style pill")
+                require(chrome.modeButtons[mode]!.primary && chrome.modeButtons.values.filter(\.primary).count == 1 && !chrome.modeButtons.values.contains(where: \.lit) && top.groups.count == (mode == .text ? 3 : 4),
+                        "the current mode draws as Copy does (primary), the other plain, and Text hides the style pill")
             }
         }
         defaults.set(false, forKey: Pref.frame)
@@ -1013,8 +1014,8 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: extent.width - 2, y: extent.height - 2))
         require(overlay.view.bounds.contains(tag.frame.union(coordinates.frame)), "at the screen corner the pointer cluster is clamped into the view: \(coordinates.frame) \(tag.frame)")
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
-        // The tools are a symbol and their key cap, named for accessibility; Copy shows a faded Command and Save a faded Shift.
-        let captureStrip = ["Copy", "\u{2318}", "\u{21A9}", "Save", "\u{21E7}", "\u{2318}", "S", "G", "V", "K"]
+        // The tools are a symbol and their key cap, named for accessibility; at rest Copy and Save show only their own keys.
+        let captureStrip = ["Copy", "\u{21A9}", "Save", "\u{2318}", "S", "G", "V", "K"]
         let offline = captureStrip.filter { !["G", "V"].contains($0) }
         require(texts(in: chrome.strip) == ["Edit", "E"] + offline + ["U"] && chrome.strip.groups.count == 3 && chrome.copy.primary && !chrome.edit.primary && !chrome.edit.lit
                     && chrome.edit.superview === chrome.strip.groups[0] && chrome.strip.frame.maxY == windowBox.minY - 8 && chrome.strip.frame.minX == windowBox.minX,
@@ -1022,8 +1023,8 @@ extension DebugRun {
         require([chrome.scroll, chrome.record, chrome.cutout, chrome.colors].map { $0.accessibilityLabel() ?? "" } == ["Scroll", "Record", "Subject", "Colors"]
                     && [chrome.cutout, chrome.colors].allSatisfy { $0.symbol != nil && $0.title.isHidden && $0.caps.count == 1 },
                 "the tools are a symbol and a key cap, with their names as accessibility labels")
-        require(chrome.copy.caps.map(\.faded) == [true, false] && chrome.save.caps.map(\.faded) == [true, false, false] && chrome.copy.key == "\u{21A9}" && chrome.save.key == "\u{2318}S",
-                "at rest Copy shows a faded Command before Return and Save a faded Shift before Command S")
+        require(chrome.copy.caps.map(\.text) == ["\u{21A9}"] && chrome.save.caps.map(\.text) == ["\u{2318}", "S"] && chrome.copy.key == "\u{21A9}" && chrome.save.key == "\u{2318}S",
+                "at rest Copy shows only Return and Save only Command S")
         require(chrome.all.flatMap(faded).isEmpty, "nothing else in the chrome is faded: \(chrome.all.flatMap(faded))")
         // Held modifiers fold the alternates into Copy and Save, light their caps, and dim what has no modified meaning; the strip's left
         // edge stays put while the labels change. Releasing restores the strip.
@@ -1055,6 +1056,27 @@ extension DebugRun {
         require(texts(in: chrome.strip) == restStrip && chrome.strip.frame.minX == restLeft && chrome.strip.subviews.flatMap { keyCaps("\u{2318}", in: $0) }.allSatisfy { !$0.pressed }
                     && ([chrome.copy, chrome.save] + others).allSatisfy(\.isEnabled),
                 "releasing the modifiers restores the strip: \(texts(in: chrome.strip))")
+        // With motion (a live overlay without Reduce Motion), Command cross-fades Copy's label and caps and animates its width, 140 ms,
+        // while its frame reads the final value at once; headless, nothing animates.
+        let restCopy = chrome.copy.frame
+        overlay.isHeadless = false
+        flags(.command)
+        overlay.isHeadless = true
+        let copyLayer = chrome.copy.layer!, animating = copyLayer.animationKeys() ?? []
+        require(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                    ? animating.isEmpty : animating.contains("transition") && copyLayer.animation(forKey: "transition")?.duration == 0.14
+                        && copyLayer.animation(forKey: "bounds")?.duration == 0.14,
+                "with motion, Command cross-fades Copy and animates its width (Reduce Motion \(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)): \(animating)")
+        require(texts(in: chrome.copy) == ["Agent", "\u{2318}", "\u{21A9}"] && chrome.copy.frame.width == BarButton("Agent", key: "\u{2318}\u{21A9}").frame.width
+                    && chrome.copy.frame.width > restCopy.width && chrome.strip.frame.minX == restLeft,
+                "while it animates, Copy's frame already reads Agent's width: \(texts(in: chrome.copy)) \(chrome.copy.frame) \(restCopy) \(chrome.strip.frame.minX) \(restLeft)")
+        func stopAnimations(_ layer: CALayer) {
+            layer.removeAllAnimations()
+            layer.sublayers?.forEach(stopAnimations)
+        }
+        stopAnimations(chrome.strip.layer!)
+        flags([])
+        require(chrome.strip.subviews.allSatisfy { $0.layer!.animationKeys() == nil } && copyLayer.animationKeys() == nil, "headless, releasing Command animates nothing")
         // Hovering a tool shows its name in a chip under it after a short delay; the chip takes neither the hover nor clicks.
         mouse(.mouseMoved, viewPixel(centerOf(chrome.colors)))
         require(chrome.toolTip.isHidden, "the tool's name waits for the delay")
@@ -1398,7 +1420,13 @@ extension DebugRun {
         overlay.radii[window] = 0
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
         require(chrome.radius.isHidden, "a hover with its measured radius shows no radius chip")
+        // With motion the radius chip fades in; it is shown at once.
+        overlay.isHeadless = false
         key(30, "]")
+        overlay.isHeadless = true
+        let radiusFade = chrome.radius.layer!.animationKeys() ?? []
+        require(!chrome.radius.isHidden && (NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? radiusFade.isEmpty : radiusFade.contains("transition")),
+                "with motion, the radius chip fades in and is shown at once: \(radiusFade)")
         let hoverChips = [chrome.hover, chrome.snapTag, chrome.radius]
         let covering = overlay.view.subviews.filter { view in !view.isHidden && !hoverChips.contains(view) && hoverChips.contains { $0.frame.intersects(view.frame) } && view !== overlay.view.liveText }
         require(texts(in: chrome.radius) == ["r 1", "[", "]"] && chrome.radius.frame.minY == chrome.hover.frame.minY && covering.isEmpty,
@@ -1498,17 +1526,21 @@ extension DebugRun {
         key(53, "\u{1B}")
         overlay.dismiss()
 
-        // A lit Edit button draws exactly as a lit mode button does, in the light and the dark look.
+        // A lit Edit button draws exactly as a lit toggle (Loupe) does, and the current mode exactly as Copy, in the light and the dark look.
         for look in ["light", "dark"] {
             defaults.set(look, forKey: Pref.overlayAppearance)
             open()
             drag(rough)
             overlay.refresh()
-            let mode = chrome.modeButtons[.capture]!, edit = chrome.edit
+            defaults.set(true, forKey: Pref.loupe)
+            overlay.refresh()
+            let mode = chrome.modeButtons[.capture]!, edit = chrome.edit, loupe = chrome.viewToggles[0].1
             func drawn(_ button: BarButton) -> [String] {
                 [button.layer!.backgroundColor, button.layer!.borderColor].map { "\(NSColor(cgColor: $0!)!.usingColorSpace(.sRGB)!)" } + ["\(button.layer!.borderWidth)", "\(button.title.textColor!.usingColorSpace(.sRGB)!)", "\(button.title.font!.fontName) \(button.title.font!.pointSize)"]
             }
-            require(mode.lit && edit.lit && drawn(mode) == drawn(edit), "a lit Edit draws as a lit mode button in the \(look) look: \(drawn(mode)) \(drawn(edit))")
+            require(loupe.lit && edit.lit && drawn(loupe) == drawn(edit), "a lit Edit draws as a lit toggle in the \(look) look: \(drawn(loupe)) \(drawn(edit))")
+            require(mode.primary && drawn(mode) == drawn(chrome.copy), "the current mode draws as Copy in the \(look) look: \(drawn(mode)) \(drawn(chrome.copy))")
+            defaults.set(false, forKey: Pref.loupe)
             overlay.dismiss()
         }
         defaults.removeObject(forKey: Pref.overlayAppearance)

@@ -121,14 +121,12 @@ final class Pill: NSView {
 }
 
 /// The key cap: one key's glyph on a raised key. Idle it is neutral; `pressed` fills it with the tint (for a moment after its chord,
-/// or while its modifier is held), darker with a ring on a tint-filled button; `onTint` is the white key on a tint-filled button;
-/// `faded`, a modifier that changes its button and is not held, is an outline with a faint glyph.
+/// or while its modifier is held), darker with a ring on a tint-filled button; `onTint` is the white key on a tint-filled button.
 @MainActor
 final class KeyCap: NSView {
     let text: String
     /// The chord the cap is part of ("⌘S" for both its caps): a press of the chord lights it.
     let chord: String
-    let faded: Bool
     private let label: NSTextField
     var pressed = false {
         didSet { if pressed != oldValue { apply() } }
@@ -137,10 +135,9 @@ final class KeyCap: NSView {
         didSet { if onTint != oldValue { apply() } }
     }
 
-    init(_ text: String, chord: String? = nil, faded: Bool = false) {
+    init(_ text: String, chord: String? = nil) {
         self.text = text
         self.chord = chord ?? text
-        self.faded = faded
         label = NSTextField(text, size: 11, weight: .semibold)
         super.init(frame: .zero)
         wantsLayer = true
@@ -163,14 +160,7 @@ final class KeyCap: NSView {
     /// Draws the current state in the current look and tint.
     func apply() {
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            if faded {
-                let base = onTint ? Chrome.onTint : .chromeText
-                label.textColor = base.withAlphaComponent(0.4)
-                layer!.backgroundColor = nil
-                layer!.borderWidth = 1
-                layer!.borderColor = base.withAlphaComponent(0.3).cgColor
-                layer!.shadowOpacity = 0
-            } else if pressed && onTint {
+            if pressed && onTint {
                 let fill = Chrome.tint.blended(withFraction: 0.4, of: .black)!
                 label.textColor = Chrome.text(on: fill)
                 layer!.backgroundColor = fill.cgColor
@@ -269,7 +259,7 @@ final class BarButton: NSView {
     /// The chord a click presses.
     private(set) var key: String?
     let title: NSTextField
-    /// The faded modifier caps, then the chord's caps.
+    /// The chord's caps.
     private(set) var caps: [KeyCap] = []
     let symbol: NSImageView?
     var lit = false {
@@ -332,12 +322,12 @@ final class BarButton: NSView {
         fit()
     }
 
-    /// Shows a faded cap per modifier glyph of `faded`, then a cap per key of `key`, the chord a click presses, and resizes the button.
-    func setKeys(_ key: String?, faded: String = "") {
-        guard caps.isEmpty || key != self.key || faded != String(caps.filter(\.faded).map(\.text).joined()) else { return }
+    /// Shows a cap per key of `key`, the chord a click presses, and resizes the button.
+    func setKeys(_ key: String?) {
+        guard caps.isEmpty || key != self.key else { return }
         self.key = key
         caps.forEach { $0.removeFromSuperview() }
-        caps = faded.map { KeyCap(String($0), chord: "", faded: true) } + (key.map(KeyCap.caps) ?? [])
+        caps = key.map(KeyCap.caps) ?? []
         for cap in caps {
             cap.frame.origin.y = (frame.height - cap.frame.height) / 2
             addSubview(cap)
@@ -406,22 +396,27 @@ final class Bar: NSView {
         return hit === self ? nil : hit
     }
 
-    /// Shows the groups, laid out again only when their buttons or titles change.
+    /// Shows the groups, laid out again only when their buttons or titles change. The pills stay while their number does, so in an
+    /// animation a button's new width moves the buttons and pills after it.
     func show(_ groups: [[BarButton]]) {
         isHidden = false
-        let key = groups.map { $0.map { $0.title.stringValue + $0.caps.map { ($0.faded ? "~" : "") + $0.text }.joined() }.joined(separator: ",") }.joined(separator: "|")
+        let key = groups.map { $0.map { $0.title.stringValue + $0.caps.map(\.text).joined() }.joined(separator: ",") }.joined(separator: "|")
         guard key != self.key else { return }
         self.key = key
-        self.groups.forEach { $0.removeFromSuperview() }
+        if self.groups.count != groups.count {
+            self.groups.forEach { $0.removeFromSuperview() }
+            self.groups = groups.map { _ in
+                let pill = Pill(radius: 11, insets: NSEdgeInsets(top: 3, left: 3, bottom: 3, right: 3), spacing: 2, height: Chrome.controlHeight)
+                pill.isClickThrough = false
+                return pill
+            }
+        }
         var x: CGFloat = 0
-        self.groups = groups.map { buttons in
-            let pill = Pill(radius: 11, insets: NSEdgeInsets(top: 3, left: 3, bottom: 3, right: 3), spacing: 2, height: Chrome.controlHeight)
-            pill.isClickThrough = false
-            pill.show(key + "\(x)") { buttons }
+        for (pill, buttons) in zip(self.groups, groups) {
+            pill.show(key) { buttons }
             pill.frame.origin.x = x
             x += pill.frame.width + 8
-            addSubview(pill)
-            return pill
+            if pill.superview !== self { addSubview(pill) }
         }
         frame.size = CGSize(width: x - 8, height: self.groups.map(\.frame.height).max()!)
     }
@@ -483,14 +478,9 @@ final class Chrome {
     /// change never moves the edge.
     var stripSlack: CGFloat = 0
     static let widest: (copy: CGFloat, save: CGFloat, text: CGFloat) = (
-        [("Copy", "\u{21A9}", "\u{2318}"), ("Agent", "\u{2318}\u{21A9}", ""), ("Text", "\u{21E7}\u{21A9}", ""), ("Translate", "\u{2325}\u{21A9}", "")].map { width($0) }.max()!,
-        [("Save", "\u{2318}S", "\u{21E7}"), ("Save As", "\u{21E7}\u{2318}S", "")].map { width($0) }.max()!,
-        [("Copy", "\u{21A9}", "\u{21E7}\u{2325}"), ("Rows", "\u{21E7}\u{21A9}", ""), ("Translate", "\u{2325}\u{21A9}", "")].map { width($0) }.max()!)
-    private static func width(_ variant: (title: String, key: String, faded: String)) -> CGFloat {
-        let button = BarButton(variant.title, key: nil)
-        button.setKeys(variant.key, faded: variant.faded)
-        return button.frame.width
-    }
+        [("Copy", "\u{21A9}"), ("Agent", "\u{2318}\u{21A9}"), ("Text", "\u{21E7}\u{21A9}"), ("Translate", "\u{2325}\u{21A9}")].map { BarButton($0, key: $1).frame.width }.max()!,
+        [("Save", "\u{2318}S"), ("Save As", "\u{21E7}\u{2318}S")].map { BarButton($0, key: $1).frame.width }.max()!,
+        [("Copy", "\u{21A9}"), ("Rows", "\u{21E7}\u{21A9}"), ("Translate", "\u{2325}\u{21A9}")].map { BarButton($0, key: $1).frame.width }.max()!)
     let scrolled = BarButton("Scrolling", key: nil)
     let done = BarButton("Done", key: "\u{21A9}")
     let cancel = BarButton("Cancel", key: "esc")

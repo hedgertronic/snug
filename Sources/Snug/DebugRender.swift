@@ -82,6 +82,19 @@ extension DebugRun {
         try snapshot("area-idle")
         overlay.dismiss()
 
+        // The settings bar with the current mode drawn as Copy is, in Capture and in Text, light and dark.
+        for look in ["light", "dark"] {
+            defaults.set(look, forKey: Pref.overlayAppearance)
+            for mode in [OverlayController.Mode.capture, .text] {
+                open()
+                overlay.chrome.modeButtons[mode]!.onClick()
+                mouse(.mouseMoved, CGPoint(x: 1200, y: 1000))
+                try snapshot("bar-\(mode)-\(look)")
+                overlay.dismiss()
+            }
+        }
+        defaults.removeObject(forKey: Pref.overlayAppearance)
+
         open()
         mouse(.mouseMoved, CGPoint(x: 1280, y: 1580))
         try snapshot("bar-at-top")

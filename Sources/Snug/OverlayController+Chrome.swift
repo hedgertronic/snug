@@ -92,7 +92,7 @@ extension OverlayController {
         Set([(optionHeld, "\u{2325}"), (commandHeld, "\u{2318}"), (shiftHeld, "\u{21E7}")].compactMap { $0.0 ? Character($0.1) : nil })
     }
 
-    /// Every cap is pressed while its chord flashes, and a modifier's cap while its key is held (a faded cap shows only while it is not);
+    /// Every cap is pressed while its chord flashes, and a modifier's cap while its key is held;
     /// with `restyle` (a new tint), every button and cap redraws in the current tint.
     private func lightCaps(restyle: Bool = false) {
         let held = heldGlyphs
@@ -161,6 +161,26 @@ extension OverlayController {
         if c.topBar.appearance?.name != look?.name {
             for item in c.all + [cornerChip, view.guides.readout] where item !== c.help { item.appearance = look }
         }
+        // Chrome motion, off headless and with Reduce Motion: the strip's buttons cross-fade their labels and caps and animate their
+        // widths, the strip moves and resizes, the settings bar slides, and the chips and strip fade in and out, 140 ms, ease out.
+        // Everything else, the hover outline and the selection among it, changes at once. Frames take their final values at once; the
+        // layers animate to them.
+        let motion = !isHeadless && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        func animate(_ on: Bool, _ changes: () -> Void) {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.14
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                context.allowsImplicitAnimation = on
+                changes()
+            }
+        }
+        let fading: [NSView] = [c.hover, c.size, c.snap, c.ratio, c.radius, c.reading, c.status, c.strip]
+        let wasShown = fading.map { !$0.isHidden }
+        // The strip moves only from where it showed, and not while a drag moves the selection under it. Its views and their frames now,
+        // and each one's subviews (a button's caps), to animate from once the strip is laid out.
+        let stripMoves = motion && !c.strip.isHidden && draggedRect == nil
+        func tree(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(tree) }
+        let stripBefore = stripMoves ? tree(c.strip).map { ($0, $0.frame, $0.subviews) } : []
         for item in [c.hover, c.size, c.snap, c.snapTag, c.ratio, c.radius, c.legend, c.reading, c.status, c.strip] { item.isHidden = true }
         c.help.frame = bounds
         c.help.layoutPanel()
@@ -174,7 +194,7 @@ extension OverlayController {
             c.topBar.show(modes + [c.viewToggles.map(\.1)] + (mode == .text ? [] : [c.styleToggles.map(\.1)]) + [[c.keys]])
             if c.topBar.frame.width > bounds.width - 16 { c.topBar.show([[c.keys]]) }
         }
-        for (current, button) in c.modeButtons { button.lit = current == mode }
+        for (current, button) in c.modeButtons { button.primary = current == mode }
         for (key, button) in c.viewToggles + c.styleToggles { button.lit = defaults.bool(forKey: key) }
 
         // The object's chips and strip, filled before the keys line, which leaves out what the strip shows, and attached to the object
@@ -199,24 +219,25 @@ extension OverlayController {
         }
         /// The capture strip: Edit in its own pill, lit once there is a selection, then Copy and Save, then Scroll and Record (each
         /// left out when it cannot run on `area`), Subject, and Colors. The modifiers held relabel Copy (Command: Agent, Shift: Text,
-        /// Option: Translate, each alone) and Save (Shift: Save As), whose clicks press the chord shown; at rest Copy shows a faded
-        /// Command and Save a faded Shift. A combination with no meaning dims the button, and any modifier dims Edit and the tools.
+        /// Option: Translate, each alone) and Save (Shift: Save As), whose clicks press the chord shown; at rest each shows only its own
+        /// key, and a modifier's cap appears while it is held. A combination with no meaning dims the button, and any modifier dims Edit
+        /// and the tools.
         func captureStrip(_ area: CGRect) {
             let scrolls = (scrollFrames != nil || displayID != nil) && area != extent && windows.contains { $0.insetBy(dx: -2, dy: -2).contains(area) }
             let held = heldGlyphs
             c.edit.lit = selection != nil
-            let copy: (title: String, key: String, faded: String)? = switch held {
-            case []: ("Copy", "\u{21A9}", "\u{2318}")
-            case ["\u{2318}"]: ("Agent", "\u{2318}\u{21A9}", "")
-            case ["\u{21E7}"]: ("Text", "\u{21E7}\u{21A9}", "")
-            case ["\u{2325}"]: ("Translate", "\u{2325}\u{21A9}", "")
+            let copy: (title: String, key: String)? = switch held {
+            case []: ("Copy", "\u{21A9}")
+            case ["\u{2318}"]: ("Agent", "\u{2318}\u{21A9}")
+            case ["\u{21E7}"]: ("Text", "\u{21E7}\u{21A9}")
+            case ["\u{2325}"]: ("Translate", "\u{2325}\u{21A9}")
             default: nil
             }
             c.copy.setTitle(copy?.title ?? "Copy")
-            c.copy.setKeys(copy?.key ?? "\u{21A9}", faded: copy?.faded ?? "")
+            c.copy.setKeys(copy?.key ?? "\u{21A9}")
             c.copy.isEnabled = copy != nil
             c.save.setTitle(shiftHeld && !optionHeld ? "Save As" : "Save")
-            c.save.setKeys(shiftHeld && !optionHeld ? "\u{21E7}\u{2318}S" : "\u{2318}S", faded: held.isEmpty ? "\u{21E7}" : "")
+            c.save.setKeys(shiftHeld && !optionHeld ? "\u{21E7}\u{2318}S" : "\u{2318}S")
             c.save.isEnabled = !optionHeld
             for button in [c.edit, c.scroll, c.record, c.cutout, c.colors] { button.isEnabled = held.isEmpty }
             c.stripSlack = Chrome.widest.copy - c.copy.frame.width + Chrome.widest.save - c.save.frame.width
@@ -224,16 +245,16 @@ extension OverlayController {
         }
 
         /// The Text strip: Copy, whose label the modifiers held change (Shift alone: Rows, Option alone: Translate) and which at rest
-        /// shows a faded Shift and Option; any other combination dims it.
+        /// shows only Return; any other combination dims it.
         func textStrip() {
-            let copy: (title: String, key: String, faded: String)? = switch heldGlyphs {
-            case []: ("Copy", "\u{21A9}", "\u{21E7}\u{2325}")
-            case ["\u{21E7}"]: ("Rows", "\u{21E7}\u{21A9}", "")
-            case ["\u{2325}"]: ("Translate", "\u{2325}\u{21A9}", "")
+            let copy: (title: String, key: String)? = switch heldGlyphs {
+            case []: ("Copy", "\u{21A9}")
+            case ["\u{21E7}"]: ("Rows", "\u{21E7}\u{21A9}")
+            case ["\u{2325}"]: ("Translate", "\u{2325}\u{21A9}")
             default: nil
             }
             c.copy.setTitle(copy?.title ?? "Copy")
-            c.copy.setKeys(copy?.key ?? "\u{21A9}", faded: copy?.faded ?? "")
+            c.copy.setKeys(copy?.key ?? "\u{21A9}")
             c.copy.isEnabled = copy != nil
             c.stripSlack = Chrome.widest.text - c.copy.frame.width
             c.strip.show([[c.copy]])
@@ -320,17 +341,11 @@ extension OverlayController {
             frames.append((c.topBar, frame))
             if barAtTop { top = frame.minY } else { floor = frame.maxY + 8 }
         }
-        let animate = !isHeadless && (barAtTop != c.barAtTop || ruler != c.ruler)
-        c.ruler = ruler
-        c.barAtTop = barAtTop
-        if animate {
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.15
-                for (item, frame) in frames { item.animator().frame = frame }
-            }
-        } else {
+        animate(motion && (barAtTop != c.barAtTop || ruler != c.ruler)) {
             for (item, frame) in frames { item.frame = frame }
         }
+        c.ruler = ruler
+        c.barAtTop = barAtTop
 
         /// Attaches the strip below `box` (above when the bottom has no room, else inside), then the chip row above it (above the strip
         /// when that is above, else inside the top): `left` from the box's left edge, `right` ending at its right edge, or after `left`
@@ -450,6 +465,27 @@ extension OverlayController {
             let width = c.list.frame.width, height = c.list.frame.height
             let x = box.maxX + 12 + width <= bounds.width - 8 ? box.maxX + 12 : (box.minX - 12 - width >= 8 ? box.minX - 12 - width : 12)
             c.list.frame.origin = CGPoint(x: x, y: min(max(box.maxY - height, 8), top - height - 8))
+        }
+        // The strip's views that stayed in it animate from their old frames to the new ones, and a button whose caps were replaced
+        // cross-fades its old title and caps into the new ones. The views are built and laid out outside the animation: a new text
+        // field, not yet in a layer tree, would otherwise grow its frame from zero.
+        if !c.strip.isHidden {
+            let moved = stripBefore.filter { $0.0.frame != $0.1 && ($0.0 === c.strip || $0.0.isDescendant(of: c.strip)) }
+            let relabeled = stripBefore.filter { $0.0 is BarButton && $0.0.subviews != $0.2 }.map(\.0)
+            let targets = moved.map(\.0.frame)
+            for (item, frame, _) in moved { item.frame = frame }
+            animate(true) {
+                for ((item, _, _), target) in zip(moved, targets) { item.animator().frame = target }
+                let fade = CATransition()
+                fade.duration = 0.14
+                fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                for button in relabeled { button.layer!.add(fade, forKey: kCATransition) }
+            }
+        }
+        // A chip or the strip that appeared or went away fades: its hidden state is set again inside the animation.
+        for (item, shown) in zip(fading, wasShown) where motion && item.isHidden == shown {
+            item.isHidden = !shown
+            animate(true) { item.isHidden = shown }
         }
         placeToolTip()
         lightCaps(restyle: restyle)
