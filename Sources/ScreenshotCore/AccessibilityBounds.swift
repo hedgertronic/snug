@@ -130,8 +130,10 @@ public enum AccessibilityBounds {
     /// Where the hovered element's peers hang: the index in `frames` (innermost element first, window last) of the outermost element
     /// whose frame is only padding around the hovered one (the innermost `hoverLevel` frame), which is the one that has siblings.
     /// Finder's sidebar row is a 159 pt wide `AXRow` around a 139 pt `AXCell`: the cell is what hovers, and its parent row has the
-    /// other rows as siblings. The run stops below the window. Nil when nothing hovers.
+    /// other rows as siblings. The run stops below the window. Over a section header, its row: the other rows are still its peers.
+    /// Nil when nothing hovers.
     public static func peerLevel(_ frames: [AXFrame]) -> Int? {
+        if let header = sectionHeaderRow(frames) { return header }
         guard let hovered = hoverLevel(frames).first, var level = frames.firstIndex(of: hovered) else { return nil }
         while level + 1 < frames.count, frames[level + 1].role != "AXWindow", frames[level + 1].rect.isNear(frames[level].rect, within: paddingTolerance) { level += 1 }
         return level

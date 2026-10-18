@@ -62,6 +62,7 @@ struct FinderSidebarHoverTests {
         let tableRow = AXFrame(roleDescription: "row", rect: row(2).rect, role: "AXRow", subrole: "AXTableRow")
         #expect(AccessibilityBounds.sectionHeaderRow([text(2), cell(2), tableRow] + sidebar) == nil, "a text-only table row is not a header")
         #expect(AccessibilityBounds.hoverLevel(hovered(2)).first == sidebar[0], "hovering a header picks the sidebar, as hovering a text does")
+        #expect(AccessibilityBounds.peerLevel(hovered(2)) == 2, "its peers are still the outline's rows, not the scroll area's children (the scroll bar)")
     }
 
     @Test func leftAndRightSkipTheSectionHeaders() async throws {
