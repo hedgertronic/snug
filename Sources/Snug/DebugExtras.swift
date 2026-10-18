@@ -542,40 +542,19 @@ extension DebugRun {
             overlay.dismiss()
         }
 
-        // Left and Right outline the previous and next peer only, drawn 2 pt inside their rectangles so the rows above and below a
-        // hovered row stay off it, each with its cap in the outline's top-left corner; they follow a Left step and wrap.
+        // Left and Right draw no outline and no cap: a hovered row has no hint, and a Left step still picks the row before it, wrapping.
         let peerRows = (0..<4).map { Candidate(id: "row-\($0)", label: "Row", bounds: CGRect(x: 620, y: 420 + CGFloat($0) * 64, width: 560, height: 64), score: AccessibilityBounds.baseScore, kind: .element) }
         open()
         overlay.detectionTask?.cancel()
         overlay.session = SelectionSession(candidates: peerRows, extent: extent, anchor: CGPoint(x: peerRows[1].bounds.midX, y: peerRows[1].bounds.midY))
         mouse(.mouseMoved, CGPoint(x: peerRows[1].bounds.midX, y: peerRows[1].bounds.midY))
         let o = overlay.view.overlays
-        require(o.hover == peerRows[1].bounds && o.leftHint == peerRows[0].bounds && o.rightHint == peerRows[2].bounds && o.upHint == nil && o.downHint == nil,
-                "a hovered row outlines the row before it for Left and the row after it for Right, and no other: \(String(describing: o.leftHint)) \(String(describing: o.rightHint))")
-        let drawn = overlay.view.levelHintLayer.path!.boundingBox, hoverRow = overlay.view.viewRect(peerRows[1].bounds)
-        let insetPeers = overlay.view.viewRect(peerRows[0].bounds).union(overlay.view.viewRect(peerRows[2].bounds)).insetBy(dx: 2, dy: 2)
-        require(drawn == insetPeers && overlay.view.viewRect(peerRows[0].bounds).insetBy(dx: 2, dy: 2).minY - hoverRow.maxY == 2 && hoverRow.minY - overlay.view.viewRect(peerRows[2].bounds).insetBy(dx: 2, dy: 2).maxY == 2,
-                "the peer outlines are drawn 2 pt inside their peerRows, 2 pt off the hovered row: \(drawn) \(insetPeers) \(hoverRow)")
-        for (cap, row) in [(overlay.chrome.leftHint, peerRows[0]), (overlay.chrome.rightHint, peerRows[2])] {
-            let box = overlay.view.viewRect(row.bounds).insetBy(dx: 2, dy: 2)
-            require(!cap.isHidden && cap.frame.minX == box.minX + 4 && cap.frame.maxY == box.maxY - 4, "the \(cap.text) cap sits in its outline's top-left corner: \(cap.frame) \(box)")
-        }
+        require(o.hover == peerRows[1].bounds && o.upHint == nil && o.downHint == nil && overlay.view.levelHintLayer.path!.isEmpty && overlay.chrome.upHint.isHidden && overlay.chrome.downHint.isHidden,
+                "a hovered row among peers has no outline and no cap: \(String(describing: o.upHint)) \(String(describing: o.downHint))")
         key(123, "")
-        require(overlay.view.overlays.hover == peerRows[0].bounds && overlay.view.overlays.leftHint == peerRows[3].bounds && overlay.view.overlays.rightHint == peerRows[1].bounds,
-                "after Left the outlines follow: Left wraps to the last row, Right is the row Left came from")
-        overlay.dismiss()
-        open()
-        overlay.detectionTask?.cancel()
-        overlay.session = SelectionSession(candidates: Array(peerRows.prefix(2)), extent: extent, anchor: CGPoint(x: peerRows[0].bounds.midX, y: peerRows[0].bounds.midY))
-        mouse(.mouseMoved, CGPoint(x: peerRows[0].bounds.midX, y: peerRows[0].bounds.midY))
-        require(overlay.view.overlays.rightHint == peerRows[1].bounds && overlay.view.overlays.leftHint == nil && overlay.chrome.leftHint.isHidden,
-                "with one peer, Left and Right pick the same row: it shows once, as Right")
-        overlay.dismiss()
-        open()
-        overlay.detectionTask?.cancel()
-        overlay.session = SelectionSession(candidates: [peerRows[0]], extent: extent, anchor: CGPoint(x: peerRows[0].bounds.midX, y: peerRows[0].bounds.midY))
-        mouse(.mouseMoved, CGPoint(x: peerRows[0].bounds.midX, y: peerRows[0].bounds.midY))
-        require(overlay.view.overlays.leftHint == nil && overlay.view.overlays.rightHint == nil && overlay.chrome.rightHint.isHidden, "with no peer there is no Left or Right outline")
+        require(overlay.view.overlays.hover == peerRows[0].bounds && overlay.view.levelHintLayer.path!.isEmpty, "Left still picks the row before it, with no outline")
+        key(123, "")
+        require(overlay.view.overlays.hover == peerRows[3].bounds, "Left from the first row wraps to the last")
         overlay.dismiss()
 
         // The highlight reads its settings on each present.
@@ -1294,9 +1273,27 @@ extension DebugRun {
         require(keyCaps("\u{2325}", in: chrome.copy).count == 1 && lit(["\u{2325}"], chrome.strip) && lit(["\u{2325}"], chrome.legend)
                     && texts(in: chrome.legend) == ["grow", "\u{2325}"],
                 "holding Option lights the Option caps on the strip (Translate) and the legend, which reads grow with its cap: \(texts(in: chrome.legend))")
-        require(sides.allSatisfy { !$0.isHidden } && sides[0].frame.maxX <= selected.minX && sides[1].frame.minX >= selected.maxX && sides[2].frame.minY >= selected.maxY
-                    && abs(sides[0].frame.midY - selected.midY) < 1 && abs(sides[2].frame.midX - selected.midX) < 1 && !sides[3].frame.intersects(chrome.strip.frame),
-                "holding Option puts an arrow cap outside each side's midpoint, clear of the strip: \(sides.map(\.frame)) \(selected)")
+        // The arrow caps are a D-pad around the legend, the group centered in the selection (this one is 35 pt tall, so the group is
+        // taller than it, stays centered across and moves past the chips).
+        func dpad(_ what: String) {
+            let legend = chrome.legend.frame, group = sides.map(\.frame).reduce(legend) { $0.union($1) }
+            let fits = group.width <= selected.width && group.height <= selected.height
+            require(sides.allSatisfy { !$0.isHidden } && abs(group.midX - selected.midX) <= 1 && (!fits || abs(group.midY - selected.midY) <= 1)
+                        && ![chrome.strip, chrome.size, chrome.snap, chrome.ratio, chrome.radius].contains { !$0.isHidden && $0.frame.intersects(group) },
+                    "\(what): the arrow caps and the legend are one group, centered in the selection when it fits, clear of the chips: \(group) \(selected)")
+            require(sides[2].frame.minY == legend.maxY + 6 && sides[3].frame.maxY == legend.minY - 6 && sides[0].frame.maxX == legend.minX - 6 && sides[1].frame.minX == legend.maxX + 6
+                        && abs(sides[2].frame.midX - legend.midX) <= 1 && abs(sides[3].frame.midX - legend.midX) <= 1 && abs(sides[0].frame.midY - legend.midY) <= 1 && abs(sides[1].frame.midY - legend.midY) <= 1
+                        && !sides.contains { $0.frame.intersects(legend) },
+                    "\(what): up above the legend, down below, left and right beside it: \(sides.map(\.frame)) \(legend)")
+        }
+        dpad("holding Option")
+        flags([.option, .shift])
+        require(lit(["\u{2325}", "\u{21E7}"], chrome.legend) && texts(in: chrome.legend) == ["grow 10 px", "\u{2325}", "\u{21E7}"], "holding Option-Shift the legend reads grow 10 px with both caps: \(texts(in: chrome.legend))")
+        dpad("holding Option-Shift")
+        flags([.option, .shift, .command])
+        require(lit(["\u{2325}", "\u{21E7}", "\u{2318}"], chrome.legend) && texts(in: chrome.legend) == ["shrink 10 px", "\u{2325}", "\u{21E7}", "\u{2318}"], "holding Option-Shift-Command the legend reads shrink 10 px: \(texts(in: chrome.legend))")
+        dpad("holding Option-Shift-Command")
+        flags(.option)
         flags([.option, .command])
         require(lit(["\u{2325}", "\u{2318}"], chrome.strip) && lit(["\u{2325}", "\u{2318}"], chrome.legend)
                     && texts(in: chrome.legend) == ["shrink", "\u{2325}", "\u{2318}"] && sides.allSatisfy { !$0.isHidden },
@@ -1304,6 +1301,7 @@ extension DebugRun {
         flags(.command)
         require(lit(["\u{2318}"], chrome.strip) && lit(["\u{2318}"], chrome.legend) && texts(in: chrome.legend) == ["edge out", "\u{2318}", "edge in", "\u{2318}", "\u{21E7}"] && sides.allSatisfy { !$0.isHidden },
                 "holding Command lights the Command caps and the legend reads both edge directions: \(texts(in: chrome.legend))")
+        dpad("holding Command")
         flags([.command, .shift])
         require(lit(["\u{2318}", "\u{21E7}"], chrome.strip) && lit(["\u{2318}", "\u{21E7}"], chrome.legend)
                     && texts(in: chrome.legend) == ["edge out", "\u{2318}", "edge in", "\u{2318}", "\u{21E7}"],
@@ -1428,6 +1426,10 @@ extension DebugRun {
             let outside = shown.filter { !screen.contains($0.1.frame) }.map { "\($0.0) \($0.1.frame) in \(screen)" }
             require(overlaps.isEmpty && outside.isEmpty && !chrome.ratio.isHidden && chrome.sideHints.allSatisfy { !$0.isHidden },
                     "the \(name) selection's chrome does not overlap or leave the screen: overlaps \(overlaps), outside \(outside)")
+            if name == "large" {
+                let group = chrome.sideHints.map(\.frame).reduce(chrome.legend.frame) { $0.union($1) }
+                require(overlay.view.viewRect(rect).contains(group), "in the large selection the arrow caps and the legend sit inside it: \(group)")
+            }
             // At the right edge the strip is clamped with room for its widest labels, so they keep its left edge and stay on screen.
             guard name == "right" else { continue }
             let left = chrome.strip.frame.minX
