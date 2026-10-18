@@ -21,7 +21,7 @@ extension DebugRun {
 
     /// Copy for Agent on the frozen image, with Frame and Rounded on: Cmd-Return on a hovered geometry element, then the strip's Agent
     /// button on a selection whose accessibility frames the hover had read. Each writes a bundle with a valid manifest to the agent folder
-    /// and one item with the PNG (its manifest in the text chunk), the reference line and the manifest to the run's private pasteboard.
+    /// (the second replaces the first) and one item with the PNG (its manifest in the text chunk), the reference line and the manifest to the run's private pasteboard.
     static func verifyAgentHandoff(image: CGImage, frame: CGRect, overlay: OverlayController, require: (Bool, String) -> Void) async throws {
         let pasteboard = overlay.pasteboard
         let defaults = overlay.defaults
@@ -118,7 +118,9 @@ extension DebugRun {
                 "a selection takes the accessibility fields of the element the hover read for it: \(field.target)")
         require(field.target.ancestors?.map(\.role) == ["AXGroup", "AXWindow"] && field.warnings.contains(.accessibilityStale),
                 "its ancestors follow innermost first, and a read 6 s after the freeze is stale: \(field.warnings)")
-        require(try store.manifests().prefix(2).map(\.captureId) == [field.captureId, element.captureId], "the store lists both bundles, newest first")
+        require(try store.current() == field && FileManager.default.contentsOfDirectory(atPath: store.root.path) == [field.captureId],
+                "the second copy replaced the first: the store holds only bundle \(field.captureId), not \(element.captureId)")
+        print("replaced capture: \(element.captureId)")
         defaults.set(false, forKey: Pref.frame)
     }
 }

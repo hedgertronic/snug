@@ -2,25 +2,23 @@ import CoreGraphics
 import Foundation
 import zlib
 
-/// What an agent handoff (Copy for Agent) records about its capture, schema version 1: the image, where it sat on screen, the app and
+/// What an agent handoff (Copy for Agent) records about its capture, schema version 2: the image, where it sat on screen, the app and
 /// window it came from, and what the target is. Every field is observed; an unknown one is nil and left out of the JSON.
 public struct HandoffManifest: Codable, Sendable, Equatable {
-    public var schemaVersion = 1
+    public var schemaVersion = 2
     /// 8 characters of Crockford base32.
     public var captureId: String
     /// When the pixels were frozen.
     public var capturedAt: Date
-    public var expiresAt: Date
     public var image: Image
     public var geometry: Geometry
     public var source: Source?
     public var target: Target
     public var warnings: [Warning]
 
-    public init(captureId: String, capturedAt: Date, expiresAt: Date, image: Image, geometry: Geometry, source: Source?, target: Target, warnings: [Warning]) {
+    public init(captureId: String, capturedAt: Date, image: Image, geometry: Geometry, source: Source?, target: Target, warnings: [Warning]) {
         self.captureId = captureId
         self.capturedAt = capturedAt
-        self.expiresAt = expiresAt
         self.image = image
         self.geometry = geometry
         self.source = source
@@ -239,13 +237,10 @@ public struct HandoffManifest: Codable, Sendable, Equatable {
     private static func bigEndian(_ value: UInt32) -> [UInt8] { (0..<4).map { UInt8(truncatingIfNeeded: value >> (24 - 8 * $0)) } }
 }
 
-/// The agent handoff bundles in one folder: each capture's id names a folder holding `capture.png` and `manifest.json`. Bundles expire
-/// after `lifetime`; writing one removes the expired ones, then the oldest while the folder holds more than `byteCap` bytes. A removed
-/// id is listed in the `removed` file, so a lookup can tell it from one that never existed.
+/// The agent handoff bundle in one folder: the id of the last capture names a folder holding `capture.png` and `manifest.json`. Writing a
+/// bundle replaces the previous one, like the clipboard.
 public struct HandoffStore: Sendable {
     public let root: URL
-    public var byteCap = 500_000_000
-    public static let lifetime: TimeInterval = 7 * 24 * 60 * 60
 
     /// `~/Library/Application Support/Snug/Agent`.
     public static var defaultRoot: URL { URL.applicationSupportDirectory.appending(path: "Snug/Agent") }
@@ -254,17 +249,10 @@ public struct HandoffStore: Sendable {
         self.root = root
     }
 
-    public enum Lookup: Equatable {
-        case found(HandoffManifest)
-        case expired
-        case notFound
-    }
-
-    private var removedFile: URL { root.appending(path: "removed") }
-
-    /// Writes the bundle into a temporary folder beside it, then renames it into place; then applies retention, keeping this bundle.
+    /// Writes the bundle into a temporary folder beside it, renames it into place, then removes every other bundle, so a reader never
+    /// finds the folder empty.
     @discardableResult
-    public func write(png: Data, manifest: HandoffManifest, now: Date = .now) throws -> URL {
+    public func write(png: Data, manifest: HandoffManifest) throws -> URL {
         let files = FileManager.default
         try files.createDirectory(at: root, withIntermediateDirectories: true)
         let partial = root.appending(path: ".\(manifest.captureId).partial")
@@ -273,28 +261,18 @@ public struct HandoffStore: Sendable {
         try manifest.json().write(to: partial.appending(path: "manifest.json"))
         let bundle = root.appending(path: manifest.captureId)
         try files.moveItem(at: partial, to: bundle)
-        try prune(now: now, keeping: manifest.captureId)
+        for name in try files.contentsOfDirectory(atPath: root.path) where name != manifest.captureId {
+            try files.removeItem(at: root.appending(path: name))
+        }
         return bundle
     }
 
-    /// Every bundle's manifest, newest first, expired ones included.
-    public func manifests() throws -> [HandoffManifest] {
-        guard FileManager.default.fileExists(atPath: root.path) else { return [] }
+    /// The manifest of the last capture, or nil when there is none.
+    public func current() throws -> HandoffManifest? {
+        guard FileManager.default.fileExists(atPath: root.path) else { return nil }
         return try FileManager.default.contentsOfDirectory(atPath: root.path).filter(HandoffManifest.isId).map {
             try HandoffManifest(json: Data(contentsOf: root.appending(path: "\($0)/manifest.json")))
-        }.sorted { $0.capturedAt > $1.capturedAt }
-    }
-
-    /// The bundle for `id`: found, expired (past its expiry, or removed), or not found.
-    public func lookup(_ id: String, now: Date = .now) throws -> Lookup {
-        guard HandoffManifest.isId(id) else { return .notFound }
-        let file = root.appending(path: "\(id)/manifest.json")
-        if FileManager.default.fileExists(atPath: file.path) {
-            let manifest = try HandoffManifest(json: Data(contentsOf: file))
-            return manifest.expiresAt > now ? .found(manifest) : .expired
-        }
-        let removed = FileManager.default.fileExists(atPath: removedFile.path) ? try String(contentsOf: removedFile, encoding: .utf8) : ""
-        return removed.split(separator: "\n").contains(Substring(id)) ? .expired : .notFound
+        }.max { $0.capturedAt < $1.capturedAt }
     }
 
     /// The bundle's PNG.
@@ -302,39 +280,11 @@ public struct HandoffStore: Sendable {
         try Data(contentsOf: root.appending(path: "\(manifest.captureId)/\(manifest.image.file)"))
     }
 
-    /// Removes expired bundles, then the oldest while the bundles hold more than `byteCap` bytes. Never removes `kept`.
-    public func prune(now: Date, keeping kept: String) throws {
-        var live: [(id: String, bytes: Int)] = []
-        for manifest in try manifests().reversed() where manifest.captureId != kept {
-            if manifest.expiresAt <= now { try remove(manifest.captureId) } else { live.append((manifest.captureId, try bytes(of: manifest.captureId))) }
-        }
-        var total = try live.reduce(bytes(of: kept)) { $0 + $1.bytes }
-        for bundle in live where total > byteCap {
-            try remove(bundle.id)
-            total -= bundle.bytes
-        }
-    }
-
-    /// Removes every bundle, and any folder a failed write left.
-    public func removeAll() throws {
+    /// Removes the bundle, and any folder a failed write left.
+    public func clear() throws {
         guard FileManager.default.fileExists(atPath: root.path) else { return }
-        for name in try FileManager.default.contentsOfDirectory(atPath: root.path) where name != removedFile.lastPathComponent {
-            if HandoffManifest.isId(name) { try remove(name) } else { try FileManager.default.removeItem(at: root.appending(path: name)) }
+        for name in try FileManager.default.contentsOfDirectory(atPath: root.path) {
+            try FileManager.default.removeItem(at: root.appending(path: name))
         }
-    }
-
-    /// Bytes in the bundle's files.
-    public func bytes(of id: String) throws -> Int {
-        try FileManager.default.contentsOfDirectory(at: root.appending(path: id), includingPropertiesForKeys: [.fileSizeKey])
-            .reduce(0) { $0 + (try $1.resourceValues(forKeys: [.fileSizeKey]).fileSize!) }
-    }
-
-    private func remove(_ id: String) throws {
-        try FileManager.default.removeItem(at: root.appending(path: id))
-        if !FileManager.default.fileExists(atPath: removedFile.path) { FileManager.default.createFile(atPath: removedFile.path, contents: nil) }
-        let handle = try FileHandle(forWritingTo: removedFile)
-        defer { try! handle.close() }
-        try handle.seekToEnd()
-        try handle.write(contentsOf: Data((id + "\n").utf8))
     }
 }

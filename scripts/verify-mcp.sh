@@ -1,17 +1,18 @@
 #!/bin/bash
 # verify-mcp.sh: the MCP server end to end, on a built .build/debug/Snug (run `swift build` first). The headless
-# `--verify-agent-ui` check writes two agent bundles into a new temporary folder; JSON-RPC lines then go into
-# `Snug --mcp -SnugAgentFolder FOLDER`, once as written and once after the older bundle's expiry is moved into the past.
+# `--verify-agent-ui` check copies for an agent twice into a new temporary folder, so only the second bundle is left; JSON-RPC lines
+# then go into `Snug --mcp -SnugAgentFolder FOLDER`, once with that bundle and once after it is removed.
 # Prints each request and response (image data cut short) and exits non-zero when a response is not the expected one.
 # Needs jq. Run it inside the debug lock, like any debug Snug run.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 snug=.build/debug/Snug
 folder=$(mktemp -d "${TMPDIR:-/tmp}/snug-mcp.XXXXXX")
-"$snug" --verify-agent-ui "$folder" --image notes/real-web/form-test.png | grep "Agent UI verification passed"
-older=$(jq -rs 'sort_by(.captured_at) | .[0].capture_id' "$folder"/*/manifest.json)
-newest=$(jq -rs 'sort_by(.captured_at) | .[-1].capture_id' "$folder"/*/manifest.json)
-echo "folder $folder, bundles $older (older) and $newest (newest)"
+output=$("$snug" --verify-agent-ui "$folder" --image notes/real-web/form-test.png)
+grep "Agent UI verification passed" <<< "$output"
+older=$(sed -n 's/^replaced capture: //p' <<< "$output")
+newest=$(jq -rs '.[0].capture_id' "$folder"/*/manifest.json)
+echo "folder $folder, bundle $newest (current) replaced $older"
 
 # One server session: sends the lines in `requests`, then checks the Nth response against the Nth jq filter in `checks`.
 session() {
@@ -30,36 +31,40 @@ call() { printf '{"jsonrpc":"2.0","id":%s,"method":"tools/call","params":{"name"
 # Arguments with commas are built here: bash 3.2 brace-expands them inside a quoted command substitution.
 older_id=$(printf '{"id":"%s"}' "$older")
 zoom=$(printf '{"id":"%s","x":100,"y":10,"width":200,"height":40}' "$newest")
+zoom_older=$(printf '{"id":"%s","x":100,"y":10,"width":200,"height":40}' "$older")
 zoom_outside=$(printf '{"id":"%s","x":500,"y":0,"width":200,"height":40}' "$newest")
+replaced=".result.isError and .result.structuredContent.code == \"capture_replaced\" and .result.structuredContent.message == \"Capture $older was replaced by a newer capture. Ask the user to copy it again.\""
 requests=(
     '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"verify-mcp","version":"1"}}}'
     '{"jsonrpc":"2.0","method":"notifications/initialized"}'
     '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
     "$(call 3 get_capture '{"id":"latest"}')"
-    "$(call 4 get_capture "$older_id")"
-    "$(call 5 zoom "$zoom")"
-    "$(call 6 zoom "$zoom_outside")"
-    "$(call 7 list_captures '{}')"
-    "$(call 8 get_capture '{"id":"ZZZZZZZZ"}')"
+    "$(call 4 get_capture "$(printf '{"id":"%s"}' "$newest")")"
+    "$(call 5 get_capture "$older_id")"
+    "$(call 6 zoom "$zoom_older")"
+    "$(call 7 zoom "$zoom")"
+    "$(call 8 zoom "$zoom_outside")"
+    "$(call 9 list_captures '{}')"
+    "$(call 10 get_capture '{"id":"../x"}')"
 )
 # The notification gets no response, so it has no check.
 checks=(
     '.id == 1 and .result.protocolVersion == "2025-06-18" and .result.serverInfo.name == "snug"'
-    '[.result.tools[].name] == ["get_capture", "zoom", "list_captures"]'
-    ".result.structuredContent.capture_id == \"$newest\" and .result.content[0].type == \"image\" and (.result.content[1].text | fromjson | .capture_id) == \"$newest\""
-    ".result.structuredContent.capture_id == \"$older\" and .result.isError == null"
+    '[.result.tools[].name] == ["get_capture", "zoom"]'
+    ".result.structuredContent.capture_id == \"$newest\" and .result.content[0].type == \"image\" and (.result.content[1].text | fromjson | .capture_id) == \"$newest\" and (.result.content[1].text | fromjson | has(\"expires_at\") | not)"
+    ".result.structuredContent.capture_id == \"$newest\" and .result.isError == null"
+    "$replaced"
+    "$replaced"
     ".result.structuredContent == {\"capture_id\": \"$newest\", \"offset\": {\"x\": 100, \"y\": 10}, \"width\": 200, \"height\": 40}"
     '.result.isError and .result.structuredContent.code == "invalid_rect"'
-    "[.result.structuredContent.captures[].id] == [\"$newest\", \"$older\"]"
+    '.error.code == -32602'
     '.result.isError and .result.structuredContent.code == "capture_not_found"'
 )
 session
 
-manifest="$folder/$older/manifest.json"
-jq '.expires_at = "2026-01-01T00:00:00.000Z"' "$manifest" > "$manifest.new"
-mv "$manifest.new" "$manifest"
-echo "moved $older's expiry to 2026-01-01"
-requests=("$(call 9 get_capture "$older_id")" "$(call 10 list_captures '{}')")
-checks=('.result.isError and .result.structuredContent.code == "capture_expired"' "[.result.structuredContent.captures[].id] == [\"$newest\"]")
+trash "$folder/$newest"
+echo "removed $newest"
+requests=("$(call 11 get_capture '{"id":"latest"}')" "$(call 12 get_capture "$older_id")")
+checks=('.result.isError and .result.structuredContent.code == "capture_not_found"' '.result.isError and .result.structuredContent.code == "capture_not_found"')
 session
 echo "MCP verification passed"

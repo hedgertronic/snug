@@ -54,7 +54,7 @@ extension OverlayController {
                                            windowTitle: (info?[kCGWindowName as String] as? String).flatMap { $0.isEmpty ? nil : $0 },
                                            windowFrame: info.map { CGRect(dictionaryRepresentation: $0[kCGWindowBounds as String] as! CFDictionary)! })
                 }
-                let manifest = HandoffManifest(captureId: HandoffManifest.newId(), capturedAt: capturedAt, expiresAt: capturedAt.addingTimeInterval(HandoffStore.lifetime),
+                let manifest = HandoffManifest(captureId: HandoffManifest.newId(), capturedAt: capturedAt,
                                                image: .init(width: Int(crop.width), height: Int(crop.height), scale: scale),
                                                geometry: .init(cropPixels: crop, scale: scale, displayId: displayID, displayFrame: display),
                                                source: source, target: target, warnings: warnings)

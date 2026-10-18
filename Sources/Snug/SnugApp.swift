@@ -241,7 +241,6 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         let capture = menu.addItem(withTitle: "Capture", action: #selector(captureFromMenu), keyEquivalent: "")
         capture.setShortcut(from: defaults)
         menu.addItem(withTitle: "Capture Text", action: #selector(copyTextFromMenu), keyEquivalent: "")
-        menu.addItem(withTitle: "Repeat Last Area", action: #selector(repeatLastArea), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
         menu.addItem(withTitle: "About Snug", action: #selector(showAbout), keyEquivalent: "")
@@ -380,27 +379,6 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 _ = try await ScreenRecording.deliver(session.file, pasteboard: .general, defaults: .standard)
             } catch {
                 showRecordingFailure(error)
-            }
-        }
-    }
-
-    @objc private func repeatLastArea() {
-        guard CGPreflightScreenCaptureAccess() else { return showFirstRun() }
-        guard let area = UserDefaults.standard.array(forKey: Pref.lastArea) as? [Double] else { return NSSound.beep() }
-        let id = CGDirectDisplayID(area[0])
-        let screen = NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value == id }
-        guard let screen else { return NSSound.beep() }
-        Task {
-            do {
-                let image = try await DisplayCapture.image(of: id)
-                let scale = CGFloat(image.width) / screen.frame.width
-                let crop = CGRect(x: area[1], y: area[2], width: area[3], height: area[4]).applying(CGAffineTransform(scaleX: scale, y: scale))
-                let defaults = UserDefaults.standard
-                try await Output.deliver(image, crop: crop, framed: overlay.framed, scale: scale, copy: true,
-                                         save: defaults.string(forKey: Pref.afterCapture) == "copyAndSave",
-                                         pasteboard: .general, defaults: defaults)
-            } catch {
-                Toast.show(message: "Capture failed", detail: (error as NSError).localizedFailureReason ?? error.localizedDescription, color: .systemRed)
             }
         }
     }
