@@ -37,7 +37,8 @@ struct FirstRunView: View {
             }
             VStack(alignment: .leading, spacing: 8) {
                 step(1, Text("Press \(Text(Shortcut.label(code: hotKeyCode, modifiers: hotKeyModifiers)).bold()) anywhere to capture"))
-                step(2, Text("Press \(Text("?").bold()) in the overlay any time you forget a key"))
+                step(2, Text("Press \(Text("T").bold()) for Text, then drag over text to select it"))
+                step(3, Text("Press \(Text("?").bold()), or click \(Text("?").bold()) at the bottom of the overlay, for every key"))
             }
             .font(.system(size: 13))
             .frame(maxWidth: .infinity, alignment: .leading)
