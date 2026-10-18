@@ -240,7 +240,7 @@ extension OverlayController {
         }
 
         if mode == .text {
-            if let box = textSelectionBox {
+            if !window.textDragging, let box = textSelectionBox {
                 textStrip()
                 attachment = (box, true, [], [])
             }

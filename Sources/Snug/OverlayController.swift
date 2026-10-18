@@ -19,13 +19,20 @@ final class OverlayWindow: NSWindow {
     /// Text mode: where the current press landed and the word (or, after a double or triple click, the word or line) it anchors.
     var textPress: (point: CGPoint, anchor: Range<String.Index>?)?
 
+    /// Text mode: a press is down that began on a chrome button, or one that began elsewhere (Live Text's).
+    var buttonPress = false
+    var textDragging = false
+
     override func sendEvent(_ event: NSEvent) {
-        // A click on a chrome button goes to the button, so it never clears or changes the text selection it acts on.
-        guard !(contentView as! OverlayView).liveText.isHidden, [.leftMouseDown, .leftMouseDragged, .leftMouseUp].contains(event.type),
-              !(contentView!.hitTest(event.locationInWindow) is BarButton) else {
-            return super.sendEvent(event)
-        }
+        let view = contentView as! OverlayView
+        guard !view.liveText.isHidden, [.leftMouseDown, .leftMouseDragged, .leftMouseUp].contains(event.type) else { return super.sendEvent(event) }
+        // A press that begins on a chrome button goes to the button, so it never clears or changes the text selection it acts on.
+        if event.type == .leftMouseDown { buttonPress = view.hitTest(event.locationInWindow) is BarButton }
+        guard !buttonPress else { return super.sendEvent(event) }
+        // While Live Text's press is down the Text strip stays hidden, so it never lands under the pointer mid-drag.
+        textDragging = event.type != .leftMouseUp
         sendTextMouse(event)
+        if event.type == .leftMouseUp { view.controller!.refresh() }
     }
 }
 
