@@ -45,7 +45,7 @@ extension DebugRun {
             overlay.refresh()
         }
         let scale = overlay.scale
-        let hints = { texts(in: overlay.chrome.hints) }
+        let status = { overlay.chrome.status.isHidden ? [] : texts(in: overlay.chrome.status) }
         let strip = { texts(in: overlay.chrome.strip) }
 
         require(defaults.integer(forKey: Pref.recordCountIn) == 3 && defaults.bool(forKey: Pref.recordCursor),
@@ -63,8 +63,8 @@ extension DebugRun {
                 && !overlay.view.overlays.showsHandles && overlay.chrome.topBar.isHidden,
                 "armed: a red outline on the selection, no handles or top bar")
         require(strip() == ["Cursor", "H", "Audio", "J", "Count-in", "I", "Cancel", "esc", "Start", "\u{21A9}"] && overlay.chrome.cursor.lit && !overlay.chrome.audio.lit
-                    && !overlay.chrome.countIn.lit && overlay.chrome.start.primary && overlay.chrome.hints.isHidden,
-                "the armed strip: Cursor lit, Audio and Count-in plain, Start primary; no keys line, since the strip shows Start and Cancel: \(strip()) \(hints())")
+                    && !overlay.chrome.countIn.lit && overlay.chrome.start.primary && status().isEmpty,
+                "the armed strip: Cursor lit, Audio and Count-in plain, Start primary; no status chip, since the strip shows Start and Cancel: \(strip()) \(status())")
         // Armed near the right edge, the size chip stays over the selection's left edge.
         select(CGRect(x: extent.width - 600, y: 400, width: 560, height: 500))
         let badgeOffset = overlay.chrome.size.frame.minX - overlay.view.viewRect(overlay.selection!.rect).minX
@@ -209,7 +209,8 @@ extension DebugRun {
         select(CGRect(x: 600, y: 300, width: 400, height: 200))
         key(9, "v")
         key(36, "\r")
-        require(hints() == ["Recording in 3"], "counting in, the keys line leaves out Cancel, which the strip shows: \(hints())")
+        require(status() == ["Recording in 3"] && overlay.chrome.status.frame.minY == overlay.chrome.size.frame.minY && overlay.chrome.status.frame.minX == overlay.chrome.size.frame.maxX + 6,
+                "counting in, a status chip after the size chip counts down, and Cancel stays on the strip: \(status()) \(overlay.chrome.status.frame) \(overlay.chrome.size.frame)")
         try await Task.sleep(for: .milliseconds(1500))
         key(53, "\u{1B}")
         try await Task.sleep(for: .milliseconds(2600))

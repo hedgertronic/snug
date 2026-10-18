@@ -83,14 +83,6 @@ extension DebugRun {
         open()
         require(animations(overlay.view.layer!).isEmpty, "opening animates no layer: \(animations(overlay.view.layer!))")
 
-        // B toggles the keys line and remembers it; the top bar stays.
-        let keysLine = overlay.chrome.hints
-        require(!keysLine.isHidden && !overlay.chrome.topBar.isHidden, "the keys line and top bar start visible")
-        key(11, "b")
-        require(keysLine.isHidden && !overlay.chrome.topBar.isHidden && !defaults.bool(forKey: Pref.modeBar), "B hides the keys line and remembers it")
-        key(11, "b")
-        require(!keysLine.isHidden && defaults.bool(forKey: Pref.modeBar), "B shows it again")
-
         // L / R / X toggle their layers, remembered.
         let guides = overlay.view.guides
         require(guides.loupe.isHidden && guides.rulers.isHidden && guides.crosshair.isHidden, "loupe, rulers, and crosshair start off")
@@ -102,13 +94,13 @@ extension DebugRun {
         }
         let view = overlay.view
         require(guides.crosshair.path!.boundingBox.size == view.bounds.size, "the crosshair spans the view")
-        // With Rulers on, the top bar sits below the top ruler's band and nothing clamps into the left ruler's.
+        // With Rulers on, nothing covers a ruler's band, and the settings bar stays 8 pt above the bottom edge.
         let topRuler = CGRect(x: 0, y: view.bounds.height - overlay.topInset - Guides.rulerThickness, width: view.bounds.width, height: Guides.rulerThickness)
         let leftRuler = CGRect(x: 0, y: 0, width: Guides.rulerThickness, height: view.bounds.height)
-        let edgeChrome = [overlay.chrome.topBar, overlay.chrome.hints, overlay.chrome.strip, overlay.chrome.hover, overlay.chrome.coordinates, overlay.chrome.snapTag].filter { !$0.isHidden }
-        require(edgeChrome.allSatisfy { !$0.frame.intersects(topRuler) && !$0.frame.intersects(leftRuler) } && overlay.chrome.topBar.frame.maxY == topRuler.minY - 8,
-                "with Rulers on, the top bar sits 8 pt under the top ruler and no chrome covers a ruler: \(edgeChrome.map(\.frame)) \(topRuler)")
-        let controls = overlay.chrome.topBar.groups + [overlay.chrome.hints, overlay.chrome.strip].filter { !$0.isHidden }
+        let edgeChrome = [overlay.chrome.topBar, overlay.chrome.strip, overlay.chrome.hover, overlay.chrome.coordinates, overlay.chrome.snapTag].filter { !$0.isHidden }
+        require(edgeChrome.allSatisfy { !$0.frame.intersects(topRuler) && !$0.frame.intersects(leftRuler) } && overlay.chrome.topBar.frame.minY == 8,
+                "with Rulers on, the settings bar stays at the bottom and no chrome covers a ruler: \(edgeChrome.map(\.frame)) \(topRuler)")
+        let controls = overlay.chrome.topBar.groups + [overlay.chrome.strip].filter { !$0.isHidden }
         let labelPills = [overlay.chrome.hover, overlay.chrome.size, overlay.chrome.reading].filter { !$0.isHidden }
         require(controls.allSatisfy { $0.frame.height == Chrome.controlHeight } && labelPills.allSatisfy { $0.frame.height == Chrome.labelHeight },
                 "controls are \(Chrome.controlHeight) pt and labels \(Chrome.labelHeight) pt tall: \(controls.map(\.frame.height)) \(labelPills.map(\.frame.height))")
@@ -267,9 +259,9 @@ extension DebugRun {
         open()
         let barChrome = overlay.chrome
         defaults.set(true, forKey: Pref.loupe)
-        for y in stride(from: barChrome.hints.frame.maxY + 4, through: barChrome.hints.frame.maxY + 140, by: 12) {
-            mouse(.mouseMoved, CGPoint(x: barChrome.hints.frame.midX * overlay.scale, y: (viewBounds.height - y) * overlay.scale))
-            let covered = [barChrome.topBar, barChrome.hints, barChrome.strip].filter { !$0.isHidden && guides.loupe.frame.intersects($0.frame) }
+        for y in stride(from: barChrome.topBar.frame.maxY + 4, through: barChrome.topBar.frame.maxY + 140, by: 12) {
+            mouse(.mouseMoved, CGPoint(x: barChrome.topBar.frame.midX * overlay.scale, y: (viewBounds.height - y) * overlay.scale))
+            let covered = [barChrome.topBar, barChrome.strip].filter { !$0.isHidden && guides.loupe.frame.intersects($0.frame) }
             require(covered.isEmpty, "the loupe with the pointer at y \(y) covers no bar: \(guides.loupe.frame) \(covered.map(\.frame))")
         }
         // Nor over a chip: with a selection's chips showing (size, Snap, ratio, radius, and the "move" legend), a sweep of the pointer left of
@@ -405,7 +397,6 @@ extension DebugRun {
                     && colors.items.filter { $0.swatch != nil }.count == 6,
                 "the menu lists the average, a separator, and five main colors, each with a swatch and a cap: \(colors.items.map(\.title)) \(colors.items.map(\.cap))")
         require(averageText == pasteboard.string(forType: .string), "the first row is the color C copies: \(averageText)")
-        require(texts(in: overlay.chrome.hints) == ["pick", "\u{2191}", "\u{2193}", "copy", "\u{21A9}", "1-6", "close", "esc"], "the keys line names the menu's keys: \(texts(in: overlay.chrome.hints))")
         key(53, "\u{1B}")
         require(colors.isHidden && overlay.window.isVisible && overlay.selection?.rect == average, "Esc closes the Colors menu and keeps the selection")
         try await openColors { key(32, "u") }
@@ -550,6 +541,42 @@ extension DebugRun {
                     "a level \(shows ? "8" : "3") pt from the hover on every side \(shows ? "keeps" : "loses") its outline: \(String(describing: overlay.view.overlays.upHint))")
             overlay.dismiss()
         }
+
+        // Left and Right outline the previous and next peer only, drawn 2 pt inside their rectangles so the rows above and below a
+        // hovered row stay off it, each with its cap in the outline's top-left corner; they follow a Left step and wrap.
+        let peerRows = (0..<4).map { Candidate(id: "row-\($0)", label: "Row", bounds: CGRect(x: 620, y: 420 + CGFloat($0) * 64, width: 560, height: 64), score: AccessibilityBounds.baseScore, kind: .element) }
+        open()
+        overlay.detectionTask?.cancel()
+        overlay.session = SelectionSession(candidates: peerRows, extent: extent, anchor: CGPoint(x: peerRows[1].bounds.midX, y: peerRows[1].bounds.midY))
+        mouse(.mouseMoved, CGPoint(x: peerRows[1].bounds.midX, y: peerRows[1].bounds.midY))
+        let o = overlay.view.overlays
+        require(o.hover == peerRows[1].bounds && o.leftHint == peerRows[0].bounds && o.rightHint == peerRows[2].bounds && o.upHint == nil && o.downHint == nil,
+                "a hovered row outlines the row before it for Left and the row after it for Right, and no other: \(String(describing: o.leftHint)) \(String(describing: o.rightHint))")
+        let drawn = overlay.view.levelHintLayer.path!.boundingBox, hoverRow = overlay.view.viewRect(peerRows[1].bounds)
+        let insetPeers = overlay.view.viewRect(peerRows[0].bounds).union(overlay.view.viewRect(peerRows[2].bounds)).insetBy(dx: 2, dy: 2)
+        require(drawn == insetPeers && overlay.view.viewRect(peerRows[0].bounds).insetBy(dx: 2, dy: 2).minY - hoverRow.maxY == 2 && hoverRow.minY - overlay.view.viewRect(peerRows[2].bounds).insetBy(dx: 2, dy: 2).maxY == 2,
+                "the peer outlines are drawn 2 pt inside their peerRows, 2 pt off the hovered row: \(drawn) \(insetPeers) \(hoverRow)")
+        for (cap, row) in [(overlay.chrome.leftHint, peerRows[0]), (overlay.chrome.rightHint, peerRows[2])] {
+            let box = overlay.view.viewRect(row.bounds).insetBy(dx: 2, dy: 2)
+            require(!cap.isHidden && cap.frame.minX == box.minX + 4 && cap.frame.maxY == box.maxY - 4, "the \(cap.text) cap sits in its outline's top-left corner: \(cap.frame) \(box)")
+        }
+        key(123, "")
+        require(overlay.view.overlays.hover == peerRows[0].bounds && overlay.view.overlays.leftHint == peerRows[3].bounds && overlay.view.overlays.rightHint == peerRows[1].bounds,
+                "after Left the outlines follow: Left wraps to the last row, Right is the row Left came from")
+        overlay.dismiss()
+        open()
+        overlay.detectionTask?.cancel()
+        overlay.session = SelectionSession(candidates: Array(peerRows.prefix(2)), extent: extent, anchor: CGPoint(x: peerRows[0].bounds.midX, y: peerRows[0].bounds.midY))
+        mouse(.mouseMoved, CGPoint(x: peerRows[0].bounds.midX, y: peerRows[0].bounds.midY))
+        require(overlay.view.overlays.rightHint == peerRows[1].bounds && overlay.view.overlays.leftHint == nil && overlay.chrome.leftHint.isHidden,
+                "with one peer, Left and Right pick the same row: it shows once, as Right")
+        overlay.dismiss()
+        open()
+        overlay.detectionTask?.cancel()
+        overlay.session = SelectionSession(candidates: [peerRows[0]], extent: extent, anchor: CGPoint(x: peerRows[0].bounds.midX, y: peerRows[0].bounds.midY))
+        mouse(.mouseMoved, CGPoint(x: peerRows[0].bounds.midX, y: peerRows[0].bounds.midY))
+        require(overlay.view.overlays.leftHint == nil && overlay.view.overlays.rightHint == nil && overlay.chrome.rightHint.isHidden, "with no peer there is no Left or Right outline")
+        overlay.dismiss()
 
         // The highlight reads its settings on each present.
         defaults.set("#FF0000", forKey: Pref.highlightColor)
@@ -935,11 +962,18 @@ extension DebugRun {
             guard !view.isHidden else { return [] }
             return (view.alphaValue < 1 && (view as? BarButton)?.isEnabled != false ? ["\(type(of: view)) \(texts(in: view))"] : []) + view.subviews.flatMap(faded)
         }
-        require(texts(in: top) == ["Capture", "A", "Text", "T", "Loupe", "L", "Rulers", "R", "Crosshair", "X", "Rounded", "O", "Frame", "M"]
-                    && top.groups.count == 3 && zip(top.groups, top.groups.dropFirst()).allSatisfy { abs($1.frame.minX - $0.frame.maxX - 8) < 0.01 },
-                "the top bar is three pills 8 pt apart, the modes, view, and style, with key caps: \(texts(in: top))")
-        require(top.frame.maxY == overlay.view.bounds.height - overlay.topInset - 8 && abs(top.frame.midX - overlay.view.bounds.midX) <= 0.5 && chrome.hints.frame.minY == 32,
-                "the top bar sits centered under the top edge and the keys line at the bottom: \(top.frame) \(chrome.hints.frame)")
+        require(texts(in: top) == ["Capture", "A", "Text", "T", "Loupe", "L", "Rulers", "R", "Crosshair", "X", "Rounded", "O", "Frame", "M", "?"]
+                    && top.groups.count == 4 && top.groups[3].subviews == [chrome.keys] && zip(top.groups, top.groups.dropFirst()).allSatisfy { abs($1.frame.minX - $0.frame.maxX - 8) < 0.01 },
+                "the settings bar is four pills 8 pt apart, the modes, view, style, and the ? button, with key caps: \(texts(in: top))")
+        require(top.frame.minY == 8 && abs(top.frame.midX - overlay.view.bounds.midX) <= 0.5 && !chrome.barAtTop,
+                "the settings bar sits centered 8 pt above the bottom edge: \(top.frame)")
+        // The ? button opens the keys sheet, as ? does; ? closes it.
+        require(chrome.help.isHidden && chrome.keys.accessibilityLabel() == "All keys", "the keys sheet starts closed and the ? button is labeled All keys")
+        mouse(.leftMouseDown, viewPixel(centerOf(chrome.keys)))
+        mouse(.leftMouseUp, viewPixel(centerOf(chrome.keys)))
+        require(!chrome.help.isHidden && overlay.window.isVisible, "a click on the ? button opens the keys sheet")
+        key(44, "?", .shift)
+        require(chrome.help.isHidden, "? closes the keys sheet")
         let barButtons = [chrome.modeButtons[.capture]!, chrome.modeButtons[.text]!] + (chrome.viewToggles + chrome.styleToggles).map(\.1)
         func clipped() -> [String] {
             barButtons.filter { $0.title.cell!.cellSize.width > $0.title.frame.width || $0.title.frame.maxX > $0.frame.width }.map { $0.title.stringValue }
@@ -952,7 +986,7 @@ extension DebugRun {
                 overlay.refresh()
                 require(clipped().isEmpty && abs(frameButton.caps[0].frame.minX - frameButton.title.frame.maxX - 7) < 0.01 && abs(frameButton.bounds.maxX - frameButton.caps.last!.frame.maxX - 7) < 0.01,
                         "no bar title clips and the Frame button hugs its cap with Frame \(framed) and \(mode) selected: \(clipped()) \(frameButton.frame)")
-                require(chrome.modeButtons[mode]!.lit && !chrome.modeButtons[mode]!.primary && chrome.modeButtons.values.filter(\.lit).count == 1 && top.groups.count == (mode == .text ? 2 : 3), "the current mode is lit, the other plain, and Text hides the style pill")
+                require(chrome.modeButtons[mode]!.lit && !chrome.modeButtons[mode]!.primary && chrome.modeButtons.values.filter(\.lit).count == 1 && top.groups.count == (mode == .text ? 3 : 4), "the current mode is lit, the other plain, and Text hides the style pill")
             }
         }
         defaults.set(false, forKey: Pref.frame)
@@ -1029,8 +1063,8 @@ extension DebugRun {
                         && others.allSatisfy { !$0.isEnabled && $0.alphaValue < 0.5 } && chrome.strip.frame.minX == restLeft,
                     "holding \(glyph): Copy reads \(copy), Save reads \(save)\(held == .option ? " dimmed" : ""), Edit and the tools dim, and the left edge stays: \(texts(in: chrome.strip)) \(chrome.strip.frame.minX)")
             require(keyCaps(glyph, in: chrome.strip).allSatisfy(\.pressed) && !keyCaps(glyph, in: chrome.strip).isEmpty && keyCaps("\u{21A9}", in: chrome.copy).allSatisfy { !$0.pressed }
-                        && keyCaps(glyph, in: chrome.hints).allSatisfy(\.pressed),
-                    "holding \(glyph) lights its caps in the strip and the keys line, and only those")
+,
+                    "holding \(glyph) lights its caps in the strip, and only those")
             require(overlay.view.hitTest(centerOf(chrome.edit)) !== chrome.edit && overlay.view.hitTest(centerOf(chrome.colors)) !== chrome.colors,
                     "holding \(glyph), the dimmed Edit and tools take no clicks")
         }
@@ -1150,8 +1184,6 @@ extension DebugRun {
         overlay.refresh()
         mouse(.mouseMoved, CGPoint(x: 40, y: 40))
         require(chrome.hover.isHidden && chrome.strip.isHidden && !tag.isHidden, "the chip row and strip go away off the window, and the Snap tag stays with the pointer")
-        require(texts(in: chrome.hints) == ["bigger / smaller", "\u{2191}", "\u{2193}", "next", "\u{2190}", "\u{2192}", "full screen", "F", "window", "W", "all keys", "?"],
-                "the hover keys line has no click capture and names W window after F full screen: \(texts(in: chrome.hints))")
         mouse(.leftMouseDown, rough.origin)
         mouse(.leftMouseDragged, CGPoint(x: rough.midX, y: rough.midY))
         mouse(.leftMouseDragged, CGPoint(x: rough.maxX, y: rough.maxY))
@@ -1161,11 +1193,8 @@ extension DebugRun {
         require(texts(in: chrome.size) == ["\(Int(fit.width)) x \(Int(fit.height))  Snapped"], "a snap preview shows its size and Snapped: \(texts(in: chrome.size))")
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
         require(texts(in: chrome.snap) == ["Snapped", "S"] && chrome.snap.lit, "after release on a fit: Snapped, lit")
-        require(!top.isHidden && texts(in: chrome.strip) == ["Edit", "E"] + offline + ["U"] && chrome.edit.lit && texts(in: chrome.hints)
-                    == ["move", "\u{2190}", "\u{2192}", "grow", "\u{2325}", "shrink", "\u{2325}", "\u{2318}", "edge out", "\u{2318}", "edge in", "\u{2318}", "\u{21E7}", "all sides", "+", "-",
-                        "undo", "\u{2318}", "Z"],
-                "a selection keeps the top bar, has the strip with a lit Edit, and the arrow layers on the keys line: \(texts(in: chrome.hints))")
-        require(chrome.hints.frame.height < 40 && chrome.hints.frame.width <= overlay.view.bounds.width - 16, "the keys line is one line and fits: \(chrome.hints.frame) in \(overlay.view.bounds.width)")
+        require(!top.isHidden && texts(in: chrome.strip) == ["Edit", "E"] + offline + ["U"] && chrome.edit.lit,
+                "a selection keeps the settings bar and has the strip with a lit Edit: \(texts(in: chrome.strip))")
         // The chip row: size and Snap from the selection's left edge, the ratio and radius ending at its right edge (after Snap when they
         // would meet). The ratio chip's readout with P opens the ratio menu, the lock with Shift-P toggles the lock, with no fills of their own.
         let lockedBefore = overlay.ratioLocked, rectBefore = overlay.selection!.rect
@@ -1197,16 +1226,14 @@ extension DebugRun {
         let segment = chrome.ratio.convert(chrome.ratioButton.frame, to: overlay.view)
         require(!menu.isHidden && overlay.window.firstResponder === menu && menu.panel.frame.minX == segment.minX && menu.panel.frame.maxY <= segment.minY,
                 "clicking the readout opens the ratio panel under the ratio segment, left edges aligned: \(menu.panel.frame) \(segment)")
-        require(texts(in: chrome.hints) == ["pick", "\u{2191}", "\u{2193}", "choose", "\u{21A9}", "close", "esc"], "the keys line names the menu's keys: \(texts(in: chrome.hints))")
         require(menu.items.map(\.title) == ["Free", "Original", "1:1", "4:3", "3:2", "16:10", "16:9", "21:9", "", "Portrait"] && menu.items.filter(\.on).map(\.title) == (overlay.ratioLocked ? [] : ["Free"]),
                 "the panel lists the presets and checks Free while unlocked: \(menu.items.map(\.title))")
         key(53, "\u{1B}")
-        require(menu.isHidden && overlay.window.isVisible && overlay.selection?.rect == rectBefore && overlay.window.firstResponder === overlay.view && texts(in: chrome.hints).first == "move",
-                "Esc closes the panel and leaves the selection, the overlay, and the selection's keys line")
+        require(menu.isHidden && overlay.window.isVisible && overlay.selection?.rect == rectBefore && overlay.window.firstResponder === overlay.view,
+                "Esc closes the panel and leaves the selection and the overlay")
         key(35, "p")
         key(down, "")
-        let downCaps = chrome.hints.subviews.flatMap(\.subviews).compactMap { $0 as? KeyCap }.filter(\.pressed).map(\.text)
-        require(chrome.pressed == ["\u{2193}"] && downCaps == ["\u{2193}"], "Down in the ratio menu flashes the keys line's Down cap: \(chrome.pressed) \(downCaps)")
+        require(chrome.pressed == ["\u{2193}"], "Down in the ratio menu flashes the Down caps: \(chrome.pressed)")
         key(down, "")
         key(up, "")
         key(up, "")
@@ -1244,7 +1271,7 @@ extension DebugRun {
         key(1, "s")
         require(defaults.bool(forKey: Pref.snap) && chrome.snap.lit, "S turns snap back on and the Snap chip follows")
         // The edge keys: the side arrows and the legend show while the pointer rests inside the selection or a modifier is held; the
-        // legend and the lit cap on the keys line follow the modifiers.
+        // legend and the lit caps on the strip and legend follow the modifiers.
         let insideSelection = CGPoint(x: overlay.selection!.rect.midX, y: overlay.selection!.rect.midY)
         let sides = chrome.sideHints
         mouse(.mouseMoved, CGPoint(x: 40, y: 40))
@@ -1258,27 +1285,27 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: 40, y: 40))
         require(sides.allSatisfy(\.isHidden) && chrome.legend.isHidden, "moving the pointer out of the selection hides the edge keys")
         let selected = overlay.view.viewRect(overlay.selection!.rect)
-        require(keyCaps("\u{2325}", in: chrome.hints).allSatisfy { !$0.pressed }, "without Option the Option cap is idle")
+        require(keyCaps("\u{2325}", in: chrome.strip).allSatisfy { !$0.pressed }, "without Option the Option cap is idle")
         flags(.option)
         // One cap per key: a held modifier lights its cap wherever it shows, alone or in a chord, and no other cap.
         func lit(_ glyphs: Set<String>, _ view: NSView) -> Bool {
             ["\u{2325}", "\u{2318}", "\u{21E7}"].allSatisfy { glyph in keyCaps(glyph, in: view).allSatisfy { $0.pressed == glyphs.contains(glyph) } }
         }
-        require(keyCaps("\u{2325}", in: chrome.hints).count == 2 && lit(["\u{2325}"], chrome.hints) && lit(["\u{2325}"], chrome.legend)
+        require(keyCaps("\u{2325}", in: chrome.copy).count == 1 && lit(["\u{2325}"], chrome.strip) && lit(["\u{2325}"], chrome.legend)
                     && texts(in: chrome.legend) == ["grow", "\u{2325}"],
-                "holding Option lights both Option caps on the keys line (grow and shrink) and the legend reads grow with its cap: \(texts(in: chrome.legend))")
+                "holding Option lights the Option caps on the strip (Translate) and the legend, which reads grow with its cap: \(texts(in: chrome.legend))")
         require(sides.allSatisfy { !$0.isHidden } && sides[0].frame.maxX <= selected.minX && sides[1].frame.minX >= selected.maxX && sides[2].frame.minY >= selected.maxY
                     && abs(sides[0].frame.midY - selected.midY) < 1 && abs(sides[2].frame.midX - selected.midX) < 1 && !sides[3].frame.intersects(chrome.strip.frame),
                 "holding Option puts an arrow cap outside each side's midpoint, clear of the strip: \(sides.map(\.frame)) \(selected)")
         flags([.option, .command])
-        require(lit(["\u{2325}", "\u{2318}"], chrome.hints) && lit(["\u{2325}", "\u{2318}"], chrome.legend)
+        require(lit(["\u{2325}", "\u{2318}"], chrome.strip) && lit(["\u{2325}", "\u{2318}"], chrome.legend)
                     && texts(in: chrome.legend) == ["shrink", "\u{2325}", "\u{2318}"] && sides.allSatisfy { !$0.isHidden },
                 "holding Option-Command lights every Option and Command cap, the legend reads shrink, and the side arrows stay: \(texts(in: chrome.legend))")
         flags(.command)
-        require(lit(["\u{2318}"], chrome.hints) && texts(in: chrome.legend) == ["edge out", "\u{2318}", "edge in", "\u{2318}", "\u{21E7}"] && sides.allSatisfy { !$0.isHidden },
+        require(lit(["\u{2318}"], chrome.strip) && lit(["\u{2318}"], chrome.legend) && texts(in: chrome.legend) == ["edge out", "\u{2318}", "edge in", "\u{2318}", "\u{21E7}"] && sides.allSatisfy { !$0.isHidden },
                 "holding Command lights the Command caps and the legend reads both edge directions: \(texts(in: chrome.legend))")
         flags([.command, .shift])
-        require(lit(["\u{2318}", "\u{21E7}"], chrome.hints) && lit(["\u{2318}", "\u{21E7}"], chrome.legend)
+        require(lit(["\u{2318}", "\u{21E7}"], chrome.strip) && lit(["\u{2318}", "\u{21E7}"], chrome.legend)
                     && texts(in: chrome.legend) == ["edge out", "\u{2318}", "edge in", "\u{2318}", "\u{21E7}"],
                 "holding Command-Shift lights the Command and Shift caps: \(texts(in: chrome.legend))")
         flags(.shift)
@@ -1369,7 +1396,7 @@ extension DebugRun {
             overlay.refresh()
             mouse(.mouseMoved, CGPoint(x: 40, y: 40))
             mouse(.mouseMoved, CGPoint(x: rect.midX, y: rect.midY))
-            let pieces: [(String, NSView)] = [("hints", chrome.hints), ("top bar", chrome.topBar), ("strip", chrome.strip), ("size", chrome.size), ("snap", chrome.snap),
+            let pieces: [(String, NSView)] = [("bar", chrome.topBar), ("strip", chrome.strip), ("size", chrome.size), ("snap", chrome.snap),
                                                ("ratio", chrome.ratio), ("radius", chrome.radius), ("legend", chrome.legend)]
                 + chrome.sideHints.enumerated().map { ("side \($0.offset)", $0.element) }
             let shown = pieces.filter { !$0.1.isHidden }
@@ -1390,23 +1417,26 @@ extension DebugRun {
         }
         overlay.topInset = 0
 
-        // Hovering the menu bar, under the top bar: the hover chip, the strip, and the chips keep clear of the top bar and of each other,
-        // with and without a camera-housing inset.
+        // Hovering the menu bar, with the settings bar at the bottom: the hover chip, the strip, and the bar keep clear of each other; a
+        // menu bar item too short to hold the chip row stacks it under the strip, with and without a camera-housing inset.
         let menuBar = 24 * overlay.scale
         let menuItem = CGRect(x: extent.midX - 60 * overlay.scale, y: 0, width: 120 * overlay.scale, height: menuBar)
         for (name, inset) in [("flat", CGFloat(0)), ("notched", CGFloat(38))] {
             for (what, hovered) in [("a menu bar item", menuItem), ("the whole menu bar", CGRect(x: 0, y: 0, width: extent.width, height: menuBar))] {
                 overlay.dismiss()
-                overlay.topInset = inset
                 open()
+                // Opening reads the screen's inset; the simulated one is set after.
+                overlay.topInset = inset
                 await overlay.detectionTask?.value
                 overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
                 overlay.merge([Candidate(id: "ax-menu-bar", label: "Menu bar", bounds: hovered, score: AccessibilityBounds.baseScore, kind: .element)])
                 mouse(.mouseMoved, CGPoint(x: hovered.midX, y: 8))
-                let pieces: [(String, NSView)] = [("hover chip", chrome.hover), ("strip", chrome.strip), ("top bar", chrome.topBar)].filter { !$0.1.isHidden }
+                let pieces: [(String, NSView)] = [("hover chip", chrome.hover), ("strip", chrome.strip), ("bar", chrome.topBar)].filter { !$0.1.isHidden }
                 let clashes = pieces.indices.flatMap { i in pieces.indices.filter { $0 > i && pieces[i].1.frame.intersects(pieces[$0].1.frame) }.map { "\(pieces[i].0) x \(pieces[$0].0)" } }
-                require(pieces.map(\.0) == ["hover chip", "strip", "top bar"] && clashes.isEmpty && chrome.hover.frame.maxY <= chrome.topBar.frame.minY,
-                        "hovering \(what) under the top bar (\(name) screen) keeps the hover chip and strip clear of the top bar: \(clashes) \(pieces.map { "\($0.0) \($0.1.frame)" })")
+                let box = overlay.view.viewRect(hovered)
+                require(pieces.map(\.0) == ["hover chip", "strip", "bar"] && clashes.isEmpty && !chrome.barAtTop && chrome.strip.frame.maxY == min(box.minY, overlay.view.bounds.height - inset) - 8
+                            && chrome.hover.frame.maxY == chrome.strip.frame.minY - 6,
+                        "hovering \(what) (\(name) screen) hangs the strip under it and stacks the hover chip under the strip, clear of the bar: \(clashes) \(pieces.map { "\($0.0) \($0.1.frame)" })")
                 overlay.dismiss()
             }
         }
@@ -1492,8 +1522,9 @@ extension DebugRun {
         for _ in 0..<3000 where overlay.scrollHeight < 900 { try await Task.sleep(for: .milliseconds(10)) }
         let pageBox = overlay.view.viewRect(page)
         require(overlay.scrollHeight == 900 && texts(in: chrome.strip) == ["Scrolling 900 px", "Cancel", "esc", "Done", "\u{21A9}"] && chrome.done.primary
-                    && chrome.strip.frame.maxY == pageBox.minY - 8 && texts(in: chrome.hints) == ["Scroll the app under the outline"],
-                "frames stitch as the area scrolls, and the strip under the area counts the height: \(overlay.scrollHeight) \(texts(in: chrome.strip)) \(texts(in: chrome.hints))")
+                    && chrome.strip.frame.maxY == pageBox.minY - 8 && texts(in: chrome.status) == ["Scroll the app under the outline"]
+                    && chrome.status.frame.origin == CGPoint(x: pageBox.minX, y: pageBox.maxY + 8),
+                "frames stitch as the area scrolls, the strip under the area counts the height, and a status chip over its left edge says what to do: \(overlay.scrollHeight) \(texts(in: chrome.strip)) \(texts(in: chrome.status)) \(chrome.status.frame)")
         offsets = [200]
         for _ in 0..<3000 where overlay.scrollHeight > 800 { try await Task.sleep(for: .milliseconds(10)) }
         require(overlay.scrollHeight == 800 && texts(in: chrome.strip).first == "Scrolling 800 px",
@@ -1539,51 +1570,62 @@ extension DebugRun {
         key(53, "")
         overlay.scrollFrames = nil
 
-        // Hint row: on a narrow screen it drops hints from the end and keeps "all keys" last.
+        // On a narrow screen the settings bar keeps only its ? button.
         open()
-        let fullHints = texts(in: chrome.hints)
         overlay.view.setFrameSize(CGSize(width: 520, height: overlay.view.bounds.height))
         overlay.refresh()
-        let narrowHints = texts(in: chrome.hints)
-        require(chrome.hints.frame.width <= 520 - 16 && narrowHints.count < fullHints.count && narrowHints.first == fullHints.first && narrowHints.suffix(2) == ["all keys", "?"], "a 520 pt screen drops hints from the end and keeps all keys last: \(narrowHints)")
+        require(!chrome.topBar.isHidden && texts(in: chrome.topBar) == ["?"] && chrome.topBar.frame.width <= 520 - 16, "a 520 pt screen keeps only the bar's ? button: \(texts(in: chrome.topBar))")
         overlay.view.setFrameSize(CGSize(width: width0, height: overlay.view.bounds.height))
         overlay.dismiss()
 
-        // The top bar and the keys line move to the other edge when a drag or selection reaches them there and not there, and come
-        // back; the pointer and the hover never move them, so their buttons stay within reach.
+        // The settings bar moves to the top when a drag or selection is within 24 pt of it at the bottom and not at the top, and comes
+        // back; the pointer and the hover never move it, so its buttons stay within reach.
         open()
         overlay.detectionTask?.cancel()
-        let halfHeight = overlay.view.bounds.height / 2
-        let keysLine2 = chrome.hints
+        let halfHeight = overlay.view.bounds.height / 2, topLine = overlay.view.bounds.height - overlay.topInset - 8
         mouse(.mouseMoved, CGPoint(x: extent.midX, y: extent.midY))
-        require(top.frame.minY > halfHeight && keysLine2.frame.maxY < halfHeight && !chrome.barAtBottom && !chrome.hintsAtTop, "the top bar sits at the top and the keys line at the bottom")
+        require(top.frame.minY == 8 && !chrome.barAtTop, "the settings bar sits at the bottom")
         mouse(.mouseMoved, CGPoint(x: extent.midX, y: extent.height - 20))
-        require(keysLine2.frame.maxY < halfHeight && !chrome.hintsAtTop, "the pointer near the keys line leaves it there")
-        mouse(.mouseMoved, CGPoint(x: extent.midX, y: 20))
-        require(top.frame.minY > halfHeight && !chrome.barAtBottom, "the pointer near the top bar leaves it there")
+        require(top.frame.minY == 8 && !chrome.barAtTop, "the pointer near the bar leaves it there")
         overlay.setWindows([CGRect(x: 600, y: extent.height - 420, width: 1200, height: 410)], names: ["Low window"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, CGPoint(x: 700, y: extent.height - 400))
-        require(!chrome.hover.isHidden && !chrome.hintsAtTop, "a hovered window that reaches the keys line leaves it there")
+        require(!chrome.hover.isHidden && !chrome.barAtTop, "a hovered window that reaches the bar leaves it there")
         let low = CGRect(x: 800, y: extent.height - 300, width: 600, height: 290)
         mouse(.leftMouseDown, low.origin)
         mouse(.leftMouseDragged, CGPoint(x: low.maxX, y: low.maxY))
-        require(chrome.hintsAtTop && keysLine2.frame.maxY == top.frame.minY - 8, "a drag that reaches the keys line moves it to the top, under the top bar: \(keysLine2.frame) \(top.frame)")
+        require(chrome.barAtTop && top.frame.maxY == topLine, "a drag that reaches the bar moves it under the top edge: \(top.frame)")
         mouse(.leftMouseUp, CGPoint(x: low.maxX, y: low.maxY))
         let lowBox = overlay.view.viewRect(overlay.selection!.rect)
-        require(!chrome.strip.isHidden && chrome.strip.frame.minY == lowBox.maxY + 8 && keysLine2.frame.minY > halfHeight,
-                "a released selection at the bottom puts the strip above it and the keys line at the top: \(chrome.strip.frame) \(lowBox)")
+        require(!chrome.strip.isHidden && chrome.strip.frame.minY == lowBox.maxY + 8 && top.frame.minY > halfHeight,
+                "a released selection at the bottom puts the strip above it and the bar at the top: \(chrome.strip.frame) \(lowBox)")
         mouse(.mouseMoved, CGPoint(x: extent.midX, y: extent.height - 20))
-        require(chrome.hintsAtTop, "the pointer at the bottom does not pull the keys line back down")
+        require(chrome.barAtTop, "the pointer at the bottom does not pull the bar back down")
+        key(53, "")
+        // Within 24 pt of the bar a selection moves it; 30 pt away it does not.
+        open()
+        let barTop = top.frame.maxY
+        for (gap, moves) in [(CGFloat(20), true), (30, false)] {
+            let bottom = (overlay.view.bounds.height - barTop - gap) * overlay.scale
+            overlay.selection = AreaSelection(extent: extent, exact: CGRect(x: extent.midX - 300, y: bottom - 400, width: 600, height: 400))
+            overlay.refresh()
+            require(chrome.barAtTop == moves, "a selection \(gap) pt above the bar \(moves ? "moves" : "leaves") it: \(top.frame)")
+        }
         key(53, "")
         open()
         overlay.selection = AreaSelection(extent: extent, exact: CGRect(x: 800, y: 0, width: 600, height: 290))
         overlay.refresh()
-        require(chrome.barAtBottom && top.frame.maxY < halfHeight && top.frame.minY == keysLine2.frame.maxY + 8,
-                "a selection at the top moves the top bar to the bottom, above the keys line: \(top.frame) \(keysLine2.frame)")
+        require(!chrome.barAtTop && top.frame.minY == 8, "a selection at the top leaves the bar at the bottom: \(top.frame)")
+        // A box beside the bar that ends below its upper edge (a Dock item) gets its strip standing on that edge and its chips above it.
+        overlay.selection = AreaSelection(extent: extent, exact: CGRect(x: 80, y: extent.height - 38 * overlay.scale, width: 200, height: 28 * overlay.scale))
+        overlay.refresh()
+        let dockBox = overlay.view.viewRect(overlay.selection!.rect)
+        require(!chrome.barAtTop && dockBox.maxY < top.frame.maxY && chrome.strip.frame.minY == top.frame.maxY + 8 && chrome.size.frame.minY == chrome.strip.frame.maxY + 8
+                    && !chrome.strip.frame.intersects(top.frame),
+                "a selection below the bar's upper edge stands its strip on that edge and its chips on the strip: \(chrome.strip.frame) \(chrome.size.frame) \(top.frame) \(dockBox)")
         key(53, "")
         open()
         drag(rough)
-        require(!chrome.strip.isHidden && keysLine2.frame.maxY < halfHeight && top.frame.minY > halfHeight, "a selection mid-screen keeps both bars home")
+        require(!chrome.strip.isHidden && top.frame.minY == 8, "a selection mid-screen keeps the bar home")
         overlay.dismiss()
 
         // Safe area: with a simulated 38 pt inset, nothing sits under the camera housing.
@@ -1600,7 +1642,7 @@ extension DebugRun {
         for item in chrome.all where !item.isHidden && item !== chrome.help {
             require(item.frame.maxY <= limit + 0.5 && item.frame.minY >= 0 && item.frame.minX >= 0 && item.frame.maxX <= width, "\(type(of: item)) \(item.frame) lies inside the safe area")
         }
-        require(!chrome.size.isHidden && !chrome.hints.isHidden && !chrome.strip.isHidden && !chrome.topBar.isHidden, "the full-screen state shows the size chip, keys line, strip, and top bar")
+        require(!chrome.size.isHidden && !chrome.strip.isHidden && !chrome.topBar.isHidden, "the full-screen state shows the size chip, strip, and settings bar")
         overlay.topInset = 0
         overlay.refresh()
         require(guides2.bands.path!.boundingBox.maxY == overlay.view.bounds.height, "without an inset the top ruler sits at the top edge")

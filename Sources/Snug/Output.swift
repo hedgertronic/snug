@@ -20,7 +20,6 @@ enum Pref {
     static let saveFolder = "SnugSaveFolder"
     static let hotKeyCode = "SnugHotKeyCode"
     static let hotKeyModifiers = "SnugHotKeyModifiers"
-    static let modeBar = "SnugModeBar"
     static let loupe = "SnugLoupe"
     static let rulers = "SnugRulers"
     static let crosshair = "SnugCrosshair"
@@ -79,7 +78,6 @@ enum Pref {
             saveFolder: NSHomeDirectory() + "/Desktop",
             hotKeyCode: 49,
             hotKeyModifiers: Int(NSEvent.ModifierFlags([.control, .shift]).rawValue),
-            modeBar: true,
             colorFormat: ColorFormat.hex.rawValue,
             highlightColor: "",
             highlightFill: 0.0,

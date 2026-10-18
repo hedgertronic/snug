@@ -107,24 +107,6 @@ extension OverlayController {
         (chrome.all + [cornerChip, view.guides.readout] + chrome.buttons).forEach(light)
     }
 
-    /// The keys line: each hint is a label and its key caps, shown in that order.
-    private var hints: [(keys: [String], label: String)] {
-        if !chrome.ratioMenu.isHidden { return [(["\u{2191}", "\u{2193}"], "pick"), (["\u{21A9}"], "choose"), (["esc"], "close")] }
-        if !chrome.colorMenu.isHidden { return [(["\u{2191}", "\u{2193}"], "pick"), (["\u{21A9}", "1-6"], "copy"), (["esc"], "close")] }
-        if cutout != nil { return [(["K", "esc"], "back")] }
-        if scrollArea != nil { return [([], "Scroll the app under the outline")] }
-        if let armed = armedRecording {
-            if let remaining = armed.remaining { return [([], "Recording in \(remaining)"), (["esc"], "cancel")] }
-            return [(["\u{21A9}"], "start"), (["esc"], "cancel")]
-        }
-        return switch mode {
-        case .text: [(["Drag"], "select text"), (["\u{21A9}"], "copy"), (["\u{21E7}", "\u{21A9}"], "rows"), (["Tab"], "links, codes"), (["\u{2325}", "\u{21A9}"], "translate"), (["F"], "all text"), (["C"], "color"), (["?"], "all keys")]
-        case .capture where selection != nil:
-            [(["\u{2190}", "\u{2192}"], "move"), (["\u{2325}"], "grow"), (["\u{2325}\u{2318}"], "shrink"), (["\u{2318}"], "edge out"), (["\u{2318}\u{21E7}"], "edge in"), (["+", "-"], "all sides"), (["\u{2318}Z"], "undo")]
-        case .capture: [(["\u{2191}", "\u{2193}"], "bigger / smaller"), (["\u{2190}", "\u{2192}"], "next"), (["F"], "full screen"), (["W"], "window"), (["?"], "all keys")]
-        }
-    }
-
     /// What the arrow keys do with the modifiers held now: labels, each with its chord.
     private var arrowLegend: [(keys: [String], label: String)] {
         switch (optionHeld, commandHeld) {
@@ -176,21 +158,21 @@ extension OverlayController {
         Chrome.tint = tint
         let look = Chrome.appearance(defaults)
         // The keys sheet keeps its own dark material.
-        if c.hints.appearance?.name != look?.name {
+        if c.topBar.appearance?.name != look?.name {
             for item in c.all + [cornerChip, view.guides.readout] where item !== c.help { item.appearance = look }
         }
         for item in [c.hover, c.size, c.snap, c.snapTag, c.ratio, c.radius, c.legend, c.reading, c.status, c.strip] { item.isHidden = true }
         c.help.frame = bounds
         c.help.layoutPanel()
 
-        // The top bar: the modes (not in cut out), view, and style (not in Text); hidden while scrolling or armed to record, and on a
-        // screen too narrow for it.
+        // The settings bar: the modes (not in cut out), view, style (not in Text), and the keys sheet's button; hidden while scrolling or
+        // armed to record. On a screen too narrow for it, the keys sheet's button alone.
         if scrollArea != nil || armedRecording != nil {
             c.topBar.isHidden = true
         } else {
             let modes = cutout == nil ? [[c.modeButtons[.capture]!, c.modeButtons[.text]!]] : []
-            c.topBar.show(modes + [c.viewToggles.map(\.1)] + (mode == .text ? [] : [c.styleToggles.map(\.1)]))
-            c.topBar.isHidden = c.topBar.frame.width > bounds.width - 16
+            c.topBar.show(modes + [c.viewToggles.map(\.1)] + (mode == .text ? [] : [c.styleToggles.map(\.1)]) + [[c.keys]])
+            if c.topBar.frame.width > bounds.width - 16 { c.topBar.show([[c.keys]]) }
         }
         for (current, button) in c.modeButtons { button.lit = current == mode }
         for (key, button) in c.viewToggles + c.styleToggles { button.lit = defaults.bool(forKey: key) }
@@ -203,6 +185,12 @@ extension OverlayController {
             let text = (rect == extent ? "Full screen  " : "") + "\(Int(rect.width)) x \(Int(rect.height))" + (armedRecording == nil ? additions(rect) : "") + drag
             c.size.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText)] }
             return c.size
+        }
+        /// A session's hint in the status chip, in the chip row after the size chip; a notice takes the chip instead.
+        func statusChip(_ keys: [String], _ label: String) -> [NSView] {
+            guard text.notice == nil else { return [] }
+            c.status.show(label + keys.joined()) { [Pill.hint(keys, label)] }
+            return [c.status]
         }
         func radiusChip(_ rect: CGRect) -> Pill {
             let text = radiusText(rect)
@@ -235,7 +223,28 @@ extension OverlayController {
             c.strip.show([[c.edit], [c.copy, c.save], (scrolls ? [c.scroll] : []) + (displayID != nil ? [c.record] : []) + [c.cutout, c.colors]])
         }
 
-        if let cutout {
+        /// The Text strip: Copy, whose label the modifiers held change (Shift alone: Rows, Option alone: Translate) and which at rest
+        /// shows a faded Shift and Option; any other combination dims it.
+        func textStrip() {
+            let copy: (title: String, key: String, faded: String)? = switch heldGlyphs {
+            case []: ("Copy", "\u{21A9}", "\u{21E7}\u{2325}")
+            case ["\u{21E7}"]: ("Rows", "\u{21E7}\u{21A9}", "")
+            case ["\u{2325}"]: ("Translate", "\u{2325}\u{21A9}", "")
+            default: nil
+            }
+            c.copy.setTitle(copy?.title ?? "Copy")
+            c.copy.setKeys(copy?.key ?? "\u{21A9}", faded: copy?.faded ?? "")
+            c.copy.isEnabled = copy != nil
+            c.stripSlack = Chrome.widest.text - c.copy.frame.width
+            c.strip.show([[c.copy]])
+        }
+
+        if mode == .text {
+            if !window.textDragging, let box = textSelectionBox {
+                textStrip()
+                attachment = (box, true, [], [])
+            }
+        } else if let cutout {
             let subjects = cutout.subjects.count > 1 ? [c.subject] : []
             c.subject.setTitle(cutout.label)
             c.crop.lit = cutout.cropped
@@ -245,12 +254,12 @@ extension OverlayController {
             c.save.setKeys("\u{2318}S")
             for button in [c.copy, c.save] { button.isEnabled = true }
             c.strip.show([subjects + [c.crop], [c.save, c.copy]])
-            attachment = (view.viewRect(cutout.frame), true, [sizeChip(cutout.frame)], [])
+            attachment = (view.viewRect(cutout.frame), true, [sizeChip(cutout.frame)] + statusChip(["K", "esc"], "back"), [])
         } else if let scrollArea {
             let height = scrollHeight >= ScrollStitcher.maximumHeight ? "\(ScrollStitcher.maximumHeight) px, the limit" : "\(scrollHeight) px"
             c.scrolled.setTitle("Scrolling \(height)")
             c.strip.show([[c.scrolled], [c.cancel, c.done]])
-            attachment = (view.viewRect(scrollArea), true, [], [])
+            attachment = (view.viewRect(scrollArea), true, statusChip([], "Scroll the app under the outline"), [])
         } else if let armed = armedRecording, let rect = selection?.rect {
             let countIn = defaults.integer(forKey: Pref.recordCountIn)
             c.cursor.lit = defaults.bool(forKey: Pref.recordCursor)
@@ -258,7 +267,8 @@ extension OverlayController {
             c.countIn.setTitle(countIn > 0 ? "\(countIn)-second count" : "Count-in")
             c.countIn.lit = countIn > 0
             c.strip.show(armed.remaining == nil ? [[c.cursor, c.audio, c.countIn], [c.cancel, c.start]] : [[c.cancel]])
-            attachment = (view.viewRect(rect), true, [sizeChip(rect)], [])
+            // Counting in, the chip counts down; before, Start and Cancel on the strip carry the keys.
+            attachment = (view.viewRect(rect), true, [sizeChip(rect)] + (armed.remaining.map { statusChip([], "Recording in \($0)") } ?? []), [])
         } else if mode == .capture, let rect = overlays.selection ?? overlays.preview ?? overlays.ghost {
             // A drag shows its size, then Snapped when the snap preview is showing and Exact when it is not. A selection shows its size
             // and Snap, which reads Snapped or Exact, then the ratio and radius.
@@ -292,47 +302,27 @@ extension OverlayController {
             attachment = (view.viewRect(rect), true, [c.hover] + (editedRadii[rect] == nil ? [] : [radiusChip(rect)]), [])
         }
 
-        // The keys line, unless B hid it, or nothing is left once hints a visible strip button already shows (its title and key) drop.
-        // Hints that do not fit drop from the end, keeping the first and "all keys".
-        let stripped = c.strip.isHidden ? [] : c.strip.groups.flatMap(\.subviews).compactMap { $0 as? BarButton }.map { ($0.title.stringValue.lowercased(), $0.key) }
-        var items = hints.filter { hint in hint.keys.isEmpty || !stripped.contains { $0 == (hint.label, hint.keys.joined()) } }
-        c.hints.isHidden = !defaults.bool(forKey: Pref.modeBar) || items.isEmpty
-        if !c.hints.isHidden {
-            let kept = items.last?.label == "all keys" ? 1 : 0
-            while true {
-                c.hints.show(items.map { $0.label + $0.keys.joined() }.joined(separator: "|")) { items.map { Pill.hint($0.keys, $0.label) } }
-                guard c.hints.frame.width > bounds.width - 16, items.count > kept + 1 else { break }
-                items.remove(at: items.count - 1 - kept)
-            }
-        }
-
-        // The top bar sits under the menu bar or notch and the keys line at the bottom. Each moves to the other edge when a drag,
-        // preview, or selection reaches it there and not there; items on one edge stack inward, the bar nearer the top.
+        // The settings bar sits 8 pt above the bottom edge. It moves under the menu bar or notch while a drag, preview, or selection is
+        // within 24 pt of it there and not there.
         let objects = [overlays.ghost, overlays.preview, overlays.selection].compactMap { $0 }.map(view.viewRect)
-        func zone(_ item: NSView, atTop: Bool) -> CGRect {
-            CGRect(x: (bounds.width - item.frame.width) / 2, y: atTop ? topEdge - 8 - item.frame.height : 32, width: item.frame.width, height: item.frame.height).insetBy(dx: -24, dy: -24)
+        let barSize = c.topBar.frame.size
+        func barFrame(atTop: Bool) -> CGRect {
+            CGRect(x: ((bounds.width - barSize.width) / 2).rounded(), y: atTop ? topEdge - 8 - barSize.height : 8, width: barSize.width, height: barSize.height)
         }
-        func moves(_ item: NSView, fromTop: Bool) -> Bool {
-            !item.isHidden && objects.contains { $0.intersects(zone(item, atTop: fromTop)) && !$0.intersects(zone(item, atTop: !fromTop)) }
+        let barAtTop = !c.topBar.isHidden && objects.contains {
+            $0.intersects(barFrame(atTop: false).insetBy(dx: -24, dy: -24)) && !$0.intersects(barFrame(atTop: true).insetBy(dx: -24, dy: -24))
         }
-        let barAtBottom = moves(c.topBar, fromTop: true), hintsAtTop = moves(c.hints, fromTop: false)
-        let topItems: [NSView] = (barAtBottom ? [] : [c.topBar]) + (hintsAtTop ? [c.hints] : [])
-        let bottomItems: [NSView] = (hintsAtTop ? [] : [c.hints]) + (barAtBottom ? [c.topBar] : [])
-        var top = topEdge, floor: CGFloat = 32
+        // Chrome attached to an object keeps between `floor` and `top`, clear of the bar.
+        var top = topEdge, floor: CGFloat = 8
         var frames: [(NSView, CGRect)] = []
-        for item in topItems where !item.isHidden {
-            frames.append((item, CGRect(x: ((bounds.width - item.frame.width) / 2).rounded(), y: top - 8 - item.frame.height, width: item.frame.width, height: item.frame.height)))
-            top = frames.last!.1.minY
+        if !c.topBar.isHidden {
+            let frame = barFrame(atTop: barAtTop)
+            frames.append((c.topBar, frame))
+            if barAtTop { top = frame.minY } else { floor = frame.maxY + 8 }
         }
-        for item in bottomItems where !item.isHidden {
-            frames.append((item, CGRect(x: ((bounds.width - item.frame.width) / 2).rounded(), y: floor, width: item.frame.width, height: item.frame.height)))
-            floor = frames.last!.1.maxY + 8
-        }
-        if bottomItems.allSatisfy(\.isHidden) { floor = 8 }
-        let animate = !isHeadless && (barAtBottom != c.barAtBottom || hintsAtTop != c.hintsAtTop || ruler != c.ruler)
+        let animate = !isHeadless && (barAtTop != c.barAtTop || ruler != c.ruler)
         c.ruler = ruler
-        c.barAtBottom = barAtBottom
-        c.hintsAtTop = hintsAtTop
+        c.barAtTop = barAtTop
         if animate {
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.15
@@ -345,10 +335,11 @@ extension OverlayController {
         /// Attaches the strip below `box` (above when the bottom has no room, else inside), then the chip row above it (above the strip
         /// when that is above, else inside the top): `left` from the box's left edge, `right` ending at its right edge, or after `left`
         /// when they would meet, or a row higher (lower, inside) when the screen ends first. Only the box's edges place them. Outside, chrome
-        /// sits 8 pt off the outline; inside, 8 pt in from it on every side. A box wholly above the top bar's lower edge (an element of the
-        /// menu bar, under the bar) has no room there: the strip hangs from that edge and the chip row stacks under it.
+        /// sits 8 pt off the outline; inside, 8 pt in from it on every side. A box wholly above the bar's lower edge with the bar at the
+        /// top, or above the top ruler's lower edge, has no room there: the strip hangs from that edge and the chip row stacks under it. With
+        /// the bar at the bottom, a box that ends below the bar's upper edge gets its strip and chips standing on that edge.
         func attach(to box: CGRect, strip: Bool, left: [NSView], right: [NSView] = []) {
-            var over = box.maxY + 8
+            var over = max(box.maxY + 8, floor)
             let capped = box.minY > top
             if strip {
                 let size = c.strip.frame.size
@@ -360,9 +351,11 @@ extension OverlayController {
             }
             guard let height = (left + right).first?.frame.height else { return }
             for chip in left + right { chip.isHidden = false }
-            let inside = capped || over + height > top - 8
-            let inset: CGFloat = inside && !capped ? 8 : 0
-            var y = capped ? (strip ? c.strip.frame.minY : top - 8) - 6 - height : inside ? min(box.maxY, top) - 8 - height : over
+            // A box too short to hold the chip row inside above its strip (a menu bar item at the top edge) stacks it under the strip.
+            let stacked = capped || strip && over + height > top - 8 && c.strip.frame.maxY <= box.minY && min(box.maxY, top) - 14 - height < c.strip.frame.maxY
+            let inside = stacked || over + height > top - 8
+            let inset: CGFloat = inside && !stacked ? 8 : 0
+            var y = stacked ? (strip ? c.strip.frame.minY : top - 8) - 6 - height : inside ? min(box.maxY, top) - 8 - height : over
             var x = min(max(box.minX + inset, leftEdge), bounds.width - 8 - left.reduce(-6) { $0 + $1.frame.width + 6 })
             for chip in left {
                 chip.frame.origin = CGPoint(x: x, y: y)
@@ -382,11 +375,11 @@ extension OverlayController {
         if let attachment { attach(to: attachment.box, strip: attachment.strip, left: attachment.left, right: attachment.right) }
 
         // While the pointer rests inside a released selection, or a modifier is held, each side's arrow key sits just outside the side's
-        // midpoint, pushed further out past the chips or strip in the way, and inside the side when that leaves the screen; the legend
+        // midpoint, pushed further out past the chips, strip or bar in the way, and inside the side when that leaves the screen; the legend
         // in the middle says what the arrows do.
         let resting = draggedRect == nil && selection?.rect.contains(pointer) == true
         let showsEdgeKeys = editing && (optionHeld || commandHeld || resting)
-        let obstacles: [NSView] = [c.strip, c.size, c.snap, c.ratio, c.radius].filter { !$0.isHidden }
+        let obstacles: [NSView] = [c.topBar, c.strip, c.size, c.snap, c.ratio, c.radius].filter { !$0.isHidden }
         for (index, pill) in c.sideHints.enumerated() {
             pill.isHidden = true
             guard showsEdgeKeys, let rect = overlays.selection else { continue }
@@ -439,11 +432,11 @@ extension OverlayController {
                                                 y: corner.movesTop ? chip.minY - 4 - size.height : chip.maxY + 4)
         }
 
-        // The key caps of the faint Up and Down outlines sit inside their top-left corners.
-        for (cap, rect) in [(c.upHint, overlays.upHint), (c.downHint, overlays.downHint)] {
+        // The key caps of the faint outlines sit inside their top-left corners, a peer's inside its 2 pt inset outline.
+        for (cap, rect, inset) in [(c.upHint, overlays.upHint, 0), (c.downHint, overlays.downHint, 0), (c.leftHint, overlays.leftHint, 2), (c.rightHint, overlays.rightHint, 2)] as [(KeyCap, CGRect?, CGFloat)] {
             cap.isHidden = rect == nil
             if let rect {
-                let box = view.viewRect(rect)
+                let box = view.viewRect(rect).insetBy(dx: inset, dy: inset)
                 cap.frame.origin = CGPoint(x: box.minX + 4, y: box.maxY - cap.frame.height - 4)
             }
         }

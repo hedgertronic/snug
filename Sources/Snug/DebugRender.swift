@@ -66,9 +66,9 @@ extension DebugRun {
             try snapshot("loupe-drag-\(name)")
             mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
             overlay.dismiss()
-            // The pointer just above the keys line: the loupe flips above it instead of hiding behind it.
+            // The pointer just above the settings bar: the loupe flips above it instead of hiding behind it.
             overlay.present(image: content, frame: frame, displayID: nil)
-            let barTop = overlay.chrome.hints.frame.maxY
+            let barTop = overlay.chrome.topBar.frame.maxY
             let nearBar = CGRect(x: 900, y: (overlay.view.bounds.height - barTop - 40) * overlay.scale - 200, width: 500, height: 200)
             drag(nearBar, release: false)
             try snapshot("loupe-near-bar-\(name)")
@@ -225,6 +225,30 @@ extension DebugRun {
         try snapshot("hint-outlines-rounded")
         overlay.dismiss()
 
+        // Finder's sidebar (the round 13 fixture, a 920 x 436 pt window at 2x) with Documents hovered: Up outlines the sidebar, Down the
+        // icon, Left Developer and Right Downloads. The frames are the live AX tree's (FinderSidebarHoverTests), in window points; the
+        // icon's is its glyph's pixel box in the fixture, as the AX tree read has no icon frame.
+        let finderURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../notes/fixtures/round13/finder-sidebar-recents.png").standardized
+        let finder = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(finderURL as CFURL, nil)!, 0, nil)!
+        overlay.present(image: finder, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(finder.width) / 2, height: CGFloat(finder.height) / 2), displayID: nil)
+        overlay.detectionTask?.cancel()
+        func finderPixels(_ rect: CGRect) -> CGRect { CGRect(x: (rect.minX - 341) * 2, y: (rect.minY - 162) * 2, width: rect.width * 2, height: rect.height * 2) }
+        let sidebarRows: [(name: String, y: CGFloat)] = [("Recents", 214), ("Shared", 246), ("Applications", 310), ("Desktop", 342), ("Developer", 374), ("Documents", 406),
+                                                         ("Downloads", 438), ("iCloud Drive", 502), ("hedgertronic", 534), ("Macintosh HD", 566)]
+        let finderCells = sidebarRows.map { Candidate(id: "ax-\($0.name)", label: "cell", bounds: finderPixels(CGRect(x: 351, y: $0.y, width: 139, height: 32)), score: AccessibilityBounds.baseScore, kind: .element) }
+        let finderSidebar = Candidate(id: "ax-sidebar", label: "scroll area", bounds: finderPixels(CGRect(x: 341, y: 214, width: 159, height: 384)), score: AccessibilityBounds.baseScore, kind: .element)
+        let documentsIcon = Candidate(id: "ax-icon", label: "image", bounds: CGRect(x: 44, y: 503, width: 28, height: 35), score: AccessibilityBounds.baseScore, kind: .element)
+        overlay.session = SelectionSession(candidates: finderCells + [finderSidebar, documentsIcon], extent: CGRect(x: 0, y: 0, width: finder.width, height: finder.height),
+                                           anchor: CGPoint(x: documentsIcon.bounds.midX, y: documentsIcon.bounds.midY))
+        mouse(.mouseMoved, CGPoint(x: documentsIcon.bounds.midX, y: documentsIcon.bounds.midY))
+        key(126, "")
+        let finderHints = overlay.view.overlays
+        require(finderHints.hover == finderCells[5].bounds && finderHints.upHint == finderSidebar.bounds && finderHints.downHint == documentsIcon.bounds
+                    && finderHints.leftHint == finderCells[4].bounds && finderHints.rightHint == finderCells[6].bounds,
+                "Finder render: Documents hovered, Up the sidebar, Down the icon, Left Developer, Right Downloads: \(String(describing: finderHints.leftHint)) \(String(describing: finderHints.rightHint))")
+        try snapshot("hint-outlines-finder")
+        overlay.dismiss()
+
         // Highlight with a fill and no glow, in a picked color.
         defaults.set("#E5484D", forKey: Pref.highlightColor)
         defaults.set(0.15, forKey: Pref.highlightFill)
@@ -261,7 +285,15 @@ extension DebugRun {
             try await waitFor("Live Text") { liveText.analysis != nil }
             let all = liveText.text
             liveText.selectedRanges = [all.range(of: "Product name")!.lowerBound..<all.range(of: "Second product")!.upperBound]
+            overlay.refresh()
             try snapshot("text")
+            // The Text strip under a one-line selection, with Shift held: Rows.
+            liveText.selectedRanges = [all.range(of: "Billing address")!]
+            overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: .shift, timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!)
+            try snapshot("text-selected-strip")
+            overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!)
             overlay.targetLanguage = Locale.Language(identifier: "de")
             overlay.translationStatus = { _, _ in .supported }
             key(36, "\r", .option)
@@ -547,8 +579,8 @@ extension DebugRun {
         capture.setShortcut(from: defaults)
         require(capture.keyEquivalent == "k" && capture.keyEquivalentModifierMask == [.control, .option], "a recorded letter shortcut updates the key equivalent")
         require(Shortcut.label(from: defaults) == "\u{2303}\u{2325}K", "the recorded shortcut displays from code and modifiers: \(Shortcut.label(from: defaults))")
-        let hintFill = overlay.chrome.hints.layer!.backgroundColor.flatMap(NSColor.init(cgColor:))!
-        require(hintFill.alphaComponent >= 0.92, "the keys line is on the chrome surface: \(hintFill.alphaComponent)")
+        let hintFill = overlay.chrome.topBar.groups[0].layer!.backgroundColor.flatMap(NSColor.init(cgColor:))!
+        require(hintFill.alphaComponent >= 0.92, "the settings bar is on the chrome surface: \(hintFill.alphaComponent)")
         exit(EXIT_SUCCESS)
     }
 

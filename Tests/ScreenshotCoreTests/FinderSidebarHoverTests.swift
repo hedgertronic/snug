@@ -78,4 +78,17 @@ struct FinderSidebarHoverTests {
         for _ in 0..<5 { _ = session.step(right: true) }
         #expect(session.selected?.bounds == pixels(cell(9).rect), "Right from Downloads goes to iCloud Drive, past Locations")
     }
+
+    /// What Left and Right would pick, for their hint outlines, without picking it: Documents' peers are Developer and Downloads, and
+    /// the first row's previous peer wraps to the last row inside the scroll area.
+    @Test func peerNamesWhatLeftAndRightWouldPick() async throws {
+        for (index, left, right) in [(6, 5, 7), (0, 11, 1)] {
+            let hover = try await AccessibilityBounds.candidates(frames: AccessibilityBounds.hoverLevel(hovered(index)), displayOrigin: .zero, scale: 2, extent: extent)
+            let peers = try await AccessibilityBounds.peerCandidates(siblings(of: index), displayOrigin: .zero, scale: 2, extent: extent)
+            var session = SelectionSession(candidates: hover, extent: extent, anchor: CGPoint(x: pixels(cell(index).rect).midX, y: pixels(cell(index).rect).midY))
+            session.merge(peers)
+            #expect(session.peer(right: false)?.bounds == pixels(cell(left).rect) && session.peer(right: true)?.bounds == pixels(cell(right).rect))
+            #expect(session.selected?.bounds == pixels(cell(index).rect) && !session.isLocked, "peer(right:) changes nothing")
+        }
+    }
 }

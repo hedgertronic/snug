@@ -19,11 +19,20 @@ final class OverlayWindow: NSWindow {
     /// Text mode: where the current press landed and the word (or, after a double or triple click, the word or line) it anchors.
     var textPress: (point: CGPoint, anchor: Range<String.Index>?)?
 
+    /// Text mode: a press is down that began on a chrome button, or one that began elsewhere (Live Text's).
+    var buttonPress = false
+    var textDragging = false
+
     override func sendEvent(_ event: NSEvent) {
-        guard !(contentView as! OverlayView).liveText.isHidden, [.leftMouseDown, .leftMouseDragged, .leftMouseUp].contains(event.type) else {
-            return super.sendEvent(event)
-        }
+        let view = contentView as! OverlayView
+        guard !view.liveText.isHidden, [.leftMouseDown, .leftMouseDragged, .leftMouseUp].contains(event.type) else { return super.sendEvent(event) }
+        // A press that begins on a chrome button goes to the button, so it never clears or changes the text selection it acts on.
+        if event.type == .leftMouseDown { buttonPress = view.hitTest(event.locationInWindow) is BarButton }
+        guard !buttonPress else { return super.sendEvent(event) }
+        // While Live Text's press is down the Text strip stays hidden, so it never lands under the pointer mid-drag.
+        textDragging = event.type != .leftMouseUp
         sendTextMouse(event)
+        if event.type == .leftMouseUp { view.controller!.refresh() }
     }
 }
 
@@ -990,11 +999,15 @@ final class OverlayController {
         overlays.showsHandles = selection != nil
         if selection == nil || unionHover, case .none = interaction { overlays.hover = hoverRect }
         if mode == .text, let picked = text.picked { overlays.hover = text.items![picked].bounds }
-        // While hovering, faint outlines show what Up and Down would select, unless that is nothing, the display, or within 4 pt of the hover.
+        // While hovering, faint outlines show what Up and Down would select, unless that is nothing, the display, or within 4 pt of the
+        // hover; and what Left and Right would, unless that is one of those. With two peers, Left and Right pick the same one: it shows as Right.
         if mode == .capture, selection == nil, let hover = overlays.hover, let session {
             let level = { (candidate: Candidate?) in candidate.flatMap { $0.kind == .display || $0.bounds.isNear(hover, within: 4 * self.scale) ? nil : $0.bounds } }
             overlays.upHint = level(session.parents.first)
             overlays.downHint = level(session.child)
+            let peer = { (right: Bool) in level(session.peer(right: right)).flatMap { [overlays.upHint, overlays.downHint].contains($0) ? nil : $0 } }
+            overlays.rightHint = peer(true)
+            overlays.leftHint = peer(false).flatMap { $0 == overlays.rightHint ? nil : $0 }
         }
         if let scrollArea { overlays.selection = scrollArea; overlays.showsHandles = false; overlays.hover = nil }
         if let cutout { overlays.selection = cutout.frame; overlays.showsHandles = false; overlays.hover = nil }
@@ -1003,13 +1016,16 @@ final class OverlayController {
         // The selection is measured once it settles; a dragged handle makes a new rectangle on every event.
         let settled: CGRect? = if case .none = interaction { selection?.rect } else { nil }
         let shown = selection?.rect ?? snapPreview
-        for rect in [snapPreview, settled, overlays.hover, overlays.upHint, overlays.downHint] { measureRadius(rect) }
-        for rect in [shown, overlays.hover, overlays.upHint, overlays.downHint] { measureRadius(rect.flatMap(container)) }
+        let hints = [overlays.upHint, overlays.downHint, overlays.leftHint, overlays.rightHint]
+        for rect in [snapPreview, settled, overlays.hover] + hints { measureRadius(rect) }
+        for rect in [shown, overlays.hover] + hints { measureRadius(rect.flatMap(container)) }
         overlays.radii = cutout?.frameRadii ?? shown.map(cornerRadii) ?? .zero
         overlays.hoverRadii = overlays.hover.map(cornerRadii) ?? .zero
         layoutCornerChip()
         overlays.upHintRadii = overlays.upHint.map(cornerRadii) ?? .zero
         overlays.downHintRadii = overlays.downHint.map(cornerRadii) ?? .zero
+        overlays.leftHintRadii = overlays.leftHint.map(cornerRadii) ?? .zero
+        overlays.rightHintRadii = overlays.rightHint.map(cornerRadii) ?? .zero
         // The padded card of an area or element; a live window's real shadow has no card to preview.
         if let rect = selection?.rect, framed, !capturesLiveWindow(rect) { overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, framed: true) }
         view.overlays = overlays

@@ -165,6 +165,18 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         return true
     }
 
+    /// The selected text's bounds in view points, nil with nothing selected or an item picked. Live Text's text view (its subview that
+    /// is an `NSTextInputClient`) answers `firstRect(forCharacterRange:actualRange:)` for the selected range with the union of the
+    /// selected glyphs' boxes, in its own points from the top-left corner (measured on form-test.png), not the first line's screen rect
+    /// the protocol names. The text view covers Live Text, which covers the overlay view.
+    var textSelectionBox: CGRect? {
+        guard text.picked == nil, !view.liveText.selectedText.isEmpty else { return nil }
+        func client(in view: NSView) -> NSTextInputClient? { (view as? NSTextInputClient) ?? view.subviews.lazy.compactMap(client).first }
+        let selection = client(in: view.liveText)!
+        let rect = selection.firstRect(forCharacterRange: selection.selectedRange(), actualRange: nil)
+        return CGRect(x: rect.minX, y: view.bounds.height - rect.maxY, width: rect.width, height: rect.height)
+    }
+
     /// A click on a highlighted item does not open it behind the overlay; Cmd-Return opens the picked one.
     func overlayView(_ overlayView: ImageAnalysisOverlayView, shouldBeginAt point: CGPoint, forAnalysisType analysisType: ImageAnalysisOverlayView.InteractionTypes) -> Bool {
         analysisType != .dataDetectors

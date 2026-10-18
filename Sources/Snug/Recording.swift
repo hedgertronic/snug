@@ -270,7 +270,7 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         let pills = [[clock] as [NSView], [defaults.integer(forKey: Pref.hotKeyCode) < 0
             ? NSTextField("Stop from the menu bar", size: 12, weight: .medium, color: .chromeText)
             : Pill.hint([Shortcut.label(from: defaults)], "stop")]].map { views in
-            // Both take the control height, like the keys line, so they match.
+            // Both take the control height, like the action strip, so they match.
             let pill = Pill(radius: 11, insets: NSEdgeInsets(top: 0, left: 14, bottom: 0, right: 14), spacing: 0, height: Chrome.controlHeight)
             pill.show("reminder") { views }
             return pill
