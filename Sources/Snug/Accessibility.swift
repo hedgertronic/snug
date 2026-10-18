@@ -8,9 +8,14 @@ enum Accessibility {
     private static let maxDepth = 24
     /// The longest the peers of one lookup take to read; a slow app gets the peers it answered for.
     private static let peerBudget = Duration.milliseconds(100)
+    /// The longest a walk down from the window by frames takes; a slow app gets the depth it reached.
+    private static let walkBudget = Duration.milliseconds(100)
 
     /// The frames of the element at `point` (global points, top-left origin) in `pid`'s app and its parents up to the window,
-    /// innermost first, each with its role, title, subrole, identifier and description. Empty without permission, on a timeout, when nothing is there, or for Snug's own windows: AX against
+    /// innermost first, each with its role, title, subrole, identifier and description. When the hit test's answer and its parents are
+    /// all unhoverable inside a window (`AccessibilityBounds.hoverLevel` is empty), the chain is instead the window walked down by
+    /// frames to the deepest element containing `point`.
+    /// Empty without permission, on a timeout, when nothing is there, or for Snug's own windows: AX against
     /// its own pid runs in this process, off main, and AppKit's hit test there trips the MainActor isolation check.
     @concurrent
     static func frames(at point: CGPoint, pid: pid_t) async -> [AXFrame] {
@@ -39,7 +44,17 @@ enum Accessibility {
                   let parent else { break }
             element = parent as! AXUIElement
         }
-        return chain
+        guard AccessibilityBounds.hoverLevel(chain.map(\.frame)).isEmpty, let window = chain.last, window.frame.role == kAXWindowRole else { return chain }
+        // Finder's column view answers the hit test with its window-sized AXBrowser even over the sidebar, which is a sibling of the
+        // browser's split group. Then the window is walked down by frames: at each level, the smallest child that contains the point.
+        var path = [window]
+        let began = ContinuousClock.now
+        while path.count < maxDepth, began.duration(to: .now) < walkBudget, let children = children(of: path.last!.element, kAXChildrenAttribute),
+              let smallest = children.compactMap({ child in frame(of: child).map { (element: child, frame: $0) } })
+                  .filter({ $0.frame.rect.contains(point) }).min(by: { $0.frame.rect.width * $0.frame.rect.height < $1.frame.rect.width * $1.frame.rect.height }) {
+            path.append(smallest)
+        }
+        return path.reversed()
     }
 
     /// The chains of the peers of the hovered element in `chain`: the other children of the container (`AXRows` for an outline or a
