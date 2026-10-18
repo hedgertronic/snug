@@ -1284,6 +1284,28 @@ extension DebugRun {
         }
         overlay.topInset = 0
 
+        // Hovering the menu bar, under the top bar: the hover chip, the strip, and the chips keep clear of the top bar and of each other,
+        // with and without a camera-housing inset.
+        let menuBar = 24 * overlay.scale
+        let menuItem = CGRect(x: extent.midX - 60 * overlay.scale, y: 0, width: 120 * overlay.scale, height: menuBar)
+        for (name, inset) in [("flat", CGFloat(0)), ("notched", CGFloat(38))] {
+            for (what, hovered) in [("a menu bar item", menuItem), ("the whole menu bar", CGRect(x: 0, y: 0, width: extent.width, height: menuBar))] {
+                overlay.dismiss()
+                overlay.topInset = inset
+                open()
+                await overlay.detectionTask?.value
+                overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+                overlay.merge([Candidate(id: "ax-menu-bar", label: "Menu bar", bounds: hovered, score: AccessibilityBounds.baseScore, kind: .element)])
+                mouse(.mouseMoved, CGPoint(x: hovered.midX, y: 8))
+                let pieces: [(String, NSView)] = [("hover chip", chrome.hover), ("strip", chrome.strip), ("top bar", chrome.topBar)].filter { !$0.1.isHidden }
+                let clashes = pieces.indices.flatMap { i in pieces.indices.filter { $0 > i && pieces[i].1.frame.intersects(pieces[$0].1.frame) }.map { "\(pieces[i].0) x \(pieces[$0].0)" } }
+                require(pieces.map(\.0) == ["hover chip", "strip", "top bar"] && clashes.isEmpty && chrome.hover.frame.maxY <= chrome.topBar.frame.minY,
+                        "hovering \(what) under the top bar (\(name) screen) keeps the hover chip and strip clear of the top bar: \(clashes) \(pieces.map { "\($0.0) \($0.1.frame)" })")
+                overlay.dismiss()
+            }
+        }
+        overlay.topInset = 0
+
         // Armed to record, the selection keeps none of the editing chrome; Esc brings it back.
         overlay.dismiss()
         overlay.present(image: image, frame: frame, displayID: CGMainDisplayID())

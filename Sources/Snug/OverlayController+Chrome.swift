@@ -278,12 +278,14 @@ extension OverlayController {
         /// Attaches the strip below `box` (above when the bottom has no room, else inside), then the chip row above it (above the strip
         /// when that is above, else inside the top): `left` from the box's left edge, `right` ending at its right edge, or after `left`
         /// when they would meet, or a row higher (lower, inside) when the screen ends first. Only the box's edges place them. Outside, chrome
-        /// sits 8 pt off the outline; inside, 8 pt in from it on every side.
+        /// sits 8 pt off the outline; inside, 8 pt in from it on every side. A box wholly above the top bar's lower edge (an element of the
+        /// menu bar, under the bar) has no room there: the strip hangs from that edge and the chip row stacks under it.
         func attach(to box: CGRect, strip: Bool, left: [NSView], right: [NSView] = []) {
             var over = box.maxY + 8
+            let capped = box.minY > top
             if strip {
                 let size = c.strip.frame.size
-                let below = box.minY - 8 - size.height
+                let below = min(box.minY, top) - 8 - size.height
                 let outside = below >= floor || over + size.height <= top - 8
                 let y = below >= floor ? below : over + size.height <= top - 8 ? over : max(box.minY + 8, floor)
                 c.strip.frame.origin = CGPoint(x: min(max(box.minX + (outside ? 0 : 8), leftEdge), bounds.width - size.width - 8), y: y)
@@ -291,9 +293,9 @@ extension OverlayController {
             }
             guard let height = (left + right).first?.frame.height else { return }
             for chip in left + right { chip.isHidden = false }
-            let inside = over + height > top - 8
-            let inset: CGFloat = inside ? 8 : 0
-            var y = inside ? min(box.maxY, top) - 8 - height : over
+            let inside = capped || over + height > top - 8
+            let inset: CGFloat = inside && !capped ? 8 : 0
+            var y = capped ? (strip ? c.strip.frame.minY : top - 8) - 6 - height : inside ? min(box.maxY, top) - 8 - height : over
             var x = min(max(box.minX + inset, leftEdge), bounds.width - 8 - left.reduce(-6) { $0 + $1.frame.width + 6 })
             for chip in left {
                 chip.frame.origin = CGPoint(x: x, y: y)
