@@ -1044,7 +1044,6 @@ final class OverlayController {
         for rect in [shown, overlays.hover] + hints { measureRadius(rect.flatMap(container)) }
         overlays.radii = cutout?.frameRadii ?? shown.map(cornerRadii) ?? .zero
         overlays.hoverRadii = overlays.hover.map(cornerRadii) ?? .zero
-        layoutCornerChip()
         overlays.upHintRadii = overlays.upHint.map(cornerRadii) ?? .zero
         overlays.downHintRadii = overlays.downHint.map(cornerRadii) ?? .zero
         // The padded card of an area or element; a live window's real shadow has no card to preview.
