@@ -17,7 +17,7 @@ extension OverlayController {
             chrome.help.isHidden = true
             return true
         }
-        let toggles = ["b": Pref.modeBar, "l": Pref.loupe, "r": Pref.rulers, "x": Pref.crosshair, "n": Pref.candidates]
+        let toggles = ["l": Pref.loupe, "r": Pref.rulers, "x": Pref.crosshair, "n": Pref.candidates]
         let character = event.charactersIgnoringModifiers ?? ""
         if let key = toggles[character] {
             defaults.set(!defaults.bool(forKey: key), forKey: key)
@@ -265,7 +265,7 @@ extension OverlayController {
         guides.update(point: CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale), pixel: pixel,
                       image: image, bounds: view.bounds, scale: scale, topInset: topInset,
                       selected: draggedRect ?? selection?.rect, dragging: draggedRect != nil,
-                      avoiding: [chrome.topBar, chrome.strip, chrome.hints, chrome.list, chrome.hover, chrome.size, chrome.snap, chrome.ratio, chrome.radius, chrome.status,
+                      avoiding: [chrome.topBar, chrome.strip, chrome.list, chrome.hover, chrome.size, chrome.snap, chrome.ratio, chrome.radius, chrome.status,
                                  chrome.reading, chrome.legend, chrome.colorMenu, chrome.ratioMenu].filter { !$0.isHidden }.map(\.frame))
     }
 }

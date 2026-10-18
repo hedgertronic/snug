@@ -136,9 +136,10 @@ final class HelpSheet: NSView {
                              ("Text: Tab", "Next link, email, phone, code"), ("Text: \u{2318} \u{21A9}", "Open the picked item"), ("Text: \u{2325} \u{21A9}", "Translate text")]),
         ("Modes, view, recording", [("A", "Capture"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),
                                     ("X", "Crosshair"), ("O", "Rounded corners"), ("M", "Frame: shadow on / off"), ("P", "Ratio menu"),
-                                    ("\u{21E7} P", "Lock the ratio"), ("U", "Colors menu: 1-6 copies"), ("N", "Candidate list"), ("1-5", "Pick from the list (N)"), ("B", "Keys line"), ("?", "This sheet"),
+                                    ("\u{21E7} P", "Lock the ratio"), ("U", "Colors menu: 1-6 copies"), ("N", "Candidate list"), ("1-5", "Pick from the list (N)"), ("?", "This sheet"),
                                     ("V", "Arm recording, hover or selection"), ("Armed: \u{21A9} / V", "Start recording"), ("Armed: H", "Cursor on / off"), ("Armed: I", "Count-in off, 3 s, 5 s"),
-                                    ("Armed: J", "System audio on / off"), ("hotkey", "Stop recording")])
+                                    ("Armed: J", "System audio on / off"), ("hotkey", "Stop recording"),
+                                    ("Menus: \u{2191} / \u{2193}", "Pick in the Ratio or Colors menu"), ("Subject: K / esc", "Back to the selection")])
     ]
     let panel = NSVisualEffectView()
 

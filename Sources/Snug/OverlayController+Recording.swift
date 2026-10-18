@@ -25,7 +25,7 @@ extension OverlayController {
         let armed = ArmedRecording()
         view.layer!.addSublayer(armed.outline)
         view.addSubview(armed.count)
-        armed.count.appearance = chrome.hints.appearance
+        armed.count.appearance = chrome.topBar.appearance
         armedRecording = armed
         refresh()
     }

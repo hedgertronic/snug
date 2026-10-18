@@ -85,8 +85,8 @@ extension DebugRun {
         require(overlay.mode == .capture && liveText.isHidden && liveText.analysis == nil, "the overlay opens in Capture with Live Text hidden and nothing analyzed")
         key(tKey, "t")
         require(overlay.mode == .text && !liveText.isHidden, "T enters Text mode and shows Live Text")
-        require(texts(in: overlay.chrome.hints) == ["select text", "Drag", "copy", "\u{21A9}", "rows", "\u{21E7}", "\u{21A9}", "links, codes", "Tab", "translate", "\u{2325}", "\u{21A9}", "all text", "F", "color", "C", "all keys", "?"],
-                "Text mode shows its hint row: \(texts(in: overlay.chrome.hints))")
+        require(overlay.chrome.strip.isHidden && texts(in: overlay.chrome.topBar) == ["Capture", "A", "Text", "T", "Loupe", "L", "Rulers", "R", "Crosshair", "X", "?"],
+                "Text mode with nothing selected shows no strip, and the bar has the modes, view and the keys button: \(texts(in: overlay.chrome.topBar))")
         require(!overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."], "a Reading text... pill shows while the analysis runs")
         try await waitFor("the Live Text analysis attaches") { liveText.analysis != nil }
         print("Live Text analysis: \(String(format: "%.1f", overlay.lastLiveTextMilliseconds)) ms (first in this process)")
@@ -611,11 +611,12 @@ extension DebugRun {
         let ringPixels = (0..<ring.height).reduce(0) { sum, y in sum + (0..<ring.width).count { ringAlpha[y * ring.bytesPerRow + $0 * 2 + 1] > 0 } }
         require(ringAlpha[(ring.height / 2) * ring.bytesPerRow + ring.width / 2 * 2 + 1] == 0 && ringPixels > 0 && ringPixels < ring.width * ring.height / 10,
                 "the outline is a thin ring outside the subject: \(ringPixels) of \(ring.width * ring.height) pixels, center clear")
-        require(overlay.selection == nil && overlay.chrome.topBar.groups.count == 2 && !texts(in: overlay.chrome.topBar).contains("Capture") && overlay.view.overlays.selection == iconRect
+        require(overlay.selection == nil && texts(in: overlay.chrome.topBar).last == "?" && !texts(in: overlay.chrome.topBar).contains("Capture") && overlay.view.overlays.selection == iconRect
                 && !overlay.view.overlays.showsHandles, "while previewing, the top bar has no modes, the handles stay hidden and the area stays outlined")
         require(texts(in: overlay.chrome.strip) == ["Snap to subject", "S", "Save", "\u{2318}", "S", "Copy", "\u{21A9}"] && !overlay.chrome.crop.lit
-                    && texts(in: overlay.chrome.hints) == ["back", "K", "esc"],
-                "the strip has the preview's controls, Snap to subject plain, and the keys line K back: \(texts(in: overlay.chrome.strip)) \(texts(in: overlay.chrome.hints))")
+                    && texts(in: overlay.chrome.status) == ["back", "K", "esc"] && overlay.chrome.status.frame.minY == overlay.chrome.size.frame.minY
+                    && overlay.chrome.status.frame.minX == overlay.chrome.size.frame.maxX + 6,
+                "the strip has the preview's controls, Snap to subject plain, and a status chip after the size chip says K back: \(texts(in: overlay.chrome.strip)) \(texts(in: overlay.chrome.status))")
         let (previewPixels, previewWidth) = pixels(preview!.subjects[0].image)
         require(previewPixels[3] == 0 && previewPixels[(previewWidth / 2 + previewWidth * previewWidth / 2) * 4 + 3] == 255, "the preview is transparent at the corner and opaque at the center")
         // The press is near the area's top, off the strip, which this small view lays across its middle.

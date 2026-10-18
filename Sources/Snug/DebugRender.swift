@@ -66,9 +66,9 @@ extension DebugRun {
             try snapshot("loupe-drag-\(name)")
             mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
             overlay.dismiss()
-            // The pointer just above the keys line: the loupe flips above it instead of hiding behind it.
+            // The pointer just above the settings bar: the loupe flips above it instead of hiding behind it.
             overlay.present(image: content, frame: frame, displayID: nil)
-            let barTop = overlay.chrome.hints.frame.maxY
+            let barTop = overlay.chrome.topBar.frame.maxY
             let nearBar = CGRect(x: 900, y: (overlay.view.bounds.height - barTop - 40) * overlay.scale - 200, width: 500, height: 200)
             drag(nearBar, release: false)
             try snapshot("loupe-near-bar-\(name)")
@@ -547,8 +547,8 @@ extension DebugRun {
         capture.setShortcut(from: defaults)
         require(capture.keyEquivalent == "k" && capture.keyEquivalentModifierMask == [.control, .option], "a recorded letter shortcut updates the key equivalent")
         require(Shortcut.label(from: defaults) == "\u{2303}\u{2325}K", "the recorded shortcut displays from code and modifiers: \(Shortcut.label(from: defaults))")
-        let hintFill = overlay.chrome.hints.layer!.backgroundColor.flatMap(NSColor.init(cgColor:))!
-        require(hintFill.alphaComponent >= 0.92, "the keys line is on the chrome surface: \(hintFill.alphaComponent)")
+        let hintFill = overlay.chrome.topBar.groups[0].layer!.backgroundColor.flatMap(NSColor.init(cgColor:))!
+        require(hintFill.alphaComponent >= 0.92, "the settings bar is on the chrome surface: \(hintFill.alphaComponent)")
         exit(EXIT_SUCCESS)
     }
 

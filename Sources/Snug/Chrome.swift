@@ -430,7 +430,7 @@ final class Bar: NSView {
 /// All the overlay's on-screen chrome. `OverlayController.refreshChrome` positions and fills it.
 @MainActor
 final class Chrome {
-    /// The two pill heights. Controls (the top bar's groups, the action strip, the keys line, the recording pills) and labels (the chip row,
+    /// The two pill heights. Controls (the top bar's groups, the action strip, the recording pills) and labels (the chip row,
     /// the loupe's readout) keep theirs with or without a key cap inside.
     static let controlHeight: CGFloat = 32
     static let labelHeight: CGFloat = 26
@@ -454,11 +454,13 @@ final class Chrome {
         return 0.2126 * color.redComponent + 0.7152 * color.greenComponent + 0.0722 * color.blueComponent > 0.7 ? .black : .white
     }
 
-    /// The top bar: three pills of remembered settings, the modes, view, and style.
+    /// The settings bar at the bottom center: three pills of remembered settings, the modes, view, and style, then the keys sheet's button.
     let topBar = Bar()
     let modeButtons: [OverlayController.Mode: BarButton] = [.capture: BarButton("Capture", key: "A"), .text: BarButton("Text", key: "T")]
     let viewToggles = [(Pref.loupe, BarButton("Loupe", key: "L")), (Pref.rulers, BarButton("Rulers", key: "R")), (Pref.crosshair, BarButton("Crosshair", key: "X"))]
     let styleToggles = [(Pref.roundCorners, BarButton("Rounded", key: "O")), (Pref.frame, BarButton("Frame", key: "M"))]
+    /// Opens the keys sheet, as ? does: the permanent route to every shortcut.
+    let keys = BarButton("", key: "?")
     /// The action strip below the hovered element or the selection, or a session's (scroll, armed recording, cut out) controls.
     let strip = Bar()
     let edit = BarButton("Edit", key: "E")
@@ -514,8 +516,6 @@ final class Chrome {
     let colorMenu = RatioMenu()
     /// The live corner radius with its keys.
     let radius = Pill(radius: 8, insets: NSEdgeInsets(top: 0, left: 8, bottom: 0, right: 3), spacing: 6, height: Chrome.labelHeight)
-    /// The keys for this moment, at the bottom.
-    let hints = Pill(radius: 11, insets: NSEdgeInsets(top: 0, left: 14, bottom: 0, right: 14), spacing: 14, height: Chrome.controlHeight)
     /// Key caps at the top-left corners of the faint outlines of what Up and Down would select.
     let upHint = KeyCap("\u{2191}")
     let downHint = KeyCap("\u{2193}")
@@ -530,9 +530,8 @@ final class Chrome {
     let legend = Pill.chip()
     /// Beside the "All corners" chip of a hovered corner dot: the radius keys and Option for one corner.
     let cornerKeys = Pill(radius: 8, insets: NSEdgeInsets(top: 5, left: 8, bottom: 5, right: 5), spacing: 5, vertical: true)
-    /// The top bar sits at the bottom and the keys line at the top, each moved off its edge by a rectangle there.
-    var barAtBottom = false
-    var hintsAtTop = false
+    /// The settings bar sits at the top, moved off the bottom edge by a rectangle there.
+    var barAtTop = false
     /// The rulers' thickness the chrome last kept clear of, 0 with Rulers off; a change moves the chrome with the rulers' slide.
     var ruler: CGFloat = 0
     /// The cap texts of the key just pressed, lit for 150 ms.
@@ -549,6 +548,9 @@ final class Chrome {
         snapTag.isHidden = true
         lock.washes = false
         for button in [copy, done, start] { button.primary = true }
+        keys.setAccessibilityElement(true)
+        keys.setAccessibilityRole(.button)
+        keys.setAccessibilityLabel("All keys")
         for tool in [scroll, record, cutout, colors] {
             tool.setAccessibilityElement(true)
             tool.setAccessibilityRole(.button)
@@ -558,10 +560,10 @@ final class Chrome {
 
     /// Every button, for the click wiring.
     var buttons: [BarButton] {
-        Array(modeButtons.values) + (viewToggles + styleToggles).map(\.1)
+        Array(modeButtons.values) + (viewToggles + styleToggles).map(\.1) + [keys]
             + [edit, copy, save, scroll, record, cutout, colors, done, cancel, cursor, audio, countIn, start, subject, crop, snap, ratioButton, lock]
     }
 
     /// Lowest first: the cut-out preview goes under all of them.
-    var all: [NSView] { [upHint, downHint, hover, size, snap, snapTag, coordinates, reading, legend] + sideHints + [radius, cornerKeys, list, hints, topBar, strip, toolTip, status, ratio, ratioMenu, colorMenu, help] }
+    var all: [NSView] { [upHint, downHint, hover, size, snap, snapTag, coordinates, reading, legend] + sideHints + [radius, cornerKeys, list, topBar, strip, toolTip, status, ratio, ratioMenu, colorMenu, help] }
 }
