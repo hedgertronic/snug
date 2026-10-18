@@ -108,15 +108,14 @@ enum DisplayCapture {
     private static let systemLevels = [CGWindowLevelKey.dockWindow, .mainMenuWindow, .statusWindow, .popUpMenuWindow]
         .map { Int(CGWindowLevelForKey($0)) }
 
-    /// Visible windows on a display, front to back: rectangles in image pixels with a top-left origin, titles
-    /// (the owning app's name when a window has none), window IDs, and whether the window is a Dock, menu bar, or menu
-    /// target that only the frozen capture can crop. Those are skipped when they cover the whole display, except the Dock, which
-    /// (with Accessibility trusted) becomes its AXList union.
+    /// Visible windows on a display, front to back, leaving out `excluded` (from `excludedWindowIDs`): rectangles in image pixels
+    /// with a top-left origin, titles (the owning app's name when a window has none), window IDs, and whether the window is a Dock,
+    /// menu bar, or menu target that only the frozen capture can crop. Those are skipped when they cover the whole display, except
+    /// the Dock, which (with Accessibility trusted) becomes its AXList union. Runs entirely off main.
     @concurrent
-    static func windows(on displayID: CGDirectDisplayID, pixelScale: CGFloat) async -> [(rect: CGRect, name: String, id: CGWindowID, frozen: Bool)] {
+    static func windows(on displayID: CGDirectDisplayID, pixelScale: CGFloat, excluding excluded: Set<CGWindowID>) async -> [(rect: CGRect, name: String, id: CGWindowID, frozen: Bool)] {
         let display = CGDisplayBounds(displayID)
         let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as! [[String: Any]]
-        let excluded = await excludedWindowIDs()
         var result: [(rect: CGRect, name: String, id: CGWindowID, frozen: Bool)] = []
         for window in info {
             let layer = window[kCGWindowLayer as String] as! Int

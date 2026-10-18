@@ -295,7 +295,13 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 if text { overlay.setMode(.text) }
                 let scale = overlay.scale
                 let listing = signposter.beginInterval("windows")
-                var windows = await DisplayCapture.windows(on: id, pixelScale: scale)
+                // `listed` is when the list is done off main; the wait from there to `resumed` is the main thread being busy.
+                let excluded = DisplayCapture.excludedWindowIDs()
+                let (found, listed) = await Task.detached { (await DisplayCapture.windows(on: id, pixelScale: scale, excluding: excluded), clock.now) }.value
+                let resumed = clock.now
+                var windows = found
+                var dock = "none"
+                let ms = { (from: ContinuousClock.Instant, to: ContinuousClock.Instant) in Int((from.duration(to: to) / .milliseconds(1)).rounded()) }
                 // The Dock's AXList union is the magnified Dock, tens of points past the panel; the panel's rim in the frozen image gives its edges.
                 for index in windows.indices where windows[index].name == "Dock" && windows[index].frozen {
                     let union = windows[index].rect
@@ -303,14 +309,16 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     // Live item frames are magnified, so the tiles come from the frozen pixels, off main while the Dock's titles are read;
                     // titles label them when the counts match.
                     let pid = (CGWindowListCopyWindowInfo([.optionIncludingWindow], windows[index].id) as! [[String: Any]])[0][kCGWindowOwnerPID as String] as! Int32
-                    async let reading = Accessibility.dockItemTitles(pid: pid)
-                    let (panel, tiles) = await Task.detached {
+                    let docking = clock.now
+                    async let reading = (Accessibility.dockItemTitles(pid: pid), clock.now)
+                    let (panel, tiles, tiled) = await Task.detached {
                         let panel = DockTiles.panel(in: image, near: union, scale: scale) ?? union
-                        return (panel, DockTiles.tiles(in: image, panel: panel, scale: scale))
+                        return (panel, DockTiles.tiles(in: image, panel: panel, scale: scale), clock.now)
                     }.value
                     windows[index].rect = panel
                     Pref.logHoverLine("dock panel \(panel)")
-                    let titles = await reading
+                    let (titles, titled) = await reading
+                    dock = "tiles \(ms(docking, tiled)) ms, titles \(ms(docking, titled)) ms"
                     Pref.logHoverLine("dock tiles \(tiles.count) titles \(titles)")
                     overlay.dockTiles = tiles.enumerated().map { offset, rect in
                         Candidate(id: "dock-\(offset)", label: titles.count == tiles.count && !titles[offset].isEmpty ? titles[offset] : "Dock Item",
@@ -318,7 +326,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     }
                 }
                 signposter.endInterval("windows", listing)
-                openLog.notice("open: capture \(pressed.duration(to: captured), privacy: .public), present \(captured.duration(to: presented), privacy: .public), windows \(presented.duration(to: clock.now), privacy: .public)")
+                openLog.notice("open: capture \(ms(pressed, captured)) ms, present \(ms(captured, presented)) ms, list \(ms(presented, listed)) ms, main \(ms(listed, resumed)) ms, dock \(dock, privacy: .public), windows \(ms(presented, clock.now)) ms")
                 if overlay.image === image { overlay.setWindows(windows.map(\.rect), names: windows.map(\.name), ids: windows.map(\.id), frozen: windows.map(\.frozen), pointer: NSEvent.mouseLocation) }
             } catch is CancellationError {
             } catch {
