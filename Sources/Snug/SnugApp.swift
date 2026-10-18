@@ -129,13 +129,14 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         let defaults = UserDefaults.standard
         let current = [defaults.integer(forKey: Pref.hotKeyCode), defaults.integer(forKey: Pref.hotKeyModifiers)]
         guard current != registeredShortcut else { return }
+        // A shortcut macOS refused is remembered too, so later preference writes don't retry it and toast again.
+        registeredShortcut = current
         do {
             if current[0] < 0 {
                 hotKey!.unregister()
             } else {
                 try hotKey!.register(keyCode: UInt32(current[0]), modifiers: NSEvent.ModifierFlags(rawValue: UInt(current[1])))
             }
-            registeredShortcut = current
             captureItem?.setShortcut(from: defaults)
         } catch {
             Toast.show(message: "Shortcut not registered", detail: error.localizedDescription, color: .systemRed)
