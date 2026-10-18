@@ -1284,6 +1284,74 @@ extension DebugRun {
         }
         overlay.topInset = 0
 
+        // Hovering the menu bar, under the top bar: the hover chip, the strip, and the chips keep clear of the top bar and of each other,
+        // with and without a camera-housing inset.
+        let menuBar = 24 * overlay.scale
+        let menuItem = CGRect(x: extent.midX - 60 * overlay.scale, y: 0, width: 120 * overlay.scale, height: menuBar)
+        for (name, inset) in [("flat", CGFloat(0)), ("notched", CGFloat(38))] {
+            for (what, hovered) in [("a menu bar item", menuItem), ("the whole menu bar", CGRect(x: 0, y: 0, width: extent.width, height: menuBar))] {
+                overlay.dismiss()
+                overlay.topInset = inset
+                open()
+                await overlay.detectionTask?.value
+                overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+                overlay.merge([Candidate(id: "ax-menu-bar", label: "Menu bar", bounds: hovered, score: AccessibilityBounds.baseScore, kind: .element)])
+                mouse(.mouseMoved, CGPoint(x: hovered.midX, y: 8))
+                let pieces: [(String, NSView)] = [("hover chip", chrome.hover), ("strip", chrome.strip), ("top bar", chrome.topBar)].filter { !$0.1.isHidden }
+                let clashes = pieces.indices.flatMap { i in pieces.indices.filter { $0 > i && pieces[i].1.frame.intersects(pieces[$0].1.frame) }.map { "\(pieces[i].0) x \(pieces[$0].0)" } }
+                require(pieces.map(\.0) == ["hover chip", "strip", "top bar"] && clashes.isEmpty && chrome.hover.frame.maxY <= chrome.topBar.frame.minY,
+                        "hovering \(what) under the top bar (\(name) screen) keeps the hover chip and strip clear of the top bar: \(clashes) \(pieces.map { "\($0.0) \($0.1.frame)" })")
+                overlay.dismiss()
+            }
+        }
+        overlay.topInset = 0
+
+        // The cursor is the arrow over a button of the top bar and the strip and over a row of an open menu, and the capture cursor on the
+        // gaps between them and on the labels that pass the pointer through.
+        overlay.dismiss()
+        open()
+        await overlay.detectionTask?.value
+        overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, flat)
+        require(overlay.view.cursor === NSCursor.crosshair && !chrome.strip.isHidden && !chrome.hover.isHidden, "a hover shows the capture cursor: \(overlay.view.cursor)")
+        let overButtons = [("Copy", chrome.copy), ("Edit", chrome.edit), ("Capture", chrome.modeButtons[.capture]!), ("Frame", chrome.styleToggles[1].1)]
+        for (name, button) in overButtons {
+            mouse(.mouseMoved, viewPixel(centerOf(button)))
+            require(overlay.view.cursor === NSCursor.arrow, "the cursor is the arrow over the \(name) button: \(overlay.view.cursor)")
+        }
+        let barGap = CGPoint(x: (top.groups[0].frame.maxX + top.groups[1].frame.minX) / 2 + top.frame.minX, y: top.frame.midY)
+        mouse(.mouseMoved, viewPixel(barGap))
+        require(overlay.view.cursor === NSCursor.crosshair, "the cursor is the capture cursor on the gap between top bar pills: \(overlay.view.cursor)")
+        mouse(.mouseMoved, flat)
+        mouse(.mouseMoved, viewPixel(centerOf(chrome.hover)))
+        require(overlay.view.cursor === NSCursor.crosshair, "the hover chip passes the pointer through, so the cursor does not change over it: \(overlay.view.cursor)")
+        mouse(.mouseMoved, flat)
+        drag(rough)
+        key(35, "p")
+        require(!chrome.ratioMenu.isHidden, "P opens the ratio menu")
+        let menuRow = chrome.ratioMenu.panel.convert(CGPoint(x: chrome.ratioMenu.rows[0].frame.midX, y: chrome.ratioMenu.rows[0].frame.midY), to: overlay.view)
+        mouse(.mouseMoved, viewPixel(menuRow))
+        require(overlay.view.cursor === NSCursor.arrow, "the cursor is the arrow over a menu row: \(overlay.view.cursor)")
+        mouse(.mouseMoved, CGPoint(x: 40, y: 40))
+        require(overlay.view.cursor !== NSCursor.arrow, "the cursor leaves the arrow off the menu's rows: \(overlay.view.cursor)")
+        key(53, "\u{1B}")
+        overlay.dismiss()
+
+        // A lit Edit button draws exactly as a lit mode button does, in the light and the dark look.
+        for look in ["light", "dark"] {
+            defaults.set(look, forKey: Pref.overlayAppearance)
+            open()
+            drag(rough)
+            overlay.refresh()
+            let mode = chrome.modeButtons[.capture]!, edit = chrome.edit
+            func drawn(_ button: BarButton) -> [String] {
+                [button.layer!.backgroundColor, button.layer!.borderColor].map { "\(NSColor(cgColor: $0!)!.usingColorSpace(.sRGB)!)" } + ["\(button.layer!.borderWidth)", "\(button.title.textColor!.usingColorSpace(.sRGB)!)", "\(button.title.font!.fontName) \(button.title.font!.pointSize)"]
+            }
+            require(mode.lit && edit.lit && drawn(mode) == drawn(edit), "a lit Edit draws as a lit mode button in the \(look) look: \(drawn(mode)) \(drawn(edit))")
+            overlay.dismiss()
+        }
+        defaults.removeObject(forKey: Pref.overlayAppearance)
+
         // Armed to record, the selection keeps none of the editing chrome; Esc brings it back.
         overlay.dismiss()
         overlay.present(image: image, frame: frame, displayID: CGMainDisplayID())
