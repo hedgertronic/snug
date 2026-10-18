@@ -386,7 +386,10 @@ final class OverlayController {
         pointer = view.pixelPoint(event)
         // On the top bar, or crossing from the hovered element to its chips or strip, the hover holds so their buttons can be clicked;
         // the guides, loupe and crosshair still follow the pointer.
-        if holdsHover(at: view.convert(event.locationInWindow, from: nil)) { return updateGuides() }
+        if holdsHover(at: view.convert(event.locationInWindow, from: nil)) {
+            updateGuides()
+            return updateCursor()
+        }
         // The edge keys show while the pointer is inside a released selection.
         if selection?.rect.contains(pointer) != wasInside { refresh() }
         updateHoveredCorner()
@@ -395,13 +398,15 @@ final class OverlayController {
         updateCursor()
     }
 
-    /// Resize cursors on handles and edges, an open hand inside the selection, a closed hand while moving, the crosshair elsewhere;
-    /// in Text mode, the I-beam over text and the arrow elsewhere.
-    /// Headless runs record the choice on the view but leave the system cursor alone.
-    private func updateCursor() {
+    /// The arrow over a button of the chrome or a row of its menus (not the pointing hand, which macOS keeps for links); resize cursors
+    /// on handles and edges, an open hand inside the selection, a closed hand while moving, the crosshair elsewhere; in Text mode,
+    /// the I-beam over text and the arrow elsewhere. The panel does not activate, so cursor rects alone are unreliable: the choice
+    /// is also set on each pointer move. Headless runs record the choice on the view but leave the system cursor alone.
+    func updateCursor() {
         guard window.isVisible else { return }
         let cursor: NSCursor
         switch interaction {
+        case .none where overClickableChrome: cursor = .arrow
         case .resizing(let handle, _): cursor = Self.resizeCursors[handle]!
         case .moving: cursor = .closedHand
         case .rounding: cursor = .pointingHand

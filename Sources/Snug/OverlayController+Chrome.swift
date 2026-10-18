@@ -10,10 +10,14 @@ extension OverlayController {
             button.onClick = { [unowned self, unowned button] in _ = handleKey(KeyCap.event(for: button.key!)) }
         }
         cornerChip.surface = true
-        chrome.ratioMenu.onClose = { [unowned self] in refresh() }
-        chrome.ratioMenu.onKey = { [unowned self] in flash($0) }
-        chrome.colorMenu.onClose = { [unowned self] in refresh() }
-        chrome.colorMenu.onKey = { [unowned self] in flash($0) }
+        for menu in [chrome.ratioMenu, chrome.colorMenu] {
+            menu.onClose = { [unowned self] in
+                refresh()
+                updateCursor()
+            }
+            menu.onMove = { [unowned self] in updateCursor() }
+            menu.onKey = { [unowned self] in flash($0) }
+        }
     }
 
     /// Lights the caps of a key just pressed, for 150 ms.
@@ -41,6 +45,14 @@ extension OverlayController {
         }
         return !box.contains(point) && attached.contains { $0.insetBy(dx: -2, dy: -2).contains(point) }
             || !chrome.topBar.isHidden && chrome.topBar.frame.contains(point)
+    }
+
+    /// Whether the pointer is on clickable chrome: a button of the top bar, strip or chips, or a row of an open menu (which covers the
+    /// rest). The chips that pass clicks through are not.
+    var overClickableChrome: Bool {
+        if let menu = [chrome.ratioMenu, chrome.colorMenu].first(where: { !$0.isHidden }) { return menu.overRow }
+        let point = CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale)
+        return view.hitTest(view.convert(point, to: view.superview)) is BarButton
     }
 
     /// The glyphs of the modifiers held now; a cap made of exactly these is lit.

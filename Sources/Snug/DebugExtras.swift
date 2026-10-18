@@ -1306,6 +1306,37 @@ extension DebugRun {
         }
         overlay.topInset = 0
 
+        // The cursor is the arrow over a button of the top bar and the strip and over a row of an open menu, and the capture cursor on the
+        // gaps between them and on the labels that pass the pointer through.
+        overlay.dismiss()
+        open()
+        await overlay.detectionTask?.value
+        overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        mouse(.mouseMoved, flat)
+        require(overlay.view.cursor === NSCursor.crosshair && !chrome.strip.isHidden && !chrome.hover.isHidden, "a hover shows the capture cursor: \(overlay.view.cursor)")
+        let overButtons = [("Copy", chrome.copy), ("Edit", chrome.edit), ("Capture", chrome.modeButtons[.capture]!), ("Frame", chrome.styleToggles[1].1)]
+        for (name, button) in overButtons {
+            mouse(.mouseMoved, viewPixel(centerOf(button)))
+            require(overlay.view.cursor === NSCursor.arrow, "the cursor is the arrow over the \(name) button: \(overlay.view.cursor)")
+        }
+        let barGap = CGPoint(x: (top.groups[0].frame.maxX + top.groups[1].frame.minX) / 2 + top.frame.minX, y: top.frame.midY)
+        mouse(.mouseMoved, viewPixel(barGap))
+        require(overlay.view.cursor === NSCursor.crosshair, "the cursor is the capture cursor on the gap between top bar pills: \(overlay.view.cursor)")
+        mouse(.mouseMoved, flat)
+        mouse(.mouseMoved, viewPixel(centerOf(chrome.hover)))
+        require(overlay.view.cursor === NSCursor.crosshair, "the hover chip passes the pointer through, so the cursor does not change over it: \(overlay.view.cursor)")
+        mouse(.mouseMoved, flat)
+        drag(rough)
+        key(35, "p")
+        require(!chrome.ratioMenu.isHidden, "P opens the ratio menu")
+        let menuRow = chrome.ratioMenu.panel.convert(CGPoint(x: chrome.ratioMenu.rows[0].frame.midX, y: chrome.ratioMenu.rows[0].frame.midY), to: overlay.view)
+        mouse(.mouseMoved, viewPixel(menuRow))
+        require(overlay.view.cursor === NSCursor.arrow, "the cursor is the arrow over a menu row: \(overlay.view.cursor)")
+        mouse(.mouseMoved, CGPoint(x: 40, y: 40))
+        require(overlay.view.cursor !== NSCursor.arrow, "the cursor leaves the arrow off the menu's rows: \(overlay.view.cursor)")
+        key(53, "\u{1B}")
+        overlay.dismiss()
+
         // Armed to record, the selection keeps none of the editing chrome; Esc brings it back.
         overlay.dismiss()
         overlay.present(image: image, frame: frame, displayID: CGMainDisplayID())

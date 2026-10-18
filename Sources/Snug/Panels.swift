@@ -212,6 +212,10 @@ final class RatioMenu: NSView {
     var toggleKey = "p"
 
     var onClose: () -> Void = {}
+    /// The pointer moved over the menu: `overRow` is current again.
+    var onMove: () -> Void = {}
+    /// Whether the pointer is on an item row, which a click picks.
+    private(set) var overRow = false
     /// A key the menu handles itself, so its cap can flash.
     var onKey: (NSEvent) -> Void = { _ in }
     private(set) var items: [Item] = []
@@ -302,6 +306,7 @@ final class RatioMenu: NSView {
 
     func close() {
         isHidden = true
+        overRow = false
         window!.makeFirstResponder(superview)
         onClose()
     }
@@ -353,7 +358,12 @@ final class RatioMenu: NSView {
         }
     }
 
-    override func mouseMoved(with event: NSEvent) { highlight(row(at: convert(event.locationInWindow, from: nil))) }
+    override func mouseMoved(with event: NSEvent) {
+        let index = row(at: convert(event.locationInWindow, from: nil))
+        overRow = index != nil
+        highlight(index)
+        onMove()
+    }
 
     override func mouseDown(with event: NSEvent) {
         if let index = row(at: convert(event.locationInWindow, from: nil)) { pick(index) } else { close() }
