@@ -10,6 +10,17 @@ public enum UniqueFile {
         let temporary = file.deletingLastPathComponent().appending(path: ".snug-\(UUID().uuidString).tmp")
         try data.write(to: temporary)
         defer { if FileManager.default.fileExists(atPath: temporary.path) { try! FileManager.default.removeItem(at: temporary) } }
+        return try move(temporary, to: file)
+    }
+
+    /// A temporary name beside `file` for a file that is written in place, as a recording is, and moved to `file` with `move` once complete.
+    public static func temporary(beside file: URL) -> URL {
+        file.deletingLastPathComponent().appending(path: ".snug-\(UUID().uuidString).\(file.pathExtension)")
+    }
+
+    /// Moves the finished `temporary` file to `file`, or, when that name is taken, to the name with " 2", " 3", and so on before the
+    /// extension; the move refuses an existing name. Returns the file it is now.
+    public static func move(_ temporary: URL, to file: URL) throws -> URL {
         var candidate = file
         var number = 2
         while true {

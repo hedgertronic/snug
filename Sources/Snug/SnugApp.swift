@@ -375,8 +375,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         Task {
             do {
                 let session = try await start.value
-                try await session.stop()
-                _ = try await ScreenRecording.deliver(session.file, pasteboard: .general, defaults: .standard)
+                let file = try await session.stop()
+                _ = try await ScreenRecording.deliver(file, pasteboard: .general, defaults: .standard)
             } catch {
                 showRecordingFailure(error)
             }
