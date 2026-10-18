@@ -44,6 +44,8 @@ final class OverlayView: NSView {
         /// Sides a resize snapped to, as zero-width or zero-height rectangles.
         var snappedEdges: [CGRect] = []
         var showsHandles = false
+        /// The corner Tab focused: its radius dot is drawn lit.
+        var focusedCorner: Handle?
         /// Capture with nothing targeted: the whole screen dims, since none of it is the target.
         var dimsAll = false
         /// The first hover target (or nothing) has resolved since the overlay opened; until then the dim stays off, and that first dim applies without a crossfade.
@@ -93,12 +95,14 @@ final class OverlayView: NSView {
     let levelHintLayer = CAShapeLayer()
     private let styleLayer = CAShapeLayer()
     private let ghostLayer = CAShapeLayer()
-    private let outlineLayer = CAShapeLayer()
+    let outlineLayer = CAShapeLayer()
     private let previewLayer = CAShapeLayer()
-    private let handlesLayer = CAShapeLayer()
+    let handlesLayer = CAShapeLayer()
     private let snappedLayer = CAShapeLayer()
     /// The corner-radius dots, drawn over the resize handles.
     private let cornerDotsLayer = CAShapeLayer()
+    /// The focused corner's dot, larger and filled white.
+    private let focusedDotLayer = CAShapeLayer()
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -132,6 +136,9 @@ final class OverlayView: NSView {
         cornerDotsLayer.strokeColor = NSColor.white.cgColor
         cornerDotsLayer.lineWidth = 1.5
         handlesLayer.addSublayer(cornerDotsLayer)
+        focusedDotLayer.fillColor = NSColor.white.cgColor
+        focusedDotLayer.lineWidth = 2
+        handlesLayer.addSublayer(focusedDotLayer)
         applyAccent()
     }
 
@@ -200,6 +207,7 @@ final class OverlayView: NSView {
             outlineLayer.strokeColor = accent.cgColor
             handlesLayer.strokeColor = accent.cgColor
             cornerDotsLayer.fillColor = accent.cgColor
+            focusedDotLayer.strokeColor = accent.cgColor
         }
     }
 
@@ -296,5 +304,9 @@ final class OverlayView: NSView {
             }
         }
         cornerDotsLayer.path = dots
+        focusedDotLayer.path = o.showsHandles && o.selection != nil ? o.focusedCorner.map {
+            let point = o.radii.dot(of: $0, in: o.selection!, minimumInset: 8 * scale)
+            return CGPath(ellipseIn: CGRect(x: point.x / scale - 5, y: bounds.height - point.y / scale - 5, width: 10, height: 10), transform: nil)
+        } : nil
     }
 }

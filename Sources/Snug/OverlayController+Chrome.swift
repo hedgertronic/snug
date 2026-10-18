@@ -425,8 +425,12 @@ extension OverlayController {
 
         // The keys of a hovered corner dot stack under its "All corners" chip (over it at the bottom corners), flush with the chip's outer side.
         c.cornerKeys.isHidden = cornerChip.isHidden
-        if !cornerChip.isHidden, let corner = hoveredCorner {
-            c.cornerKeys.show("corner") { [Pill.hint(["[", "]"], "radius"), Pill.hint(["\u{2325}"], "one corner")] }
+        if !cornerChip.isHidden, let corner = hoveredCorner ?? focusedCorner {
+            if focusedCorner != nil && hoveredCorner == nil {
+                c.cornerKeys.show("focused corner") { [Pill.hint(["[", "]"], "this corner"), Pill.hint(["Tab"], "next corner"), Pill.hint(["esc"], "all four")] }
+            } else {
+                c.cornerKeys.show("corner") { [Pill.hint(["[", "]"], "radius"), Pill.hint(["\u{2325}"], "one corner"), Pill.hint(["Tab"], "step corners")] }
+            }
             let chip = cornerChip.frame, size = c.cornerKeys.frame.size
             c.cornerKeys.frame.origin = CGPoint(x: min(max(corner.movesLeft ? chip.maxX - size.width : chip.minX, 8), bounds.width - size.width - 8),
                                                 y: corner.movesTop ? chip.minY - 4 - size.height : chip.maxY + 4)

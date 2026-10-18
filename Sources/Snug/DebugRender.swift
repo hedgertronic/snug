@@ -194,6 +194,12 @@ extension DebugRun {
         try snapshot("selection-corner-chip-top-left")
         mouse(.mouseMoved, overlay.cornerRadii(of: rounded).dot(of: .bottomRight, in: rounded, minimumInset: 8 * overlay.scale))
         try snapshot("selection-corner-chip-bottom-right")
+        mouse(.mouseMoved, CGPoint(x: rounded.midX, y: rounded.midY))
+        for (corner, name) in [(Handle.topLeft, "top-left"), (.bottomRight, "bottom-right")] {
+            overlay.focusedCorner = corner
+            overlay.refresh()
+            try snapshot("selection-corner-focused-\(name)")
+        }
         overlay.dismiss()
 
         open()

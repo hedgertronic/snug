@@ -191,6 +191,11 @@ extension DebugRun {
         defaults.set(3, forKey: Pref.recordCountIn)
         open()
         select(CGRect(x: 600, y: 300, width: 400, height: 200))
+        // Every path written to the handles and the accent outline while armed, through the count-in: each one is a frame that could show them.
+        var drawn: [String] = []
+        let observers = [("handles", overlay.view.handlesLayer), ("outline", overlay.view.outlineLayer)].map { name, layer in
+            layer.observe(\.path) { layer, _ in if layer.path?.isEmpty == false { drawn.append(name) } }
+        }
         key(9, "v")
         require(strip().contains("3-second count") && overlay.chrome.countIn.lit, "the armed strip shows the count-in: \(strip())")
         let pressed = ContinuousClock.now
@@ -201,6 +206,8 @@ extension DebugRun {
             try await Task.sleep(for: .milliseconds(20))
         }
         let delay = requests.count > count ? pressed.duration(to: times.last!).milliseconds : .infinity
+        observers.forEach { $0.invalidate() }
+        require(drawn.isEmpty, "no handle or accent outline is drawn at arming, at any count-in tick or at any refresh between: \(drawn)")
         require(shown == ["3", "2", "1"] && (2900...3600).contains(delay) && overlayShown.last == false,
                 "the count-in shows 3, 2, 1 and records 3 s after Return with the overlay closed: \(shown) \(delay) ms \(overlayShown)")
 
