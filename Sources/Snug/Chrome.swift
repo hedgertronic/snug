@@ -522,6 +522,8 @@ final class Chrome {
     let legend = Pill.chip()
     /// Beside the "All corners" chip of a hovered corner dot: the radius keys and Option for one corner.
     let cornerKeys = Pill(radius: 8, insets: NSEdgeInsets(top: 5, left: 8, bottom: 5, right: 5), spacing: 5, vertical: true)
+    /// The outline the strip and chips were last placed against, in view points; nil with none.
+    var anchor: CGRect?
     /// The settings bar sits at the top, moved off the bottom edge by a rectangle there.
     var barAtTop = false
     /// The rulers' thickness the chrome last kept clear of, 0 with Rulers off; a change moves the chrome with the rulers' slide.
@@ -556,6 +558,7 @@ final class Chrome {
             + [edit, copy, save, scroll, record, cutout, colors, done, cancel, cursor, audio, countIn, start, subject, crop, snap, ratioButton, lock]
     }
 
-    /// Lowest first: the cut-out preview goes under all of them.
-    var all: [NSView] { [upHint, downHint, hover, size, snap, snapTag, coordinates, reading, legend] + sideHints + [radius, cornerKeys, list, topBar, strip, toolTip, status, ratio, ratioMenu, colorMenu, help] }
+    /// Lowest first, in tiers: the hint caps, the chips, the strip and settings bar with their tool tip and menus, then the keys sheet.
+    /// The cut-out preview goes under all of them, and the loupe over them.
+    var all: [NSView] { [upHint, downHint, hover, size, snap, ratio, radius, status, reading, legend] + sideHints + [cornerKeys, snapTag, coordinates, list, topBar, strip, toolTip, ratioMenu, colorMenu, help] }
 }

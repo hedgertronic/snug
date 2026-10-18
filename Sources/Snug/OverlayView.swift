@@ -111,7 +111,6 @@ final class OverlayView: NSView {
             layer!.addSublayer(shape)
         }
         layer!.addSublayer(guides.root)
-        addSubview(guides.readout)
         liveText.preferredInteractionTypes = .textSelection
         // No Live Text button in the corner: Text mode is already the text view.
         liveText.isSupplementaryInterfaceHidden = true
@@ -153,6 +152,7 @@ final class OverlayView: NSView {
         imageLayer.frame = bounds
         CATransaction.commit()
         liveText.frame = bounds
+        guides.host.frame = bounds
         layoutOverlays()
     }
 

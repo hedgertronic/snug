@@ -356,7 +356,7 @@ enum DebugRun {
         mouse(.mouseMoved, CGPoint(x: bottomHalf.midX, y: bottomHalf.midY))
         key(30, "]")
         let siblings = overlay.chrome.radius.superview!.subviews
-        let covering = siblings[(siblings.firstIndex(of: overlay.chrome.radius)! + 1)...].filter { !$0.isHidden && $0.frame.intersects(overlay.chrome.radius.frame) }
+        let covering = siblings[(siblings.firstIndex(of: overlay.chrome.radius)! + 1)...].filter { !$0.isHidden && $0 !== overlay.view.guides.host && $0.frame.intersects(overlay.chrome.radius.frame) }
         require(!overlay.chrome.radius.isHidden && texts(in: overlay.chrome.radius).first == "r 2 / 2 / 22 / 22" && covering.isEmpty,
                 "with the pointer inside, ] shows the radius uncovered: \(texts(in: overlay.chrome.radius)) \(overlay.chrome.radius.frame) covered by \(covering.map { "\(type(of: $0)) \($0.frame) \(texts(in: $0))" })")
         key(33, "[")

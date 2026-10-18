@@ -170,7 +170,8 @@ extension DebugRun {
         key(53, "\u{1B}")
         let edgeRects = [("small", CGRect(x: 600, y: 300, width: 120, height: 80)), ("left", CGRect(x: 0, y: 600, width: 500, height: 300)),
                          ("right", CGRect(x: editExtent.width - 500, y: 600, width: 500, height: 300)), ("top", CGRect(x: 900, y: 0, width: 700, height: 300)),
-                         ("bottom", CGRect(x: 900, y: editExtent.height - 300, width: 700, height: 300)), ("full", editExtent)]
+                         ("bottom", CGRect(x: 900, y: editExtent.height - 300, width: 700, height: 300)),
+                         ("small-bottom", CGRect(x: 600, y: editExtent.height - 160, width: 120, height: 80)), ("full", editExtent)]
         for (name, rect) in edgeRects {
             overlay.selection = AreaSelection(extent: editExtent, exact: rect)
             overlay.refresh()
@@ -218,6 +219,17 @@ extension DebugRun {
             overlay.refresh()
             try snapshot("selection-corner-focused-\(name)")
         }
+        // The loupe on the hovered bottom-right corner's chip, on the strip, and on the chip row: it draws above them all.
+        overlay.focusedCorner = nil
+        defaults.set(true, forKey: Pref.loupe)
+        func pixel(at view: NSView) -> CGPoint { CGPoint(x: view.frame.midX * overlay.scale, y: (overlay.view.bounds.height - view.frame.midY) * overlay.scale) }
+        for (name, at) in [("corner-chip", { overlay.cornerRadii(of: rounded).dot(of: .bottomRight, in: rounded, minimumInset: 8 * overlay.scale) }),
+                           ("strip", { pixel(at: overlay.chrome.strip) }), ("chips", { pixel(at: overlay.chrome.size) })] {
+            mouse(.mouseMoved, CGPoint(x: rounded.midX, y: rounded.midY))
+            mouse(.mouseMoved, at())
+            try snapshot("loupe-over-\(name)")
+        }
+        defaults.set(false, forKey: Pref.loupe)
         overlay.dismiss()
 
         open()

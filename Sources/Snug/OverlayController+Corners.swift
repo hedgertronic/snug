@@ -125,20 +125,6 @@ extension OverlayController {
         return cornerChip.frame.union(dotBox).insetBy(dx: -2, dy: -2)
     }
 
-    /// Shows the "All corners" chip just outside the hovered corner, beside the selection's side: left of the left corners, right of the
-    /// right ones, hanging inward from the top corners' edge and rising from the bottom ones'. Inside the corner when there is no room outside.
-    func layoutCornerChip() {
-        guard let corner = hoveredCorner ?? focusedCorner, let rect = selection?.rect, scrollArea == nil, mode == .capture else { return cornerChip.isHidden = true }
-        let box = view.viewRect(rect)
-        let size = cornerChip.frame.size
-        let gap: CGFloat = 6
-        let outside = corner.movesLeft ? box.minX - gap - size.width : box.maxX + gap
-        let fits = outside >= 8 && outside + size.width <= view.bounds.width - 8
-        let inside = corner.movesLeft ? box.minX + 14 : box.maxX - 14 - size.width
-        cornerChip.frame.origin = CGPoint(x: fits ? outside : inside, y: corner.movesTop ? box.maxY - size.height : box.minY)
-        cornerChip.isHidden = false
-    }
-
     /// An arrow-key move of the selection, keeping its edited corners.
     func nudge(_ delta: CGPoint) {
         guard let old = selection?.rect else { return }

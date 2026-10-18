@@ -230,9 +230,11 @@ final class OverlayController {
         view.controller = self
         view.liveText.delegate = self
         window.contentView = view
+        // Bottom to top: the hint caps, the chips, the strip and settings bar with their menus, the keys sheet, then the loupe.
         chrome.all.forEach(view.addSubview)
         cornerChip.isHidden = true
-        view.addSubview(cornerChip)
+        view.addSubview(cornerChip, positioned: .below, relativeTo: chrome.topBar)
+        view.addSubview(view.guides.host)
         wireChrome()
     }
 
@@ -1042,7 +1044,6 @@ final class OverlayController {
         for rect in [shown, overlays.hover] + hints { measureRadius(rect.flatMap(container)) }
         overlays.radii = cutout?.frameRadii ?? shown.map(cornerRadii) ?? .zero
         overlays.hoverRadii = overlays.hover.map(cornerRadii) ?? .zero
-        layoutCornerChip()
         overlays.upHintRadii = overlays.upHint.map(cornerRadii) ?? .zero
         overlays.downHintRadii = overlays.downHint.map(cornerRadii) ?? .zero
         // The padded card of an area or element; a live window's real shadow has no card to preview.

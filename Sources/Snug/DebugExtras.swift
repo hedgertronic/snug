@@ -1428,47 +1428,82 @@ extension DebugRun {
         require(!chrome.radius.isHidden && (NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? radiusFade.isEmpty : radiusFade.contains("transition")),
                 "with motion, the radius chip fades in and is shown at once: \(radiusFade)")
         let hoverChips = [chrome.hover, chrome.snapTag, chrome.radius]
-        let covering = overlay.view.subviews.filter { view in !view.isHidden && !hoverChips.contains(view) && hoverChips.contains { $0.frame.intersects(view.frame) } && view !== overlay.view.liveText }
+        let covering = overlay.view.subviews.filter { view in !view.isHidden && !hoverChips.contains(view) && hoverChips.contains { $0.frame.intersects(view.frame) } && view !== overlay.view.liveText && view !== overlay.view.guides.host }
         require(texts(in: chrome.radius) == ["r 1", "[", "]"] && chrome.radius.frame.minY == chrome.hover.frame.minY && covering.isEmpty,
                 "] on a hovered element shows its radius in the chip row, uncovered: \(texts(in: chrome.radius)) covered by \(covering.map { "\(type(of: $0)) \($0.frame)" })")
 
-        // Released chrome never overlaps or leaves the screen: a large and a small selection, one at each screen edge, and the full
-        // screen with a 38 pt inset, each with the pointer inside so the edge keys show.
+        // Chrome never overlaps or leaves the screen, and the loupe, which is on throughout, draws above all of it: a large and a small
+        // selection, one at each screen edge (the bottom one moves the bar to the top), and the full screen with a 38 pt inset, each with
+        // the pointer inside so the edge keys show, then on the top-left and bottom-right corner dots, then with the top-left corner focused.
         overlay.dismiss()
         open()
+        defaults.set(true, forKey: Pref.loupe)
+        func chromeClear(_ state: String) {
+            let pieces: [(String, NSView)] = [("bar", chrome.topBar), ("strip", chrome.strip), ("hover", chrome.hover), ("size", chrome.size), ("snap", chrome.snap),
+                                               ("ratio", chrome.ratio), ("radius", chrome.radius), ("status", chrome.status), ("legend", chrome.legend),
+                                               ("corner chip", overlay.cornerChip), ("corner keys", chrome.cornerKeys), ("up cap", chrome.upHint), ("down cap", chrome.downHint)]
+                + chrome.sideHints.enumerated().map { ("side \($0.offset)", $0.element) }
+            let shown = pieces.filter { !$0.1.isHidden }
+            let overlaps = shown.indices.flatMap { i in shown.indices.filter { $0 > i && shown[i].1.frame.intersects(shown[$0].1.frame) }.map { "\(shown[i].0) x \(shown[$0].0)" } }
+            let screen = CGRect(x: 0, y: 0, width: overlay.view.bounds.width, height: overlay.view.bounds.height - overlay.topInset)
+            let outside = shown.filter { !screen.contains($0.1.frame) }.map { "\($0.0) \($0.1.frame) in \(screen)" }
+            let host = overlay.view.guides.host
+            require(overlaps.isEmpty && outside.isEmpty, "\(state): the chrome does not overlap or leave the screen: overlaps \(overlaps), outside \(outside)")
+            require(!guides2.loupe.isHidden && guides2.loupe.superlayer === host.layer && guides2.readout.superview === host && overlay.view.subviews.last === host,
+                    "\(state): the loupe and its readout draw above all the chrome: \(overlay.view.subviews.last.map { "\(type(of: $0))" } ?? "none") on top")
+        }
         let edgeCases = [("large", large), ("small", CGRect(x: 600, y: 300, width: 120, height: 80)), ("left", CGRect(x: 0, y: 600, width: 500, height: 300)),
                          ("right", CGRect(x: extent.width - 500, y: 600, width: 500, height: 300)), ("top", CGRect(x: 900, y: 0, width: 700, height: 300)),
-                         ("bottom", CGRect(x: 900, y: extent.height - 300, width: 700, height: 300)), ("full", extent)]
+                         ("bottom", CGRect(x: 900, y: extent.height - 300, width: 700, height: 300)),
+                         ("small bottom", CGRect(x: 600, y: extent.height - 160, width: 120, height: 80)), ("full", extent)]
         for (name, rect) in edgeCases {
             overlay.topInset = name == "full" ? 38 : 0
             overlay.selection = AreaSelection(extent: extent, exact: rect)
             overlay.refresh()
             mouse(.mouseMoved, CGPoint(x: 40, y: 40))
             mouse(.mouseMoved, CGPoint(x: rect.midX, y: rect.midY))
-            let pieces: [(String, NSView)] = [("bar", chrome.topBar), ("strip", chrome.strip), ("size", chrome.size), ("snap", chrome.snap),
-                                               ("ratio", chrome.ratio), ("radius", chrome.radius), ("legend", chrome.legend)]
-                + chrome.sideHints.enumerated().map { ("side \($0.offset)", $0.element) }
-            let shown = pieces.filter { !$0.1.isHidden }
-            let overlaps = shown.indices.flatMap { i in shown.indices.filter { $0 > i && shown[i].1.frame.intersects(shown[$0].1.frame) }.map { "\(shown[i].0) x \(shown[$0].0)" } }
-            let screen = CGRect(x: 0, y: 0, width: overlay.view.bounds.width, height: overlay.view.bounds.height - overlay.topInset)
-            let outside = shown.filter { !screen.contains($0.1.frame) }.map { "\($0.0) \($0.1.frame) in \(screen)" }
-            require(overlaps.isEmpty && outside.isEmpty && !chrome.ratio.isHidden && chrome.sideHints.allSatisfy { !$0.isHidden },
-                    "the \(name) selection's chrome does not overlap or leave the screen: overlaps \(overlaps), outside \(outside)")
+            chromeClear("the \(name) selection")
+            require(!chrome.ratio.isHidden && chrome.sideHints.allSatisfy { !$0.isHidden } && chrome.barAtTop == name.hasSuffix("bottom"),
+                    "the \(name) selection shows the ratio chip and the edge keys, with the bar \(name.hasSuffix("bottom") ? "at the top" : "at the bottom")")
+            // The arrow keys and legend stay by the selection and its chrome: within a chip row's height of them.
+            let dpad = chrome.sideHints.map(\.frame).reduce(chrome.legend.frame) { $0.union($1) }
+            let attached = [chrome.strip, chrome.size, chrome.ratio].map(\.frame).reduce(overlay.view.viewRect(rect)) { $0.union($1) }
+            require(dpad.insetBy(dx: 0, dy: -40).intersects(attached), "the \(name) selection's arrow keys stay by it: \(dpad) by \(attached)")
             if name == "large" {
                 let group = chrome.sideHints.map(\.frame).reduce(chrome.legend.frame) { $0.union($1) }
                 require(overlay.view.viewRect(rect).contains(group), "in the large selection the arrow caps and the legend sit inside it: \(group)")
+                // With motion, an arrow nudge moves the strip with its outline at once: nothing in the strip animates its position.
+                let stripTop = chrome.strip.frame.maxY
+                overlay.isHeadless = false
+                key(125, "")
+                overlay.isHeadless = true
+                func moving(_ view: NSView) -> [String] { (view.layer!.animationKeys() ?? []) + view.subviews.flatMap(moving) }
+                require(moving(chrome.strip).isEmpty && chrome.strip.frame.maxY == stripTop - 1 / overlay.scale,
+                        "with motion, an arrow nudge moves the strip with the outline and animates nothing: \(moving(chrome.strip)) \(chrome.strip.frame.maxY) from \(stripTop)")
+                key(126, "")
             }
+            for corner in [Handle.topLeft, .bottomRight] {
+                mouse(.mouseMoved, overlay.cornerRadii(of: rect).dot(of: corner, in: rect, minimumInset: 8 * overlay.scale))
+                require(overlay.hoveredCorner == corner, "the \(name) selection's \(corner) dot is hovered")
+                chromeClear("the \(name) selection's hovered \(corner) corner")
+            }
+            mouse(.mouseMoved, CGPoint(x: rect.midX, y: rect.midY))
+            key(48, "\t")
+            require(overlay.focusedCorner == .topLeft, "Tab focuses the \(name) selection's top-left corner")
+            chromeClear("the \(name) selection's focused corner")
+            key(53, "\u{1B}")
             // At the right edge the strip is clamped with room for its widest labels, so they keep its left edge and stay on screen.
             guard name == "right" else { continue }
             let left = chrome.strip.frame.minX
             for held in [NSEvent.ModifierFlags.option, .shift, .command] {
                 flags(held)
-                require(chrome.strip.frame.minX == left && chrome.strip.frame.maxX <= screen.maxX - 8,
+                require(chrome.strip.frame.minX == left && chrome.strip.frame.maxX <= overlay.view.bounds.width - 8,
                         "at the right edge, holding \(held.rawValue) keeps the strip's left edge and keeps it on screen: \(chrome.strip.frame)")
             }
             flags([])
         }
         overlay.topInset = 0
+        defaults.set(false, forKey: Pref.loupe)
 
         // Hovering the menu bar, with the settings bar at the bottom: the hover chip, the strip, and the bar keep clear of each other; a
         // menu bar item too short to hold the chip row stacks it under the strip, with and without a camera-housing inset.
@@ -1503,6 +1538,11 @@ extension DebugRun {
         overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, flat)
         require(overlay.view.cursor === NSCursor.crosshair && !chrome.strip.isHidden && !chrome.hover.isHidden, "a hover shows the capture cursor: \(overlay.view.cursor)")
+        defaults.set(true, forKey: Pref.loupe)
+        mouse(.mouseMoved, CGPoint(x: flat.x + 1, y: flat.y))
+        chromeClear("a hover")
+        defaults.set(false, forKey: Pref.loupe)
+        mouse(.mouseMoved, flat)
         let overButtons = [("Copy", chrome.copy), ("Edit", chrome.edit), ("Capture", chrome.modeButtons[.capture]!), ("Frame", chrome.styleToggles[1].1)]
         for (name, button) in overButtons {
             mouse(.mouseMoved, viewPixel(centerOf(button)))
