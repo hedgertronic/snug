@@ -226,7 +226,7 @@ extension DebugRun {
         overlay.dismiss()
 
         // Finder's sidebar (the round 13 fixture, a 920 x 436 pt window at 2x) with Documents hovered: Up outlines the sidebar, Down the
-        // icon, Left Developer and Right Downloads. The frames are the live AX tree's (FinderSidebarHoverTests), in window points; the
+        // icon, and Left and Right outline nothing. The frames are the live AX tree's (FinderSidebarHoverTests), in window points; the
         // icon's is its glyph's pixel box in the fixture, as the AX tree read has no icon frame.
         let finderURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../notes/fixtures/round13/finder-sidebar-recents.png").standardized
         let finder = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(finderURL as CFURL, nil)!, 0, nil)!
@@ -244,8 +244,8 @@ extension DebugRun {
         key(126, "")
         let finderHints = overlay.view.overlays
         require(finderHints.hover == finderCells[5].bounds && finderHints.upHint == finderSidebar.bounds && finderHints.downHint == documentsIcon.bounds
-                    && finderHints.leftHint == finderCells[4].bounds && finderHints.rightHint == finderCells[6].bounds,
-                "Finder render: Documents hovered, Up the sidebar, Down the icon, Left Developer, Right Downloads: \(String(describing: finderHints.leftHint)) \(String(describing: finderHints.rightHint))")
+                    && overlay.view.levelHintLayer.path!.boundingBox == overlay.view.viewRect(finderSidebar.bounds).insetBy(dx: 0.5, dy: 0.5),
+                "Finder render: Documents hovered, Up the sidebar, Down the icon, nothing for Left and Right")
         try snapshot("hint-outlines-finder")
         overlay.dismiss()
 

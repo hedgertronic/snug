@@ -432,11 +432,11 @@ extension OverlayController {
                                                 y: corner.movesTop ? chip.minY - 4 - size.height : chip.maxY + 4)
         }
 
-        // The key caps of the faint outlines sit inside their top-left corners, a peer's inside its 2 pt inset outline.
-        for (cap, rect, inset) in [(c.upHint, overlays.upHint, 0), (c.downHint, overlays.downHint, 0), (c.leftHint, overlays.leftHint, 2), (c.rightHint, overlays.rightHint, 2)] as [(KeyCap, CGRect?, CGFloat)] {
+        // The key caps of the faint outlines sit inside their top-left corners.
+        for (cap, rect) in [(c.upHint, overlays.upHint), (c.downHint, overlays.downHint)] {
             cap.isHidden = rect == nil
             if let rect {
-                let box = view.viewRect(rect).insetBy(dx: inset, dy: inset)
+                let box = view.viewRect(rect)
                 cap.frame.origin = CGPoint(x: box.minX + 4, y: box.maxY - cap.frame.height - 4)
             }
         }

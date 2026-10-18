@@ -39,8 +39,8 @@ final class OverlayView: NSView {
     /// Overlay geometry in image pixels with a top-left origin.
     struct Overlays {
         var selection, ghost, preview, hover, styleFrame: CGRect?
-        /// What Up and Down, and Left and Right, would select from the hovered element, drawn as faint outlines.
-        var upHint, downHint, leftHint, rightHint: CGRect?
+        /// What Up and Down would select from the hovered element, drawn as faint outlines.
+        var upHint, downHint: CGRect?
         /// Sides a resize snapped to, as zero-width or zero-height rectangles.
         var snappedEdges: [CGRect] = []
         var showsHandles = false
@@ -55,8 +55,6 @@ final class OverlayView: NSView {
         var hoverRadii = CornerRadii.zero
         var upHintRadii = CornerRadii.zero
         var downHintRadii = CornerRadii.zero
-        var leftHintRadii = CornerRadii.zero
-        var rightHintRadii = CornerRadii.zero
     }
 
     weak var controller: OverlayController?
@@ -265,9 +263,6 @@ final class OverlayView: NSView {
         let hints = CGMutablePath()
         if let rect = o.upHint { hints.addPath(path(rect, radii: o.upHintRadii, inset: 0.5)) }
         if let rect = o.downHint { hints.addPath(path(rect, radii: o.downHintRadii, inset: 0.5)) }
-        // Peers sit 2 pt inside their rectangles, so in a list the rows above and below stay off the hover's edge.
-        if let rect = o.leftHint { hints.addPath(path(rect, radii: o.leftHintRadii, inset: 2.5, outset: -2)) }
-        if let rect = o.rightHint { hints.addPath(path(rect, radii: o.rightHintRadii, inset: 2.5, outset: -2)) }
         levelHintLayer.path = hints
         styleLayer.path = o.styleFrame.map { path($0) }
         ghostLayer.path = o.ghost.map { path($0) }

@@ -1003,15 +1003,11 @@ final class OverlayController {
         overlays.showsHandles = selection != nil
         if selection == nil || unionHover, case .none = interaction { overlays.hover = hoverRect }
         if mode == .text, let picked = text.picked { overlays.hover = text.items![picked].bounds }
-        // While hovering, faint outlines show what Up and Down would select, unless that is nothing, the display, or within 4 pt of the
-        // hover; and what Left and Right would, unless that is one of those. With two peers, Left and Right pick the same one: it shows as Right.
+        // While hovering, faint outlines show what Up and Down would select, unless that is nothing, the display, or within 4 pt of the hover.
         if mode == .capture, selection == nil, let hover = overlays.hover, let session {
             let level = { (candidate: Candidate?) in candidate.flatMap { $0.kind == .display || $0.bounds.isNear(hover, within: 4 * self.scale) ? nil : $0.bounds } }
             overlays.upHint = level(session.parents.first)
             overlays.downHint = level(session.child)
-            let peer = { (right: Bool) in level(session.peer(right: right)).flatMap { [overlays.upHint, overlays.downHint].contains($0) ? nil : $0 } }
-            overlays.rightHint = peer(true)
-            overlays.leftHint = peer(false).flatMap { $0 == overlays.rightHint ? nil : $0 }
         }
         if let scrollArea { overlays.selection = scrollArea; overlays.showsHandles = false; overlays.hover = nil }
         if let cutout { overlays.selection = cutout.frame; overlays.showsHandles = false; overlays.hover = nil }
@@ -1020,7 +1016,7 @@ final class OverlayController {
         // The selection is measured once it settles; a dragged handle makes a new rectangle on every event.
         let settled: CGRect? = if case .none = interaction { selection?.rect } else { nil }
         let shown = selection?.rect ?? snapPreview
-        let hints = [overlays.upHint, overlays.downHint, overlays.leftHint, overlays.rightHint]
+        let hints = [overlays.upHint, overlays.downHint]
         for rect in [snapPreview, settled, overlays.hover] + hints { measureRadius(rect) }
         for rect in [shown, overlays.hover] + hints { measureRadius(rect.flatMap(container)) }
         overlays.radii = cutout?.frameRadii ?? shown.map(cornerRadii) ?? .zero
@@ -1028,8 +1024,6 @@ final class OverlayController {
         layoutCornerChip()
         overlays.upHintRadii = overlays.upHint.map(cornerRadii) ?? .zero
         overlays.downHintRadii = overlays.downHint.map(cornerRadii) ?? .zero
-        overlays.leftHintRadii = overlays.leftHint.map(cornerRadii) ?? .zero
-        overlays.rightHintRadii = overlays.rightHint.map(cornerRadii) ?? .zero
         // The padded card of an area or element; a live window's real shadow has no card to preview.
         if let rect = selection?.rect, framed, !capturesLiveWindow(rect) { overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, framed: true) }
         view.overlays = overlays

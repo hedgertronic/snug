@@ -518,11 +518,9 @@ final class Chrome {
     let colorMenu = RatioMenu()
     /// The live corner radius with its keys.
     let radius = Pill(radius: 8, insets: NSEdgeInsets(top: 0, left: 8, bottom: 0, right: 3), spacing: 6, height: Chrome.labelHeight)
-    /// Key caps at the top-left corners of the faint outlines of what Up, Down, Left and Right would select.
+    /// Key caps at the top-left corners of the faint outlines of what Up and Down would select.
     let upHint = KeyCap("\u{2191}")
     let downHint = KeyCap("\u{2193}")
-    let leftHint = KeyCap("\u{2190}")
-    let rightHint = KeyCap("\u{2192}")
     let reading = Pill.chip()
     /// Notices: text recognition getting ready, a translation not installed, no subject found.
     let status = Pill.chip()
@@ -569,5 +567,5 @@ final class Chrome {
     }
 
     /// Lowest first: the cut-out preview goes under all of them.
-    var all: [NSView] { [upHint, downHint, leftHint, rightHint, hover, size, snap, snapTag, coordinates, reading, legend] + sideHints + [radius, cornerKeys, list, topBar, strip, toolTip, status, ratio, ratioMenu, colorMenu, help] }
+    var all: [NSView] { [upHint, downHint, hover, size, snap, snapTag, coordinates, reading, legend] + sideHints + [radius, cornerKeys, list, topBar, strip, toolTip, status, ratio, ratioMenu, colorMenu, help] }
 }
