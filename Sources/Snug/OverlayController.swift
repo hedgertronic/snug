@@ -939,10 +939,6 @@ final class OverlayController {
         let edited = editedRadii[crop], rounds = defaults.bool(forKey: Pref.roundCorners)
         let (known, measuring) = (radii[crop].map { (radius: $0, arcs: arcs[crop] ?? .zero) }, radiusTasks[crop])
         let (windowKnown, windowMeasuring) = (container.flatMap { radii[$0] }, container.flatMap { radiusTasks[$0] })
-        if let displayID {
-            let area = [Double(displayID)] + [crop.minX, crop.minY, crop.width, crop.height].map { Double($0 / scale) }
-            defaults.set(area, forKey: Pref.lastArea)
-        }
         dismiss()
         commitTask = Task { [pasteboard, defaults] in
             do {

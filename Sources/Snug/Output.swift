@@ -20,7 +20,6 @@ enum Pref {
     static let saveFolder = "SnugSaveFolder"
     static let hotKeyCode = "SnugHotKeyCode"
     static let hotKeyModifiers = "SnugHotKeyModifiers"
-    static let lastArea = "SnugLastArea"
     static let modeBar = "SnugModeBar"
     static let loupe = "SnugLoupe"
     static let rulers = "SnugRulers"

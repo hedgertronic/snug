@@ -32,7 +32,7 @@ enum Shortcut {
     }
 }
 
-/// The Settings window's toolbar tabs. The window title follows the selected tab.
+/// The Settings window's toolbar tabs. The window title stays "Settings" on every tab.
 @MainActor
 enum SettingsTabs {
     static let width: CGFloat = 400
@@ -43,8 +43,16 @@ enum SettingsTabs {
         ("Agent", "sparkles", AnyView(AgentPane()))
     ]
 
+    /// AppKit gives the window the selected tab's label as its title; this puts "Settings" back.
+    private final class Controller: NSTabViewController {
+        override var title: String! {
+            get { "Settings" }
+            set {}
+        }
+    }
+
     static func makeController() -> NSTabViewController {
-        let controller = NSTabViewController()
+        let controller = Controller()
         controller.tabStyle = .toolbar
         for pane in panes {
             let host = NSHostingController(rootView: pane.view)
@@ -60,6 +68,7 @@ enum SettingsTabs {
 
     static func makeWindow() -> NSWindow {
         let window = NSWindow(contentViewController: makeController())
+        window.title = "Settings"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
         return window
@@ -626,26 +635,26 @@ struct ShortcutRecorder: NSViewRepresentable {
     }
 }
 
-/// Copy for Agent: the captures kept for agents, with Delete All, and the command that adds Snug's MCP server to Claude Code. Snug adds
-/// it nowhere by itself.
+/// Copy for Agent: the last capture, with Clear, and the command that adds Snug's MCP server to Claude Code. Snug adds it nowhere by itself.
 private struct AgentPane: View {
-    @State private var captures: (count: Int, bytes: Int) = (0, 0)
-    @State private var confirming = false
+    @State private var captureId: String?
     private let store = HandoffStore(defaults: .standard)
     private let command = "claude mcp add snug -- " + { $0.contains(" ") ? "'\($0)'" : $0 }(Bundle.main.executablePath!) + " --mcp"
 
     var body: some View {
         Pane {
-            Text("Cmd-Return in the overlay copies a capture for an agent, with the app, window and element it shows. Captures are kept 7 days, up to 500 MB.")
+            Text("Cmd-Return in the overlay copies a capture for an agent, with the app, window and element it shows. Only the last capture is kept.")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
             Card {
                 LabeledContent {
-                    Button("Delete All...") { confirming = true }.disabled(captures.count == 0)
+                    Button("Clear last capture") {
+                        try! store.clear()
+                        load()
+                    }.disabled(captureId == nil)
                 } label: {
-                    detailed("Agent captures", captures.count == 0 ? "None"
-                        : "\(captures.count) kept, \(ByteCountFormatter.string(fromByteCount: Int64(captures.bytes), countStyle: .file))")
+                    detailed("Last agent capture", captureId ?? "None")
                 }
                 .padding(.vertical, 4)
             }
@@ -667,26 +676,9 @@ private struct AgentPane: View {
         }
         .fixedSize(horizontal: false, vertical: true)
         .onAppear(perform: load)
-        .confirmationDialog("Delete all agent captures?", isPresented: $confirming) {
-            Button("Delete All", role: .destructive) {
-                do {
-                    try store.removeAll()
-                } catch {
-                    NSApp.presentError(error)
-                }
-                load()
-            }
-        } message: {
-            Text("Agents can no longer read them.")
-        }
     }
 
     private func load() {
-        do {
-            let ids = try store.manifests().map(\.captureId)
-            captures = (ids.count, try ids.reduce(0) { $0 + (try store.bytes(of: $1)) })
-        } catch {
-            NSApp.presentError(error)
-        }
+        captureId = try! store.current()?.captureId
     }
 }

@@ -521,14 +521,14 @@ extension DebugRun {
 
         let menu = SnugApp.makeMenu(defaults: defaults)
         let capture = menu.items[0]
-        require(menu.items.map(\.title) == ["Capture", "Capture Text", "Repeat Last Area", "", "Settings...", "About Snug", "", "Quit Snug"], "menu items: \(menu.items.map(\.title))")
+        require(menu.items.map(\.title) == ["Capture", "Capture Text", "", "Settings...", "About Snug", "", "Quit Snug"], "menu items: \(menu.items.map(\.title))")
         require(capture.keyEquivalent == " " && capture.keyEquivalentModifierMask == [.control, .shift], "Capture shows the shortcut as a key equivalent")
-        require(menu.items[4].keyEquivalent == "," && menu.items[7].keyEquivalent == "q", "Settings and Quit carry their command keys")
+        require(menu.items[3].keyEquivalent == "," && menu.items[6].keyEquivalent == "q", "Settings and Quit carry their command keys")
         SnugApp.showRecording(true, in: menu)
-        require(menu.items.filter { !$0.isHidden }.prefix(2).map(\.title) == ["Stop Recording", "Repeat Last Area"] && capture.keyEquivalent == " ",
+        require(menu.items.filter { !$0.isHidden }.prefix(2).map(\.title) == ["Stop Recording", ""] && capture.keyEquivalent == " ",
                 "while recording, Stop Recording with the shortcut replaces Capture and Capture Text: \(menu.items.filter { !$0.isHidden }.map(\.title))")
         SnugApp.showRecording(false, in: menu)
-        require(menu.items.filter { !$0.isHidden }.map(\.title) == ["Capture", "Capture Text", "Repeat Last Area", "", "Settings...", "About Snug", "", "Quit Snug"],
+        require(menu.items.filter { !$0.isHidden }.map(\.title) == ["Capture", "Capture Text", "", "Settings...", "About Snug", "", "Quit Snug"],
                 "after the recording the menu is restored")
         require(Shortcut.label(from: defaults) == "\u{2303}\u{21E7}Space", "the default shortcut displays as glyphs: \(Shortcut.label(from: defaults))")
         defaults.set(40, forKey: Pref.hotKeyCode)
@@ -609,7 +609,7 @@ extension DebugRun {
         let tabController = window.contentViewController as! NSTabViewController
         for (index, item) in tabController.tabViewItems.enumerated() {
             tabController.selectedTabViewItemIndex = index
-            precondition(window.title == item.label, "the Settings window title follows the \(item.label) tab: \"\(window.title)\"")
+            precondition(window.title == "Settings", "the Settings window title stays Settings on the \(item.label) tab: \"\(window.title)\"")
         }
     }
 
