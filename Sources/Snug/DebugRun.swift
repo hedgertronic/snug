@@ -89,6 +89,8 @@ enum DebugRun {
         let rough = CGRect(x: 350, y: 458, width: 580, height: 64)
         open()
         let scale = overlay.scale
+        require(overlay.window.styleMask.contains(.nonactivatingPanel) && overlay.window.canBecomeKey && !overlay.window.hidesOnDeactivate,
+                "the overlay is a nonactivating panel that can become key and stays up when Snug deactivates")
         overlay.dismiss()
 
         // Pause-to-snap, release takes the preview.

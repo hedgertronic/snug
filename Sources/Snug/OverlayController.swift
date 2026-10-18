@@ -2,12 +2,14 @@ import AppKit
 import ScreenshotCore
 import Translation
 
+/// A nonactivating panel: it becomes key, taking the keyboard, without making Snug the active app. Activating Snug on open could
+/// wait about 0.5 s on the app being left, and the overlay reached the screen only after it.
 @MainActor
-final class OverlayWindow: NSWindow {
+final class OverlayWindow: NSPanel {
     override var canBecomeKey: Bool { true }
 
     init() {
-        super.init(contentRect: .zero, styleMask: .borderless, backing: .buffered, defer: false)
+        super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         level = .screenSaver
         isOpaque = true
         backgroundColor = .black
@@ -189,8 +191,8 @@ final class OverlayController {
     /// When `present` froze the pixels.
     var frozenAt = Date.now
     var previousApp: NSRunningApplication?
-    /// Esc as a global hot key while the overlay is up (never in debug runs): Snug may not be active, as when the shortcut opened the
-    /// overlay over another app's open menu, and then a plain Esc would go to that app. A press reaches the overlay as its Esc key.
+    /// Esc as a global hot key while the overlay is up (never in debug runs): Snug is not the active app (see `OverlayWindow`), and when
+    /// the shortcut opened the overlay over another app's open menu a plain Esc would go to that app. A press reaches the overlay as its Esc key.
     private var escape: HotKey?
     private var interaction = Interaction.none
     private var snapSuggestions: [CGRect] = []
@@ -277,8 +279,8 @@ final class OverlayController {
             window.ignoresMouseEvents = true
             window.orderFrontRegardless()
         } else {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate()
+            window.orderFrontRegardless()
+            window.makeKey()
             if escape == nil {
                 escape = HotKey(id: 2) { [unowned self] in
                     window.sendEvent(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
