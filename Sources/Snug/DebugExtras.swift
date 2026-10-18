@@ -209,7 +209,7 @@ extension DebugRun {
             require(close(bytes(shown), [229, 72, 77], 2), "the \(name) is drawn in the highlight color")
         }
         let modeFill = overlay.chrome.modeButtons[.capture]!.layer!.backgroundColor.flatMap { NSColor(cgColor: $0)?.usingColorSpace(.sRGB) }
-        require(modeFill.map { close(bytes($0), [229, 72, 77], 2) } == true, "a new highlight color restyles the buttons: the current mode washes with it")
+        require(modeFill.map { close(bytes($0), [229, 72, 77], 2) } == true, "a new highlight color restyles the buttons: the current mode fills with it")
         defaults.removeObject(forKey: Pref.highlightColor)
         overlay.view.highlight = Highlight(defaults: defaults)
         mouse(.leftMouseUp, CGPoint(x: rough.maxX, y: rough.maxY))
@@ -986,7 +986,8 @@ extension DebugRun {
                 overlay.refresh()
                 require(clipped().isEmpty && abs(frameButton.caps[0].frame.minX - frameButton.title.frame.maxX - 7) < 0.01 && abs(frameButton.bounds.maxX - frameButton.caps.last!.frame.maxX - 7) < 0.01,
                         "no bar title clips and the Frame button hugs its cap with Frame \(framed) and \(mode) selected: \(clipped()) \(frameButton.frame)")
-                require(chrome.modeButtons[mode]!.lit && !chrome.modeButtons[mode]!.primary && chrome.modeButtons.values.filter(\.lit).count == 1 && top.groups.count == (mode == .text ? 3 : 4), "the current mode is lit, the other plain, and Text hides the style pill")
+                require(chrome.modeButtons[mode]!.primary && chrome.modeButtons.values.filter(\.primary).count == 1 && !chrome.modeButtons.values.contains(where: \.lit) && top.groups.count == (mode == .text ? 3 : 4),
+                        "the current mode draws as Copy does (primary), the other plain, and Text hides the style pill")
             }
         }
         defaults.set(false, forKey: Pref.frame)
@@ -1473,17 +1474,21 @@ extension DebugRun {
         key(53, "\u{1B}")
         overlay.dismiss()
 
-        // A lit Edit button draws exactly as a lit mode button does, in the light and the dark look.
+        // A lit Edit button draws exactly as a lit toggle (Loupe) does, and the current mode exactly as Copy, in the light and the dark look.
         for look in ["light", "dark"] {
             defaults.set(look, forKey: Pref.overlayAppearance)
             open()
             drag(rough)
             overlay.refresh()
-            let mode = chrome.modeButtons[.capture]!, edit = chrome.edit
+            defaults.set(true, forKey: Pref.loupe)
+            overlay.refresh()
+            let mode = chrome.modeButtons[.capture]!, edit = chrome.edit, loupe = chrome.viewToggles[0].1
             func drawn(_ button: BarButton) -> [String] {
                 [button.layer!.backgroundColor, button.layer!.borderColor].map { "\(NSColor(cgColor: $0!)!.usingColorSpace(.sRGB)!)" } + ["\(button.layer!.borderWidth)", "\(button.title.textColor!.usingColorSpace(.sRGB)!)", "\(button.title.font!.fontName) \(button.title.font!.pointSize)"]
             }
-            require(mode.lit && edit.lit && drawn(mode) == drawn(edit), "a lit Edit draws as a lit mode button in the \(look) look: \(drawn(mode)) \(drawn(edit))")
+            require(loupe.lit && edit.lit && drawn(loupe) == drawn(edit), "a lit Edit draws as a lit toggle in the \(look) look: \(drawn(loupe)) \(drawn(edit))")
+            require(mode.primary && drawn(mode) == drawn(chrome.copy), "the current mode draws as Copy in the \(look) look: \(drawn(mode)) \(drawn(chrome.copy))")
+            defaults.set(false, forKey: Pref.loupe)
             overlay.dismiss()
         }
         defaults.removeObject(forKey: Pref.overlayAppearance)

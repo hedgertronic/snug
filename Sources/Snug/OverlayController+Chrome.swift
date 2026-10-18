@@ -174,7 +174,7 @@ extension OverlayController {
             c.topBar.show(modes + [c.viewToggles.map(\.1)] + (mode == .text ? [] : [c.styleToggles.map(\.1)]) + [[c.keys]])
             if c.topBar.frame.width > bounds.width - 16 { c.topBar.show([[c.keys]]) }
         }
-        for (current, button) in c.modeButtons { button.lit = current == mode }
+        for (current, button) in c.modeButtons { button.primary = current == mode }
         for (key, button) in c.viewToggles + c.styleToggles { button.lit = defaults.bool(forKey: key) }
 
         // The object's chips and strip, filled before the keys line, which leaves out what the strip shows, and attached to the object
