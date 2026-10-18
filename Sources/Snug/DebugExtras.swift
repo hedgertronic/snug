@@ -1337,6 +1337,21 @@ extension DebugRun {
         key(53, "\u{1B}")
         overlay.dismiss()
 
+        // A lit Edit button draws exactly as a lit mode button does, in the light and the dark look.
+        for look in ["light", "dark"] {
+            defaults.set(look, forKey: Pref.overlayAppearance)
+            open()
+            drag(rough)
+            overlay.refresh()
+            let mode = chrome.modeButtons[.capture]!, edit = chrome.edit
+            func drawn(_ button: BarButton) -> [String] {
+                [button.layer!.backgroundColor, button.layer!.borderColor].map { "\(NSColor(cgColor: $0!)!.usingColorSpace(.sRGB)!)" } + ["\(button.layer!.borderWidth)", "\(button.title.textColor!.usingColorSpace(.sRGB)!)", "\(button.title.font!.fontName) \(button.title.font!.pointSize)"]
+            }
+            require(mode.lit && edit.lit && drawn(mode) == drawn(edit), "a lit Edit draws as a lit mode button in the \(look) look: \(drawn(mode)) \(drawn(edit))")
+            overlay.dismiss()
+        }
+        defaults.removeObject(forKey: Pref.overlayAppearance)
+
         // Armed to record, the selection keeps none of the editing chrome; Esc brings it back.
         overlay.dismiss()
         overlay.present(image: image, frame: frame, displayID: CGMainDisplayID())
