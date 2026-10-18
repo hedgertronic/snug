@@ -131,6 +131,9 @@ final class OverlayController {
     var lastEditedCorner: Handle?
     /// The corner whose dot the pointer is on (or whose chip it is heading to), and its "All corners" chip.
     var hoveredCorner: Handle?
+    /// The corner Tab stepped to with a selection open: its dot lights, its chip shows as a hover's does, and `[` and `]` change only it.
+    /// Nil is all four. A pointer on another dot takes over, and a new capture clears it.
+    var focusedCorner: Handle?
     let cornerChip = BarButton("All corners", key: "=", height: 23, size: 11)
     /// The selection's locked aspect ratio, width over height, set with Shift-P or a preset from P's menu; nil is free. Handle drags,
     /// grow and shrink keep it. A fresh drag or closing the overlay drops it.
@@ -347,6 +350,7 @@ final class OverlayController {
         redoStack = []
         lastEditedCorner = nil
         hoveredCorner = nil
+        focusedCorner = nil
         lockedRatio = nil
         ratioBase = nil
         ratioPortrait = nil
@@ -716,6 +720,12 @@ final class OverlayController {
             refresh()
             return true
         }
+        // Esc with a corner focused returns to all four corners first.
+        if event.keyCode == 53, focusedCorner != nil, mode == .capture, selection != nil, chrome.help.isHidden {
+            focusedCorner = nil
+            refresh()
+            return true
+        }
         // Esc, or E (the lit Edit button), with a released selection drops it back to hover, as an undo step.
         let leavesEdit = event.keyCode == 53 || flags.isEmpty && event.charactersIgnoringModifiers == "e"
         if leavesEdit, mode == .capture, selection != nil, chrome.help.isHidden, case .none = interaction {
@@ -724,6 +734,7 @@ final class OverlayController {
             lastEdit = nil
             cancelWork()
             selection = nil
+            focusedCorner = nil
             lockedRatio = nil
             ratioBase = nil
             ratioPortrait = nil
@@ -781,6 +792,10 @@ final class OverlayController {
         case (48, _, _) where hovering, (126, _, _) where hovering || unionHover, (125, _, _) where hovering || unionHover:
             if event.keyCode == 125 || event.keyCode == 48 && shift { session?.shrink() } else { session?.expand() }
             walkedLevel = true
+        case (48, _, _) where !command:
+            // Tab with a selection open: all four, top-left, top-right, bottom-right, bottom-left; Shift-Tab goes back.
+            let order: [Handle?] = [nil, .topLeft, .topRight, .bottomRight, .bottomLeft]
+            focusedCorner = order[(order.firstIndex { $0 == focusedCorner }! + (shift ? 4 : 1)) % 5]
         case (123, false, _) where hovering && !option, (124, false, _) where hovering && !option:
             // The element beside the hovered one; it holds like an Up or Down pick.
             guard session?.step(right: event.keyCode == 124) == true else { beep(); break }
@@ -928,10 +943,11 @@ final class OverlayController {
         return measured.replacingCorners(sharedWith: window, in: rect, with: radii[window] ?? 0, arcs: arcs)
     }
 
-    /// `]` / `[`: every corner of the selection (or the hovered rectangle) grows or shrinks by `points`, from its current radii.
+    /// `]` / `[`: every corner of the selection (or the hovered rectangle), or only the focused corner, grows or shrinks by `points`, from its current radii.
     private func adjustRadii(by points: CGFloat) {
         guard let rect = selection?.rect ?? hoverRect else { return }
-        editedRadii[rect] = cornerRadii(of: rect).offset(by: points * scale, in: rect.size)
+        let radii = cornerRadii(of: rect)
+        editedRadii[rect] = radii.moving(focusedCorner ?? .topLeft, by: points * scale, alone: focusedCorner != nil, in: rect.size)
     }
 
     /// Asks where Save As writes, with the overlay still up: canceling the panel leaves the overlay and its selection as they were, and
@@ -1003,6 +1019,7 @@ final class OverlayController {
         // Armed to record, the red outline replaces both, so the view never receives them.
         overlays.showsHandles = selection != nil && armedRecording == nil
         overlays.showsOutline = armedRecording == nil
+        overlays.focusedCorner = selection == nil ? nil : focusedCorner
         if selection == nil || unionHover, case .none = interaction { overlays.hover = hoverRect }
         if mode == .text, let picked = text.picked { overlays.hover = text.items![picked].bounds }
         // While hovering, faint outlines show what Up and Down would select, unless that is nothing, the display, or within 4 pt of the

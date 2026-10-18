@@ -446,7 +446,7 @@ extension DebugRun {
                     && helpActions["\u{2318} arrow"] == "Edge out, one side" && helpActions["\u{21E7} \u{2318} arrow"] == "Edge in, one side"
                     && helpActions["+ / -"] == "All sides 1 px (Option: 10)" && helpActions["\u{21E7} \u{21A9}"] == "Copy the text" && helpActions["\u{2318} \u{21A9}"] == "Copy for an agent"
                     && helpActions["\u{2325} \u{21A9}"] == "Translate" && helpActions["\u{21E7} \u{2318} S"] == "Save As"
-                    && helpActions["Tab"] == "Walk out (Shift: in)"
+                    && helpActions["Tab"] == "Walk out (Shift: in)" && helpActions["[ ]"] == "Corner radius (Tab: one corner)"
                     && !helpRows.contains { $0.action.contains("Aspect ratio lock") },
                 "the sheet lists the ratio menu and lock, W, the subject keys, G and V on a hover, the recording keys, Cmd-arrow, + and -, Shift-Return on a hover, Tab without other fits, and no P cycle")
         require(sheet.contains("Esc or ? closes this.") || sheet.contains { $0.hasSuffix("Esc or ? closes this.") }, "the sheet says how to close it")
@@ -1312,12 +1312,35 @@ extension DebugRun {
         require(sides.allSatisfy(\.isHidden) && chrome.legend.isHidden, "Shift alone with the pointer outside shows no edge keys")
         flags([])
         let snapped = overlay.selection!
-        key(48, "\t")
-        require(overlay.selection?.rect == snapped.rect, "Tab on a released selection does nothing")
         overlay.editedRadii[snapped.rect] = CornerRadii(12 * overlay.scale)
+        // Tab steps a focused corner: top-left, top-right, bottom-right, bottom-left, then all four; it lights the dot, shows the chip and
+        // keys, and [ ] change only that corner. Esc returns to all four first. Undo covers the edit.
+        let radius = 12 * overlay.scale
+        var focus: [Handle?] = []
+        for _ in 0..<5 { key(48, "\t"); focus.append(overlay.focusedCorner) }
+        require(focus == [.topLeft, .topRight, .bottomRight, .bottomLeft, nil] && overlay.selection?.rect == snapped.rect, "Tab steps the corners TL, TR, BR, BL, then all four: \(focus)")
+        key(48, "\t")
+        require(overlay.view.overlays.focusedCorner == .topLeft && !overlay.cornerChip.isHidden && texts(in: chrome.cornerKeys) == ["this corner", "[", "]", "next corner", "Tab", "all four", "esc"],
+                "a focused corner lights its dot and shows the chip and keys: \(texts(in: chrome.cornerKeys))")
+        key(93, "]")
+        key(48, "\t")
+        key(33, "[")
+        let stepped = overlay.cornerRadii(of: snapped.rect)
+        require(stepped.topLeft == radius + overlay.scale && stepped.topRight == radius - overlay.scale && stepped.bottomLeft == radius && stepped.bottomRight == radius,
+                "] on the top-left and [ on the top-right change only those corners: \(stepped)")
+        key(53, "\u{1B}")
+        require(overlay.focusedCorner == nil && overlay.selection?.rect == snapped.rect && overlay.cornerChip.isHidden && overlay.view.overlays.focusedCorner == nil, "Esc returns from a focused corner to all four and keeps the selection")
+        key(33, "[")
+        require(overlay.cornerRadii(of: snapped.rect) == CornerRadii(topLeft: radius, topRight: radius - 2 * overlay.scale, bottomLeft: radius - overlay.scale, bottomRight: radius - overlay.scale),
+                "with no corner focused, [ changes all four: \(overlay.cornerRadii(of: snapped.rect))")
+        overlay.undoEdit(redo: false)
+        // The two [ presses within 0.5 s are one undo step, so undo returns to the state after the ].
+        require(overlay.cornerRadii(of: snapped.rect) == CornerRadii(topLeft: radius + overlay.scale, topRight: radius, bottomLeft: radius, bottomRight: radius),
+                "undo covers the corner edits like any radius edit: \(overlay.cornerRadii(of: snapped.rect))")
+        overlay.editedRadii[snapped.rect] = CornerRadii(radius)
         mouse(.mouseMoved, overlay.cornerRadii(of: snapped.rect).dot(of: .topLeft, in: snapped.rect, minimumInset: 8 * overlay.scale))
         let cornerKeys = chrome.cornerKeys, cornerChip = overlay.cornerChip
-        require(!cornerChip.isHidden && texts(in: cornerKeys) == ["radius", "[", "]", "one corner", "\u{2325}"]
+        require(!cornerChip.isHidden && texts(in: cornerKeys) == ["radius", "[", "]", "one corner", "\u{2325}", "step corners", "Tab"]
                 && cornerKeys.frame.maxY <= cornerChip.frame.minY && abs(cornerKeys.frame.maxX - cornerChip.frame.maxX) < 0.5,
                 "hovering a corner dot shows radius [ ] and Option for one corner under the All corners chip: \(texts(in: cornerKeys)) \(cornerKeys.frame) \(cornerChip.frame)")
         flags(.option)

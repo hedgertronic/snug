@@ -102,7 +102,7 @@ extension OverlayController {
     func applyRadiusToAll() {
         guard let rect = selection?.rect else { return }
         let current = cornerRadii(of: rect)
-        let radius = (hoveredCorner ?? lastEditedCorner).map { current[$0] } ?? CornerRadii.corners.map { current[$0] }.max()!
+        let radius = (hoveredCorner ?? focusedCorner ?? lastEditedCorner).map { current[$0] } ?? CornerRadii.corners.map { current[$0] }.max()!
         editedRadii[rect] = CornerRadii(radius).offset(by: 0, in: rect.size)
         refresh()
     }
@@ -112,6 +112,7 @@ extension OverlayController {
         let viewPoint = CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale)
         let corner = selection == nil ? nil : hoveredCorner != nil && cornerChipPath.contains(viewPoint) ? hoveredCorner : cornerDot(at: pointer)
         guard corner != hoveredCorner else { return }
+        if corner != nil { focusedCorner = nil }
         hoveredCorner = corner
         refresh()
     }
@@ -127,7 +128,7 @@ extension OverlayController {
     /// Shows the "All corners" chip just outside the hovered corner, beside the selection's side: left of the left corners, right of the
     /// right ones, hanging inward from the top corners' edge and rising from the bottom ones'. Inside the corner when there is no room outside.
     func layoutCornerChip() {
-        guard let corner = hoveredCorner, let rect = selection?.rect, scrollArea == nil, mode == .capture else { return cornerChip.isHidden = true }
+        guard let corner = hoveredCorner ?? focusedCorner, let rect = selection?.rect, scrollArea == nil, mode == .capture else { return cornerChip.isHidden = true }
         let box = view.viewRect(rect)
         let size = cornerChip.frame.size
         let gap: CGFloat = 6
