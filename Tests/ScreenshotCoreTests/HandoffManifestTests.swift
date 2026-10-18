@@ -145,10 +145,13 @@ struct HandoffStoreTests {
         defer { try? FileManager.default.removeItem(at: store.root) }
         try store.write(png: handoffPNG(), manifest: handoffManifest(id: "AAAAAAAA"))
         try FileManager.default.createDirectory(at: store.root.appending(path: ".BBBBBBBB.partial"), withIntermediateDirectories: false)
+        FileManager.default.createFile(atPath: store.root.appending(path: "notes.txt").path, contents: Data())
         let newer = handoffManifest(id: "CCCCCCCC", capturedAt: Date(timeIntervalSince1970: 1_791_000_100))
         try store.write(png: handoffPNG(), manifest: newer)
-        #expect(try FileManager.default.contentsOfDirectory(atPath: store.root.path) == ["CCCCCCCC"])
+        #expect(try Set(FileManager.default.contentsOfDirectory(atPath: store.root.path)) == ["CCCCCCCC", "notes.txt"])
         #expect(try store.current() == newer)
+        try store.clear()
+        #expect(try FileManager.default.contentsOfDirectory(atPath: store.root.path) == ["notes.txt"])
     }
 
     @Test func clearingLeavesNoCapture() throws {

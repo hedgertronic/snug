@@ -249,8 +249,8 @@ public struct HandoffStore: Sendable {
         self.root = root
     }
 
-    /// Writes the bundle into a temporary folder beside it, renames it into place, then removes every other bundle, so a reader never
-    /// finds the folder empty.
+    /// Writes the bundle into a temporary folder beside it, renames it into place, then removes every other bundle and partial folder, so
+    /// a reader never finds the folder empty. Other files in the folder are left alone.
     @discardableResult
     public func write(png: Data, manifest: HandoffManifest) throws -> URL {
         let files = FileManager.default
@@ -261,7 +261,7 @@ public struct HandoffStore: Sendable {
         try manifest.json().write(to: partial.appending(path: "manifest.json"))
         let bundle = root.appending(path: manifest.captureId)
         try files.moveItem(at: partial, to: bundle)
-        for name in try files.contentsOfDirectory(atPath: root.path) where name != manifest.captureId {
+        for name in try files.contentsOfDirectory(atPath: root.path) where name != manifest.captureId && Self.isBundle(name) {
             try files.removeItem(at: root.appending(path: name))
         }
         return bundle
@@ -275,6 +275,11 @@ public struct HandoffStore: Sendable {
         }.max { $0.capturedAt < $1.capturedAt }
     }
 
+    /// A bundle folder (named by a capture id) or the `.<id>.partial` folder a write builds it in.
+    private static func isBundle(_ name: String) -> Bool {
+        HandoffManifest.isId(name) || (name.hasPrefix(".") && name.hasSuffix(".partial") && HandoffManifest.isId(String(name.dropFirst().dropLast(8))))
+    }
+
     /// The bundle's PNG.
     public func png(of manifest: HandoffManifest) throws -> Data {
         try Data(contentsOf: root.appending(path: "\(manifest.captureId)/\(manifest.image.file)"))
@@ -283,7 +288,7 @@ public struct HandoffStore: Sendable {
     /// Removes the bundle, and any folder a failed write left.
     public func clear() throws {
         guard FileManager.default.fileExists(atPath: root.path) else { return }
-        for name in try FileManager.default.contentsOfDirectory(atPath: root.path) {
+        for name in try FileManager.default.contentsOfDirectory(atPath: root.path) where Self.isBundle(name) {
             try FileManager.default.removeItem(at: root.appending(path: name))
         }
     }
