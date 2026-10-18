@@ -130,6 +130,16 @@ extension DebugRun {
         overlay.refresh()
         mouse(.mouseMoved, CGPoint(x: 40, y: 40))
         try snapshot("edit-chrome")
+        print("strip width, edit: \(overlay.chrome.strip.frame.width) pt")
+        // The strip under each modifier: Agent, Text and Save As, Translate, with the held caps lit.
+        for (name, modifiers) in [("cmd", NSEvent.ModifierFlags.command), ("shift", .shift), ("option", .option)] {
+            overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
+            try snapshot("edit-chrome-\(name)")
+            print("strip width, edit with \(name): \(overlay.chrome.strip.frame.width) pt")
+        }
+        overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
         mouse(.mouseMoved, CGPoint(x: editRect.midX, y: editRect.midY))
         try snapshot("edit-chrome-pointer-inside")
         key(35, "p")
@@ -330,6 +340,7 @@ extension DebugRun {
         overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, CGPoint(x: 422, y: 585))
         try snapshot("capture-hover")
+        print("strip width, hover: \(overlay.chrome.strip.frame.width) pt")
         defaults.set(true, forKey: Pref.candidates)
         key(126, "")
         try snapshot("capture-hover-list")

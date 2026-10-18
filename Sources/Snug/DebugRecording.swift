@@ -226,11 +226,11 @@ extension DebugRun {
         let reminder = ScreenRecording.makeReminder(around: recordArea, on: display, defaults: defaults)
         let settings = SettingsTabs.makeWindow()
         require(outline.contentView!.layer!.borderColor == NSColor.systemRed.cgColor, "the recording outline is red, like the armed outline")
-        require(texts(in: reminder.contentView!) == ["0:00", "stop", "\u{2303}\u{21E7}Space"], "the reminder reads the time, stop, then the shortcut: \(texts(in: reminder.contentView!))")
+        require(texts(in: reminder.contentView!) == ["0:00", "stop", "\u{2303}", "\u{21E7}", "Space"], "the reminder reads the time, stop, then the shortcut, one cap per key: \(texts(in: reminder.contentView!))")
         let reminderPills = reminder.contentView!.subviews.compactMap { $0 as? Pill }
-        let reminderCaps = reminderPills.last.map { $0.subviews[0].subviews.compactMap { $0 as? KeyCap } } ?? []
-        require(reminderPills.count == 2 && reminderPills[1].frame.minX - reminderPills[0].frame.maxX == 8 && reminderCaps.map(\.text) == ["\u{2303}\u{21E7}Space"] && reminder.hasShadow,
-                "the reminder is two chrome pills 8 pt apart, the time and then stop with the shortcut's key cap; the panel draws the shadow")
+        let reminderCaps = reminderPills.last.map { $0.subviews[0].subviews.flatMap { $0.subviews }.compactMap { $0 as? KeyCap } } ?? []
+        require(reminderPills.count == 2 && reminderPills[1].frame.minX - reminderPills[0].frame.maxX == 8 && reminderCaps.map(\.text) == ["\u{2303}", "\u{21E7}", "Space"] && reminder.hasShadow,
+                "the reminder is two chrome pills 8 pt apart, the time and then stop with the shortcut's key caps; the panel draws the shadow")
         require(reminderPills.map(\.frame.height) == [32, 32], "the time and stop pills are both the 32 pt control height: \(reminderPills.map(\.frame.height))")
         require([0, 7, 59, 60, 750].map(ScreenRecording.elapsed) == ["0:00", "0:07", "0:59", "1:00", "12:30"], "the time reads m:ss")
         require(reminder.frame.maxY == outline.frame.minY - ScreenRecording.reminderGap && abs(reminder.frame.midX - outline.frame.midX) <= 0.5,

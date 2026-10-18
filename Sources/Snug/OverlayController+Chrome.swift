@@ -55,17 +55,49 @@ extension OverlayController {
         return view.hitTest(view.convert(point, to: view.superview)) is BarButton
     }
 
-    /// The glyphs of the modifiers held now; a cap made of exactly these is lit.
+    /// The tool button under the pointer: its name shows in the tool tip chip under it after 0.5 s, as a macOS tooltip does.
+    func updateToolTip() {
+        let point = CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale)
+        let hit = view.hitTest(view.convert(point, to: view.superview))
+        let tool: BarButton? = [chrome.scroll, chrome.record, chrome.cutout, chrome.colors].first { $0 === hit }
+        guard tool !== chrome.tipButton else { return }
+        chrome.tipButton = tool
+        chrome.tipDue = false
+        chrome.tipTask?.cancel()
+        placeToolTip()
+        guard tool != nil else { return }
+        chrome.tipTask = Task {
+            try await Task.sleep(for: .milliseconds(500))
+            chrome.tipDue = true
+            placeToolTip()
+        }
+    }
+
+    /// Shows the tool tip chip centered under its button (over the strip when there is no room below) once its delay has passed and
+    /// while the pointer is on the button and the button takes clicks (not dimmed, not under an open menu); hides it otherwise.
+    private func placeToolTip() {
+        let c = chrome
+        let point = CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale)
+        guard c.tipDue, let tool = c.tipButton, !c.strip.isHidden, view.hitTest(view.convert(point, to: view.superview)) === tool else { return c.toolTip.isHidden = true }
+        let name = tool.accessibilityLabel()!
+        c.toolTip.show(name) { [NSTextField(name, size: 12, weight: .semibold, color: .chromeText)] }
+        let button = view.convert(tool.bounds, from: tool), size = c.toolTip.frame.size
+        let below = c.strip.frame.minY - 4 - size.height
+        c.toolTip.frame.origin = CGPoint(x: min(max((button.midX - size.width / 2).rounded(), 8), view.bounds.width - size.width - 8),
+                                         y: below >= 8 ? below : c.strip.frame.maxY + 4)
+    }
+
+    /// The glyphs of the modifiers held now; each one's cap is lit.
     private var heldGlyphs: Set<Character> {
         Set([(optionHeld, "\u{2325}"), (commandHeld, "\u{2318}"), (shiftHeld, "\u{21E7}")].compactMap { $0.0 ? Character($0.1) : nil })
     }
 
-    /// Every cap is pressed while its key flashes or while exactly its modifiers are held; with `restyle` (a new tint), every button and
-    /// cap redraws in the current tint.
+    /// Every cap is pressed while its chord flashes, and a modifier's cap while its key is held (a faded cap shows only while it is not);
+    /// with `restyle` (a new tint), every button and cap redraws in the current tint.
     private func lightCaps(restyle: Bool = false) {
         let held = heldGlyphs
         func light(_ view: NSView) {
-            if let cap = view as? KeyCap { cap.pressed = chrome.pressed.contains(cap.text) || !held.isEmpty && Set(cap.text) == held }
+            if let cap = view as? KeyCap { cap.pressed = chrome.pressed.contains(cap.chord) || cap.text.count == 1 && held.contains(cap.text.first!) }
             if restyle {
                 (view as? BarButton)?.apply()
                 (view as? KeyCap)?.apply()
@@ -88,18 +120,18 @@ extension OverlayController {
         return switch mode {
         case .text: [(["Drag"], "select text"), (["\u{21A9}"], "copy"), (["\u{21E7}", "\u{21A9}"], "rows"), (["Tab"], "links, codes"), (["\u{2325}", "\u{21A9}"], "translate"), (["F"], "all text"), (["C"], "color"), (["?"], "all keys")]
         case .capture where selection != nil:
-            [(["\u{2190}\u{2192}"], "move"), (["\u{2325}"], "grow"), (["\u{2325}\u{2318}"], "shrink"), (["\u{2318}"], "edge out"), (["\u{2318}\u{21E7}"], "edge in"), (["+", "-"], "all sides"), (["\u{2318}Z"], "undo")]
+            [(["\u{2190}", "\u{2192}"], "move"), (["\u{2325}"], "grow"), (["\u{2325}\u{2318}"], "shrink"), (["\u{2318}"], "edge out"), (["\u{2318}\u{21E7}"], "edge in"), (["+", "-"], "all sides"), (["\u{2318}Z"], "undo")]
         case .capture: [(["\u{2191}", "\u{2193}"], "bigger / smaller"), (["\u{2190}", "\u{2192}"], "next"), (["F"], "full screen"), (["W"], "window"), (["?"], "all keys")]
         }
     }
 
-    /// What the arrow keys do with the modifiers held now.
-    private var arrowLegend: String {
+    /// What the arrow keys do with the modifiers held now: labels, each with its chord.
+    private var arrowLegend: [(keys: [String], label: String)] {
         switch (optionHeld, commandHeld) {
-        case (true, true): "\u{2325}\u{2318} shrink"
-        case (true, false): "\u{2325} grow"
-        case (false, true): "\u{2318} edge out  \u{2318}\u{21E7} edge in"
-        case (false, false): shiftHeld ? "\u{21E7} move 10 px" : "move"
+        case (true, true): [(["\u{2325}\u{2318}"], "shrink")]
+        case (true, false): [(["\u{2325}"], "grow")]
+        case (false, true): [(["\u{2318}"], "edge out"), (["\u{2318}\u{21E7}"], "edge in")]
+        case (false, false): shiftHeld ? [(["\u{21E7}"], "move 10 px")] : [([], "move")]
         }
     }
 
@@ -166,6 +198,7 @@ extension OverlayController {
         // The object's chips and strip, filled before the keys line, which leaves out what the strip shows, and attached to the object
         // once the bar and keys line are placed.
         var attachment: (box: CGRect, strip: Bool, left: [NSView], right: [NSView])?
+        c.stripSlack = 0
         func sizeChip(_ rect: CGRect, drag: String = "") -> Pill {
             let text = (rect == extent ? "Full screen  " : "") + "\(Int(rect.width)) x \(Int(rect.height))" + (armedRecording == nil ? additions(rect) : "") + drag
             c.size.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText)] }
@@ -176,19 +209,41 @@ extension OverlayController {
             c.radius.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText), KeyCap("["), KeyCap("]")] }
             return c.radius
         }
-        /// The capture strip: Edit in its own pill, lit once there is a selection, then Copy, Agent, Save, and Text, then Scroll and
-        /// Record (each left out when it cannot run on `area`), Subject, and Colors.
+        /// The capture strip: Edit in its own pill, lit once there is a selection, then Copy and Save, then Scroll and Record (each
+        /// left out when it cannot run on `area`), Subject, and Colors. The modifiers held relabel Copy (Command: Agent, Shift: Text,
+        /// Option: Translate, each alone) and Save (Shift: Save As), whose clicks press the chord shown; at rest Copy shows a faded
+        /// Command and Save a faded Shift. A combination with no meaning dims the button, and any modifier dims Edit and the tools.
         func captureStrip(_ area: CGRect) {
             let scrolls = (scrollFrames != nil || displayID != nil) && area != extent && windows.contains { $0.insetBy(dx: -2, dy: -2).contains(area) }
+            let held = heldGlyphs
             c.edit.lit = selection != nil
-            c.strip.show([[c.edit], [c.copy, c.agent, c.save, c.text],
-                          (scrolls ? [c.scroll] : []) + (displayID != nil ? [c.record] : []) + [c.cutout, c.colors]])
+            let copy: (title: String, key: String, faded: String)? = switch held {
+            case []: ("Copy", "\u{21A9}", "\u{2318}")
+            case ["\u{2318}"]: ("Agent", "\u{2318}\u{21A9}", "")
+            case ["\u{21E7}"]: ("Text", "\u{21E7}\u{21A9}", "")
+            case ["\u{2325}"]: ("Translate", "\u{2325}\u{21A9}", "")
+            default: nil
+            }
+            c.copy.setTitle(copy?.title ?? "Copy")
+            c.copy.setKeys(copy?.key ?? "\u{21A9}", faded: copy?.faded ?? "")
+            c.copy.isEnabled = copy != nil
+            c.save.setTitle(shiftHeld && !optionHeld ? "Save As" : "Save")
+            c.save.setKeys(shiftHeld && !optionHeld ? "\u{21E7}\u{2318}S" : "\u{2318}S", faded: held.isEmpty ? "\u{21E7}" : "")
+            c.save.isEnabled = !optionHeld
+            for button in [c.edit, c.scroll, c.record, c.cutout, c.colors] { button.isEnabled = held.isEmpty }
+            c.stripSlack = Chrome.widest.copy - c.copy.frame.width + Chrome.widest.save - c.save.frame.width
+            c.strip.show([[c.edit], [c.copy, c.save], (scrolls ? [c.scroll] : []) + (displayID != nil ? [c.record] : []) + [c.cutout, c.colors]])
         }
 
         if let cutout {
             let subjects = cutout.subjects.count > 1 ? [c.subject] : []
             c.subject.setTitle(cutout.label)
             c.crop.lit = cutout.cropped
+            c.copy.setTitle("Copy")
+            c.copy.setKeys("\u{21A9}")
+            c.save.setTitle("Save")
+            c.save.setKeys("\u{2318}S")
+            for button in [c.copy, c.save] { button.isEnabled = true }
             c.strip.show([subjects + [c.crop], [c.save, c.copy]])
             attachment = (view.viewRect(cutout.frame), true, [sizeChip(cutout.frame)], [])
         } else if let scrollArea {
@@ -300,7 +355,7 @@ extension OverlayController {
                 let below = min(box.minY, top) - 8 - size.height
                 let outside = below >= floor || over + size.height <= top - 8
                 let y = below >= floor ? below : over + size.height <= top - 8 ? over : max(box.minY + 8, floor)
-                c.strip.frame.origin = CGPoint(x: min(max(box.minX + (outside ? 0 : 8), leftEdge), bounds.width - size.width - 8), y: y)
+                c.strip.frame.origin = CGPoint(x: min(max(box.minX + (outside ? 0 : 8), leftEdge), bounds.width - size.width - c.stripSlack - 8), y: y)
                 if y == over { over = c.strip.frame.maxY + 8 }
             }
             guard let height = (left + right).first?.frame.height else { return }
@@ -367,7 +422,7 @@ extension OverlayController {
         }
         if showsEdgeKeys, let rect = overlays.selection {
             let legend = arrowLegend
-            c.legend.show(legend) { [NSTextField(legend, size: 11, weight: .semibold, color: .chromeText)] }
+            c.legend.show(legend.map { $0.label + $0.keys.joined() }.joined(separator: "|")) { legend.map { Pill.hint($0.keys, $0.label) } }
             let box = view.viewRect(rect)
             c.legend.frame.origin = CGPoint(x: (box.midX - c.legend.frame.width / 2).rounded(), y: (box.midY - c.legend.frame.height / 2).rounded())
             // Under the top arrow or over the bottom one when they come inside that far.
@@ -414,6 +469,7 @@ extension OverlayController {
             let x = box.maxX + 12 + width <= bounds.width - 8 ? box.maxX + 12 : (box.minX - 12 - width >= 8 ? box.minX - 12 - width : 12)
             c.list.frame.origin = CGPoint(x: x, y: min(max(box.maxY - height, 8), top - height - 8))
         }
+        placeToolTip()
         lightCaps(restyle: restyle)
     }
 }
