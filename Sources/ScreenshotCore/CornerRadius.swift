@@ -64,7 +64,7 @@ public func cornerArcs(in image: CGImage, rect: CGRect) -> CornerRadii {
         // The smallest inset with a fit: a free inset lets a tight shape's arc pass for a smaller circle further in. Within a tenth of
         // the radius, at most 3 px: edges of a grid around the corner can fit a large circle to a tenth of it. The radius is the frame's:
         // the circle tangent to the frame's sides that runs `inset` px outside the shape's arc.
-        return [0, 1, 2].lazy.compactMap { inset -> Int? in
+        return [0, 1, 2].lazy.filter { Int(limit) - $0 >= 8 }.compactMap { inset -> Int? in
             let best = (8...Int(limit) - inset).map { (radius: $0, miss: miss(Double($0), Double(inset))) }.min { $0.miss < $1.miss }!
             return best.miss <= max(1.25, min(3, Double(best.radius + inset) * 0.1)) ? best.radius + inset : nil
         }.first

@@ -166,6 +166,21 @@ struct CornerRadiusTests {
         #expect(abs(cornerRadius(in: image, rect: CGRect(x: 168, y: 12, width: 70, height: 52)) - 24) <= 1)
     }
 
+    @Test func smallRectsLeaveNoRoomForAnInsetArc() throws {
+        // A short side of 16 to 19 px leaves no 8 px radius once the inset is taken; such rects over the capsule's ends still measure.
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("notes/fixtures/round13/finder-toolbar-capsules.png")
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        for side in 16...19 {
+            for y in 0...(76 - side) {
+                for x in stride(from: 0, through: 324 - side, by: 2) {
+                    _ = cornerArcs(in: image, rect: CGRect(x: x, y: y, width: side, height: side))
+                }
+            }
+        }
+    }
+
     @Test func measuresTheLogosRoundedSquare() throws {
         // The rounded square that a snap finds in the user's logo fixture (see SmartSnapTests).
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
