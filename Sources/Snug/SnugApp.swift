@@ -138,7 +138,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             registeredShortcut = current
             captureItem?.setShortcut(from: defaults)
         } catch {
-            NSApp.presentError(error)
+            Toast.show(message: "Shortcut not registered", detail: error.localizedDescription, color: .systemRed)
         }
     }
 
@@ -322,7 +322,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 if overlay.image === image { overlay.setWindows(windows.map(\.rect), names: windows.map(\.name), ids: windows.map(\.id), frozen: windows.map(\.frozen), pointer: NSEvent.mouseLocation) }
             } catch is CancellationError {
             } catch {
-                NSApp.presentError(error)
+                Toast.show(message: "Capture failed", detail: error.localizedDescription, color: .systemRed)
             }
         }
     }
@@ -375,8 +375,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         Task {
             do {
                 let session = try await start.value
-                try await session.stop()
-                _ = try await ScreenRecording.deliver(session.file, pasteboard: .general, defaults: .standard)
+                let file = try await session.stop()
+                _ = try await ScreenRecording.deliver(file, pasteboard: .general, defaults: .standard)
             } catch {
                 showRecordingFailure(error)
             }

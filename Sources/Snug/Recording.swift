@@ -2,6 +2,7 @@ import AppKit
 import AVFoundation
 import os
 import ScreenCaptureKit
+import ScreenshotCore
 
 let recordingLog = Logger(subsystem: "local.snug", category: "recording")
 
@@ -48,7 +49,10 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     /// Space between the bottom of the visible frame and the stop reminder inside a full-screen area.
     static let fullScreenInset: CGFloat = 24
 
+    /// The name the finished recording asks for; `stop` moves the recording to it, or to the next free numbered name.
     let file: URL
+    /// Where the output writes while recording, beside `file` under a hidden name, so no other recording's file is ever replaced.
+    private let temporary: URL
     /// Called on the main actor if the recording fails before `stop`, with no frames written.
     var onFailure: (any Error) -> Void = { _ in }
     /// Called on the main actor when the stream stops without `stop`, as when the system's screen-recording indicator in the menu bar
@@ -65,10 +69,11 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     /// Counts the reminder's time once a second until the recording stops.
     private var ticking: Task<Void, any Error>?
 
-    private init(file: URL, filter: SCContentFilter, configuration: SCStreamConfiguration, recordingConfiguration: SCRecordingOutputConfiguration,
+    private init(file: URL, temporary: URL, filter: SCContentFilter, configuration: SCStreamConfiguration, recordingConfiguration: SCRecordingOutputConfiguration,
                  panels: [RecordingPanel]) throws {
         self.file = file
         self.panels = panels
+        self.temporary = temporary
         (ended, end) = AsyncStream.makeStream()
         super.init()
         stream = SCStream(filter: filter, configuration: configuration, delegate: self)
@@ -109,10 +114,11 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
             configuration.capturesAudio = capturesAudio
             configuration.excludesCurrentProcessAudio = true
             let recordingConfiguration = SCRecordingOutputConfiguration()
-            recordingConfiguration.outputURL = file
+            let temporary = UniqueFile.temporary(beside: file)
+            recordingConfiguration.outputURL = temporary
             recordingConfiguration.outputFileType = .mov
             recordingConfiguration.videoCodecType = .h264
-            recording = try ScreenRecording(file: file, filter: filter, configuration: configuration, recordingConfiguration: recordingConfiguration, panels: panels)
+            recording = try ScreenRecording(file: file, temporary: temporary, filter: filter, configuration: configuration, recordingConfiguration: recordingConfiguration, panels: panels)
             recording.onFailure = onFailure
             recording.onStop = onStop
             try await recording.stream.startCapture()
@@ -141,8 +147,9 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         return recording
     }
 
-    /// Ends the recording and waits until the file is written, or fails after `finishTimeout`.
-    func stop() async throws {
+    /// Ends the recording and waits until the file is written, or fails after `finishTimeout`. Returns the file the recording was moved
+    /// to: `file`, or its next free numbered name when another recording or capture already has it.
+    func stop() async throws -> URL {
         stopping = true
         ticking?.cancel()
         panels.forEach { $0.orderOut(nil) }
@@ -152,8 +159,15 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
                 do { try await stream!.stopCapture() } catch { end.yield(error) }
             }
         }
-        try await Self.waitForEnd(ended, file: file)
+        do {
+            try await Self.waitForEnd(ended, file: file)
+        } catch {
+            // A recording that failed to finish stays recoverable at a visible name.
+            if FileManager.default.fileExists(atPath: temporary.path) { _ = try UniqueFile.move(temporary, to: file) }
+            throw error
+        }
         recordingLog.notice("stop() returned")
+        return try UniqueFile.move(temporary, to: file)
     }
 
     /// Waits for the first end in `ended`: returns on nil, throws the error it carries, or throws a write error naming `file` after

@@ -337,20 +337,23 @@ extension DebugRun {
         let area = CGRect(x: 0, y: 0, width: 200, height: 100)
         let recording = try await ScreenRecording.start(displayID: display, area: area, file: live, showsCursor: true, capturesAudio: false, showsPanels: false, defaults: defaults)
         try await Task.sleep(for: .seconds(1))
-        try await recording.stop()
-        let recorded = try await movie(live)
-        let silentTracks = try await AVURLAsset(url: live).loadTracks(withMediaType: .audio)
+        let liveDone = try await recording.stop()
+        let recorded = try await movie(liveDone)
+        let silentTracks = try await AVURLAsset(url: liveDone).loadTracks(withMediaType: .audio)
         require(silentTracks.isEmpty, "a recording made with audio off has no audio track: \(silentTracks.count)")
         let pixelScale = CGFloat(CGDisplayCopyDisplayMode(display)!.pixelWidth) / CGDisplayBounds(display).width
         require(recorded.size == CGSize(width: area.width * pixelScale, height: area.height * pixelScale) && abs(recorded.seconds - 1) < 0.3,
                 "a live 1 s recording of 200 x 100 pt is \(area.width * pixelScale) x \(area.height * pixelScale) px and about 1 s: \(recorded)")
 
         // The same recording with system audio on: SCRecordingOutput writes an audio track (one, with no microphone).
-        let loud = FileManager.default.temporaryDirectory.appending(path: "snug-recording-audio-\(UUID().uuidString).mov")
-        let withAudio = try await ScreenRecording.start(displayID: display, area: area, file: loud, showsCursor: true, capturesAudio: true, showsPanels: false, defaults: defaults)
+        // It asks for the first recording's name, so it takes the numbered one and the first keeps its file.
+        let withAudio = try await ScreenRecording.start(displayID: display, area: area, file: live, showsCursor: true, capturesAudio: true, showsPanels: false, defaults: defaults)
         try await Task.sleep(for: .seconds(1))
-        try await withAudio.stop()
-        let audioTracks = try await AVURLAsset(url: loud).loadTracks(withMediaType: .audio)
+        let loudDone = try await withAudio.stop()
+        require(liveDone == live && loudDone.lastPathComponent == live.deletingPathExtension().lastPathComponent + " 2.mov"
+                && FileManager.default.fileExists(atPath: liveDone.path) && FileManager.default.fileExists(atPath: loudDone.path),
+                "two recordings that ask for one name keep both files: \(liveDone.lastPathComponent) \(loudDone.lastPathComponent)")
+        let audioTracks = try await AVURLAsset(url: loudDone).loadTracks(withMediaType: .audio)
         let audioSeconds = try await audioTracks.first?.load(.timeRange).duration.seconds
         print("recording audio       \(audioTracks.count) audio track(s), \(audioSeconds.map { String(format: "%.2f", $0) } ?? "none") s")
         require(audioTracks.count == 1, "a recording made with audio on has one audio track: \(audioTracks.count)")
