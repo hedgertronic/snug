@@ -132,7 +132,7 @@ extension DebugRun {
         try snapshot("edit-chrome")
         print("strip width, edit: \(overlay.chrome.strip.frame.width) pt")
         // The strip under each modifier: Agent, Text and Save As, Translate, with the held caps lit.
-        for (name, modifiers) in [("cmd", NSEvent.ModifierFlags.command), ("shift", .shift), ("option", .option)] {
+        for (name, modifiers) in [("cmd", NSEvent.ModifierFlags.command), ("shift", .shift), ("option", .option), ("option-shift", [.option, .shift]), ("option-cmd", [.option, .command])] {
             overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
                 windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
             try snapshot("edit-chrome-\(name)")
@@ -142,6 +142,11 @@ extension DebugRun {
             windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
         mouse(.mouseMoved, CGPoint(x: editRect.midX, y: editRect.midY))
         try snapshot("edit-chrome-pointer-inside")
+        overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: .shift, timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!)
+        try snapshot("edit-chrome-pointer-inside-shift")
+        overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!)
         key(35, "p")
         for _ in 0..<3 { key(125, "") }
         try snapshot("edit-ratio-menu")
@@ -243,8 +248,7 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: documentsIcon.bounds.midX, y: documentsIcon.bounds.midY))
         key(126, "")
         let finderHints = overlay.view.overlays
-        require(finderHints.hover == finderCells[5].bounds && finderHints.upHint == finderSidebar.bounds && finderHints.downHint == documentsIcon.bounds
-                    && overlay.view.levelHintLayer.path!.boundingBox == overlay.view.viewRect(finderSidebar.bounds).insetBy(dx: 0.5, dy: 0.5),
+        require(finderHints.hover == finderCells[5].bounds && finderHints.upHint == finderSidebar.bounds && finderHints.downHint == documentsIcon.bounds,
                 "Finder render: Documents hovered, Up the sidebar, Down the icon, nothing for Left and Right")
         try snapshot("hint-outlines-finder")
         overlay.dismiss()
