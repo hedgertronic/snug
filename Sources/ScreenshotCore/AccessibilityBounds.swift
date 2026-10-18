@@ -54,15 +54,29 @@ public enum AccessibilityBounds {
     /// The frames a hover can land on: not the window (its rectangle comes from the window list, where a click captures it as a window),
     /// nor an element within `paddingTolerance` of the window's frame on every side (Finder's column view AXBrowser is
     /// 1 pt larger than its window on every side, measured on macOS 26), not static text, not Stage Manager's strip list (it would win in the gaps between thumbnails and around their
-    /// tilted pictures), and nothing under 16 pt on a side. Roles, not role descriptions: those are localized.
+    /// tilted pictures), nothing under 16 pt on a side, and not an outline's section header (`sectionHeaderRow`): like static text,
+    /// hovering one picks what holds it. Roles, not role descriptions: those are localized.
     public static func hoverLevel(_ frames: [AXFrame]) -> [AXFrame] {
         let stageManager = StageManager.owns(frames)
         let window = frames.first { $0.role == "AXWindow" }?.rect
-        return frames.filter { frame in
+        return frames.dropFirst(sectionHeaderRow(frames).map { $0 + 1 } ?? 0).filter { frame in
             frame.role != "AXWindow" && frame.role != "AXStaticText" && !(stageManager && frame.role == "AXList")
                 && frame.rect.width >= minimumHoverSide && frame.rect.height >= minimumHoverSide
                 && !(window.map { frame.rect.isNear($0, within: paddingTolerance) } ?? false)
         }
+    }
+
+    /// The index in `frames` (innermost first) of the outline row when they start with a section header, such as "Favorites" in
+    /// Finder's sidebar: an `AXStaticText` that fills its `AXOutlineRow`, each step out (its cell, then the row) within
+    /// `paddingTolerance`. An item row holds an icon beside its text, so its text starts well inside the cell (35 pt in Finder). Nil otherwise.
+    public static func sectionHeaderRow(_ frames: [AXFrame]) -> Int? {
+        guard frames.first?.role == "AXStaticText" else { return nil }
+        var level = 0
+        while level + 1 < frames.count, frames[level + 1].rect.isNear(frames[level].rect, within: paddingTolerance) {
+            level += 1
+            if frames[level].subrole == "AXOutlineRow" { return level }
+        }
+        return nil
     }
 
     /// Whether hover looks up accessibility frames in a window: not in the frozen Dock (named "Dock" by the window listing), whose live
@@ -125,10 +139,11 @@ public enum AccessibilityBounds {
 
     /// The candidates of the hovered element's peers. Each chain is one sibling's frames, innermost first, then the shared ancestors up to
     /// the window, so a sibling is converted, clipped to its scroll viewport and collapsed to its padding-free level (its cell, not its
-    /// row) as the hovered element is, and the peers share its depth. Only the first candidate of each chain is kept.
+    /// row) as the hovered element is, and the peers share its depth. Only the first candidate of each chain is kept. Section headers
+    /// (`sectionHeaderRow`) are skipped, as Finder's own arrow keys skip them.
     public static func peerCandidates(_ chains: [[AXFrame]], displayOrigin: CGPoint, scale: CGFloat, extent: CGRect) async throws -> [Candidate] {
         var output: [Candidate] = []
-        for chain in chains {
+        for chain in chains where sectionHeaderRow(chain) == nil {
             output += try await candidates(frames: hoverLevel(chain), displayOrigin: displayOrigin, scale: scale, extent: extent).prefix(1)
         }
         return output
