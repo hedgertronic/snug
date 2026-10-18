@@ -110,8 +110,8 @@ extension OverlayController {
     /// What the arrow keys do with the modifiers held now: labels, each with its chord.
     private var arrowLegend: [(keys: [String], label: String)] {
         switch (optionHeld, commandHeld) {
-        case (true, true): [(["\u{2325}\u{2318}"], "shrink")]
-        case (true, false): [(["\u{2325}"], "grow")]
+        case (true, true): shiftHeld ? [(["\u{2325}\u{21E7}\u{2318}"], "shrink 10 px")] : [(["\u{2325}\u{2318}"], "shrink")]
+        case (true, false): shiftHeld ? [(["\u{2325}\u{21E7}"], "grow 10 px")] : [(["\u{2325}"], "grow")]
         case (false, true): [(["\u{2318}"], "edge out"), (["\u{2318}\u{21E7}"], "edge in")]
         case (false, false): shiftHeld ? [(["\u{21E7}"], "move 10 px")] : [([], "move")]
         }
@@ -374,53 +374,38 @@ extension OverlayController {
         }
         if let attachment { attach(to: attachment.box, strip: attachment.strip, left: attachment.left, right: attachment.right) }
 
-        // While the pointer rests inside a released selection, or a modifier is held, each side's arrow key sits just outside the side's
-        // midpoint, pushed further out past the chips, strip or bar in the way, and inside the side when that leaves the screen; the legend
-        // in the middle says what the arrows do.
+        // While the pointer rests inside a released selection, or a modifier is held, the legend in the middle says what the arrows do and
+        // the four arrow keys sit around it like a D-pad (up above, down below, left and right beside), the group centered in the
+        // selection, kept on the screen. A group wider or taller than the selection stays centered on it, as the legend alone does. It
+        // moves down (up when that leaves the screen) past each chip, the strip or the bar it would cover.
         let resting = draggedRect == nil && selection?.rect.contains(pointer) == true
         let showsEdgeKeys = editing && (optionHeld || commandHeld || resting)
-        let obstacles: [NSView] = [c.topBar, c.strip, c.size, c.snap, c.ratio, c.radius].filter { !$0.isHidden }
         for (index, pill) in c.sideHints.enumerated() {
-            pill.isHidden = true
-            guard showsEdgeKeys, let rect = overlays.selection else { continue }
             let arrow = ["\u{2190}", "\u{2192}", "\u{2191}", "\u{2193}"][index]
-            pill.show(arrow) { [KeyCap(arrow)] }
-            let box = view.viewRect(rect), size = pill.frame.size, gap: CGFloat = 6
-            let midX = (box.midX - size.width / 2).rounded(), midY = (box.midY - size.height / 2).rounded()
-            var outside: CGRect
-            var inside: CGPoint
-            switch index {
-            case 0: (outside, inside) = (CGRect(origin: CGPoint(x: box.minX - gap - size.width, y: midY), size: size), CGPoint(x: box.minX + gap, y: midY))
-            case 1: (outside, inside) = (CGRect(origin: CGPoint(x: box.maxX + gap, y: midY), size: size), CGPoint(x: box.maxX - gap - size.width, y: midY))
-            case 2: (outside, inside) = (CGRect(origin: CGPoint(x: midX, y: box.maxY + gap), size: size), CGPoint(x: midX, y: min(box.maxY, top) - gap - size.height))
-            default: (outside, inside) = (CGRect(origin: CGPoint(x: midX, y: box.minY - gap - size.height), size: size), CGPoint(x: midX, y: box.minY + gap))
-            }
-            for obstacle in obstacles where obstacle.frame.intersects(outside) {
-                switch index {
-                case 0: outside.origin.x = obstacle.frame.minX - gap - size.width
-                case 1: outside.origin.x = obstacle.frame.maxX + gap
-                case 2: outside.origin.y = obstacle.frame.maxY + gap
-                default: outside.origin.y = obstacle.frame.minY - gap - size.height
-                }
-            }
-            for obstacle in obstacles where obstacle.frame.intersects(CGRect(origin: inside, size: size)) {
-                switch index {
-                case 0: inside.x = obstacle.frame.maxX + gap
-                case 1: inside.x = obstacle.frame.minX - gap - size.width
-                case 2: inside.y = obstacle.frame.minY - gap - size.height
-                default: inside.y = obstacle.frame.maxY + gap
-                }
-            }
-            pill.frame.origin = CGRect(x: 4, y: 4, width: bounds.width - 8, height: top - 8).contains(outside) ? outside.origin : inside
+            pill.isHidden = !showsEdgeKeys
+            if showsEdgeKeys { pill.show(arrow) { [KeyCap(arrow)] } }
         }
         if showsEdgeKeys, let rect = overlays.selection {
             let legend = arrowLegend
             c.legend.show(legend.map { $0.label + $0.keys.joined() }.joined(separator: "|")) { legend.map { Pill.hint($0.keys, $0.label) } }
-            let box = view.viewRect(rect)
-            c.legend.frame.origin = CGPoint(x: (box.midX - c.legend.frame.width / 2).rounded(), y: (box.midY - c.legend.frame.height / 2).rounded())
-            // Under the top arrow or over the bottom one when they come inside that far.
-            if c.sideHints[2].frame.intersects(c.legend.frame) { c.legend.frame.origin.y = c.sideHints[2].frame.minY - 6 - c.legend.frame.height }
-            if c.sideHints[3].frame.intersects(c.legend.frame) { c.legend.frame.origin.y = c.sideHints[3].frame.maxY + 6 }
+            let box = view.viewRect(rect), gap: CGFloat = 6
+            let (left, right, up, down) = (c.sideHints[0].frame.size, c.sideHints[1].frame.size, c.sideHints[2].frame.size, c.sideHints[3].frame.size)
+            let size = c.legend.frame.size
+            let group = CGSize(width: left.width + gap + size.width + gap + right.width, height: up.height + gap + size.height + gap + down.height)
+            let screen = CGRect(x: 4, y: 4, width: bounds.width - 8, height: top - 8)
+            var origin = CGPoint(x: min(max((box.midX - group.width / 2).rounded(), screen.minX), max(screen.maxX - group.width, screen.minX)),
+                                 y: min(max((box.midY - group.height / 2).rounded(), screen.minY), max(screen.maxY - group.height, screen.minY)))
+            // Lowest first, so a move down past one chip does not land on a chip below it.
+            for obstacle in [c.topBar, c.strip, c.size, c.snap, c.ratio, c.radius].filter({ !$0.isHidden }).sorted(by: { $0.frame.minY > $1.frame.minY }) where obstacle.frame.intersects(CGRect(origin: origin, size: group)) {
+                let below = obstacle.frame.minY - gap - group.height
+                origin.y = below >= screen.minY ? below : obstacle.frame.maxY + gap
+            }
+            let center = CGPoint(x: origin.x + left.width + gap + size.width / 2, y: origin.y + down.height + gap + size.height / 2)
+            c.legend.frame.origin = CGPoint(x: center.x - size.width / 2, y: center.y - size.height / 2)
+            c.sideHints[0].frame.origin = CGPoint(x: c.legend.frame.minX - gap - left.width, y: center.y - left.height / 2)
+            c.sideHints[1].frame.origin = CGPoint(x: c.legend.frame.maxX + gap, y: center.y - right.height / 2)
+            c.sideHints[2].frame.origin = CGPoint(x: center.x - up.width / 2, y: c.legend.frame.maxY + gap)
+            c.sideHints[3].frame.origin = CGPoint(x: center.x - down.width / 2, y: c.legend.frame.minY - gap - down.height)
         }
 
         // The keys of a hovered corner dot stack under its "All corners" chip (over it at the bottom corners), flush with the chip's outer side.

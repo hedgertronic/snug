@@ -1273,9 +1273,27 @@ extension DebugRun {
         require(keyCaps("\u{2325}", in: chrome.copy).count == 1 && lit(["\u{2325}"], chrome.strip) && lit(["\u{2325}"], chrome.legend)
                     && texts(in: chrome.legend) == ["grow", "\u{2325}"],
                 "holding Option lights the Option caps on the strip (Translate) and the legend, which reads grow with its cap: \(texts(in: chrome.legend))")
-        require(sides.allSatisfy { !$0.isHidden } && sides[0].frame.maxX <= selected.minX && sides[1].frame.minX >= selected.maxX && sides[2].frame.minY >= selected.maxY
-                    && abs(sides[0].frame.midY - selected.midY) < 1 && abs(sides[2].frame.midX - selected.midX) < 1 && !sides[3].frame.intersects(chrome.strip.frame),
-                "holding Option puts an arrow cap outside each side's midpoint, clear of the strip: \(sides.map(\.frame)) \(selected)")
+        // The arrow caps are a D-pad around the legend, the group centered in the selection (this one is 35 pt tall, so the group is
+        // taller than it, stays centered across and moves past the chips).
+        func dpad(_ what: String) {
+            let legend = chrome.legend.frame, group = sides.map(\.frame).reduce(legend) { $0.union($1) }
+            let fits = group.width <= selected.width && group.height <= selected.height
+            require(sides.allSatisfy { !$0.isHidden } && abs(group.midX - selected.midX) <= 1 && (!fits || abs(group.midY - selected.midY) <= 1)
+                        && ![chrome.strip, chrome.size, chrome.snap, chrome.ratio, chrome.radius].contains { !$0.isHidden && $0.frame.intersects(group) },
+                    "\(what): the arrow caps and the legend are one group, centered in the selection when it fits, clear of the chips: \(group) \(selected)")
+            require(sides[2].frame.minY == legend.maxY + 6 && sides[3].frame.maxY == legend.minY - 6 && sides[0].frame.maxX == legend.minX - 6 && sides[1].frame.minX == legend.maxX + 6
+                        && abs(sides[2].frame.midX - legend.midX) <= 1 && abs(sides[3].frame.midX - legend.midX) <= 1 && abs(sides[0].frame.midY - legend.midY) <= 1 && abs(sides[1].frame.midY - legend.midY) <= 1
+                        && !sides.contains { $0.frame.intersects(legend) },
+                    "\(what): up above the legend, down below, left and right beside it: \(sides.map(\.frame)) \(legend)")
+        }
+        dpad("holding Option")
+        flags([.option, .shift])
+        require(lit(["\u{2325}", "\u{21E7}"], chrome.legend) && texts(in: chrome.legend) == ["grow 10 px", "\u{2325}", "\u{21E7}"], "holding Option-Shift the legend reads grow 10 px with both caps: \(texts(in: chrome.legend))")
+        dpad("holding Option-Shift")
+        flags([.option, .shift, .command])
+        require(lit(["\u{2325}", "\u{21E7}", "\u{2318}"], chrome.legend) && texts(in: chrome.legend) == ["shrink 10 px", "\u{2325}", "\u{21E7}", "\u{2318}"], "holding Option-Shift-Command the legend reads shrink 10 px: \(texts(in: chrome.legend))")
+        dpad("holding Option-Shift-Command")
+        flags(.option)
         flags([.option, .command])
         require(lit(["\u{2325}", "\u{2318}"], chrome.strip) && lit(["\u{2325}", "\u{2318}"], chrome.legend)
                     && texts(in: chrome.legend) == ["shrink", "\u{2325}", "\u{2318}"] && sides.allSatisfy { !$0.isHidden },
@@ -1283,6 +1301,7 @@ extension DebugRun {
         flags(.command)
         require(lit(["\u{2318}"], chrome.strip) && lit(["\u{2318}"], chrome.legend) && texts(in: chrome.legend) == ["edge out", "\u{2318}", "edge in", "\u{2318}", "\u{21E7}"] && sides.allSatisfy { !$0.isHidden },
                 "holding Command lights the Command caps and the legend reads both edge directions: \(texts(in: chrome.legend))")
+        dpad("holding Command")
         flags([.command, .shift])
         require(lit(["\u{2318}", "\u{21E7}"], chrome.strip) && lit(["\u{2318}", "\u{21E7}"], chrome.legend)
                     && texts(in: chrome.legend) == ["edge out", "\u{2318}", "edge in", "\u{2318}", "\u{21E7}"],
@@ -1384,6 +1403,10 @@ extension DebugRun {
             let outside = shown.filter { !screen.contains($0.1.frame) }.map { "\($0.0) \($0.1.frame) in \(screen)" }
             require(overlaps.isEmpty && outside.isEmpty && !chrome.ratio.isHidden && chrome.sideHints.allSatisfy { !$0.isHidden },
                     "the \(name) selection's chrome does not overlap or leave the screen: overlaps \(overlaps), outside \(outside)")
+            if name == "large" {
+                let group = chrome.sideHints.map(\.frame).reduce(chrome.legend.frame) { $0.union($1) }
+                require(overlay.view.viewRect(rect).contains(group), "in the large selection the arrow caps and the legend sit inside it: \(group)")
+            }
             // At the right edge the strip is clamped with room for its widest labels, so they keep its left edge and stay on screen.
             guard name == "right" else { continue }
             let left = chrome.strip.frame.minX
