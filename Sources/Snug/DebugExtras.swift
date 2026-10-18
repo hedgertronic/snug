@@ -488,7 +488,7 @@ extension DebugRun {
         mouse(.mouseMoved, aim)
         let hovered = overlay.view.overlays.hover!
         require(hovered != screenWindow && ![CandidateKind.window, .display].contains(overlay.session!.selected!.kind), "hover over geometry selects it, not the window \(hovered)")
-        require(Array(texts(in: overlay.chrome.hover).dropFirst()) == ["\(Int(hovered.width)) x \(Int(hovered.height))"] && texts(in: overlay.chrome.strip).prefix(5) == ["Edit", "E", "Copy", "\u{2318}", "\u{21A9}"],
+        require(Array(texts(in: overlay.chrome.hover).dropFirst()) == ["\(Int(hovered.width)) x \(Int(hovered.height))"] && texts(in: overlay.chrome.strip).prefix(4) == ["Edit", "E", "Copy", "\u{21A9}"],
                 "the hover chip shows the name and the size, and the strip below starts with Edit, then Copy: \(texts(in: overlay.chrome.hover))")
         let hoverBox = overlay.view.viewRect(hovered)
         require(overlay.chrome.hover.frame.minX == max(hoverBox.minX, 8) && (overlay.chrome.hover.frame.minY == hoverBox.maxY + 8 || hoverBox.contains(overlay.chrome.hover.frame)),
@@ -1035,8 +1035,8 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: extent.width - 2, y: extent.height - 2))
         require(overlay.view.bounds.contains(tag.frame.union(coordinates.frame)), "at the screen corner the pointer cluster is clamped into the view: \(coordinates.frame) \(tag.frame)")
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
-        // The tools are a symbol and their key cap, named for accessibility; Copy shows a faded Command and Save a faded Shift.
-        let captureStrip = ["Copy", "\u{2318}", "\u{21A9}", "Save", "\u{21E7}", "\u{2318}", "S", "G", "V", "K"]
+        // The tools are a symbol and their key cap, named for accessibility; at rest Copy and Save show only their own keys.
+        let captureStrip = ["Copy", "\u{21A9}", "Save", "\u{2318}", "S", "G", "V", "K"]
         let offline = captureStrip.filter { !["G", "V"].contains($0) }
         require(texts(in: chrome.strip) == ["Edit", "E"] + offline + ["U"] && chrome.strip.groups.count == 3 && chrome.copy.primary && !chrome.edit.primary && !chrome.edit.lit
                     && chrome.edit.superview === chrome.strip.groups[0] && chrome.strip.frame.maxY == windowBox.minY - 8 && chrome.strip.frame.minX == windowBox.minX,
@@ -1044,8 +1044,8 @@ extension DebugRun {
         require([chrome.scroll, chrome.record, chrome.cutout, chrome.colors].map { $0.accessibilityLabel() ?? "" } == ["Scroll", "Record", "Subject", "Colors"]
                     && [chrome.cutout, chrome.colors].allSatisfy { $0.symbol != nil && $0.title.isHidden && $0.caps.count == 1 },
                 "the tools are a symbol and a key cap, with their names as accessibility labels")
-        require(chrome.copy.caps.map(\.faded) == [true, false] && chrome.save.caps.map(\.faded) == [true, false, false] && chrome.copy.key == "\u{21A9}" && chrome.save.key == "\u{2318}S",
-                "at rest Copy shows a faded Command before Return and Save a faded Shift before Command S")
+        require(chrome.copy.caps.map(\.text) == ["\u{21A9}"] && chrome.save.caps.map(\.text) == ["\u{2318}", "S"] && chrome.copy.key == "\u{21A9}" && chrome.save.key == "\u{2318}S",
+                "at rest Copy shows only Return and Save only Command S")
         require(chrome.all.flatMap(faded).isEmpty, "nothing else in the chrome is faded: \(chrome.all.flatMap(faded))")
         // Held modifiers fold the alternates into Copy and Save, light their caps, and dim what has no modified meaning; the strip's left
         // edge stays put while the labels change. Releasing restores the strip.

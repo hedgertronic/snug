@@ -92,7 +92,7 @@ extension OverlayController {
         Set([(optionHeld, "\u{2325}"), (commandHeld, "\u{2318}"), (shiftHeld, "\u{21E7}")].compactMap { $0.0 ? Character($0.1) : nil })
     }
 
-    /// Every cap is pressed while its chord flashes, and a modifier's cap while its key is held (a faded cap shows only while it is not);
+    /// Every cap is pressed while its chord flashes, and a modifier's cap while its key is held;
     /// with `restyle` (a new tint), every button and cap redraws in the current tint.
     private func lightCaps(restyle: Bool = false) {
         let held = heldGlyphs
@@ -199,24 +199,25 @@ extension OverlayController {
         }
         /// The capture strip: Edit in its own pill, lit once there is a selection, then Copy and Save, then Scroll and Record (each
         /// left out when it cannot run on `area`), Subject, and Colors. The modifiers held relabel Copy (Command: Agent, Shift: Text,
-        /// Option: Translate, each alone) and Save (Shift: Save As), whose clicks press the chord shown; at rest Copy shows a faded
-        /// Command and Save a faded Shift. A combination with no meaning dims the button, and any modifier dims Edit and the tools.
+        /// Option: Translate, each alone) and Save (Shift: Save As), whose clicks press the chord shown; at rest each shows only its own
+        /// key, and a modifier's cap appears while it is held. A combination with no meaning dims the button, and any modifier dims Edit
+        /// and the tools.
         func captureStrip(_ area: CGRect) {
             let scrolls = (scrollFrames != nil || displayID != nil) && area != extent && windows.contains { $0.insetBy(dx: -2, dy: -2).contains(area) }
             let held = heldGlyphs
             c.edit.lit = selection != nil
-            let copy: (title: String, key: String, faded: String)? = switch held {
-            case []: ("Copy", "\u{21A9}", "\u{2318}")
-            case ["\u{2318}"]: ("Agent", "\u{2318}\u{21A9}", "")
-            case ["\u{21E7}"]: ("Text", "\u{21E7}\u{21A9}", "")
-            case ["\u{2325}"]: ("Translate", "\u{2325}\u{21A9}", "")
+            let copy: (title: String, key: String)? = switch held {
+            case []: ("Copy", "\u{21A9}")
+            case ["\u{2318}"]: ("Agent", "\u{2318}\u{21A9}")
+            case ["\u{21E7}"]: ("Text", "\u{21E7}\u{21A9}")
+            case ["\u{2325}"]: ("Translate", "\u{2325}\u{21A9}")
             default: nil
             }
             c.copy.setTitle(copy?.title ?? "Copy")
-            c.copy.setKeys(copy?.key ?? "\u{21A9}", faded: copy?.faded ?? "")
+            c.copy.setKeys(copy?.key ?? "\u{21A9}")
             c.copy.isEnabled = copy != nil
             c.save.setTitle(shiftHeld && !optionHeld ? "Save As" : "Save")
-            c.save.setKeys(shiftHeld && !optionHeld ? "\u{21E7}\u{2318}S" : "\u{2318}S", faded: held.isEmpty ? "\u{21E7}" : "")
+            c.save.setKeys(shiftHeld && !optionHeld ? "\u{21E7}\u{2318}S" : "\u{2318}S")
             c.save.isEnabled = !optionHeld
             for button in [c.edit, c.scroll, c.record, c.cutout, c.colors] { button.isEnabled = held.isEmpty }
             c.stripSlack = Chrome.widest.copy - c.copy.frame.width + Chrome.widest.save - c.save.frame.width
@@ -224,16 +225,16 @@ extension OverlayController {
         }
 
         /// The Text strip: Copy, whose label the modifiers held change (Shift alone: Rows, Option alone: Translate) and which at rest
-        /// shows a faded Shift and Option; any other combination dims it.
+        /// shows only Return; any other combination dims it.
         func textStrip() {
-            let copy: (title: String, key: String, faded: String)? = switch heldGlyphs {
-            case []: ("Copy", "\u{21A9}", "\u{21E7}\u{2325}")
-            case ["\u{21E7}"]: ("Rows", "\u{21E7}\u{21A9}", "")
-            case ["\u{2325}"]: ("Translate", "\u{2325}\u{21A9}", "")
+            let copy: (title: String, key: String)? = switch heldGlyphs {
+            case []: ("Copy", "\u{21A9}")
+            case ["\u{21E7}"]: ("Rows", "\u{21E7}\u{21A9}")
+            case ["\u{2325}"]: ("Translate", "\u{2325}\u{21A9}")
             default: nil
             }
             c.copy.setTitle(copy?.title ?? "Copy")
-            c.copy.setKeys(copy?.key ?? "\u{21A9}", faded: copy?.faded ?? "")
+            c.copy.setKeys(copy?.key ?? "\u{21A9}")
             c.copy.isEnabled = copy != nil
             c.stripSlack = Chrome.widest.text - c.copy.frame.width
             c.strip.show([[c.copy]])

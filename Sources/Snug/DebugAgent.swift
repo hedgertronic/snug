@@ -49,11 +49,11 @@ extension DebugRun {
         func checkAgentLabel(_ name: String) {
             flags(.command)
             let command = copyButton.caps.first { $0.text == "\u{2318}" }
-            require(texts(in: copyButton) == ["Agent", "\u{2318}", "\u{21A9}"] && copyButton.key == "\u{2318}\u{21A9}" && command?.pressed == true && !command!.faded,
+            require(texts(in: copyButton) == ["Agent", "\u{2318}", "\u{21A9}"] && copyButton.key == "\u{2318}\u{21A9}" && command?.pressed == true,
                     "\(name): with Command held the strip's Copy reads Agent, its Command cap lit: \(texts(in: copyButton))")
             flags([])
-            require(texts(in: copyButton) == ["Copy", "\u{2318}", "\u{21A9}"] && copyButton.key == "\u{21A9}" && copyButton.caps[0].faded,
-                    "\(name): releasing Command restores Copy with a faded Command cap: \(texts(in: copyButton))")
+            require(texts(in: copyButton) == ["Copy", "\u{21A9}"] && copyButton.key == "\u{21A9}",
+                    "\(name): releasing Command restores Copy with Return alone: \(texts(in: copyButton))")
         }
         /// The copied item's manifest, after checking the bundle, the clipboard item and the toast against it and the frozen pixels at `crop`.
         func copied(_ crop: CGRect, _ name: String) async throws -> HandoffManifest {

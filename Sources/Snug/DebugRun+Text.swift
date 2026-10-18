@@ -787,7 +787,7 @@ extension DebugRun {
 
         // Last, the Text strip: these selections leave Live Text selecting the word under a later single click, even in a new
         // overlay, which the click checks above would trip on.
-        // A text selection gets a strip under it: Copy with faded Shift and Option, relabeled by them (Shift: Rows, Option: Translate).
+        // A text selection gets a strip under it: Copy with Return alone, relabeled by Shift and Option, whose caps show only while held (Shift: Rows, Option: Translate).
         // Its box is Live Text's: the selected glyphs' union, which lands on accurate OCR's line boxes within 3 pt.
         try await open()
         func textFlags(_ modifiers: NSEvent.ModifierFlags) {
@@ -805,9 +805,8 @@ extension DebugRun {
         liveText.selectedRanges = [fullText.range(of: "Product name")!]
         overlay.refresh()
         let productBox = overlay.textSelectionBox!
-        require(near(productBox, pointBox(productName)) && !strip.isHidden && texts(in: strip) == ["Copy", "\u{21E7}", "\u{2325}", "\u{21A9}"]
-                    && overlay.chrome.copy.caps.map(\.faded) == [true, true, false] && strip.frame.maxY == productBox.minY - 8 && strip.frame.minX == productBox.minX,
-                "a text selection's box is its line and a strip hangs under it, Copy with faded Shift and Option: \(productBox) \(pointBox(productName)) \(texts(in: strip)) \(strip.frame)")
+        require(near(productBox, pointBox(productName)) && !strip.isHidden && texts(in: strip) == ["Copy", "\u{21A9}"] && strip.frame.maxY == productBox.minY - 8 && strip.frame.minX == productBox.minX,
+                "a text selection's box is its line and a strip hangs under it, Copy with Return alone: \(productBox) \(pointBox(productName)) \(texts(in: strip)) \(strip.frame)")
         let restLeft = strip.frame.minX
         for (held, title, glyph) in [(NSEvent.ModifierFlags.shift, "Rows", "\u{21E7}"), (.option, "Translate", "\u{2325}")] {
             textFlags(held)
@@ -817,7 +816,7 @@ extension DebugRun {
         textFlags(.command)
         require(!overlay.chrome.copy.isEnabled && texts(in: strip) == ["Copy", "\u{21A9}"], "Command has no Text meaning: Copy dims")
         textFlags([])
-        require(texts(in: strip) == ["Copy", "\u{21E7}", "\u{2325}", "\u{21A9}"] && overlay.chrome.copy.isEnabled, "releasing restores the strip")
+        require(texts(in: strip) == ["Copy", "\u{21A9}"] && overlay.chrome.copy.isEnabled, "releasing restores the strip")
         // Real drags, forward and backward.
         for (from, to) in [(CGPoint(x: billing.minX + 4, y: billing.midY), CGPoint(x: billing.maxX - 2, y: billing.midY)),
                            (CGPoint(x: billing.maxX - 2, y: billing.midY), CGPoint(x: billing.minX + 4, y: billing.midY))] {
