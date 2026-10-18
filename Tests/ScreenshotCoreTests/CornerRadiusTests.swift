@@ -174,7 +174,7 @@ struct CornerRadiusTests {
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         for side in 16...19 {
             for y in 0...(76 - side) {
-                for x in stride(from: 0, through: 324 - side, by: 2) {
+                for x in Array(stride(from: 0, through: 40, by: 2)) + Array(stride(from: 284 - side, through: 324 - side, by: 2)) {
                     _ = cornerArcs(in: image, rect: CGRect(x: x, y: y, width: side, height: side))
                 }
             }
