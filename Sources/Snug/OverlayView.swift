@@ -93,9 +93,9 @@ final class OverlayView: NSView {
     let levelHintLayer = CAShapeLayer()
     private let styleLayer = CAShapeLayer()
     private let ghostLayer = CAShapeLayer()
-    private let outlineLayer = CAShapeLayer()
+    let outlineLayer = CAShapeLayer()
     private let previewLayer = CAShapeLayer()
-    private let handlesLayer = CAShapeLayer()
+    let handlesLayer = CAShapeLayer()
     private let snappedLayer = CAShapeLayer()
     /// The corner-radius dots, drawn over the resize handles.
     private let cornerDotsLayer = CAShapeLayer()

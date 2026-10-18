@@ -1000,7 +1000,9 @@ final class OverlayController {
         overlays.preview = snapPreview
         overlays.selection = selection?.rect
         overlays.snappedEdges = snappedEdges
-        overlays.showsHandles = selection != nil
+        // Armed to record, the red outline replaces both, so the view never receives them.
+        overlays.showsHandles = selection != nil && armedRecording == nil
+        overlays.showsOutline = armedRecording == nil
         if selection == nil || unionHover, case .none = interaction { overlays.hover = hoverRect }
         if mode == .text, let picked = text.picked { overlays.hover = text.items![picked].bounds }
         // While hovering, faint outlines show what Up and Down would select, unless that is nothing, the display, or within 4 pt of the
