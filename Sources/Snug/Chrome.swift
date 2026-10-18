@@ -522,6 +522,8 @@ final class Chrome {
     let legend = Pill.chip()
     /// Beside the "All corners" chip of a hovered corner dot: the radius keys and Option for one corner.
     let cornerKeys = Pill(radius: 8, insets: NSEdgeInsets(top: 5, left: 8, bottom: 5, right: 5), spacing: 5, vertical: true)
+    /// The outline the strip and chips were last placed against, in view points; nil with none.
+    var anchor: CGRect?
     /// The settings bar sits at the top, moved off the bottom edge by a rectangle there.
     var barAtTop = false
     /// The rulers' thickness the chrome last kept clear of, 0 with Rulers off; a change moves the chrome with the rulers' slide.

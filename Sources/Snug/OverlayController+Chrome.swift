@@ -497,10 +497,11 @@ extension OverlayController {
             let x = box.maxX + 12 + width <= bounds.width - 8 ? box.maxX + 12 : (box.minX - 12 - width >= 8 ? box.minX - 12 - width : 12)
             c.list.frame.origin = CGPoint(x: x, y: min(max(box.maxY - height, 8), top - height - 8))
         }
-        // The strip's views that stayed in it animate from their old frames to the new ones, and a button whose caps were replaced
-        // cross-fades its old title and caps into the new ones. The views are built and laid out outside the animation: a new text
-        // field, not yet in a layer tree, would otherwise grow its frame from zero.
-        if !c.strip.isHidden {
+        // Against the same outline, the strip's views that stayed in it animate from their old frames to the new ones, and a button whose
+        // caps were replaced cross-fades its old title and caps into the new ones. A new outline (a hover change, an arrow nudge) moves
+        // the strip and every chip with it at once. The views are built and laid out outside the animation: a new text field, not yet
+        // in a layer tree, would otherwise grow its frame from zero.
+        if !c.strip.isHidden, attachment?.box == c.anchor {
             let moved = stripBefore.filter { $0.0.frame != $0.1 && ($0.0 === c.strip || $0.0.isDescendant(of: c.strip)) }
             let relabeled = stripBefore.filter { $0.0 is BarButton && $0.0.subviews != $0.2 }.map(\.0)
             let targets = moved.map(\.0.frame)
@@ -513,6 +514,7 @@ extension OverlayController {
                 for button in relabeled { button.layer!.add(fade, forKey: kCATransition) }
             }
         }
+        c.anchor = attachment?.box
         // A chip or the strip that appeared or went away fades: its hidden state is set again inside the animation.
         for (item, shown) in zip(fading, wasShown) where motion && item.isHidden == shown {
             item.isHidden = !shown

@@ -1467,6 +1467,15 @@ extension DebugRun {
             if name == "large" {
                 let group = chrome.sideHints.map(\.frame).reduce(chrome.legend.frame) { $0.union($1) }
                 require(overlay.view.viewRect(rect).contains(group), "in the large selection the arrow caps and the legend sit inside it: \(group)")
+                // With motion, an arrow nudge moves the strip with its outline at once: nothing in the strip animates its position.
+                let stripTop = chrome.strip.frame.maxY
+                overlay.isHeadless = false
+                key(125, "")
+                overlay.isHeadless = true
+                func moving(_ view: NSView) -> [String] { (view.layer!.animationKeys() ?? []) + view.subviews.flatMap(moving) }
+                require(moving(chrome.strip).isEmpty && chrome.strip.frame.maxY == stripTop - 1 / overlay.scale,
+                        "with motion, an arrow nudge moves the strip with the outline and animates nothing: \(moving(chrome.strip)) \(chrome.strip.frame.maxY) from \(stripTop)")
+                key(126, "")
             }
             for corner in [Handle.topLeft, .bottomRight] {
                 mouse(.mouseMoved, overlay.cornerRadii(of: rect).dot(of: corner, in: rect, minimumInset: 8 * overlay.scale))
