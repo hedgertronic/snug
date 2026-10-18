@@ -118,23 +118,27 @@ final class ActionButton: NSButton {
 /// The keys sheet: a scrim over the overlay and a centered material panel in three columns.
 @MainActor
 final class HelpSheet: NSView {
+    /// Each row's keys are space-separated: a cap per key, with "/" and a context ending in ":" ("Text:") as plain words.
     static let columns: [(title: String, rows: [(keys: String, action: String)])] = [
-        ("Capture", [("drag", "Select a region"), ("click", "Element or window"), ("Option-click", "Flip Frame for this capture"), ("Option-drag", "Exact, no snap"),
-                     ("F", "Full screen, or all text"), ("W", "Capture the window"), ("Left / Right", "Next / previous peer (hover)"), ("Return", "Copy"), ("Shift-Return", "Copy the text"), ("Cmd-Return", "Copy for an agent"), ("Cmd-S", "Save"),
-                     ("Cmd-Shift-S", "Save As"), ("E / Shift-click", "Edit; E again: back"),
+        ("Capture", [("drag", "Select a region"), ("click", "Element or window"), ("\u{2325} click", "Flip Frame for this capture"), ("\u{2325} drag", "Exact, no snap"),
+                     ("F", "Full screen, or all text"), ("W", "Capture the window"), ("\u{2190} \u{2192}", "Next / previous peer (hover)"), ("\u{21A9}", "Copy"),
+                     ("\u{21E7} \u{21A9}", "Copy the text"), ("\u{2318} \u{21A9}", "Copy for an agent"), ("\u{2325} \u{21A9}", "Translate"), ("\u{2318} S", "Save"),
+                     ("\u{21E7} \u{2318} S", "Save As"), ("E / \u{21E7} click", "Edit; E again: back"),
                      ("G", "Scrolling capture, hover or selection"), ("K", "Subject preview"), ("Subject: Tab", "Next subject (Shift: back)"), ("Subject: S", "Crop to subject"),
-                     ("C", "Copy color"), ("Shift-C", "Cycle color format"), ("Esc", "Cancel"), ("Space", "Hold while dragging to move")]),
-        ("Adjust and text", [("Tab", "Walk out (Shift: in)"), ("Arrows", "Nudge 1 px (Shift: 10 px)"), ("Option-arrow", "Grow one side 1 px"), ("Option-Cmd-arrow", "Shrink one side 1 px"),
-                             ("Cmd-arrow", "Edge out, one side"), ("Cmd-Shift-arrow", "Edge in, one side"), ("+ / -", "All sides 1 px (Option: 10)"), ("Cmd-Z", "Undo an edit (Shift: redo)"),
-                             ("Up / Down", "Bigger / smaller element"), ("Shift-click", "Add an element"),
-                             ("[ ]", "Corner radius"), ("Shift-[ ]", "Corner radius by 4 pt"), ("=", "Same radius on all corners"), ("Option-drag dot", "One corner's radius"),
-                             ("Shift-drag handle", "Keep the aspect ratio"), ("Shift-move", "Lock to one axis"),
-                             ("Text: drag", "Select text"), ("Text: Return", "Copy selected text"), ("Text: Shift-Return", "Copy as rows"),
-                             ("Text: Tab", "Next link, email, phone, code"), ("Text: Cmd-Return", "Open the picked item"), ("Option-Return", "Translate text")]),
+                     ("C", "Copy color"), ("\u{21E7} C", "Cycle color format"), ("esc", "Cancel"), ("Space", "Hold while dragging to move")]),
+        ("Adjust and text", [("Tab", "Walk out (Shift: in)"), ("Arrows", "Nudge 1 px (Shift: 10 px)"), ("\u{2325} arrow", "Grow one side 1 px"),
+                             ("\u{2325} \u{2318} arrow", "Shrink one side 1 px"), ("\u{2318} arrow", "Edge out, one side"), ("\u{21E7} \u{2318} arrow", "Edge in, one side"),
+                             ("+ / -", "All sides 1 px (Option: 10)"), ("\u{2318} Z", "Undo an edit (Shift: redo)"),
+                             ("\u{2191} / \u{2193}", "Bigger / smaller element"), ("\u{21E7} click", "Add an element"),
+                             ("[ ]", "Corner radius"), ("\u{21E7} [ ]", "Corner radius by 4 pt"), ("=", "Same radius on all corners"), ("\u{2325} drag", "One corner's radius, on a dot"),
+                             ("\u{21E7} drag", "Keep the ratio, on a handle"), ("\u{21E7} drag", "Lock to one axis, moving"),
+                             ("Text: drag", "Select text"), ("Text: \u{21A9}", "Copy selected text"), ("Text: \u{21E7} \u{21A9}", "Copy as rows"),
+                             ("Text: Tab", "Next link, email, phone, code"), ("Text: \u{2318} \u{21A9}", "Open the picked item"), ("Text: \u{2325} \u{21A9}", "Translate text")]),
         ("Modes, view, recording", [("A", "Capture"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),
                                     ("X", "Crosshair"), ("O", "Rounded corners"), ("M", "Frame: shadow on / off"), ("P", "Ratio menu"),
-                                    ("Shift-P", "Lock the ratio"), ("U", "Colors menu: 1-6 copies"), ("N", "Candidate list"), ("1-5", "Pick from the list (N)"), ("B", "Keys line"), ("?", "This sheet"),
-                                    ("V", "Arm recording, hover or selection"), ("Armed: Return / V", "Start recording"), ("Armed: H", "Cursor on / off"), ("Armed: I", "Count-in off, 3 s, 5 s"), ("Armed: J", "System audio on / off"), ("Capture hotkey", "Stop recording")])
+                                    ("\u{21E7} P", "Lock the ratio"), ("U", "Colors menu: 1-6 copies"), ("N", "Candidate list"), ("1-5", "Pick from the list (N)"), ("B", "Keys line"), ("?", "This sheet"),
+                                    ("V", "Arm recording, hover or selection"), ("Armed: \u{21A9} / V", "Start recording"), ("Armed: H", "Cursor on / off"), ("Armed: I", "Count-in off, 3 s, 5 s"),
+                                    ("Armed: J", "System audio on / off"), ("hotkey", "Stop recording")])
     ]
     let panel = NSVisualEffectView()
 
@@ -175,9 +179,14 @@ final class HelpSheet: NSView {
                 let action = NSTextField(item.action, size: 13)
                 action.sizeToFit()
                 action.frame.origin = CGPoint(x: x, y: y + (rowHeight - action.frame.height) / 2)
-                let cap = KeyCap(item.keys)
-                cap.frame.origin = CGPoint(x: x + columnWidth - cap.frame.width, y: y + (rowHeight - cap.frame.height) / 2)
-                for view in [line, action, cap] { panel.addSubview(view) }
+                let keys = Pill(fill: .clear, radius: 0, insets: NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0), spacing: 3)
+                keys.show(item.keys) {
+                    item.keys.split(separator: " ").map { token -> NSView in
+                        token == "/" || token.hasSuffix(":") ? NSTextField(String(token), size: 12, color: .secondaryLabelColor) : KeyCap(String(token))
+                    }
+                }
+                keys.frame.origin = CGPoint(x: x + columnWidth - keys.frame.width, y: y + (rowHeight - keys.frame.height) / 2)
+                for view in [line, action, keys] { panel.addSubview(view) }
             }
         }
         addSubview(panel)

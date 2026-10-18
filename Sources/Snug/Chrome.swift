@@ -120,11 +120,15 @@ final class Pill: NSView {
     static func chip() -> Pill { Pill(radius: 8, insets: NSEdgeInsets(top: 0, left: 8, bottom: 0, right: 8), spacing: 8, height: Chrome.labelHeight) }
 }
 
-/// The key cap: the key's glyph on a raised key. Idle it is neutral; `pressed` fills it with the tint (for a moment after its key, or
-/// while its modifiers are held); `onTint` is the white key on a tint-filled button.
+/// The key cap: one key's glyph on a raised key. Idle it is neutral; `pressed` fills it with the tint (for a moment after its chord,
+/// or while its modifier is held), darker with a ring on a tint-filled button; `onTint` is the white key on a tint-filled button;
+/// `faded`, a modifier that changes its button and is not held, is an outline with a faint glyph.
 @MainActor
 final class KeyCap: NSView {
     let text: String
+    /// The chord the cap is part of ("⌘S" for both its caps): a press of the chord lights it.
+    let chord: String
+    let faded: Bool
     private let label: NSTextField
     var pressed = false {
         didSet { if pressed != oldValue { apply() } }
@@ -133,13 +137,14 @@ final class KeyCap: NSView {
         didSet { if onTint != oldValue { apply() } }
     }
 
-    init(_ text: String) {
+    init(_ text: String, chord: String? = nil, faded: Bool = false) {
         self.text = text
+        self.chord = chord ?? text
+        self.faded = faded
         label = NSTextField(text, size: 11, weight: .semibold)
         super.init(frame: .zero)
         wantsLayer = true
         layer!.cornerRadius = 5
-        layer!.borderWidth = 0.5
         layer!.shadowColor = NSColor.black.cgColor
         layer!.shadowOffset = CGSize(width: 0, height: -1)
         layer!.shadowRadius = 0
@@ -158,11 +163,39 @@ final class KeyCap: NSView {
     /// Draws the current state in the current look and tint.
     func apply() {
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            label.textColor = pressed ? Chrome.onTint : onTint ? Chrome.tint : .chromeText
-            layer!.backgroundColor = (pressed ? Chrome.tint : onTint ? NSColor.white.withAlphaComponent(0.94) : NSColor.capFill).cgColor
-            layer!.borderColor = (pressed || onTint ? NSColor.clear : NSColor.capEdge).cgColor
-            layer!.shadowOpacity = isDark ? 0.55 : 0.22
+            if faded {
+                let base = onTint ? Chrome.onTint : .chromeText
+                label.textColor = base.withAlphaComponent(0.4)
+                layer!.backgroundColor = nil
+                layer!.borderWidth = 1
+                layer!.borderColor = base.withAlphaComponent(0.3).cgColor
+                layer!.shadowOpacity = 0
+            } else if pressed && onTint {
+                let fill = Chrome.tint.blended(withFraction: 0.4, of: .black)!
+                label.textColor = Chrome.text(on: fill)
+                layer!.backgroundColor = fill.cgColor
+                layer!.borderWidth = 1
+                layer!.borderColor = Chrome.onTint.withAlphaComponent(0.7).cgColor
+                layer!.shadowOpacity = 0
+            } else {
+                label.textColor = pressed ? Chrome.onTint : onTint ? Chrome.tint : .chromeText
+                layer!.backgroundColor = (pressed ? Chrome.tint : onTint ? NSColor.white.withAlphaComponent(0.94) : NSColor.capFill).cgColor
+                layer!.borderWidth = 0.5
+                layer!.borderColor = (pressed || onTint ? NSColor.clear : NSColor.capEdge).cgColor
+                layer!.shadowOpacity = isDark ? 0.55 : 0.22
+            }
         }
+    }
+
+    /// One cap per key of `chord`: each leading modifier glyph, then the key ("⌘S": ⌘ and S; "⌥⌘": ⌥ and ⌘; "esc" stays whole).
+    static func caps(_ chord: String) -> [KeyCap] {
+        var key = Substring(chord)
+        var texts: [String] = []
+        while let glyph = key.first, modifiers.contains(where: { $0.glyph == glyph }) {
+            texts.append(String(glyph))
+            key.removeFirst()
+        }
+        return (texts + (key.isEmpty ? [] : [String(key)])).map { KeyCap($0, chord: chord) }
     }
 
     private static let modifiers: [(flag: NSEvent.ModifierFlags, glyph: Character)] = [(.control, "\u{2303}"), (.option, "\u{2325}"), (.shift, "\u{21E7}"), (.command, "\u{2318}")]
@@ -209,26 +242,35 @@ final class KeyCap: NSView {
 }
 
 extension Pill {
-    /// A hint: a label then its key caps, with no surface of its own.
+    /// A hint: a label then its chords, with no surface of its own. A chord shows one cap per key, 2 pt apart.
     static func hint(_ keys: [String], _ label: String) -> Pill {
         let hint = Pill(fill: .clear, radius: 0, insets: NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0), spacing: 6)
         hint.show(label + keys.joined()) {
-            (label.isEmpty ? [] : [NSTextField(label, size: 12, weight: .medium, color: .chromeText)]) + keys.map { KeyCap($0) }
+            (label.isEmpty ? [] : [NSTextField(label, size: 12, weight: .medium, color: .chromeText)]) + keys.map { chord in
+                let caps = KeyCap.caps(chord)
+                guard caps.count > 1 else { return caps[0] }
+                let group = Pill(fill: .clear, radius: 0, insets: NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0), spacing: 2)
+                group.show(chord) { caps }
+                return group
+            }
         }
         return hint
     }
 }
 
-/// The button: a title then its key cap, after an optional SF Symbol. Plain; `lit`, a toggle that is on or the current mode (a tint
-/// wash and tint text); `primary`, the state's main action (tint fill, white cap); or disabled (`isEnabled` off: faded, no clicks), an
-/// action that cannot run on this object. `surface` gives it the chip surface, for a button that stands alone. The width fits the
-/// title in semibold, so a primary title never clips and the cap follows the text. A nil key has no cap.
+/// The button: a title then one cap per key of its chord, after an optional SF Symbol. Plain; `lit`, a toggle that is on or the
+/// current mode (a tint wash and tint text); `primary`, the state's main action (tint fill, white caps); or disabled (`isEnabled` off:
+/// dimmed, no clicks), an action that cannot run on this object or under the modifiers held. `surface` gives it the chip surface, for
+/// a button that stands alone. The width fits the title in semibold, so a primary title never clips and the caps follow the text. A
+/// nil key has no cap.
 @MainActor
 final class BarButton: NSView {
     var onClick: () -> Void = {}
-    let key: String?
+    /// The chord a click presses.
+    private(set) var key: String?
     let title: NSTextField
-    let cap: KeyCap?
+    /// The faded modifier caps, then the chord's caps.
+    private(set) var caps: [KeyCap] = []
     let symbol: NSImageView?
     var lit = false {
         didSet { if lit != oldValue { apply() } }
@@ -255,9 +297,7 @@ final class BarButton: NSView {
 
     /// `symbol` is an SF Symbol name and its accessibility description.
     init(_ title: String, key: String?, symbol: (name: String, description: String)? = nil, height: CGFloat = 26, size: CGFloat = 12) {
-        self.key = key
         self.title = NSTextField(title, size: size, weight: .medium)
-        cap = key.map { KeyCap($0) }
         self.symbol = symbol.map { NSImageView(image: NSImage(systemSymbolName: $0.name, accessibilityDescription: $0.description)!) }
         self.size = size
         super.init(frame: .zero)
@@ -273,12 +313,7 @@ final class BarButton: NSView {
             image.frame.origin.y = ((height - image.frame.height) / 2).rounded()
             addSubview(image)
         }
-        if let cap {
-            cap.frame.origin.y = (height - cap.frame.height) / 2
-            addSubview(cap)
-        }
-        fit()
-        apply()
+        setKeys(key)
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -297,6 +332,20 @@ final class BarButton: NSView {
         fit()
     }
 
+    /// Shows a faded cap per modifier glyph of `faded`, then a cap per key of `key`, the chord a click presses, and resizes the button.
+    func setKeys(_ key: String?, faded: String = "") {
+        guard caps.isEmpty || key != self.key || faded != String(caps.filter(\.faded).map(\.text).joined()) else { return }
+        self.key = key
+        caps.forEach { $0.removeFromSuperview() }
+        caps = faded.map { KeyCap(String($0), chord: "", faded: true) } + (key.map(KeyCap.caps) ?? [])
+        for cap in caps {
+            cap.frame.origin.y = (frame.height - cap.frame.height) / 2
+            addSubview(cap)
+        }
+        fit()
+        apply()
+    }
+
     private func fit() {
         var x: CGFloat = 7
         if let symbol {
@@ -309,8 +358,11 @@ final class BarButton: NSView {
             title.frame.size.width = width
             x += width + 7
         }
-        cap?.frame.origin.x = x
-        frame.size.width = cap.map { x + $0.frame.width + 7 } ?? x
+        for cap in caps {
+            cap.frame.origin.x = x
+            x += cap.frame.width + 2
+        }
+        frame.size.width = caps.isEmpty ? x : x - 2 + 7
         invalidateIntrinsicContentSize()
     }
 
@@ -328,8 +380,8 @@ final class BarButton: NSView {
             title.textColor = text
             title.font = .systemFont(ofSize: size, weight: primary ? .semibold : .medium)
             symbol?.contentTintColor = text
-            cap?.onTint = primary
-            alphaValue = isEnabled ? 1 : 0.25
+            for cap in caps { cap.onTint = primary }
+            alphaValue = isEnabled ? 1 : 0.32
         }
     }
 }
@@ -357,7 +409,7 @@ final class Bar: NSView {
     /// Shows the groups, laid out again only when their buttons or titles change.
     func show(_ groups: [[BarButton]]) {
         isHidden = false
-        let key = groups.map { $0.map { $0.title.stringValue + ($0.key ?? "") }.joined(separator: ",") }.joined(separator: "|")
+        let key = groups.map { $0.map { $0.title.stringValue + $0.caps.map { ($0.faded ? "~" : "") + $0.text }.joined() }.joined(separator: ",") }.joined(separator: "|")
         guard key != self.key else { return }
         self.key = key
         self.groups.forEach { $0.removeFromSuperview() }
@@ -410,14 +462,31 @@ final class Chrome {
     /// The action strip below the hovered element or the selection, or a session's (scroll, armed recording, cut out) controls.
     let strip = Bar()
     let edit = BarButton("Edit", key: "E")
+    /// Copy and Save fold their alternates under the modifiers (`OverlayController.captureStrip`): Agent, Text, Translate, Save As.
     let copy = BarButton("Copy", key: "\u{21A9}")
-    let agent = BarButton("Agent", key: "\u{2318}\u{21A9}")
     let save = BarButton("Save", key: "\u{2318}S")
-    let text = BarButton("Text", key: "\u{21E7}\u{21A9}")
-    let scroll = BarButton("Scroll", key: "G")
-    let record = BarButton("Record", key: "V")
-    let cutout = BarButton("Subject", key: "K")
-    let colors = BarButton("Colors", key: "U")
+    /// The tools: an SF Symbol and the key; the name is their accessibility label and shows in `toolTip`.
+    let scroll = BarButton("", key: "G", symbol: ("arrow.down.document", "Scroll"))
+    let record = BarButton("", key: "V", symbol: ("record.circle", "Record"))
+    let cutout = BarButton("", key: "K", symbol: ("person.crop.rectangle", "Subject"))
+    let colors = BarButton("", key: "U", symbol: ("eyedropper", "Colors"))
+    /// The name of the tool button under the pointer, under it after a short delay, as a macOS tooltip. Hover and clicks pass through.
+    let toolTip = Pill.chip()
+    /// The tool button the pointer is on, and whether its delay has passed.
+    var tipButton: BarButton?
+    var tipDue = false
+    var tipTask: Task<Void, any Error>?
+    /// How much wider Copy and Save get under the modifiers than now, at most: the strip's left edge is clamped with it, so a label
+    /// change never moves the edge.
+    var stripSlack: CGFloat = 0
+    static let widest: (copy: CGFloat, save: CGFloat) = (
+        [("Copy", "\u{21A9}", "\u{2318}"), ("Agent", "\u{2318}\u{21A9}", ""), ("Text", "\u{21E7}\u{21A9}", ""), ("Translate", "\u{2325}\u{21A9}", "")].map { width($0) }.max()!,
+        [("Save", "\u{2318}S", "\u{21E7}"), ("Save As", "\u{21E7}\u{2318}S", "")].map { width($0) }.max()!)
+    private static func width(_ variant: (title: String, key: String, faded: String)) -> CGFloat {
+        let button = BarButton(variant.title, key: nil)
+        button.setKeys(variant.key, faded: variant.faded)
+        return button.frame.width
+    }
     let scrolled = BarButton("Scrolling", key: nil)
     let done = BarButton("Done", key: "\u{21A9}")
     let cancel = BarButton("Cancel", key: "esc")
@@ -480,14 +549,19 @@ final class Chrome {
         snapTag.isHidden = true
         lock.washes = false
         for button in [copy, done, start] { button.primary = true }
+        for tool in [scroll, record, cutout, colors] {
+            tool.setAccessibilityElement(true)
+            tool.setAccessibilityRole(.button)
+            tool.setAccessibilityLabel(tool.symbol!.image!.accessibilityDescription)
+        }
     }
 
     /// Every button, for the click wiring.
     var buttons: [BarButton] {
         Array(modeButtons.values) + (viewToggles + styleToggles).map(\.1)
-            + [edit, copy, agent, save, text, scroll, record, cutout, colors, done, cancel, cursor, audio, countIn, start, subject, crop, snap, ratioButton, lock]
+            + [edit, copy, save, scroll, record, cutout, colors, done, cancel, cursor, audio, countIn, start, subject, crop, snap, ratioButton, lock]
     }
 
     /// Lowest first: the cut-out preview goes under all of them.
-    var all: [NSView] { [upHint, downHint, hover, size, snap, snapTag, coordinates, reading, legend] + sideHints + [radius, cornerKeys, list, hints, topBar, strip, status, ratio, ratioMenu, colorMenu, help] }
+    var all: [NSView] { [upHint, downHint, hover, size, snap, snapTag, coordinates, reading, legend] + sideHints + [radius, cornerKeys, list, hints, topBar, strip, toolTip, status, ratio, ratioMenu, colorMenu, help] }
 }

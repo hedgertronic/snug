@@ -388,6 +388,7 @@ final class OverlayController {
         // the guides, loupe and crosshair still follow the pointer.
         if holdsHover(at: view.convert(event.locationInWindow, from: nil)) {
             updateGuides()
+            updateToolTip()
             return updateCursor()
         }
         // The edge keys show while the pointer is inside a released selection.
@@ -395,6 +396,7 @@ final class OverlayController {
         updateHoveredCorner()
         updateHover(pixel: pointer)
         updateGuides()
+        updateToolTip()
         updateCursor()
     }
 
@@ -741,7 +743,7 @@ final class OverlayController {
         switch (event.keyCode, command, character) {
         case (53, _, _): dismiss()
         case (36, true, _) where !shift && !option, (76, true, _) where !shift && !option: copyForAgent()
-        case (36, _, _) where hovering && !shift, (76, _, _) where hovering && !shift: clickHover(framed: framed, copy: true, save: afterCaptureSaves, takeDisplay: true)
+        case (36, _, _) where hovering && !shift && !option, (76, _, _) where hovering && !shift && !option: clickHover(framed: framed, copy: true, save: afterCaptureSaves, takeDisplay: true)
         case (_, true, _) where shift && character.lowercased() == "s":
             if hovering { clickHover(framed: framed, copy: false, save: true, takeDisplay: true, saveAs: true) } else { save(saveAs: true) }
         case (_, false, "e") where hovering && hoverRect != nil: openAsSelection(hoverRect!)

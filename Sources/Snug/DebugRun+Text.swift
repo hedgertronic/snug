@@ -409,7 +409,12 @@ extension DebugRun {
         }
         capture(cart)
         require(overlay.selection?.rect == cart, "an Option-drag releases the exact cart selection")
-        require(texts(in: overlay.chrome.strip).contains("Text") && texts(in: overlay.chrome.text) == ["Text", "\u{21E7}\u{21A9}"], "the strip's Text button names Shift-Return")
+        overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: .shift, timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!)
+        require(texts(in: overlay.chrome.copy) == ["Text", "\u{21E7}", "\u{21A9}"] && overlay.chrome.copy.key == "\u{21E7}\u{21A9}",
+                "with Shift held the strip's Copy reads Text and names Shift-Return: \(texts(in: overlay.chrome.copy))")
+        overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!)
         pasteboard.clearContents()
         key(returnKey, "\r", .shift)
         require(!overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."], "a Reading text... pill shows while the selection is read")
@@ -608,7 +613,7 @@ extension DebugRun {
                 "the outline is a thin ring outside the subject: \(ringPixels) of \(ring.width * ring.height) pixels, center clear")
         require(overlay.selection == nil && overlay.chrome.topBar.groups.count == 2 && !texts(in: overlay.chrome.topBar).contains("Capture") && overlay.view.overlays.selection == iconRect
                 && !overlay.view.overlays.showsHandles, "while previewing, the top bar has no modes, the handles stay hidden and the area stays outlined")
-        require(texts(in: overlay.chrome.strip) == ["Snap to subject", "S", "Save", "\u{2318}S", "Copy", "\u{21A9}"] && !overlay.chrome.crop.lit
+        require(texts(in: overlay.chrome.strip) == ["Snap to subject", "S", "Save", "\u{2318}", "S", "Copy", "\u{21A9}"] && !overlay.chrome.crop.lit
                     && texts(in: overlay.chrome.hints) == ["back", "K", "esc"],
                 "the strip has the preview's controls, Snap to subject plain, and the keys line K back: \(texts(in: overlay.chrome.strip)) \(texts(in: overlay.chrome.hints))")
         let (previewPixels, previewWidth) = pixels(preview!.subjects[0].image)
@@ -627,7 +632,7 @@ extension DebugRun {
                 && overlay.cutout!.view.checker.frame == overlay.view.viewRect(box) && overlay.cutout!.view.ghost.frame == overlay.view.viewRect(box) && overlay.chrome.crop.lit,
                 "S crops to the subject's box \(box) and lights Snap to subject: outlined \(String(describing: overlay.view.overlays.selection))")
         key(kKey, "k")
-        require(overlay.cutout == nil && preview!.view.superview == nil && preview!.view.content.superlayer == nil && overlay.selection?.rect == iconRect && texts(in: overlay.chrome.strip).contains("Colors"),
+        require(overlay.cutout == nil && preview!.view.superview == nil && preview!.view.content.superlayer == nil && overlay.selection?.rect == iconRect && texts(in: overlay.chrome.strip).contains("Edit"),
                 "K again goes back to the selection: preview \(overlay.cutout != nil), view in overlay \(preview!.view.superview != nil), selection \(String(describing: overlay.selection?.rect)), strip \(texts(in: overlay.chrome.strip))")
         let secondK = await previewCutout()
         require(overlay.cutout != nil, "K opens the preview again")

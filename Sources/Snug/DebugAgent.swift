@@ -19,16 +19,16 @@ extension DebugRun {
         exit(EXIT_SUCCESS)
     }
 
-    /// Copy for Agent on the frozen image, with Frame and Rounded on: Cmd-Return on a hovered geometry element, then the strip's Agent
-    /// button on a selection whose accessibility frames the hover had read. Each writes a bundle with a valid manifest to the agent folder
+    /// Copy for Agent on the frozen image, with Frame and Rounded on: Cmd-Return on a hovered geometry element, then a Command-click on
+    /// the strip's Copy (reading Agent) on a selection whose accessibility frames the hover had read. Each writes a bundle with a valid manifest to the agent folder
     /// (the second replaces the first) and one item with the PNG (its manifest in the text chunk), the reference line and the manifest to the run's private pasteboard.
     static func verifyAgentHandoff(image: CGImage, frame: CGRect, overlay: OverlayController, require: (Bool, String) -> Void) async throws {
         let pasteboard = overlay.pasteboard
         let defaults = overlay.defaults
         let store = HandoffStore(defaults: defaults)
-        func mouse(_ type: NSEvent.EventType, _ pixel: CGPoint) {
+        func mouse(_ type: NSEvent.EventType, _ pixel: CGPoint, _ flags: NSEvent.ModifierFlags = []) {
             let point = CGPoint(x: pixel.x / overlay.scale, y: overlay.view.bounds.height - pixel.y / overlay.scale)
-            overlay.window.sendEvent(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+            overlay.window.sendEvent(NSEvent.mouseEvent(with: type, location: point, modifierFlags: flags,
                 timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: overlay.window.windowNumber,
                 context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!)
         }
@@ -39,6 +39,21 @@ extension DebugRun {
                     context: nil, characters: characters, charactersIgnoringModifiers: characters,
                     isARepeat: false, keyCode: code)!)
             }
+        }
+        func flags(_ held: NSEvent.ModifierFlags) {
+            overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: held, timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 55)!)
+        }
+        let copyButton = overlay.chrome.copy
+        /// Holding Command turns the strip's Copy into Agent, its Command cap lit; releasing it brings Copy back.
+        func checkAgentLabel(_ name: String) {
+            flags(.command)
+            let command = copyButton.caps.first { $0.text == "\u{2318}" }
+            require(texts(in: copyButton) == ["Agent", "\u{2318}", "\u{21A9}"] && copyButton.key == "\u{2318}\u{21A9}" && command?.pressed == true && !command!.faded,
+                    "\(name): with Command held the strip's Copy reads Agent, its Command cap lit: \(texts(in: copyButton))")
+            flags([])
+            require(texts(in: copyButton) == ["Copy", "\u{2318}", "\u{21A9}"] && copyButton.key == "\u{21A9}" && copyButton.caps[0].faded,
+                    "\(name): releasing Command restores Copy with a faded Command cap: \(texts(in: copyButton))")
         }
         /// The copied item's manifest, after checking the bundle, the clipboard item and the toast against it and the frozen pixels at `crop`.
         func copied(_ crop: CGRect, _ name: String) async throws -> HandoffManifest {
@@ -85,8 +100,8 @@ extension DebugRun {
             .min { $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height }!
         mouse(.mouseMoved, CGPoint(x: target.bounds.midX, y: target.bounds.midY))
         let hovered = overlay.session!.selected!
-        require(hovered.kind != .window && hovered.kind != .display && texts(in: overlay.chrome.strip).contains("Agent"),
-                "the hover strip shows Agent: \(texts(in: overlay.chrome.strip))")
+        require(hovered.kind != .window && hovered.kind != .display && !overlay.chrome.strip.isHidden, "a hovered element shows the strip")
+        checkAgentLabel("the hover strip")
         pasteboard.clearContents()
         key(36, "\r", .command)
         let element = try await copied(hovered.bounds.integral, "Cmd-Return on a hovered element")
@@ -101,7 +116,7 @@ extension DebugRun {
         let rect = CGRect(x: 350, y: 458, width: 580, height: 64)
         overlay.selection = AreaSelection(extent: extent, exact: rect)
         overlay.refresh()
-        require(texts(in: overlay.chrome.strip).contains("Agent"), "the selection strip shows Agent: \(texts(in: overlay.chrome.strip))")
+        checkAgentLabel("the selection strip")
         let scale = overlay.scale
         let origin = CGPoint(x: overlay.window.frame.minX, y: NSScreen.screens[0].frame.height - overlay.window.frame.maxY)
         let global = CGRect(x: origin.x + rect.minX / scale, y: origin.y + rect.minY / scale, width: rect.width / scale, height: rect.height / scale)
@@ -111,8 +126,15 @@ extension DebugRun {
                       AXFrame(roleDescription: "standard window", rect: global.insetBy(dx: -200, dy: -200), role: "AXWindow", title: "Form test")]
         overlay.accessibilityObservations[rect] = (frames, overlay.frozenAt.addingTimeInterval(6))
         pasteboard.clearContents()
-        overlay.chrome.agent.onClick()
-        let field = try await copied(rect, "The Agent button on a selection")
+        // A Command-click on the strip's Copy, which reads Agent while Command is held, copies for the agent.
+        flags(.command)
+        let center = copyButton.convert(CGPoint(x: copyButton.bounds.midX, y: copyButton.bounds.midY), to: overlay.view)
+        let pixel = CGPoint(x: center.x * overlay.scale, y: (overlay.view.bounds.height - center.y) * overlay.scale)
+        require(overlay.view.hitTest(center) === copyButton && texts(in: copyButton).first == "Agent", "with Command held a click at Copy reaches it, reading Agent")
+        mouse(.leftMouseDown, pixel, .command)
+        mouse(.leftMouseUp, pixel, .command)
+        flags([])
+        let field = try await copied(rect, "A Command-click on the strip's Copy (Agent) on a selection")
         require(field.target.kind == .area && field.target.provenance == .accessibility && field.target.role == "AXTextField" && field.target.title == "Email"
                     && field.target.identifier == "email" && field.target.description == "Email address" && field.target.subrole == nil,
                 "a selection takes the accessibility fields of the element the hover read for it: \(field.target)")
