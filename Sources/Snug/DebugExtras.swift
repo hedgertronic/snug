@@ -1085,7 +1085,8 @@ extension DebugRun {
         overlay.isHeadless = true
         let copyLayer = chrome.copy.layer!, animating = copyLayer.animationKeys() ?? []
         require(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-                    ? animating.isEmpty : animating.contains("transition") && copyLayer.animation(forKey: "bounds")?.duration == 0.14,
+                    ? animating.isEmpty : animating.contains("transition") && copyLayer.animation(forKey: "transition")?.duration == 0.14
+                        && copyLayer.animation(forKey: "bounds")?.duration == 0.14,
                 "with motion, Command cross-fades Copy and animates its width (Reduce Motion \(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)): \(animating)")
         require(texts(in: chrome.copy) == ["Agent", "\u{2318}", "\u{21A9}"] && chrome.copy.frame.width == BarButton("Agent", key: "\u{2318}\u{21A9}").frame.width
                     && chrome.copy.frame.width > restCopy.width && chrome.strip.frame.minX == restLeft,
@@ -1398,7 +1399,13 @@ extension DebugRun {
         overlay.radii[window] = 0
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
         require(chrome.radius.isHidden, "a hover with its measured radius shows no radius chip")
+        // With motion the radius chip fades in; it is shown at once.
+        overlay.isHeadless = false
         key(30, "]")
+        overlay.isHeadless = true
+        let radiusFade = chrome.radius.layer!.animationKeys() ?? []
+        require(!chrome.radius.isHidden && (NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? radiusFade.isEmpty : radiusFade.contains("transition")),
+                "with motion, the radius chip fades in and is shown at once: \(radiusFade)")
         let hoverChips = [chrome.hover, chrome.snapTag, chrome.radius]
         let covering = overlay.view.subviews.filter { view in !view.isHidden && !hoverChips.contains(view) && hoverChips.contains { $0.frame.intersects(view.frame) } && view !== overlay.view.liveText }
         require(texts(in: chrome.radius) == ["r 1", "[", "]"] && chrome.radius.frame.minY == chrome.hover.frame.minY && covering.isEmpty,

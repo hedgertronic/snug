@@ -82,7 +82,7 @@ extension DebugRun {
         try snapshot("area-idle")
         overlay.dismiss()
 
-        // The current mode draws as Copy does, in Capture and in Text, light and dark: a hover shows Copy on its strip beside the bar.
+        // The settings bar with the current mode drawn as Copy is, in Capture and in Text, light and dark.
         for look in ["light", "dark"] {
             defaults.set(look, forKey: Pref.overlayAppearance)
             for mode in [OverlayController.Mode.capture, .text] {

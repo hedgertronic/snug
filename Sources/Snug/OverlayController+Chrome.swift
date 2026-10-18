@@ -487,13 +487,16 @@ extension OverlayController {
             for (item, frame, _) in moved { item.frame = frame }
             animate(true) {
                 for ((item, _, _), target) in zip(moved, targets) { item.animator().frame = target }
-                for button in relabeled { button.layer!.add(CATransition(), forKey: kCATransition) }
+                let fade = CATransition()
+                fade.duration = 0.14
+                fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                for button in relabeled { button.layer!.add(fade, forKey: kCATransition) }
             }
         }
         // A chip or the strip that appeared or went away fades: its hidden state is set again inside the animation.
         for (item, shown) in zip(fading, wasShown) where motion && item.isHidden == shown {
-            item.isHidden = shown
-            animate(true) { item.isHidden = !shown }
+            item.isHidden = !shown
+            animate(true) { item.isHidden = shown }
         }
         placeToolTip()
         lightCaps(restyle: restyle)
