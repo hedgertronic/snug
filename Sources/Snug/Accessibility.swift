@@ -45,8 +45,8 @@ enum Accessibility {
             element = parent as! AXUIElement
         }
         guard AccessibilityBounds.hoverLevel(chain.map(\.frame)).isEmpty, let window = chain.last, window.frame.role == kAXWindowRole else { return chain }
-        // Finder's column view answers the hit test with its window-sized AXBrowser even over the sidebar, which is a sibling of the
-        // browser's split group. Then the window is walked down by frames: at each level, the smallest child that contains the point.
+        // Finder's column view can answer with its AXBrowser, 1 pt past the window on every side and spanning the sidebar, which is a
+        // sibling of the browser's split group. Then the window is walked down by frames: at each level, the smallest child that contains the point.
         var path = [window]
         let began = ContinuousClock.now
         while path.count < maxDepth, began.duration(to: .now) < walkBudget, let children = children(of: path.last!.element, kAXChildrenAttribute),
