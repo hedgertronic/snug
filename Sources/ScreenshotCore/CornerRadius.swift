@@ -8,7 +8,8 @@ public func cornerRadius(in image: CGImage, rect: CGRect) -> CGFloat {
 
 /// The radius of the arc each corner of `rect` follows, in image pixels with top-left image coordinates; 0 where a corner follows none.
 /// From each corner it casts rays at several angles and takes the first edge along each. A rounded corner puts those edges on a circle
-/// of one radius tangent to both sides; anything else (square corners, busy content) leaves no consistent radius.
+/// of one radius tangent to both sides, or to lines up to 2 px inside them; anything else (square corners, busy content) leaves no
+/// consistent radius. For a shape inset from `rect`, the radius is that of the circle tangent to `rect`'s sides and concentric with the arc.
 public func cornerArcs(in image: CGImage, rect: CGRect) -> CornerRadii {
     let bounds = rect.integral.intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
     let width = Int(bounds.width), height = Int(bounds.height)
@@ -51,15 +52,22 @@ public func cornerArcs(in image: CGImage, rect: CGRect) -> CornerRadii {
     func fit(corner: (x: Int, y: Int), step: (x: Int, y: Int)) -> Int? {
         let distances = angles.map { edge(corner: corner, step: step, angle: $0) }
         guard !distances.contains(where: { $0 == nil }) else { return nil }
-        // A circle of radius r tangent to both sides is first reached at r * (k - sqrt(k^2 - 1)) along the ray at an angle with k = cos + sin.
-        let best = (8...Int(limit)).map { radius in
-            (radius, zip(angles, distances).map { angle, distance in
-                let k = cos(angle) + sin(angle)
-                return abs(distance! - Double(radius) * (k - (k * k - 1).squareRoot()))
-            }.max()!)
-        }.min { $0.1 < $1.1 }!
-        // Within a tenth of the radius, at most 3 px: edges of a grid around the corner can fit a large circle to a tenth of it.
-        return best.1 <= max(1.25, min(3, Double(best.0) * 0.1)) ? best.0 : nil
+        // A circle of radius r tangent to lines `inset` px inside both sides (R = r + inset from each) is first reached at
+        // R * k - sqrt(R^2 * (k^2 - 2) + r^2) along the ray at an angle with k = cos + sin. An element's frame can sit 1 or 2 px
+        // outside the shape it draws (Finder's toolbar capsule in its AXRadioGroup frame).
+        func miss(_ radius: Double, _ inset: Double) -> Double {
+            zip(angles, distances).map { angle, distance in
+                let k = cos(angle) + sin(angle), outer = radius + inset
+                return abs(distance! - (outer * k - (outer * outer * (k * k - 2) + radius * radius).squareRoot()))
+            }.max()!
+        }
+        // The smallest inset with a fit: a free inset lets a tight shape's arc pass for a smaller circle further in. Within a tenth of
+        // the radius, at most 3 px: edges of a grid around the corner can fit a large circle to a tenth of it. The radius is the frame's:
+        // the circle tangent to the frame's sides that runs `inset` px outside the shape's arc.
+        return [0, 1, 2].lazy.filter { Int(limit) - $0 >= 8 }.compactMap { inset -> Int? in
+            let best = (8...Int(limit) - inset).map { (radius: $0, miss: miss(Double($0), Double(inset))) }.min { $0.miss < $1.miss }!
+            return best.miss <= max(1.25, min(3, Double(best.radius + inset) * 0.1)) ? best.radius + inset : nil
+        }.first
     }
 
     return CornerRadii(topLeft: CGFloat(fit(corner: (0, 0), step: (1, 1)) ?? 0), topRight: CGFloat(fit(corner: (width - 1, 0), step: (-1, 1)) ?? 0),

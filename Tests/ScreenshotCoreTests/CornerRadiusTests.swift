@@ -153,6 +153,34 @@ struct CornerRadiusTests {
         #expect(abs(arcs.bottomRight - 20) <= 3, "\(arcs)")
     }
 
+    @Test func finderToolbarCapsuleInItsAccessibilityFrame() throws {
+        // The fixture is the crop of the view-mode capsule's AXRadioGroup frame (162 x 38 pt at 2x). The glass capsule is drawn 1 px inside
+        // it horizontally and 2 px vertically, 322 x 72 px with a 36 px radius; on the frame, the concentric circle has the frame's half height.
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("notes/fixtures/round13/finder-toolbar-capsules.png")
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        #expect(cornerArcs(in: image, rect: CGRect(x: 0, y: 0, width: 324, height: 76)) == CornerRadii(38))
+        // The capsule's own rectangle and the selected segment's pill keep their tight fits.
+        #expect(cornerArcs(in: image, rect: CGRect(x: 1, y: 2, width: 322, height: 72)) == CornerRadii(36))
+        #expect(abs(cornerRadius(in: image, rect: CGRect(x: 168, y: 12, width: 70, height: 52)) - 24) <= 1)
+    }
+
+    @Test func smallRectsLeaveNoRoomForAnInsetArc() throws {
+        // A short side of 16 to 19 px leaves no 8 px radius once the inset is taken; such rects over the capsule's ends still measure.
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("notes/fixtures/round13/finder-toolbar-capsules.png")
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        for side in 16...19 {
+            for y in 0...(76 - side) {
+                for x in Array(stride(from: 0, through: 40, by: 2)) + Array(stride(from: 284 - side, through: 324 - side, by: 2)) {
+                    _ = cornerArcs(in: image, rect: CGRect(x: x, y: y, width: side, height: side))
+                }
+            }
+        }
+    }
+
     @Test func measuresTheLogosRoundedSquare() throws {
         // The rounded square that a snap finds in the user's logo fixture (see SmartSnapTests).
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
