@@ -74,10 +74,11 @@ extension OverlayController {
     }
 
     /// Shows the tool tip chip centered under its button (over the strip when there is no room below) once its delay has passed and
-    /// while the button shows and is enabled; hides it otherwise.
+    /// while the pointer is on the button and the button takes clicks (not dimmed, not under an open menu); hides it otherwise.
     private func placeToolTip() {
         let c = chrome
-        guard c.tipDue, let tool = c.tipButton, tool.window != nil, tool.isEnabled, !c.strip.isHidden else { return c.toolTip.isHidden = true }
+        let point = CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale)
+        guard c.tipDue, let tool = c.tipButton, !c.strip.isHidden, view.hitTest(view.convert(point, to: view.superview)) === tool else { return c.toolTip.isHidden = true }
         let name = tool.accessibilityLabel()!
         c.toolTip.show(name) { [NSTextField(name, size: 12, weight: .semibold, color: .chromeText)] }
         let button = view.convert(tool.bounds, from: tool), size = c.toolTip.frame.size

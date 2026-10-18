@@ -1055,6 +1055,43 @@ extension DebugRun {
         flags([])
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
         require(chrome.toolTip.isHidden, "moving off the tool hides its name")
+        mouse(.mouseMoved, viewPixel(centerOf(chrome.colors)))
+        for _ in 0..<300 where chrome.toolTip.isHidden { try await Task.sleep(for: .milliseconds(10)) }
+        mouse(.leftMouseDown, viewPixel(centerOf(chrome.colors)))
+        mouse(.leftMouseUp, viewPixel(centerOf(chrome.colors)))
+        for _ in 0..<1000 where chrome.colorMenu.isHidden { try await Task.sleep(for: .milliseconds(10)) }
+        require(!chrome.colorMenu.isHidden && chrome.toolTip.isHidden, "clicking Colors opens its menu and hides the tool's name")
+        key(53, "\u{1B}")
+        // With the pointer on the strip, Shift relabels Save under it and keeps the hover, so the Save As click lands.
+        mouse(.mouseMoved, CGPoint(x: 400, y: 400))
+        mouse(.mouseMoved, viewPixel(CGPoint(x: centerOf(chrome.copy).x, y: windowBox.minY - 4)))
+        mouse(.mouseMoved, viewPixel(centerOf(chrome.copy)))
+        mouse(.mouseMoved, viewPixel(centerOf(chrome.save)))
+        require(overlay.view.overlays.hover == window, "the hover holds along the strip to Save")
+        flags(.shift)
+        require(overlay.view.overlays.hover == window && texts(in: chrome.save).first == "Save As" && overlay.view.hitTest(centerOf(chrome.save)) === chrome.save,
+                "Shift with the pointer on Save keeps the hover and the strip, and Save reads Save As under the pointer: \(String(describing: overlay.view.overlays.hover)) \(texts(in: chrome.save))")
+        flags([])
+        // In hover, Option-Return and an Option-click on Copy (reading Translate) both translate, queued behind a warm-up that never ends.
+        OverlayController.visionWarmUp = Task { try? await Task.sleep(for: .seconds(3600)) }
+        let hoverTranslates: [(String, () -> Void)] = [("Option-Return", { key(36, "\r", .option) }), ("an Option-click on Copy", {
+            mouse(.mouseMoved, viewPixel(centerOf(chrome.copy)), .option)
+            flags(.option)
+            mouse(.leftMouseDown, viewPixel(centerOf(chrome.copy)), .option)
+            mouse(.leftMouseUp, viewPixel(centerOf(chrome.copy)), .option)
+            flags([])
+        })]
+        for (name, act) in hoverTranslates {
+            act()
+            require(overlay.text.queued?.notice.hasPrefix("Option-Return") == true && overlay.selection == nil && overlay.window.isVisible,
+                    "\(name) on the hovered window runs Option-Return (translate): \(String(describing: overlay.text.queued?.notice))")
+            overlay.text.queued = nil
+            overlay.text.notice = nil
+        }
+        OverlayController.visionWarmUp!.cancel()
+        await OverlayController.visionWarmUp!.value
+        OverlayController.visionWarmUp = nil
+        mouse(.mouseMoved, CGPoint(x: 400, y: 400))
         // The Edit button does what E does: it opens the hovered window as a selection and stays in the strip, lit; clicking it again, E,
         // and Esc go back to the hover, and Cmd-Z brings the selection back.
         chrome.edit.onClick()

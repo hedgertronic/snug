@@ -370,7 +370,8 @@ final class OverlayController {
         if shift != shiftHeld, image != nil {
             shiftHeld = shift
             movedWithShift = false
-            updateHover(pixel: pointer)
+            // On the top bar or the strip the hover holds, so Shift relabels the strip under the pointer instead of picking anew.
+            if !holdsHover(at: CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale)) { updateHover(pixel: pointer) }
         }
         refresh()
     }
