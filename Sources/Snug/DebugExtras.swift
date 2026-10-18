@@ -542,6 +542,42 @@ extension DebugRun {
             overlay.dismiss()
         }
 
+        // Left and Right outline the previous and next peer only, drawn 2 pt inside their rectangles so the rows above and below a
+        // hovered row stay off it, each with its cap in the outline's top-left corner; they follow a Left step and wrap.
+        let peerRows = (0..<4).map { Candidate(id: "row-\($0)", label: "Row", bounds: CGRect(x: 620, y: 420 + CGFloat($0) * 64, width: 560, height: 64), score: AccessibilityBounds.baseScore, kind: .element) }
+        open()
+        overlay.detectionTask?.cancel()
+        overlay.session = SelectionSession(candidates: peerRows, extent: extent, anchor: CGPoint(x: peerRows[1].bounds.midX, y: peerRows[1].bounds.midY))
+        mouse(.mouseMoved, CGPoint(x: peerRows[1].bounds.midX, y: peerRows[1].bounds.midY))
+        let o = overlay.view.overlays
+        require(o.hover == peerRows[1].bounds && o.leftHint == peerRows[0].bounds && o.rightHint == peerRows[2].bounds && o.upHint == nil && o.downHint == nil,
+                "a hovered row outlines the row before it for Left and the row after it for Right, and no other: \(String(describing: o.leftHint)) \(String(describing: o.rightHint))")
+        let drawn = overlay.view.levelHintLayer.path!.boundingBox, hoverRow = overlay.view.viewRect(peerRows[1].bounds)
+        let insetPeers = overlay.view.viewRect(peerRows[0].bounds).union(overlay.view.viewRect(peerRows[2].bounds)).insetBy(dx: 2, dy: 2)
+        require(drawn == insetPeers && overlay.view.viewRect(peerRows[0].bounds).insetBy(dx: 2, dy: 2).minY - hoverRow.maxY == 2 && hoverRow.minY - overlay.view.viewRect(peerRows[2].bounds).insetBy(dx: 2, dy: 2).maxY == 2,
+                "the peer outlines are drawn 2 pt inside their peerRows, 2 pt off the hovered row: \(drawn) \(insetPeers) \(hoverRow)")
+        for (cap, row) in [(overlay.chrome.leftHint, peerRows[0]), (overlay.chrome.rightHint, peerRows[2])] {
+            let box = overlay.view.viewRect(row.bounds).insetBy(dx: 2, dy: 2)
+            require(!cap.isHidden && cap.frame.minX == box.minX + 4 && cap.frame.maxY == box.maxY - 4, "the \(cap.text) cap sits in its outline's top-left corner: \(cap.frame) \(box)")
+        }
+        key(123, "")
+        require(overlay.view.overlays.hover == peerRows[0].bounds && overlay.view.overlays.leftHint == peerRows[3].bounds && overlay.view.overlays.rightHint == peerRows[1].bounds,
+                "after Left the outlines follow: Left wraps to the last row, Right is the row Left came from")
+        overlay.dismiss()
+        open()
+        overlay.detectionTask?.cancel()
+        overlay.session = SelectionSession(candidates: Array(peerRows.prefix(2)), extent: extent, anchor: CGPoint(x: peerRows[0].bounds.midX, y: peerRows[0].bounds.midY))
+        mouse(.mouseMoved, CGPoint(x: peerRows[0].bounds.midX, y: peerRows[0].bounds.midY))
+        require(overlay.view.overlays.rightHint == peerRows[1].bounds && overlay.view.overlays.leftHint == nil && overlay.chrome.leftHint.isHidden,
+                "with one peer, Left and Right pick the same row: it shows once, as Right")
+        overlay.dismiss()
+        open()
+        overlay.detectionTask?.cancel()
+        overlay.session = SelectionSession(candidates: [peerRows[0]], extent: extent, anchor: CGPoint(x: peerRows[0].bounds.midX, y: peerRows[0].bounds.midY))
+        mouse(.mouseMoved, CGPoint(x: peerRows[0].bounds.midX, y: peerRows[0].bounds.midY))
+        require(overlay.view.overlays.leftHint == nil && overlay.view.overlays.rightHint == nil && overlay.chrome.rightHint.isHidden, "with no peer there is no Left or Right outline")
+        overlay.dismiss()
+
         // The highlight reads its settings on each present.
         defaults.set("#FF0000", forKey: Pref.highlightColor)
         defaults.set(0.2, forKey: Pref.highlightFill)

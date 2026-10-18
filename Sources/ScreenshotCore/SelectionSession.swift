@@ -149,12 +149,21 @@ public struct SelectionSession: Sendable {
         selected = next
     }
 
-    /// Selects the next peer of the selected region in reading order, or the previous one, wrapping at the ends. Peers share the
-    /// region's parent (none, with none), and are neither ancestors nor descendants of it. Rows come first, top to bottom: regions
-    /// whose vertical centers are within half the shorter height of the one above join its row; within a row, by left edge. Returns
-    /// false, changing nothing, when there is no peer.
+    /// Selects the next peer of the selected region in reading order, or the previous one (see `peer(right:)`). Returns false,
+    /// changing nothing, when there is no peer.
     public mutating func step(right: Bool) -> Bool {
-        guard let current = selected else { return false }
+        guard let next = peer(right: right) else { return false }
+        isLocked = true
+        selected = next
+        expansionPath = []
+        return true
+    }
+
+    /// The next peer of the selected region in reading order, or the previous one, wrapping at the ends; nil when there is none. Peers
+    /// share the region's parent (none, with none), and are neither ancestors nor descendants of it. Rows come first, top to bottom:
+    /// regions whose vertical centers are within half the shorter height of the one above join its row; within a row, by left edge.
+    public func peer(right: Bool) -> Candidate? {
+        guard let current = selected else { return nil }
         let parent = enclosing(current)?.id
         func nests(_ outer: CGRect, _ inner: CGRect) -> Bool { outer.insetBy(dx: -3, dy: -3).contains(inner) }
         let peers = candidates.filter {
@@ -168,11 +177,8 @@ public struct SelectionSession: Sendable {
             rows[peer.id] = row
         }
         let ordered = peers.sorted { (rows[$0.id]!, $0.bounds.minX) < (rows[$1.id]!, $1.bounds.minX) }
-        guard ordered.count > 1, let index = ordered.firstIndex(where: { $0.id == current.id }) else { return false }
-        isLocked = true
-        selected = ordered[(index + (right ? 1 : ordered.count - 1)) % ordered.count]
-        expansionPath = []
-        return true
+        guard ordered.count > 1, let index = ordered.firstIndex(where: { $0.id == current.id }) else { return nil }
+        return ordered[(index + (right ? 1 : ordered.count - 1)) % ordered.count]
     }
 
     /// Whether a level picked with a key still holds with the pointer at `point`: while the pointer stays inside it, or for the
