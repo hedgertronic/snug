@@ -138,7 +138,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             registeredShortcut = current
             captureItem?.setShortcut(from: defaults)
         } catch {
-            NSApp.presentError(error)
+            Toast.show(message: "Shortcut not registered", detail: error.localizedDescription, color: .systemRed)
         }
     }
 
