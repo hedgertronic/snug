@@ -1077,6 +1077,26 @@ extension DebugRun {
         require(texts(in: chrome.strip) == restStrip && chrome.strip.frame.minX == restLeft && chrome.strip.subviews.flatMap { keyCaps("\u{2318}", in: $0) }.allSatisfy { !$0.pressed }
                     && ([chrome.copy, chrome.save] + others).allSatisfy(\.isEnabled),
                 "releasing the modifiers restores the strip: \(texts(in: chrome.strip))")
+        // With motion (a live overlay without Reduce Motion), Command cross-fades Copy's label and caps and animates its width, 140 ms,
+        // while its frame reads the final value at once; headless, nothing animates.
+        let restCopy = chrome.copy.frame
+        overlay.isHeadless = false
+        flags(.command)
+        overlay.isHeadless = true
+        let copyLayer = chrome.copy.layer!, animating = copyLayer.animationKeys() ?? []
+        require(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                    ? animating.isEmpty : animating.contains("transition") && copyLayer.animation(forKey: "bounds")?.duration == 0.14,
+                "with motion, Command cross-fades Copy and animates its width (Reduce Motion \(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)): \(animating)")
+        require(texts(in: chrome.copy) == ["Agent", "\u{2318}", "\u{21A9}"] && chrome.copy.frame.width == BarButton("Agent", key: "\u{2318}\u{21A9}").frame.width
+                    && chrome.copy.frame.width > restCopy.width && chrome.strip.frame.minX == restLeft,
+                "while it animates, Copy's frame already reads Agent's width: \(texts(in: chrome.copy)) \(chrome.copy.frame) \(restCopy) \(chrome.strip.frame.minX) \(restLeft)")
+        func stopAnimations(_ layer: CALayer) {
+            layer.removeAllAnimations()
+            layer.sublayers?.forEach(stopAnimations)
+        }
+        stopAnimations(chrome.strip.layer!)
+        flags([])
+        require(chrome.strip.subviews.allSatisfy { $0.layer!.animationKeys() == nil } && copyLayer.animationKeys() == nil, "headless, releasing Command animates nothing")
         // Hovering a tool shows its name in a chip under it after a short delay; the chip takes neither the hover nor clicks.
         mouse(.mouseMoved, viewPixel(centerOf(chrome.colors)))
         require(chrome.toolTip.isHidden, "the tool's name waits for the delay")

@@ -161,6 +161,26 @@ extension OverlayController {
         if c.topBar.appearance?.name != look?.name {
             for item in c.all + [cornerChip, view.guides.readout] where item !== c.help { item.appearance = look }
         }
+        // Chrome motion, off headless and with Reduce Motion: the strip's buttons cross-fade their labels and caps and animate their
+        // widths, the strip moves and resizes, the settings bar slides, and the chips and strip fade in and out, 140 ms, ease out.
+        // Everything else, the hover outline and the selection among it, changes at once. Frames take their final values at once; the
+        // layers animate to them.
+        let motion = !isHeadless && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        func animate(_ on: Bool, _ changes: () -> Void) {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.14
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                context.allowsImplicitAnimation = on
+                changes()
+            }
+        }
+        let fading: [NSView] = [c.hover, c.size, c.snap, c.ratio, c.radius, c.reading, c.status, c.strip]
+        let wasShown = fading.map { !$0.isHidden }
+        // The strip moves only from where it showed, and not while a drag moves the selection under it. Its views and their frames now,
+        // and each one's subviews (a button's caps), to animate from once the strip is laid out.
+        let stripMoves = motion && !c.strip.isHidden && draggedRect == nil
+        func tree(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(tree) }
+        let stripBefore = stripMoves ? tree(c.strip).map { ($0, $0.frame, $0.subviews) } : []
         for item in [c.hover, c.size, c.snap, c.snapTag, c.ratio, c.radius, c.legend, c.reading, c.status, c.strip] { item.isHidden = true }
         c.help.frame = bounds
         c.help.layoutPanel()
@@ -321,17 +341,11 @@ extension OverlayController {
             frames.append((c.topBar, frame))
             if barAtTop { top = frame.minY } else { floor = frame.maxY + 8 }
         }
-        let animate = !isHeadless && (barAtTop != c.barAtTop || ruler != c.ruler)
-        c.ruler = ruler
-        c.barAtTop = barAtTop
-        if animate {
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.15
-                for (item, frame) in frames { item.animator().frame = frame }
-            }
-        } else {
+        animate(motion && (barAtTop != c.barAtTop || ruler != c.ruler)) {
             for (item, frame) in frames { item.frame = frame }
         }
+        c.ruler = ruler
+        c.barAtTop = barAtTop
 
         /// Attaches the strip below `box` (above when the bottom has no room, else inside), then the chip row above it (above the strip
         /// when that is above, else inside the top): `left` from the box's left edge, `right` ending at its right edge, or after `left`
@@ -462,6 +476,24 @@ extension OverlayController {
             let width = c.list.frame.width, height = c.list.frame.height
             let x = box.maxX + 12 + width <= bounds.width - 8 ? box.maxX + 12 : (box.minX - 12 - width >= 8 ? box.minX - 12 - width : 12)
             c.list.frame.origin = CGPoint(x: x, y: min(max(box.maxY - height, 8), top - height - 8))
+        }
+        // The strip's views that stayed in it animate from their old frames to the new ones, and a button whose caps were replaced
+        // cross-fades its old title and caps into the new ones. The views are built and laid out outside the animation: a new text
+        // field, not yet in a layer tree, would otherwise grow its frame from zero.
+        if !c.strip.isHidden {
+            let moved = stripBefore.filter { $0.0.frame != $0.1 && ($0.0 === c.strip || $0.0.isDescendant(of: c.strip)) }
+            let relabeled = stripBefore.filter { $0.0 is BarButton && $0.0.subviews != $0.2 }.map(\.0)
+            let targets = moved.map(\.0.frame)
+            for (item, frame, _) in moved { item.frame = frame }
+            animate(true) {
+                for ((item, _, _), target) in zip(moved, targets) { item.animator().frame = target }
+                for button in relabeled { button.layer!.add(CATransition(), forKey: kCATransition) }
+            }
+        }
+        // A chip or the strip that appeared or went away fades: its hidden state is set again inside the animation.
+        for (item, shown) in zip(fading, wasShown) where motion && item.isHidden == shown {
+            item.isHidden = shown
+            animate(true) { item.isHidden = !shown }
         }
         placeToolTip()
         lightCaps(restyle: restyle)

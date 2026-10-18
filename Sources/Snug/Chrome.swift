@@ -396,22 +396,27 @@ final class Bar: NSView {
         return hit === self ? nil : hit
     }
 
-    /// Shows the groups, laid out again only when their buttons or titles change.
+    /// Shows the groups, laid out again only when their buttons or titles change. The pills stay while their number does, so in an
+    /// animation a button's new width moves the buttons and pills after it.
     func show(_ groups: [[BarButton]]) {
         isHidden = false
         let key = groups.map { $0.map { $0.title.stringValue + $0.caps.map(\.text).joined() }.joined(separator: ",") }.joined(separator: "|")
         guard key != self.key else { return }
         self.key = key
-        self.groups.forEach { $0.removeFromSuperview() }
+        if self.groups.count != groups.count {
+            self.groups.forEach { $0.removeFromSuperview() }
+            self.groups = groups.map { _ in
+                let pill = Pill(radius: 11, insets: NSEdgeInsets(top: 3, left: 3, bottom: 3, right: 3), spacing: 2, height: Chrome.controlHeight)
+                pill.isClickThrough = false
+                return pill
+            }
+        }
         var x: CGFloat = 0
-        self.groups = groups.map { buttons in
-            let pill = Pill(radius: 11, insets: NSEdgeInsets(top: 3, left: 3, bottom: 3, right: 3), spacing: 2, height: Chrome.controlHeight)
-            pill.isClickThrough = false
-            pill.show(key + "\(x)") { buttons }
+        for (pill, buttons) in zip(self.groups, groups) {
+            pill.show(key) { buttons }
             pill.frame.origin.x = x
             x += pill.frame.width + 8
-            addSubview(pill)
-            return pill
+            if pill.superview !== self { addSubview(pill) }
         }
         frame.size = CGSize(width: x - 8, height: self.groups.map(\.frame.height).max()!)
     }
