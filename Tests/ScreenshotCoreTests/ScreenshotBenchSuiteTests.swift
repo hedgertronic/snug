@@ -12,8 +12,8 @@ final class ScreenshotBenchSuiteTests: XCTestCase {
         let output = FileManager.default.temporaryDirectory
             .appendingPathComponent("snug-public-suite-\(UUID().uuidString)", isDirectory: true)
         try await ScreenshotBenchSuite.run(
-            manifestURL: root.appendingPathComponent("notes/evaluation/public-suite.json"),
-            baselineURL: root.appendingPathComponent("notes/evaluation/baselines/public-suite.json"),
+            manifestURL: root.appendingPathComponent("Tests/Fixtures/evaluation/public-suite.json"),
+            baselineURL: root.appendingPathComponent("Tests/Fixtures/evaluation/baselines/public-suite.json"),
             outputURL: output
         )
         XCTAssertTrue(FileManager.default.fileExists(atPath: output.appendingPathComponent("results.json").path))

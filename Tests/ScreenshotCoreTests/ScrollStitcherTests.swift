@@ -202,10 +202,10 @@ struct ScrollStitcherTests {
             let source = try #require(CGImageSourceCreateWithURL(root.appendingPathComponent(path) as CFURL, nil))
             return try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         }
-        let page = try load("notes/real-web/form-test.png")
+        let page = try load("Tests/Fixtures/real-web/form-test.png")
         let (left, top, areaWidth, areaHeight) = (400, 200, 1000, 600)
         let (tipWidth, tipHeight) = (324, 16)
-        let tip = bytes(try load("notes/fixtures/round10/scroll-savant-tooltip-repeats.png").cropping(to: CGRect(x: 6, y: 641, width: tipWidth, height: tipHeight))!)
+        let tip = bytes(try load("Tests/Fixtures/scroll-savant-tooltip-repeats.png").cropping(to: CGRect(x: 6, y: 641, width: tipWidth, height: tipHeight))!)
         let tipTop = areaHeight - 15 - tipHeight
         func frame(_ offset: Int, tooltip: Bool) -> [UInt8] {
             var frame = bytes(page.cropping(to: CGRect(x: left, y: top + offset, width: areaWidth, height: areaHeight))!)

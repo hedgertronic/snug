@@ -160,9 +160,10 @@ struct CornerRadiiTests {
     }
 
     @Test func aCaptureOnTheWindowsCornerKeepsTheWindowsRadius() throws {
-        // The user's large Slack capture that came out right: its bottom-right corner is the Slack window's, already cut by its arc.
+        // A synthetic capture of a whole dark window over a wallpaper, like a large Slack capture: every corner is the window's, already
+        // cut by its 58 px arc.
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("notes/fixtures/round8/slack-large-capture-corner-ok.png")
+            .appendingPathComponent("Tests/Fixtures/dark-window-corners.png")
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         let crop = CGRect(x: 0, y: 0, width: image.width, height: image.height)

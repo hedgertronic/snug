@@ -72,17 +72,17 @@ Toggles you flip in the overlay (Loupe, Rulers, Frame, Rounded, Snap, and others
 Xcode with a macOS 26 SDK and Swift 6.2 or later. No third-party packages.
 
 ```sh
-uv run scripts/build.py         # builds build/Snug.app, the lab app and build/ScreenshotBench
+SNUG_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" uv run scripts/build.py   # builds build/Snug.app, the lab app and build/ScreenshotBench
 swift test --disable-sandbox    # unit tests
 ```
 
-`scripts/build.py` signs with a local development identity; edit the `codesign` line for your own. The repo also holds the original detector lab (`ScreenshotLab`) and `ScreenshotBench`, the detector benchmark:
+`scripts/build.py` signs Snug with the code signing identity in `SNUG_SIGNING_IDENTITY` (`security find-identity -v -p codesigning` lists yours) and stops if it is unset. A fixed identity keeps the Screen Recording permission across rebuilds. Test fixtures are in `Tests/Fixtures` and `Tests/ScreenshotCoreTests/Fixtures`. The repo also holds the original detector lab (`ScreenshotLab`) and `ScreenshotBench`, the detector benchmark:
 
 ```sh
-build/ScreenshotBench suite --manifest FILE --baseline FILE --output DIR
+build/ScreenshotBench suite --manifest Tests/Fixtures/evaluation/public-suite.json --baseline Tests/Fixtures/evaluation/baselines/public-suite.json --output DIR
 ```
 
-Run `build/ScreenshotBench` with no arguments for every subcommand. Design and decisions are in `notes/snug-design.md`; the agent handoff is in `notes/snug-agent-handoff.md`.
+Run `build/ScreenshotBench` with no arguments for every subcommand.
 
 ## Support
 

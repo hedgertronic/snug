@@ -1,0 +1,978 @@
+{
+  "targets" : [
+    {
+      "exactDragFallbackCount" : 2,
+      "excludedContent" : [
+        "neighboring cards"
+      ],
+      "firstSuggestionWithin8Points" : true,
+      "hover" : [
+        {
+          "detector" : "geometry",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        },
+        {
+          "detector" : "vision",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        }
+      ],
+      "hoverAnchors" : [
+        [
+          1280,
+          380
+        ]
+      ],
+      "id" : "cards-middle-card",
+      "image" : "..\/real-web\/cards-test.png",
+      "labelQuality" : "provisional-visual-inference",
+      "maxEdgeError" : 3,
+      "pixelHeight" : 1600,
+      "pixelWidth" : 2560,
+      "regressions" : [
+
+      ],
+      "requiredContent" : [
+        "thumbnail",
+        "supporting paragraph",
+        "View and Edit controls",
+        "time label"
+      ],
+      "roughDrags" : [
+        [
+          [
+            901,
+            139
+          ],
+          [
+            760,
+            790
+          ]
+        ]
+      ],
+      "split" : "development",
+      "target" : [
+        [
+          920,
+          156
+        ],
+        [
+          720,
+          756
+        ]
+      ]
+    },
+    {
+      "exactDragFallbackCount" : 2,
+      "excludedContent" : [
+        "caption",
+        "neighboring card thumbnails"
+      ],
+      "firstSuggestionWithin8Points" : true,
+      "hover" : [
+        {
+          "detector" : "geometry",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : true
+        },
+        {
+          "detector" : "vision",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        }
+      ],
+      "hoverAnchors" : [
+        [
+          1280,
+          380
+        ]
+      ],
+      "id" : "cards-middle-thumbnail",
+      "image" : "..\/real-web\/cards-test.png",
+      "labelQuality" : "provisional-visual-inference",
+      "maxEdgeError" : 1,
+      "pixelHeight" : 1600,
+      "pixelWidth" : 2560,
+      "regressions" : [
+
+      ],
+      "requiredContent" : [
+        "complete center-card thumbnail image"
+      ],
+      "roughDrags" : [
+        [
+          [
+            934,
+            166
+          ],
+          [
+            690,
+            432
+          ]
+        ]
+      ],
+      "split" : "development",
+      "target" : [
+        [
+          920,
+          156
+        ],
+        [
+          720,
+          452
+        ]
+      ]
+    },
+    {
+      "exactDragFallbackCount" : 10,
+      "excludedContent" : [
+        "neighboring card text",
+        "buttons"
+      ],
+      "firstSuggestionWithin8Points" : false,
+      "hover" : [
+        {
+          "detector" : "geometry",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : true
+        },
+        {
+          "detector" : "vision",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : true
+        }
+      ],
+      "hoverAnchors" : [
+        [
+          1160,
+          700
+        ]
+      ],
+      "id" : "cards-middle-caption",
+      "image" : "..\/real-web\/cards-test.png",
+      "labelQuality" : "provisional-visual-inference",
+      "maxEdgeError" : 162,
+      "pixelHeight" : 1600,
+      "pixelWidth" : 2560,
+      "regressions" : [
+
+      ],
+      "requiredContent" : [
+        "center card's three-line supporting paragraph"
+      ],
+      "roughDrags" : [
+        [
+          [
+            960,
+            656
+          ],
+          [
+            570,
+            118
+          ]
+        ]
+      ],
+      "split" : "development",
+      "target" : [
+        [
+          953,
+          650
+        ],
+        [
+          585,
+          130
+        ]
+      ]
+    },
+    {
+      "exactDragFallbackCount" : 6,
+      "excludedContent" : [
+        "surrounding card body"
+      ],
+      "firstSuggestionWithin8Points" : true,
+      "hover" : [
+        {
+          "detector" : "geometry",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        },
+        {
+          "detector" : "vision",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        }
+      ],
+      "hoverAnchors" : [
+        [
+          1000,
+          845
+        ]
+      ],
+      "id" : "cards-middle-controls",
+      "image" : "..\/real-web\/cards-test.png",
+      "labelQuality" : "provisional-visual-inference",
+      "maxEdgeError" : 3,
+      "pixelHeight" : 1600,
+      "pixelWidth" : 2560,
+      "regressions" : [
+
+      ],
+      "requiredContent" : [
+        "View button",
+        "Edit button"
+      ],
+      "roughDrags" : [
+        [
+          [
+            958,
+            820
+          ],
+          [
+            174,
+            54
+          ]
+        ]
+      ],
+      "split" : "development",
+      "target" : [
+        [
+          953,
+          816
+        ],
+        [
+          182,
+          62
+        ]
+      ]
+    },
+    {
+      "exactDragFallbackCount" : 12,
+      "excludedContent" : [
+        "main article column"
+      ],
+      "firstSuggestionWithin8Points" : false,
+      "hover" : [
+        {
+          "detector" : "geometry",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        },
+        {
+          "detector" : "vision",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        }
+      ],
+      "hoverAnchors" : [
+        [
+          180,
+          185
+        ]
+      ],
+      "id" : "wiki-contents-sidebar",
+      "image" : "..\/real-web\/wiki-test.png",
+      "labelQuality" : "provisional-visual-inference",
+      "pixelHeight" : 1600,
+      "pixelWidth" : 2560,
+      "regressions" : [
+
+      ],
+      "requiredContent" : [
+        "Contents navigation",
+        "linked section list"
+      ],
+      "roughDrags" : [
+        [
+          [
+            124,
+            36
+          ],
+          [
+            296,
+            894
+          ]
+        ]
+      ],
+      "split" : "development",
+      "target" : [
+        [
+          118,
+          28
+        ],
+        [
+          310,
+          910
+        ]
+      ]
+    },
+    {
+      "exactDragFallbackCount" : 3,
+      "excludedContent" : [
+        "content below screenshot crop"
+      ],
+      "firstSuggestionWithin8Points" : true,
+      "hover" : [
+        {
+          "detector" : "geometry",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        },
+        {
+          "detector" : "vision",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        }
+      ],
+      "hoverAnchors" : [
+        [
+          600,
+          650
+        ]
+      ],
+      "id" : "wiki-visible-table",
+      "image" : "..\/real-web\/wiki-test.png",
+      "labelQuality" : "provisional-visual-inference",
+      "maxEdgeError" : 2,
+      "pixelHeight" : 1600,
+      "pixelWidth" : 2560,
+      "regressions" : [
+
+      ],
+      "requiredContent" : [
+        "visible multirow table header",
+        "visible data rows"
+      ],
+      "roughDrags" : [
+        [
+          [
+            540,
+            600
+          ],
+          [
+            1508,
+            980
+          ]
+        ]
+      ],
+      "split" : "development",
+      "target" : [
+        [
+          528,
+          588
+        ],
+        [
+          1533,
+          1012
+        ]
+      ]
+    },
+    {
+      "exactDragFallbackCount" : 4,
+      "excludedContent" : [
+        "neighboring header cells"
+      ],
+      "firstSuggestionWithin8Points" : true,
+      "hover" : [
+        {
+          "detector" : "geometry",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : true
+        },
+        {
+          "detector" : "vision",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : true
+        }
+      ],
+      "hoverAnchors" : [
+        [
+          600,
+          645
+        ]
+      ],
+      "id" : "wiki-browser-header-cell",
+      "image" : "..\/real-web\/wiki-test.png",
+      "labelQuality" : "provisional-visual-inference",
+      "maxEdgeError" : 3,
+      "pixelHeight" : 1600,
+      "pixelWidth" : 2560,
+      "regressions" : [
+
+      ],
+      "requiredContent" : [
+        "Browser column's two-row header",
+        "sort indicator"
+      ],
+      "roughDrags" : [
+        [
+          [
+            533,
+            594
+          ],
+          [
+            213,
+            105
+          ]
+        ]
+      ],
+      "split" : "development",
+      "target" : [
+        [
+          528,
+          589
+        ],
+        [
+          223,
+          115
+        ]
+      ]
+    },
+    {
+      "exactDragFallbackCount" : 4,
+      "excludedContent" : [
+        "neighboring table cells"
+      ],
+      "firstSuggestionWithin8Points" : true,
+      "hover" : [
+        {
+          "detector" : "geometry",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        },
+        {
+          "detector" : "vision",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        }
+      ],
+      "hoverAnchors" : [
+        [
+          600,
+          770
+        ]
+      ],
+      "id" : "wiki-amaya-cell",
+      "image" : "..\/real-web\/wiki-test.png",
+      "labelQuality" : "provisional-visual-inference",
+      "maxEdgeError" : 3,
+      "pixelHeight" : 1600,
+      "pixelWidth" : 2560,
+      "regressions" : [
+
+      ],
+      "requiredContent" : [
+        "Amaya browser name",
+        "discontinued status"
+      ],
+      "roughDrags" : [
+        [
+          [
+            538,
+            713
+          ],
+          [
+            205,
+            154
+          ]
+        ]
+      ],
+      "split" : "development",
+      "target" : [
+        [
+          528,
+          704
+        ],
+        [
+          223,
+          170
+        ]
+      ]
+    },
+    {
+      "exactDragFallbackCount" : 8,
+      "excludedContent" : [
+        "First name label"
+      ],
+      "firstSuggestionWithin8Points" : true,
+      "hover" : [
+        {
+          "detector" : "geometry",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        },
+        {
+          "detector" : "vision",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        }
+      ],
+      "hoverAnchors" : [
+        [
+          620,
+          490
+        ]
+      ],
+      "id" : "form-first-name-input",
+      "image" : "..\/real-web\/form-test.png",
+      "labelQuality" : "provisional-visual-inference",
+      "maxEdgeError" : 3,
+      "pixelHeight" : 1600,
+      "pixelWidth" : 2560,
+      "regressions" : [
+
+      ],
+      "requiredContent" : [
+        "empty First name input field"
+      ],
+      "roughDrags" : [
+        [
+          [
+            332,
+            445
+          ],
+          [
+            617,
+            92
+          ]
+        ]
+      ],
+      "split" : "development",
+      "target" : [
+        [
+          344,
+          452
+        ],
+        [
+          592,
+          76
+        ]
+      ]
+    },
+    {
+      "exactDragFallbackCount" : 9,
+      "excludedContent" : [
+        "username label"
+      ],
+      "firstSuggestionWithin8Points" : true,
+      "hover" : [
+        {
+          "detector" : "geometry",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        },
+        {
+          "detector" : "vision",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        }
+      ],
+      "hoverAnchors" : [
+        [
+          750,
+          665
+        ]
+      ],
+      "id" : "form-username-input",
+      "image" : "..\/real-web\/form-test.png",
+      "labelQuality" : "provisional-visual-inference",
+      "maxEdgeError" : 78,
+      "pixelHeight" : 1600,
+      "pixelWidth" : 2560,
+      "regressions" : [
+
+      ],
+      "requiredContent" : [
+        "leading @ prefix box",
+        "editable username field"
+      ],
+      "roughDrags" : [
+        [
+          [
+            358,
+            632
+          ],
+          [
+            1188,
+            60
+          ]
+        ]
+      ],
+      "split" : "development",
+      "target" : [
+        [
+          344,
+          624
+        ],
+        [
+          1216,
+          76
+        ]
+      ]
+    },
+    {
+      "exactDragFallbackCount" : 12,
+      "excludedContent" : [
+        "promo-code entry below"
+      ],
+      "firstSuggestionWithin8Points" : false,
+      "hover" : [
+        {
+          "detector" : "geometry",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        },
+        {
+          "detector" : "vision",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        }
+      ],
+      "hoverAnchors" : [
+        [
+          1900,
+          430
+        ]
+      ],
+      "id" : "form-cart-summary",
+      "image" : "..\/real-web\/form-test.png",
+      "labelQuality" : "provisional-visual-inference",
+      "pixelHeight" : 1600,
+      "pixelWidth" : 2560,
+      "regressions" : [
+
+      ],
+      "requiredContent" : [
+        "summary heading and count badge",
+        "listed items",
+        "total row"
+      ],
+      "roughDrags" : [
+        [
+          [
+            1668,
+            310
+          ],
+          [
+            536,
+            610
+          ]
+        ]
+      ],
+      "split" : "development",
+      "target" : [
+        [
+          1656,
+          299
+        ],
+        [
+          560,
+          634
+        ]
+      ]
+    },
+    {
+      "exactDragFallbackCount" : 7,
+      "excludedContent" : [
+        "cart summary above"
+      ],
+      "firstSuggestionWithin8Points" : true,
+      "hover" : [
+        {
+          "detector" : "geometry",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        },
+        {
+          "detector" : "vision",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        }
+      ],
+      "hoverAnchors" : [
+        [
+          1800,
+          1020
+        ]
+      ],
+      "id" : "form-promo-code-entry",
+      "image" : "..\/real-web\/form-test.png",
+      "labelQuality" : "provisional-visual-inference",
+      "maxEdgeError" : 3,
+      "pixelHeight" : 1600,
+      "pixelWidth" : 2560,
+      "regressions" : [
+
+      ],
+      "requiredContent" : [
+        "promo-code input",
+        "Redeem button"
+      ],
+      "roughDrags" : [
+        [
+          [
+            1684,
+            989
+          ],
+          [
+            504,
+            64
+          ]
+        ]
+      ],
+      "split" : "development",
+      "target" : [
+        [
+          1674,
+          983
+        ],
+        [
+          524,
+          76
+        ]
+      ]
+    },
+    {
+      "exactDragFallbackCount" : 11,
+      "excludedContent" : [
+        "main documentation article"
+      ],
+      "firstSuggestionWithin8Points" : false,
+      "hover" : [
+        {
+          "detector" : "geometry",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        },
+        {
+          "detector" : "vision",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        }
+      ],
+      "hoverAnchors" : [
+        [
+          180,
+          815
+        ]
+      ],
+      "id" : "docs-property-sidebar",
+      "image" : "..\/real-web\/docs-test.png",
+      "labelQuality" : "provisional-visual-inference",
+      "maxEdgeError" : 280,
+      "pixelHeight" : 1600,
+      "pixelWidth" : 2560,
+      "regressions" : [
+
+      ],
+      "requiredContent" : [
+        "CSS property filter field",
+        "selected grid row",
+        "visible property navigation"
+      ],
+      "roughDrags" : [
+        [
+          [
+            42,
+            410
+          ],
+          [
+            410,
+            1180
+          ]
+        ]
+      ],
+      "split" : "development",
+      "target" : [
+        [
+          32,
+          395
+        ],
+        [
+          432,
+          1205
+        ]
+      ]
+    },
+    {
+      "exactDragFallbackCount" : 6,
+      "excludedContent" : [
+        "surrounding article content"
+      ],
+      "firstSuggestionWithin8Points" : true,
+      "hover" : [
+        {
+          "detector" : "geometry",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : true
+        },
+        {
+          "detector" : "vision",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        }
+      ],
+      "hoverAnchors" : [
+        [
+          900,
+          610
+        ]
+      ],
+      "id" : "docs-compatibility-panel",
+      "image" : "..\/real-web\/docs-test.png",
+      "labelQuality" : "provisional-visual-inference",
+      "maxEdgeError" : 1,
+      "pixelHeight" : 1600,
+      "pixelWidth" : 2560,
+      "regressions" : [
+
+      ],
+      "requiredContent" : [
+        "complete green browser compatibility status panel"
+      ],
+      "roughDrags" : [
+        [
+          [
+            565,
+            529
+          ],
+          [
+            1429,
+            169
+          ]
+        ]
+      ],
+      "split" : "development",
+      "target" : [
+        [
+          576,
+          542
+        ],
+        [
+          1408,
+          140
+        ]
+      ]
+    },
+    {
+      "exactDragFallbackCount" : 3,
+      "excludedContent" : [
+        "separate preview pane to the right"
+      ],
+      "firstSuggestionWithin8Points" : true,
+      "hover" : [
+        {
+          "detector" : "geometry",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : true
+        },
+        {
+          "detector" : "vision",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        }
+      ],
+      "hoverAnchors" : [
+        [
+          900,
+          1450
+        ]
+      ],
+      "id" : "docs-demo-code-editor",
+      "image" : "..\/real-web\/docs-test.png",
+      "labelQuality" : "provisional-visual-inference",
+      "maxEdgeError" : 7,
+      "pixelHeight" : 1600,
+      "pixelWidth" : 2560,
+      "regressions" : [
+
+      ],
+      "requiredContent" : [
+        "visible CSS declaration block in left code pane"
+      ],
+      "roughDrags" : [
+        [
+          [
+            620,
+            1375
+          ],
+          [
+            566,
+            155
+          ]
+        ]
+      ],
+      "split" : "development",
+      "target" : [
+        [
+          610,
+          1368
+        ],
+        [
+          586,
+          169
+        ]
+      ]
+    },
+    {
+      "exactDragFallbackCount" : 12,
+      "excludedContent" : [
+        "adjacent advertisement"
+      ],
+      "firstSuggestionWithin8Points" : false,
+      "hover" : [
+        {
+          "detector" : "geometry",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        },
+        {
+          "detector" : "vision",
+          "firstChoiceAccepted" : false,
+          "reachableWithinTwoCorrections" : false
+        }
+      ],
+      "hoverAnchors" : [
+        [
+          2200,
+          550
+        ]
+      ],
+      "id" : "docs-article-sidebar",
+      "image" : "..\/real-web\/docs-test.png",
+      "labelQuality" : "provisional-visual-inference",
+      "pixelHeight" : 1600,
+      "pixelWidth" : 2560,
+      "regressions" : [
+
+      ],
+      "requiredContent" : [
+        "In this article navigation list"
+      ],
+      "roughDrags" : [
+        [
+          [
+            2088,
+            418
+          ],
+          [
+            350,
+            666
+          ]
+        ]
+      ],
+      "split" : "development",
+      "target" : [
+        [
+          2080,
+          407
+        ],
+        [
+          368,
+          692
+        ]
+      ]
+    }
+  ],
+  "version" : 1
+}

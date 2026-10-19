@@ -234,8 +234,8 @@ struct DockRectTests {
 
     @Test func theUsersLeftDockBesideSafariComesFromItsRim() throws {
         // The user's left Dock with Safari 12 pt to its right: their 2000 px wide screenshot resampled to the display's 3024 px (2x) and cut
-        // to its left 400 px. The panel's rims in those pixels run x 9 to 145 and y 139 to 1891. The union is this Dock's live one (hover.log).
-        let url = try #require(Bundle.module.url(forResource: "DockBesideSafari", withExtension: "png", subdirectory: "Fixtures"))
+        // to its left 400 px, with four third-party tiles covered by copies of Apple tiles. The panel's rims in those pixels run x 9 to 145 and y 139 to 1891. The union is this Dock's live one (hover.log).
+        let url = try #require(Bundle.module.url(forResource: "LeftDockBesideSafari", withExtension: "png", subdirectory: "Fixtures"))
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         let found = try #require(DockTiles.panel(in: image, near: CGRect(x: 20, y: 140, width: 134, height: 1750), scale: 2))
@@ -330,9 +330,10 @@ struct SystemSurfaceHoverTests {
     }
 
     @Test func stageManagerThumbnailsAreTheirVisiblePicturesNotTheirPaddedButtons() async throws {
-        // The user's capture of the strip's list (2586, 378, 406, 1274 px; hover.log), put back where it was on a 2x display, and the
-        // lookups' button frames. Each tilted picture's left edge is at x 146 in the capture; the frames start at x 3.
-        let url = try #require(Bundle.module.url(forResource: "StageManagerStrip", withExtension: "png", subdirectory: "Fixtures"))
+        // A synthetic capture of the strip's list (2586, 378, 406, 1274 px, where the user's was logged in hover.log), put back where it
+        // was on a 2x display, and the lookups' button frames: the window on stage ends at x 66, then wallpaper with thin streaks, then
+        // each tilted picture's straight left edge at x 146 in the capture; the frames start at x 3.
+        let url = try #require(Bundle.module.url(forResource: "StageManagerThumbnails", withExtension: "png", subdirectory: "Fixtures"))
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
         let strip = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         let context = try #require(CGContext(data: nil, width: 3024, height: 1964, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),

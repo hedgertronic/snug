@@ -132,7 +132,7 @@ struct ColorFormatTests {
     /// The dark Finder window with a blue selected row and blue sidebar icons: its median-cut colors were all grays.
     @Test func paletteOfTheFinderSidebarIncludesTheBlue() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let source = try #require(CGImageSourceCreateWithURL(root.appendingPathComponent("notes/fixtures/round12/finder-sidebar.png") as CFURL, nil))
+        let source = try #require(CGImageSourceCreateWithURL(root.appendingPathComponent("Tests/Fixtures/finder-window.png") as CFURL, nil))
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         let palette = ColorFormat.palette(of: image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
         let hexes = palette.map(ColorFormat.hex.string)

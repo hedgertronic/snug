@@ -8,8 +8,8 @@ import os
 
 root = Path(__file__).resolve().parents[1]
 binary = Path(os.environ.get("SCREENSHOT_BENCH", str(root / "build/ScreenshotBench")))
-fixtures = root / "notes/fixtures"
-results = root / "notes/results"
+fixtures = root / "build/fixtures"
+results = root / "build/results"
 repetitions = sys.argv[1] if len(sys.argv) > 1 else "3"
 subprocess.run([str(binary), "fixtures", str(fixtures)], check=True)
 manifest = json.loads((fixtures / "manifest.json").read_text())
@@ -45,5 +45,5 @@ Keyboard corrections count Tab, Shift–Tab, Up, or Down from the default select
 | Fixture | Detector | Median ms | Peak RSS MiB | Candidates | Default IoU | Best IoU | Corrections |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
 """ + "\n".join(rows) + "\n"
-(root / "notes/measurements.md").write_text(report)
-print(f"Report: {root / 'notes/measurements.md'}")
+(root / "build/measurements.md").write_text(report)
+print(f"Report: {root / 'build/measurements.md'}")

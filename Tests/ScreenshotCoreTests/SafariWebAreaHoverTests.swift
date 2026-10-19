@@ -6,11 +6,11 @@ import Testing
 
 /// Hover over a Safari page's content area (the web view under the tab bar), round 14: on a light page the user saw no hint for it.
 struct SafariWebAreaHoverTests {
-    /// The user's Safari window on ko-fi.com (notes/fixtures/round14/safari-light-kofi.png), 2x, cropped to the window: a dark toolbar and
-    /// tab bar over 146 px, then the light page. Pixel geometry, as hover runs it (half size, then scaled back), finds the page as its own
+    /// A Safari window on ko-fi.com, 2x, cropped to the window, with the other tabs' titles blanked: a dark toolbar and tab bar over
+    /// 146 px, then the light page. Pixel geometry, as hover runs it (half size, then scaled back), finds the page as its own
     /// panel, and a hover anywhere on the page selects it with the window as its parent.
     @Test func geometryFindsTheLightPageUnderTheTabBar() async throws {
-        let url = try #require(Bundle.module.url(forResource: "SafariLightKofi", withExtension: "png", subdirectory: "Fixtures"))
+        let url = try #require(Bundle.module.url(forResource: "SafariLightPage", withExtension: "png", subdirectory: "Fixtures"))
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         let found = try await GeometryDetector().detect(in: Detection.downsampled(image, by: 2)).map { $0.scaled(by: 2) }
@@ -25,7 +25,7 @@ struct SafariWebAreaHoverTests {
         }
     }
 
-    /// Safari's AX tree read from the shell (macOS 26, notes/sidebar-debug/safari-ax-probe.swift): a 1242 x 927 pt window holds four
+    /// Safari's AX tree read from the shell (macOS 26): a 1242 x 927 pt window holds four
     /// wrappers of its own size (split group, tab group, the BrowserView group, a group), then a 1242 x 837 pt scroll area and a web area
     /// of the document's height (4928 pt). The window was in Stage Manager's strip, so its web frames' positions were not usable; here the
     /// scroll area sits 90 pt down, under the 52 pt toolbar and the 38 pt tab bar. Hover gets the content area from the web area,

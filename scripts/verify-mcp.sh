@@ -8,7 +8,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 snug=.build/debug/Snug
 folder=$(mktemp -d "${TMPDIR:-/tmp}/snug-mcp.XXXXXX")
-output=$("$snug" --verify-agent-ui "$folder" --image notes/real-web/form-test.png)
+output=$("$snug" --verify-agent-ui "$folder" --image Tests/Fixtures/real-web/form-test.png)
 grep "Agent UI verification passed" <<< "$output"
 older=$(sed -n 's/^replaced capture: //p' <<< "$output")
 newest=$(jq -rs '.[0].capture_id' "$folder"/*/manifest.json)

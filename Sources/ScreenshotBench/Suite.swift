@@ -73,7 +73,7 @@ public enum ScreenshotBenchSuite {
             throw BenchError.message("Manifest must be version 1 with nonempty, unique target IDs")
         }
         let manifestPath = manifestURL.standardizedFileURL.path
-        if let privatePath = manifestPath.range(of: "/notes/evaluation/private/") {
+        if let privatePath = manifestPath.range(of: "/evaluation/private/") {
             let privateRoot = String(manifestPath[..<privatePath.upperBound].dropLast())
             let outputPath = outputURL.standardizedFileURL.path
             guard outputPath == privateRoot || outputPath.hasPrefix(privateRoot + "/") else {

@@ -7,6 +7,8 @@ import subprocess
 import tempfile
 
 root = Path(__file__).resolve().parents[1]
+# A fixed identity, bundle ID, and path keep the Screen Recording grant across rebuilds.
+signing_identity = os.environ["SNUG_SIGNING_IDENTITY"]
 env = os.environ.copy()
 env["CLANG_MODULE_CACHE_PATH"] = str(root / ".build/clang-cache")
 env["SWIFTPM_MODULECACHE_OVERRIDE"] = str(root / ".build/swift-cache")
@@ -27,8 +29,8 @@ def install_binary(source: Path, destination: Path) -> None:
 
 install_binary(binary_dir / "ScreenshotLab", contents / "MacOS/ScreenshotLab")
 install_binary(binary_dir / "ScreenshotBench", root / "build/ScreenshotBench")
-subprocess.run([str(root / "build/ScreenshotBench"), "fixtures", str(root / "notes/fixtures")], check=True)
-shutil.copy2(root / "notes/fixtures/grid-table.png", contents / "Resources/Demo.png")
+subprocess.run([str(root / "build/ScreenshotBench"), "fixtures", str(root / "build/fixtures")], check=True)
+shutil.copy2(root / "build/fixtures/grid-table.png", contents / "Resources/Demo.png")
 info = {
     "CFBundleExecutable": "ScreenshotLab",
     "CFBundleIdentifier": "local.smartscreenshot.lab",
@@ -53,7 +55,7 @@ snug_contents = snug / "Contents"
 (snug_contents / "Resources").mkdir(exist_ok=True)
 install_binary(binary_dir / "Snug", snug_contents / "MacOS/Snug")
 # Every icon size is scaled down from the 1024 master.
-master = root / "notes/brand/snug-icon-plum-coral-1024.png"
+master = root / "brand/snug-icon-plum-coral-1024.png"
 with tempfile.TemporaryDirectory() as scratch:
     iconset = Path(scratch) / "Snug.iconset"
     iconset.mkdir()
@@ -81,8 +83,7 @@ snug_info = {
 }
 with (snug_contents / "Info.plist").open("wb") as stream:
     plistlib.dump(snug_info, stream)
-# A fixed identity, bundle ID, and path keep the Screen Recording grant across rebuilds.
-subprocess.run(["codesign", "--force", "--sign", "Apple Development: Your Name (TEAMID)", str(snug)], check=True)
+subprocess.run(["codesign", "--force", "--sign", signing_identity, str(snug)], check=True)
 subprocess.run(["codesign", "--verify", "--strict", str(snug)], check=True)
 print(f"Local app: {app}")
 print(f"Snug: {snug}")
