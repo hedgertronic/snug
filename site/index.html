@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Snug - Screenshots that fit</title>
-<meta name="description" content="Snug is a free, open-source screenshot app for the Mac. Press one shortcut, point at what you want, and one click copies exactly that.">
+<meta name="description" content="Snug is a free, open-source screenshot app for the Mac. Point at anything; one click copies exactly that.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
@@ -12,429 +12,275 @@
 </head>
 <body>
 
-<header class="nav">
-  <div class="wrap nav-in">
-    <a class="brand" href="#top"><img src="icon.svg" alt="" width="28" height="28"><span>Snug</span></a>
-    <nav class="nav-links">
-      <a href="#try">Try it</a>
-      <a href="#features">Features</a>
-      <a href="#agents">Agents</a>
-      <a href="#privacy">Privacy</a>
-    </nav>
-    <span class="pill-soon">Coming soon</span>
-  </div>
+<header class="top">
+  <span class="brand"><img src="icon.svg" alt="" width="28" height="28">Snug</span>
+  <span class="tagline">Point at anything. One click copies exactly that.</span>
+  <span class="soon">Download - coming soon</span>
 </header>
 
-<main id="top">
+<main class="demos">
+<div class="main-demo">
+  <div class="stage" tabindex="0" role="application" aria-label="Demo of the Snug capture overlay. Point at anything; Up and Down walk out and in; Return copies.">
+    <div class="screen" data-n="Full screen" data-role="display">
+      <div class="scene">
 
-<section class="hero">
-  <div class="wrap">
-    <img class="hero-icon" src="icon.svg" alt="Snug icon: a bed with a dashed selection outline for a pillow" width="132" height="132">
-    <h1 class="wordmark">Snug</h1>
-    <p class="headline">Screenshots that fit.</p>
-    <p class="lede">Press one shortcut and point. Snug outlines the element under the pointer, a button, a sidebar, a table, and one click copies exactly that.</p>
-    <p class="shortcut">
-      <kbd class="key"><span>&#8963;</span>control</kbd><kbd class="key"><span>&#8679;</span>shift</kbd><kbd class="key wide">space</kbd>
-    </p>
-    <div class="cta">
-      <span class="btn primary is-soon" aria-disabled="true">Download for Mac<small>Coming soon</small></span>
-      <a class="btn" href="#github" title="The repository opens with the first release">GitHub<small>Opening soon</small></a>
-    </div>
-    <p class="fine">Free and open source. Apple Silicon, macOS 26 or later.</p>
-  </div>
-</section>
+        <div class="menubar" data-n="Menu bar" data-role="menu bar">
+          <b data-n="Finder" data-role="menu bar item">Finder</b>
+          <span data-n="File" data-role="menu bar item">File</span>
+          <span data-n="Edit" data-role="menu bar item">Edit</span>
+          <span data-n="View" data-role="menu bar item">View</span>
+          <span data-n="Go" data-role="menu bar item">Go</span>
+          <span data-n="Window" data-role="menu bar item">Window</span>
+          <span class="mb-right">
+            <span class="mb-snug" data-n="Snug" data-role="menu extra"><svg viewBox="0 0 20 16" width="18" height="14" aria-hidden="true"><path d="M3 12V5.5A3.5 3.5 0 0 1 6.5 2h7A3.5 3.5 0 0 1 17 5.5V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="1.6 2.2"/><path d="M1 10.5c6-2 12-2 18 0V15H1z" fill="currentColor"/></svg></span>
+            <span data-n="Clock" data-role="menu extra">Mon Oct 19 9:41</span>
+          </span>
+        </div>
 
-<section class="try" id="try">
-  <div class="wrap">
-    <p class="eyebrow">Try it</p>
-    <h2>Point at anything.</h2>
-    <p class="sub">A drawing of a Mac with the overlay open. Move the pointer over it, then use the keys below. On a phone, tap.</p>
-  </div>
+        <div class="dfile" data-n="Photos" data-role="folder" data-r="8">
+          <svg viewBox="0 0 48 40" width="48" height="40" aria-hidden="true"><path d="M2 8a4 4 0 0 1 4-4h12l4 4h20a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" fill="#63B3F2"/><path d="M2 13h44v21a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" fill="#86C8F7"/></svg>
+          <span>Photos</span>
+        </div>
 
-  <div class="wrap wide">
-    <div class="stage" tabindex="0" role="application" aria-label="Interactive demo of the Snug capture overlay" aria-describedby="demo-help">
-      <div class="screen" data-n="Full screen" data-role="display" data-mode="capture">
-        <div class="scene">
-
-          <div class="menubar" data-n="Menu bar" data-role="menu bar">
-            <b data-n="Finder" data-role="menu bar item">Finder</b>
-            <span data-n="File" data-role="menu bar item">File</span>
-            <span data-n="Edit" data-role="menu bar item">Edit</span>
-            <span data-n="View" data-role="menu bar item">View</span>
-            <span data-n="Go" data-role="menu bar item">Go</span>
-            <span data-n="Window" data-role="menu bar item">Window</span>
-            <span class="mb-right">
-              <span class="mb-snug" data-n="Snug" data-role="menu extra"><svg viewBox="0 0 20 16" width="18" height="14" aria-hidden="true"><path d="M3 12V5.5A3.5 3.5 0 0 1 6.5 2h7A3.5 3.5 0 0 1 17 5.5V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="1.6 2.2"/><path d="M1 10.5c6-2 12-2 18 0V15H1z" fill="currentColor"/></svg></span>
-              <span data-n="Clock" data-role="menu extra">Mon Oct 19 9:41</span>
-            </span>
+        <div class="win safari" data-n="Safari window" data-role="window" data-app="Safari" data-title="Weekend routes - Trail Log" data-r="12">
+          <div class="tb" data-n="Toolbar" data-role="toolbar">
+            <span class="lights"><i></i><i></i><i></i></span>
+            <span class="chev" data-n="Back" data-role="button" data-r="6"><svg viewBox="0 0 10 16" width="8" height="13" aria-hidden="true"><path d="M8 2 2 8l6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <span class="chev dim" data-n="Forward" data-role="button" data-r="6"><svg viewBox="0 0 10 16" width="8" height="13" aria-hidden="true"><path d="m2 2 6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <span class="addr" data-n="Address bar" data-role="text field" data-r="8"><svg viewBox="0 0 10 12" width="8" height="10" aria-hidden="true"><rect x="1" y="5" width="8" height="6.5" rx="1.5" fill="currentColor"/><path d="M3 5V3.5a2 2 0 0 1 4 0V5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>trail-log.example</span>
+            <span class="tb-end" data-n="New Tab" data-role="button" data-r="6"><svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
           </div>
-
-          <div class="dfile" data-n="Photos" data-role="folder" data-r="8">
-            <svg viewBox="0 0 48 40" width="48" height="40" aria-hidden="true"><path d="M2 8a4 4 0 0 1 4-4h12l4 4h20a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" fill="#63B3F2"/><path d="M2 13h44v21a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" fill="#86C8F7"/></svg>
-            <span>Photos</span>
-          </div>
-
-          <div class="win safari" data-n="Safari window" data-role="window" data-app="Safari" data-title="Weekend routes - Trail Log" data-r="12">
-            <div class="tb" data-n="Toolbar" data-role="toolbar">
-              <span class="lights"><i></i><i></i><i></i></span>
-              <span class="chev" data-n="Back" data-role="button" data-r="6"><svg viewBox="0 0 10 16" width="8" height="13" aria-hidden="true"><path d="M8 2 2 8l6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-              <span class="chev dim" data-n="Forward" data-role="button" data-r="6"><svg viewBox="0 0 10 16" width="8" height="13" aria-hidden="true"><path d="m2 2 6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-              <span class="addr" data-n="Address bar" data-role="text field" data-r="8"><svg viewBox="0 0 10 12" width="8" height="10" aria-hidden="true"><rect x="1" y="5" width="8" height="6.5" rx="1.5" fill="currentColor"/><path d="M3 5V3.5a2 2 0 0 1 4 0V5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>trail-log.example</span>
-              <span class="tb-end" data-n="New Tab" data-role="button" data-r="6"><svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
-            </div>
-            <div class="page" data-n="Web page" data-role="web area">
-              <header class="site" data-n="Site header" data-role="group">
-                <b class="logo" data-n="Trail Log" data-role="link"><svg viewBox="0 0 20 14" width="18" height="13" aria-hidden="true"><path d="M1 13 7 4l3 4 2-3 7 8z" fill="currentColor"/></svg>Trail Log</b>
-                <nav>
-                  <span data-n="Routes" data-role="link">Routes</span>
-                  <span data-n="Gear" data-role="link">Gear</span>
-                  <span data-n="Journal" data-role="link">Journal</span>
-                </nav>
-                <span class="sub-btn" data-n="Subscribe" data-role="button" data-r="14">Subscribe</span>
-              </header>
-              <div class="article" data-n="Article" data-role="group">
-                <h3>Weekend routes</h3>
-                <p class="dek">Four loops within an hour of town. Updated Friday morning.</p>
-                <div class="cards">
-                  <section class="card" data-n="Elevation chart" data-role="group" data-r="12">
-                    <h4>Elevation gain</h4>
-                    <svg class="bars" viewBox="0 0 240 84" aria-hidden="true">
-                      <g fill="currentColor">
-                        <rect x="8" y="40" width="34" height="34" rx="4" data-n="Cedar Loop bar" data-role="image"/>
-                        <rect x="56" y="14" width="34" height="60" rx="4" data-n="Lookout Ridge bar" data-role="image"/>
-                        <rect x="104" y="52" width="34" height="22" rx="4" data-n="Fern Hollow bar" data-role="image"/>
-                        <rect x="152" y="28" width="34" height="46" rx="4" data-n="Old Mill bar" data-role="image"/>
-                      </g>
-                      <path d="M0 74.5h240" stroke="currentColor" stroke-opacity=".25"/>
-                      <g class="bar-lab" font-size="8.5" text-anchor="middle"><text x="25" y="83">Cedar</text><text x="73" y="83">Lookout</text><text x="121" y="83">Fern</text><text x="169" y="83">Mill</text></g>
-                    </svg>
-                  </section>
-                  <section class="card" data-n="Conditions" data-role="group" data-r="12">
-                    <h4>Conditions</h4>
-                    <div class="stats">
-                      <div class="stat" data-n="Trail" data-role="group" data-r="8"><small>Trail</small><b>Dry</b></div>
-                      <div class="stat" data-n="Wind" data-role="group" data-r="8"><small>Wind</small><b>8 mph</b></div>
-                      <div class="stat" data-n="Sunset" data-role="group" data-r="8"><small>Sunset</small><b>6:42</b></div>
-                    </div>
-                  </section>
-                </div>
-                <div class="tbl" data-n="Routes table" data-role="table" data-r="10">
-                  <table>
-                    <thead><tr><th>Route</th><th>Distance</th><th>Gain</th><th>Time</th></tr></thead>
-                    <tbody>
-                      <tr data-n="Cedar Loop" data-role="row"><td>Cedar Loop</td><td>4.2 mi</td><td>620 ft</td><td>1 h 50 m</td></tr>
-                      <tr data-n="Lookout Ridge" data-role="row"><td>Lookout Ridge</td><td>7.8 mi</td><td>1,940 ft</td><td>4 h 10 m</td></tr>
-                      <tr data-n="Fern Hollow" data-role="row"><td>Fern Hollow</td><td>3.1 mi</td><td>310 ft</td><td>1 h 15 m</td></tr>
-                      <tr data-n="Old Mill" data-role="row"><td>Old Mill</td><td>5.6 mi</td><td>1,120 ft</td><td>2 h 40 m</td></tr>
-                    </tbody>
-                  </table>
-                </div>
+          <div class="page" data-n="Web page" data-role="web area">
+            <header class="site" data-n="Site header" data-role="group">
+              <b class="logo" data-n="Trail Log" data-role="link"><svg viewBox="0 0 20 14" width="18" height="13" aria-hidden="true"><path d="M1 13 7 4l3 4 2-3 7 8z" fill="currentColor"/></svg>Trail Log</b>
+              <nav>
+                <span data-n="Routes" data-role="link">Routes</span>
+                <span data-n="Gear" data-role="link">Gear</span>
+                <span data-n="Journal" data-role="link">Journal</span>
+              </nav>
+              <span class="sub-btn" data-n="Subscribe" data-role="button" data-r="14">Subscribe</span>
+            </header>
+            <div class="article" data-n="Article" data-role="group">
+              <h3>Weekend routes</h3>
+              <p class="dek">Four loops within an hour of town. Updated Friday morning.</p>
+              <div class="cards">
+                <section class="card" data-n="Elevation chart" data-role="group" data-r="12">
+                  <h4>Elevation gain</h4>
+                  <svg class="bars" viewBox="0 0 240 84" aria-hidden="true">
+                    <g fill="currentColor">
+                      <rect x="8" y="40" width="34" height="34" rx="4" data-n="Cedar Loop bar" data-role="image"/>
+                      <rect x="56" y="14" width="34" height="60" rx="4" data-n="Lookout Ridge bar" data-role="image"/>
+                      <rect x="104" y="52" width="34" height="22" rx="4" data-n="Fern Hollow bar" data-role="image"/>
+                      <rect x="152" y="28" width="34" height="46" rx="4" data-n="Old Mill bar" data-role="image"/>
+                    </g>
+                    <path d="M0 74.5h240" stroke="currentColor" stroke-opacity=".25"/>
+                    <g class="bar-lab" font-size="8.5" text-anchor="middle"><text x="25" y="83">Cedar</text><text x="73" y="83">Lookout</text><text x="121" y="83">Fern</text><text x="169" y="83">Mill</text></g>
+                  </svg>
+                </section>
+                <section class="card" data-n="Conditions" data-role="group" data-r="12">
+                  <h4>Conditions</h4>
+                  <div class="stats">
+                    <div class="stat" data-n="Trail" data-role="group" data-r="8"><small>Trail</small><b>Dry</b></div>
+                    <div class="stat" data-n="Wind" data-role="group" data-r="8"><small>Wind</small><b>8 mph</b></div>
+                    <div class="stat" data-n="Sunset" data-role="group" data-r="8"><small>Sunset</small><b>6:42</b></div>
+                  </div>
+                </section>
+              </div>
+              <div class="tbl" data-n="Routes table" data-role="table" data-r="10">
+                <table>
+                  <thead><tr><th>Route</th><th>Distance</th><th>Gain</th><th>Time</th></tr></thead>
+                  <tbody>
+                    <tr data-n="Cedar Loop" data-role="row"><td>Cedar Loop</td><td>4.2 mi</td><td>620 ft</td><td>1 h 50 m</td></tr>
+                    <tr data-n="Lookout Ridge" data-role="row"><td>Lookout Ridge</td><td>7.8 mi</td><td>1,940 ft</td><td>4 h 10 m</td></tr>
+                    <tr data-n="Fern Hollow" data-role="row"><td>Fern Hollow</td><td>3.1 mi</td><td>310 ft</td><td>1 h 15 m</td></tr>
+                    <tr data-n="Old Mill" data-role="row"><td>Old Mill</td><td>5.6 mi</td><td>1,120 ft</td><td>2 h 40 m</td></tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
+        </div>
 
-          <div class="win finder" data-n="Finder window" data-role="window" data-app="Finder" data-title="Documents" data-r="12">
-            <aside class="side" data-n="Sidebar" data-role="outline">
-              <span class="lights"><i></i><i></i><i></i></span>
-              <small>Favorites</small>
-              <div class="row" data-n="Recents" data-role="row" data-r="6"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5V8l2.5 1.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>Recents</div>
-              <div class="row" data-n="Applications" data-role="row" data-r="6"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1.2" fill="currentColor"/><rect x="9" y="2" width="5" height="5" rx="1.2" fill="currentColor"/><rect x="2" y="9" width="5" height="5" rx="1.2" fill="currentColor"/><rect x="9" y="9" width="5" height="5" rx="1.2" fill="currentColor"/></svg>Applications</div>
-              <div class="row" data-n="Desktop" data-role="row" data-r="6"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 14h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>Desktop</div>
-              <div class="row on" data-n="Documents" data-role="row" data-r="6"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1.5h5l3.5 3.5v9.5h-8.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>Documents</div>
-              <div class="row" data-n="Downloads" data-role="row" data-r="6"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v6M5.5 8.2 8 10.7l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Downloads</div>
-              <small>Locations</small>
-              <div class="row" data-n="Macintosh HD" data-role="row" data-r="6"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="4" width="13" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="11.5" cy="8" r="1" fill="currentColor"/></svg>Macintosh HD</div>
-            </aside>
-            <div class="fmain">
-              <div class="ftb" data-n="Toolbar" data-role="toolbar">
-                <span class="chev"><svg viewBox="0 0 10 16" width="8" height="13" aria-hidden="true"><path d="M8 2 2 8l6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                <b>Documents</b>
-                <span class="seg" data-n="View switcher" data-role="tab group" data-r="7"><i class="on"></i><i></i><i></i><i></i></span>
-              </div>
-              <div class="files" data-n="Files" data-role="group">
-                <div class="file" data-n="Projects" data-role="folder" data-r="8"><svg viewBox="0 0 48 40" aria-hidden="true"><path d="M2 8a4 4 0 0 1 4-4h12l4 4h20a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" fill="#63B3F2"/><path d="M2 13h44v21a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" fill="#86C8F7"/></svg><span>Projects</span></div>
-                <div class="file" data-n="Receipts" data-role="folder" data-r="8"><svg viewBox="0 0 48 40" aria-hidden="true"><path d="M2 8a4 4 0 0 1 4-4h12l4 4h20a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" fill="#63B3F2"/><path d="M2 13h44v21a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" fill="#86C8F7"/></svg><span>Receipts</span></div>
-                <div class="file" data-n="Trip notes.txt" data-role="file" data-r="8"><svg viewBox="0 0 48 40" aria-hidden="true"><path d="M14 1h14l8 8v30H14z" fill="#fff" stroke="#C9C9CE"/><path d="M28 1v8h8" fill="#ECECEF" stroke="#C9C9CE"/><path d="M18 16h14M18 21h14M18 26h10" stroke="#B0B0B6" stroke-width="1.5"/></svg><span>Trip notes.txt</span></div>
-                <div class="file" data-n="Map.png" data-role="file" data-r="8"><svg viewBox="0 0 48 40" aria-hidden="true"><rect x="8" y="5" width="32" height="30" rx="3" fill="#fff" stroke="#C9C9CE"/><path d="M11 31l9-10 6 6 4-4 7 8z" fill="#7CC38A"/><circle cx="31" cy="13" r="3" fill="#FFB547"/></svg><span>Map.png</span></div>
-                <div class="file" data-n="Budget.csv" data-role="file" data-r="8"><svg viewBox="0 0 48 40" aria-hidden="true"><path d="M14 1h14l8 8v30H14z" fill="#fff" stroke="#C9C9CE"/><path d="M28 1v8h8" fill="#ECECEF" stroke="#C9C9CE"/><path d="M18 15h14v16H18zM18 20.5h14M18 26h14M25 15v16" fill="none" stroke="#5FB872" stroke-width="1.2"/></svg><span>Budget.csv</span></div>
-                <div class="file" data-n="Gear list.pdf" data-role="file" data-r="8"><svg viewBox="0 0 48 40" aria-hidden="true"><path d="M14 1h14l8 8v30H14z" fill="#fff" stroke="#C9C9CE"/><path d="M28 1v8h8" fill="#ECECEF" stroke="#C9C9CE"/><rect x="17" y="24" width="16" height="7" rx="1.5" fill="#E5534B"/></svg><span>Gear list.pdf</span></div>
-              </div>
+        <div class="win finder" data-n="Finder window" data-role="window" data-app="Finder" data-title="Documents" data-r="12">
+          <aside class="side" data-n="Sidebar" data-role="outline">
+            <span class="lights"><i></i><i></i><i></i></span>
+            <small>Favorites</small>
+            <div class="row" data-n="Recents" data-role="row" data-r="6"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5V8l2.5 1.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>Recents</div>
+            <div class="row" data-n="Applications" data-role="row" data-r="6"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1.2" fill="currentColor"/><rect x="9" y="2" width="5" height="5" rx="1.2" fill="currentColor"/><rect x="2" y="9" width="5" height="5" rx="1.2" fill="currentColor"/><rect x="9" y="9" width="5" height="5" rx="1.2" fill="currentColor"/></svg>Applications</div>
+            <div class="row" data-n="Desktop" data-role="row" data-r="6"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 14h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>Desktop</div>
+            <div class="row on" data-n="Documents" data-role="row" data-r="6"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1.5h5l3.5 3.5v9.5h-8.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>Documents</div>
+            <div class="row" data-n="Downloads" data-role="row" data-r="6"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v6M5.5 8.2 8 10.7l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Downloads</div>
+            <small>Locations</small>
+            <div class="row" data-n="Macintosh HD" data-role="row" data-r="6"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="4" width="13" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="11.5" cy="8" r="1" fill="currentColor"/></svg>Macintosh HD</div>
+          </aside>
+          <div class="fmain">
+            <div class="ftb" data-n="Toolbar" data-role="toolbar">
+              <span class="chev"><svg viewBox="0 0 10 16" width="8" height="13" aria-hidden="true"><path d="M8 2 2 8l6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              <b>Documents</b>
+              <span class="seg" data-n="View switcher" data-role="tab group" data-r="7"><i class="on"></i><i></i><i></i><i></i></span>
+            </div>
+            <div class="files" data-n="Files" data-role="group">
+              <div class="file" data-n="Projects" data-role="folder" data-r="8"><svg viewBox="0 0 48 40" aria-hidden="true"><path d="M2 8a4 4 0 0 1 4-4h12l4 4h20a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" fill="#63B3F2"/><path d="M2 13h44v21a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" fill="#86C8F7"/></svg><span>Projects</span></div>
+              <div class="file" data-n="Receipts" data-role="folder" data-r="8"><svg viewBox="0 0 48 40" aria-hidden="true"><path d="M2 8a4 4 0 0 1 4-4h12l4 4h20a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" fill="#63B3F2"/><path d="M2 13h44v21a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" fill="#86C8F7"/></svg><span>Receipts</span></div>
+              <div class="file" data-n="Trip notes.txt" data-role="file" data-r="8"><svg viewBox="0 0 48 40" aria-hidden="true"><path d="M14 1h14l8 8v30H14z" fill="#fff" stroke="#C9C9CE"/><path d="M28 1v8h8" fill="#ECECEF" stroke="#C9C9CE"/><path d="M18 16h14M18 21h14M18 26h10" stroke="#B0B0B6" stroke-width="1.5"/></svg><span>Trip notes.txt</span></div>
+              <div class="file" data-n="Map.png" data-role="file" data-r="8"><svg viewBox="0 0 48 40" aria-hidden="true"><rect x="8" y="5" width="32" height="30" rx="3" fill="#fff" stroke="#C9C9CE"/><path d="M11 31l9-10 6 6 4-4 7 8z" fill="#7CC38A"/><circle cx="31" cy="13" r="3" fill="#FFB547"/></svg><span>Map.png</span></div>
+              <div class="file" data-n="Budget.csv" data-role="file" data-r="8"><svg viewBox="0 0 48 40" aria-hidden="true"><path d="M14 1h14l8 8v30H14z" fill="#fff" stroke="#C9C9CE"/><path d="M28 1v8h8" fill="#ECECEF" stroke="#C9C9CE"/><path d="M18 15h14v16H18zM18 20.5h14M18 26h14M25 15v16" fill="none" stroke="#5FB872" stroke-width="1.2"/></svg><span>Budget.csv</span></div>
+              <div class="file" data-n="Gear list.pdf" data-role="file" data-r="8"><svg viewBox="0 0 48 40" aria-hidden="true"><path d="M14 1h14l8 8v30H14z" fill="#fff" stroke="#C9C9CE"/><path d="M28 1v8h8" fill="#ECECEF" stroke="#C9C9CE"/><rect x="17" y="24" width="16" height="7" rx="1.5" fill="#E5534B"/></svg><span>Gear list.pdf</span></div>
             </div>
           </div>
-
         </div>
 
-        <div class="ov" aria-hidden="true">
-          <div class="dimall"></div>
-          <div class="hint up"><span class="kc">&uarr;</span></div>
-          <div class="hint down"><span class="kc">&darr;</span></div>
-          <div class="framep"></div>
-          <div class="hl"></div>
-          <div class="ghost"></div>
-          <div class="sel"><i class="h" data-h="nw"></i><i class="h" data-h="n"></i><i class="h" data-h="ne"></i><i class="h" data-h="e"></i><i class="h" data-h="se"></i><i class="h" data-h="s"></i><i class="h" data-h="sw"></i><i class="h" data-h="w"></i></div>
-          <div class="flash"></div>
-          <div class="ruler top"></div>
-          <div class="ruler left"></div>
-          <div class="cross"><i></i><i></i></div>
-          <div class="chip size"></div>
-          <div class="chip corner"></div>
-          <div class="strip">
-            <button type="button" class="sb pri" data-key="Enter"><span class="lab">Copy</span><span class="kc cmdcap">&#8984;</span><span class="kc">&#8617;</span></button>
-            <button type="button" class="sb" data-key="s" data-mods="meta">Save<span class="kc">&#8984;</span><span class="kc">S</span></button>
-          </div>
-          <div class="chip cluster"></div>
-          <div class="loupe"><div class="lz"></div><div class="grid"></div></div>
-          <div class="chip readout"></div>
-          <div class="bar">
-            <div class="pill"><button type="button" data-key="a" data-mode="capture">Capture<span class="kc">A</span></button><button type="button" data-key="t" data-mode="text">Text<span class="kc">T</span></button></div>
-            <div class="pill tools"><button type="button" data-key="l" data-t="L">Loupe<span class="kc">L</span></button><button type="button" data-key="r" data-t="R">Rulers<span class="kc">R</span></button><button type="button" data-key="x" data-t="X">Crosshair<span class="kc">X</span></button></div>
-            <div class="pill tools"><button type="button" data-key="o" data-t="O">Rounded<span class="kc">O</span></button><button type="button" data-key="m" data-t="M">Frame<span class="kc">M</span></button></div>
-          </div>
-          <div class="chip keycast" hidden></div>
-          <div class="chip notice">Snug is closed. Press <span class="kc">&#8963;</span><span class="kc">&#8679;</span><span class="kc">space</span> or click to capture again.</div>
-        </div>
       </div>
-    </div>
-    <p class="demo-status" aria-live="polite"></p>
 
-    <div class="legend" id="demo-help">
-      <div class="lg">
-        <h3>Point and copy</h3>
-        <p><span class="word">point</span>Outline the element under the pointer</p>
-        <p><span class="word">click</span><button class="key" data-key="Enter">&#8617;</button>Copy it</p>
-        <p><button class="key" data-key="Meta" data-mods="meta" data-for="Enter">&#8984;</button><button class="key" data-key="Enter" data-mods="meta">&#8617;</button>Copy for an agent</p>
-        <p><button class="key" data-key="Escape">esc</button>Back, or close</p>
+      <div class="ov" aria-hidden="true">
+        <div class="dimall"></div>
+        <div class="hint up"><span class="kc">&uarr;</span></div>
+        <div class="hint down"><span class="kc">&darr;</span></div>
+        <div class="hl"></div>
+        <div class="ghost"></div>
+        <div class="sel"></div>
+        <div class="flash"></div>
+        <div class="chip size"></div>
+        <div class="strip"><button type="button" class="sb" tabindex="-1"><span class="lab">Copy</span><span class="kc cmdcap">&#8984;</span><span class="kc">&#8617;</span></button></div>
+        <div class="chip notice">Snug is closed. Click to capture again.</div>
       </div>
-      <div class="lg">
-        <h3>Walk the layout</h3>
-        <p><button class="key" data-key="ArrowUp">&uarr;</button><button class="key" data-key="ArrowDown">&darr;</button>Out to the parent, and back in</p>
-        <p><button class="key" data-key="ArrowLeft">&larr;</button><button class="key" data-key="ArrowRight">&rarr;</button>Hover the neighbors</p>
-        <p><button class="key" data-key="f">F</button>Full screen</p>
-        <p><button class="key" data-key="w">W</button>The window under the pointer</p>
-      </div>
-      <div class="lg">
-        <h3>Draw an area</h3>
-        <p><span class="word">drag</span>Draw it; edges snap. <span class="key static" data-key="Alt">&#8997;</span> keeps it exact</p>
-        <p><span class="key static" data-key="arrows">arrows</span>Move it, <span class="key static" data-key="Shift">&#8679;</span> 10 px</p>
-        <p><span class="key static" data-key="Alt">&#8997;</span><span class="key static" data-key="arrows">arrows</span>Grow a side</p>
-        <p><button class="key" data-key="Tab">tab</button><button class="key" data-key="[">[</button><button class="key" data-key="]">]</button>Focus a corner, set its radius</p>
-      </div>
-      <div class="lg">
-        <h3>Toggles</h3>
-        <p><button class="key" data-key="s">S</button>Snap</p>
-        <p><button class="key" data-key="l">L</button><button class="key" data-key="r">R</button><button class="key" data-key="x">X</button>Loupe, rulers, crosshair</p>
-        <p><button class="key" data-key="o">O</button><button class="key" data-key="m">M</button>Rounded corners, frame</p>
-        <p><button class="key" data-key="c">C</button>Copy the color under the pointer</p>
-        <p><button class="key" data-key="t">T</button><button class="key" data-key="a">A</button>Text mode, Capture mode</p>
-      </div>
+      <div class="chip cast" hidden aria-hidden="true"></div>
+      <div class="cursor" hidden aria-hidden="true"><svg viewBox="0 0 16 24" width="17" height="25"><path d="M1.5 1.5v17.2l4.3-4.1 2.9 6.6 3-1.3-2.9-6.5h6z" fill="#111" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+      <div class="toast" aria-hidden="true"><span class="t-thumb"><i></i></span><span class="t-text"><b></b><span></span></span></div>
     </div>
   </div>
-</section>
+  <p class="keys wide-only"><span><kbd>&uarr;</kbd><kbd>&darr;</kbd> walk out and in</span><span>drag: an area that snaps, <kbd>&#8997;</kbd> exact</span><span><kbd>&#8617;</kbd> copy</span><span><kbd>&#8984;</kbd><kbd>&#8617;</kbd> for your agent</span></p>
+  <p class="keys narrow-only"><span>Tap to frame it, tap again to copy</span></p>
+  <p class="status" aria-live="polite"></p>
+</div>
 
-<section class="features" id="features">
-  <div class="wrap">
-    <p class="eyebrow">More than pixels</p>
-    <h2>Every tool is one key away.</h2>
-    <p class="sub">The same overlay reads text, scrolls, records and cuts out. Capture and go stays the default.</p>
-
-    <div class="tiles">
-
-      <article class="tile" id="text">
-        <div class="tile-copy">
-          <h3><kbd class="key">T</kbd>Text, from any pixels.</h3>
-          <p>Select text in the frozen screen the way you would on a web page, then press Return. Live Text does the reading, on your Mac.</p>
-        </div>
-        <div class="vg vt" tabindex="0" aria-label="Text mode example: select the text, then press Return">
-          <div class="shot">
-            <span class="shot-tag">Screenshot</span>
-            <pre><span class="p">$</span> swift test
-Building for debugging...
-<span class="e">error:</span> cannot find 'feedRows' in scope
-  --> Sources/Feed/FeedView.swift:42:9
-Test run failed after 3.1 seconds.</pre>
-          </div>
-          <div class="tstrip" hidden><button type="button" class="sb pri">Copy<span class="kc">&#8617;</span></button></div>
-          <p class="vg-hint">Drag across the lines.</p>
-        </div>
-      </article>
-
-      <article class="tile" id="scroll">
-        <div class="tile-copy">
-          <h3><kbd class="key">G</kbd>Longer than the window.</h3>
-          <p>Press G and scroll the app under the outline. Snug stitches the frames as you go; Return copies the whole thing.</p>
-        </div>
-        <div class="vg vs" tabindex="0" aria-label="Scrolling capture example: scroll inside the outline">
-          <div class="vs-win">
-            <div class="vs-tb"><span class="lights"><i></i><i></i><i></i></span><b>Journal</b></div>
-            <div class="vs-pane"><div class="vs-list"></div></div>
-            <div class="vs-outline"></div>
-          </div>
-          <div class="vs-mini"><div class="vs-mini-in"></div><div class="vs-mini-view"></div></div>
-          <div class="vs-chips"><span class="chip vs-chip"></span><span class="chip vs-status">Scroll the app under the outline</span></div>
-          <button type="button" class="sb pri vs-copy">Copy<span class="kc">&#8617;</span></button>
-        </div>
-      </article>
-
-      <article class="tile" id="record">
-        <div class="tile-copy">
-          <h3><kbd class="key">V</kbd>Record just that part.</h3>
-          <p>V arms a recording of the selection or the element under the pointer. V or Return starts it, and the capture shortcut stops it.</p>
-        </div>
-        <div class="vg vr" tabindex="0" data-state="idle" aria-label="Recording example: press V">
-          <div class="vr-area">
-            <div class="vr-app">
-              <div class="vr-row"><span>Sync</span><i class="vr-switch"></i></div>
-              <div class="vr-row"><span>Uploading</span><i class="vr-prog"><b></b></i></div>
-            </div>
-            <div class="vr-outline"></div>
-            <span class="chip vr-chip"></span>
-          </div>
-          <div class="vr-strip">
-            <button type="button" class="sb vr-go"><span class="vr-label">Record</span><span class="kc vr-cap">V</span></button>
-            <button type="button" class="sb vr-cancel">Cancel<span class="kc">esc</span></button>
-          </div>
-          <p class="vr-remind">Press <span class="kc">&#8963;</span><span class="kc">&#8679;</span><span class="kc">space</span> to stop</p>
-        </div>
-      </article>
-
-      <article class="tile" id="subject">
-        <div class="tile-copy">
-          <h3><kbd class="key">K</kbd>Lift the subject.</h3>
-          <p>K cuts the subject out of its background, right in the overlay. Press K again to go back. The image keeps its transparency.</p>
-        </div>
-        <div class="vg vk" tabindex="0" aria-label="Subject cutout example: press K">
-          <svg class="vk-art" viewBox="0 0 320 220" preserveAspectRatio="xMidYMid slice" role="img" aria-label="A potted plant on a shelf">
-            <g class="vk-bg">
-              <rect width="320" height="220" fill="#E9DCCB"/>
-              <rect x="190" y="20" width="104" height="120" rx="6" fill="#CFE3EE"/>
-              <path d="M242 20v120M190 80h104" stroke="#FFFFFF" stroke-width="6"/>
-              <rect x="0" y="168" width="320" height="52" fill="#B58A62"/>
-              <rect x="0" y="164" width="320" height="8" fill="#9C7450"/>
-              <rect x="30" y="122" width="16" height="44" rx="2" fill="#5C7FA8"/>
-              <rect x="48" y="128" width="14" height="38" rx="2" fill="#D9825B"/>
-              <rect x="64" y="116" width="18" height="50" rx="2" fill="#7D9C6B"/>
-            </g>
-            <g class="vk-subj">
-              <path d="M150 112c-14-30-40-36-52-30 12 4 26 16 34 34z" fill="#4E8A55"/>
-              <path d="M158 110c-4-40 16-62 30-64-4 14-14 36-18 62z" fill="#5FA163"/>
-              <path d="M164 114c18-26 42-28 54-20-14 2-30 10-44 26z" fill="#4E8A55"/>
-              <path d="M154 108c-20-14-24-40-16-52 2 14 8 32 22 46z" fill="#6DB26E"/>
-              <path d="M128 112h64l-8 54h-48z" fill="#E07A5F"/>
-              <rect x="124" y="106" width="72" height="12" rx="3" fill="#C9654C"/>
-            </g>
-          </svg>
-          <span class="chip vk-chip">back <span class="kc">K</span><span class="kc">esc</span></span>
-          <button type="button" class="key vk-key" aria-label="Cut out the subject">K</button>
-        </div>
-      </article>
-
-      <article class="tile" id="color">
-        <div class="tile-copy">
-          <h3><kbd class="key">C</kbd>Any color, any format.</h3>
-          <p>C copies the color under the pointer. Shift-C switches the format between HEX, RGB, HSL and Swift, and Snug remembers it.</p>
-        </div>
-        <div class="vg vc" tabindex="0" aria-label="Color picker example: point at the gradient and press C">
-          <div class="vc-grad"></div>
-          <span class="chip vc-read"><i class="sw"></i><span class="vc-val"></span><span class="kc">C</span></span>
-          <div class="vc-foot"><button type="button" class="sb vc-fmt">HEX<span class="kc">&#8679;</span><span class="kc">C</span></button><span class="vg-hint">Point at the gradient. Click or press C.</span></div>
-        </div>
-      </article>
-
-      <article class="tile" id="frame">
-        <div class="tile-copy">
-          <h3><kbd class="key">M</kbd><kbd class="key">O</kbd>Ready to paste.</h3>
-          <p>O rounds the corners to the radius Snug measures on the capture. M adds a frame: a window keeps its real shadow, anything else gets a padded card.</p>
-        </div>
-        <div class="vg vf" tabindex="0" aria-label="Frame and rounded corners example: press M or O">
-          <div class="vf-out"><div class="vf-pad">
-            <div class="vf-card">
-              <small>Conditions</small>
-              <div class="vf-stats"><span><i>Trail</i>Dry</span><span><i>Wind</i>8 mph</span><span><i>Sunset</i>6:42</span></div>
-            </div>
-          </div></div>
-          <div class="vf-foot">
-            <button type="button" class="sb vf-tog" data-k="m">Frame<span class="kc">M</span></button>
-            <button type="button" class="sb vf-tog" data-k="o">Rounded<span class="kc">O</span></button>
-            <span class="vf-size"></span>
-          </div>
-        </div>
-      </article>
-
+<div class="tools">
+  <figure class="tile">
+    <div class="vg">
+      <svg viewBox="0 0 200 124" aria-hidden="true">
+        <rect x="14" y="12" width="172" height="76" rx="8" fill="#1B1B1F"/>
+        <rect class="tx-sel" x="21" y="40" width="148" height="13" rx="2"/>
+        <rect class="tx-sel" style="animation-delay: .35s" x="21" y="55" width="104" height="13" rx="2"/>
+        <g class="mono" fill="#E6E6EA">
+          <text x="23" y="31"><tspan fill="#7FD48C">$</tspan> swift test</text>
+          <text x="23" y="50"><tspan fill="#FF7A6B" font-weight="700">error:</tspan> no 'feedRows'</text>
+          <text x="23" y="65">FeedView.swift:42</text>
+          <text x="23" y="80" fill="#8B8B93">Test run failed.</text>
+        </g>
+        <g class="pop"><rect class="cb" x="58" y="97" width="84" height="19" rx="6"/><text class="ct" x="100" y="110" text-anchor="middle">Copied 2 lines</text></g>
+      </svg>
     </div>
-  </div>
-</section>
+    <figcaption><kbd>T</kbd> Copy the text in any pixels</figcaption>
+  </figure>
 
-<section class="agents" id="agents">
-  <div class="wrap">
-    <p class="eyebrow">Agent handoff</p>
-    <h2>Show your agent what you mean.</h2>
-    <p class="sub"><kbd class="key">&#8984;</kbd><kbd class="key">&#8617;</kbd> copies the capture for an agent: the pixels at full resolution, plus a manifest of what was under the pointer. Paste it into the chat. The agent reads it through Snug's read-only MCP server.</p>
-
-    <div class="ag-grid">
-      <div class="ag-chat">
-        <div class="ag-head"><span class="lights"><i></i><i></i><i></i></span><b>Agent chat</b></div>
-        <div class="ag-body">
-          <div class="ag-msg">
-            <span class="ag-who">You pasted</span>
-            <code class="ag-ref"></code>
-          </div>
-          <div class="ag-tool"><span class="ag-who">The agent calls</span><code>get_capture</code> for the image and manifest, and <code>zoom</code> for a closer look at full resolution.</div>
-        </div>
-      </div>
-      <div class="ag-man">
-        <div class="ag-head"><b>manifest.json</b><span class="ag-note">excerpt</span></div>
-        <pre class="ag-json"></pre>
-      </div>
+  <figure class="tile">
+    <div class="vg">
+      <svg viewBox="0 0 200 124" aria-hidden="true">
+        <defs>
+          <clipPath id="sc-clip"><rect x="16" y="30" width="112" height="82"/></clipPath>
+          <g id="sc-rows">
+            <rect class="ink" x="24" y="36" width="54" height="4" rx="2"/><rect class="ink2" x="24" y="43" width="86" height="3" rx="1.5"/>
+            <rect class="ink" x="24" y="54" width="40" height="4" rx="2"/><rect class="ink2" x="24" y="61" width="72" height="3" rx="1.5"/>
+            <rect class="ink" x="24" y="72" width="62" height="4" rx="2"/><rect class="ink2" x="24" y="79" width="80" height="3" rx="1.5"/>
+            <rect class="ink" x="24" y="90" width="46" height="4" rx="2"/><rect class="ink2" x="24" y="97" width="90" height="3" rx="1.5"/>
+            <rect class="ink" x="24" y="108" width="58" height="4" rx="2"/><rect class="ink2" x="24" y="115" width="66" height="3" rx="1.5"/>
+            <rect class="ink" x="24" y="126" width="38" height="4" rx="2"/><rect class="ink2" x="24" y="133" width="84" height="3" rx="1.5"/>
+            <rect class="ink" x="24" y="144" width="64" height="4" rx="2"/><rect class="ink2" x="24" y="151" width="76" height="3" rx="1.5"/>
+            <rect class="ink" x="24" y="162" width="44" height="4" rx="2"/><rect class="ink2" x="24" y="169" width="88" height="3" rx="1.5"/>
+            <rect class="ink" x="24" y="180" width="56" height="4" rx="2"/><rect class="ink2" x="24" y="187" width="70" height="3" rx="1.5"/>
+            <rect class="ink" x="24" y="198" width="50" height="4" rx="2"/><rect class="ink2" x="24" y="205" width="82" height="3" rx="1.5"/>
+          </g>
+        </defs>
+        <rect class="win" x="16" y="12" width="112" height="100" rx="8"/>
+        <path class="wbar" d="M16 20a8 8 0 0 1 8-8h96a8 8 0 0 1 8 8v10H16z"/>
+        <circle cx="25" cy="21" r="2.5" fill="#FF5F57"/><circle cx="33" cy="21" r="2.5" fill="#FEBC2E"/><circle cx="41" cy="21" r="2.5" fill="#28C840"/>
+        <g clip-path="url(#sc-clip)"><use class="sc-scroll" href="#sc-rows"/></g>
+        <rect class="outline" x="16.75" y="30" width="110.5" height="81.25" rx="1"/>
+        <rect class="cb" x="140" y="12" width="44" height="100" rx="5"/>
+        <g transform="translate(142 6) scale(.4) translate(-20 0)"><use href="#sc-rows"/></g>
+        <rect class="sc-cover" x="141" y="51" width="42" height="41"/>
+        <rect class="outline sc-view" x="142" y="18" width="40" height="33" rx="1"/>
+      </svg>
     </div>
-    <p class="ag-try">Try it: point at something in the demo above and press <kbd class="key">&#8984;</kbd><kbd class="key">&#8617;</kbd>. This panel updates.</p>
+    <figcaption><kbd>G</kbd> Scroll to capture more</figcaption>
+  </figure>
 
-    <div class="ag-setup">
-      <p>Add Snug to Claude Code once. Settings &gt; Agent shows this command with the real path.</p>
-      <div class="cmd"><code>claude mcp add snug -- /path/to/Snug.app/Contents/MacOS/Snug --mcp</code><button type="button" class="sb ag-copy">Copy</button></div>
-      <ul class="ag-points">
-        <li>Snug never captures for an agent. It serves only what you copied.</li>
-        <li>Only the last capture is kept. Settings &gt; Agent clears it.</li>
-      </ul>
+  <figure class="tile">
+    <div class="vg">
+      <svg viewBox="0 0 200 124" aria-hidden="true">
+        <rect class="win" x="46" y="22" width="108" height="64" rx="9"/>
+        <text class="ui" x="58" y="46">Sync</text>
+        <rect class="rc-sw" x="124" y="37" width="20" height="12" rx="6"/>
+        <circle class="rc-knob" cx="138" cy="43" r="4.6" fill="#fff"/>
+        <path class="line" d="M52 56h96"/>
+        <text class="ui" x="58" y="74">Upload</text>
+        <rect class="ink2" x="98" y="68" width="46" height="5" rx="2.5"/>
+        <rect class="rc-prog" x="98" y="68" width="46" height="5" rx="2.5"/>
+        <rect class="rc-out" x="40" y="16" width="120" height="76" rx="13"/>
+        <g><rect class="cb" x="40" y="99" width="62" height="19" rx="6"/><circle class="rc-dot" cx="51" cy="108.5" r="3.5"/>
+          <text class="ct q" style="animation-delay: -4s" x="58" y="112">REC 0:01</text>
+          <text class="ct q" style="animation-delay: -3s" x="58" y="112">REC 0:02</text>
+          <text class="ct q on" style="animation-delay: -2s" x="58" y="112">REC 0:03</text>
+          <text class="ct q" style="animation-delay: -1s" x="58" y="112">REC 0:04</text></g>
+      </svg>
     </div>
-  </div>
-</section>
+    <figcaption><kbd>V</kbd> Record just that part</figcaption>
+  </figure>
 
-<section class="privacy" id="privacy">
-  <div class="wrap">
-    <p class="eyebrow">Privacy</p>
-    <h2>It all happens on your Mac.</h2>
-    <div class="pv-grid">
-      <div class="pv"><h3>Nothing uploaded</h3><p>Detection, text recognition and cutouts run on your Mac. Captures go to your clipboard, or to a file when you save.</p></div>
-      <div class="pv"><h3>Nothing running</h3><p>Snug lives in the menu bar and waits for the shortcut. It records the screen only when you ask it to.</p></div>
-      <div class="pv"><h3>Two permissions</h3><p>Screen Recording is required. Accessibility is recommended, so Snug can outline buttons and rows exactly instead of guessing from pixels.</p></div>
+  <figure class="tile">
+    <div class="vg vk">
+      <svg viewBox="0 0 320 198" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <g class="vk-bg">
+          <rect width="320" height="220" fill="#E9DCCB"/>
+          <rect x="190" y="14" width="104" height="110" rx="6" fill="#CFE3EE"/>
+          <path d="M242 14v110M190 69h104" stroke="#FFFFFF" stroke-width="6"/>
+          <rect x="0" y="160" width="320" height="60" fill="#B58A62"/>
+          <rect x="0" y="156" width="320" height="8" fill="#9C7450"/>
+          <rect x="30" y="114" width="16" height="44" rx="2" fill="#5C7FA8"/>
+          <rect x="48" y="120" width="14" height="38" rx="2" fill="#D9825B"/>
+          <rect x="64" y="108" width="18" height="50" rx="2" fill="#7D9C6B"/>
+        </g>
+        <g class="vk-subj">
+          <path d="M150 104c-14-30-40-36-52-30 12 4 26 16 34 34z" fill="#4E8A55"/>
+          <path d="M158 102c-4-40 16-62 30-64-4 14-14 36-18 62z" fill="#5FA163"/>
+          <path d="M164 106c18-26 42-28 54-20-14 2-30 10-44 26z" fill="#4E8A55"/>
+          <path d="M154 100c-20-14-24-40-16-52 2 14 8 32 22 46z" fill="#6DB26E"/>
+          <path d="M128 104h64l-8 54h-48z" fill="#E07A5F"/>
+          <rect x="124" y="98" width="72" height="12" rx="3" fill="#C9654C"/>
+        </g>
+      </svg>
     </div>
-  </div>
-</section>
+    <figcaption><kbd>K</kbd> Cut out the subject</figcaption>
+  </figure>
 
-<section class="get" id="github">
-  <div class="wrap">
-    <img src="icon.svg" alt="" width="72" height="72">
-    <h2>Snug is free.</h2>
-    <p class="sub">Open source under the MIT License. The download and the repository open with the first release.</p>
-    <dl class="req">
-      <div><dt>Mac</dt><dd>Apple Silicon</dd></div>
-      <div><dt>System</dt><dd>macOS 26 or later</dd></div>
-      <div><dt>Price</dt><dd>Free</dd></div>
-      <div><dt>License</dt><dd>MIT</dd></div>
-    </dl>
-  </div>
-</section>
+  <figure class="tile">
+    <div class="vg">
+      <svg viewBox="0 0 200 124" aria-hidden="true">
+        <defs><linearGradient id="cg"><stop offset=".125" stop-color="#3A2340"/><stop offset=".375" stop-color="#7B3F61"/><stop offset=".625" stop-color="#FF7A6B"/><stop offset=".875" stop-color="#FFB38A"/></linearGradient></defs>
+        <rect x="12" y="12" width="176" height="58" rx="8" fill="url(#cg)"/>
+        <g class="cc">
+          <circle cx="0" cy="41" r="7" fill="none" stroke="#fff" stroke-width="1.5"/><path d="M0 30v6M0 46v6M-11 41h6M5 41h6" stroke="#fff" stroke-width="1.5"/>
+          <g class="q" style="animation-delay: -4s"><rect class="cb" x="-33" y="80" width="66" height="19" rx="6"/><rect x="-27" y="85" width="9" height="9" rx="2" fill="#3A2340"/><text class="ct" x="-14" y="93">#3A2340</text></g>
+          <g class="q" style="animation-delay: -3s"><rect class="cb" x="-33" y="80" width="66" height="19" rx="6"/><rect x="-27" y="85" width="9" height="9" rx="2" fill="#7B3F61"/><text class="ct" x="-14" y="93">#7B3F61</text></g>
+          <g class="q on" style="animation-delay: -2s"><rect class="cb" x="-33" y="80" width="66" height="19" rx="6"/><rect x="-27" y="85" width="9" height="9" rx="2" fill="#FF7A6B"/><text class="ct" x="-14" y="93">#FF7A6B</text></g>
+          <g class="q" style="animation-delay: -1s"><rect class="cb" x="-33" y="80" width="66" height="19" rx="6"/><rect x="-27" y="85" width="9" height="9" rx="2" fill="#FFB38A"/><text class="ct" x="-14" y="93">#FFB38A</text></g>
+        </g>
+      </svg>
+    </div>
+    <figcaption><kbd>C</kbd> Copy any color</figcaption>
+  </figure>
 
+  <figure class="tile">
+    <div class="vg ag">
+      <div class="ag-bub"><small>You pasted</small><code class="ag-ref"></code></div>
+      <div class="ag-rep"><code>get_capture</code> the pixels and what was under the pointer</div>
+    </div>
+    <figcaption><kbd>&#8984;</kbd><kbd>&#8617;</kbd> Hand it to your agent</figcaption>
+  </figure>
+</div>
 </main>
 
-<footer class="foot">
-  <div class="wrap foot-in">
-    <span class="brand"><img src="icon.svg" alt="" width="20" height="20"><span>Snug</span></span>
-    <p>Free and open source under the MIT License. If Snug saves you time, you can <a href="https://ko-fi.com/hedgertronic">support it on Ko-fi</a>.</p>
-  </div>
-</footer>
-
-<div class="toast" role="status" aria-live="polite"><span class="t-thumb"><i></i></span><span class="t-text"><b class="t-title"></b><span class="t-detail"></span></span></div>
+<footer class="foot">Free and open source under the MIT License - <a href="https://ko-fi.com/hedgertronic">Support Snug on Ko-fi</a></footer>
 
 </body>
 </html>
