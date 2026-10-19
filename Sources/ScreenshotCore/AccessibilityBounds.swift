@@ -93,6 +93,40 @@ public enum AccessibilityBounds {
         return (anchor, leaf.rect.offsetBy(dx: offset.width, dy: offset.height).contains(point) ? offset : nil)
     }
 
+    /// The farthest below its window's top a sidebar's scroll area starts and still sits under the title bar.
+    public static let titleBarDepth: CGFloat = 60
+
+    /// `frames` (innermost first, window last) with a sidebar's full panel added above its scroll area, and `band`, the strip of the
+    /// title bar above the scroll area that the panel adds. The sidebar is an `AXScrollArea` flush with the window's left or right side
+    /// and its bottom (within `paddingTolerance`) whose top is below the window's top by at most `titleBarDepth`. Finder's glass sidebar
+    /// is one: its scroll area (341, 214, 159 x 384) stops 52 pt below the top of its window (341, 162, 920 x 436), and no element covers
+    /// the traffic-light band above it. The panel is the scroll area's frame run up to the window's top; the scroll area stays, so what it
+    /// holds is still clipped to it. Found by frames alone. The caller adds the panel only when no other element of the window
+    /// `occupies` the band. Nil when the chain has no such scroll area.
+    public static func withSidebarPanel(_ frames: [AXFrame]) -> (frames: [AXFrame], band: CGRect)? {
+        guard let window = frames.last, window.role == "AXWindow", let index = frames.firstIndex(where: { frame in
+            let rect = frame.rect
+            return frame.role == "AXScrollArea" && abs(rect.maxY - window.rect.maxY) <= paddingTolerance
+                && (abs(rect.minX - window.rect.minX) <= paddingTolerance || abs(rect.maxX - window.rect.maxX) <= paddingTolerance)
+                && rect.minY > window.rect.minY && rect.minY - window.rect.minY <= titleBarDepth
+        }) else { return nil }
+        let area = frames[index]
+        let band = CGRect(x: area.rect.minX, y: window.rect.minY, width: area.rect.width, height: area.rect.minY - window.rect.minY)
+        var withPanel = frames
+        withPanel.insert(AXFrame(roleDescription: area.roleDescription, rect: band.union(area.rect), role: area.role, title: area.title, subrole: area.subrole,
+                                 identifier: area.identifier, elementDescription: area.elementDescription), at: index + 1)
+        return (withPanel, band)
+    }
+
+    /// Whether `frame`, an element of a window, lies in the title-bar `band` above a sidebar (`withSidebarPanel`): it overlaps the band by
+    /// more than 1 pt each way (Finder's outline pokes 1 pt into it), it does not span the whole band (the toolbar and the split groups do,
+    /// and what lies in the band is inside them), and it is not one of the window's own title-bar buttons.
+    public static func occupies(_ frame: AXFrame, _ band: CGRect) -> Bool {
+        let overlap = frame.rect.intersection(band)
+        return !overlap.isNull && overlap.width > 1 && overlap.height > 1 && !frame.rect.contains(band)
+            && !["AXCloseButton", "AXMinimizeButton", "AXFullScreenButton", "AXZoomButton"].contains(frame.subrole)
+    }
+
     /// The index in `frames` (innermost first) of the outline row when they start with a section header, such as "Favorites" in
     /// Finder's sidebar: an `AXStaticText` that fills its `AXOutlineRow`, each step out (its cell, then the row) within
     /// `paddingTolerance`. An item row holds an icon beside its text, so its text starts well inside the cell (35 pt in Finder). Nil otherwise.

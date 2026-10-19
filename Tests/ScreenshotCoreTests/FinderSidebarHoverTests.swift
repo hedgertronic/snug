@@ -79,6 +79,73 @@ struct FinderSidebarHoverTests {
         #expect(session.selected?.bounds == pixels(cell(9).rect), "Right from Downloads goes to iCloud Drive, past Locations")
     }
 
+    /// The rest of the window as `Accessibility`'s band walk visits it (read-only dump of the "build" window, 10-18, same frames): the
+    /// window's children, and inside those that span the band (the split groups, the browser, the toolbar) their children.
+    let titleBarElements = [
+        AXFrame(roleDescription: "scroll area", rect: CGRect(x: 341, y: 214, width: 159, height: 384), role: "AXScrollArea"),
+        AXFrame(roleDescription: "splitter", rect: CGRect(x: 500, y: 214, width: 0.5, height: 384), role: "AXSplitter"),
+        AXFrame(roleDescription: "split group", rect: CGRect(x: 341, y: 162, width: 920, height: 436), role: "AXSplitGroup"),
+        AXFrame(roleDescription: "browser", rect: CGRect(x: 340, y: 161, width: 922, height: 438), role: "AXBrowser"),
+        AXFrame(roleDescription: "scroll area", rect: CGRect(x: 500, y: 162, width: 761, height: 436), role: "AXScrollArea"),
+        AXFrame(roleDescription: "unknown", rect: CGRect(x: 500, y: 598, width: 761, height: 28), role: "AXUnknown"),
+        AXFrame(roleDescription: "toolbar", rect: CGRect(x: 341, y: 162, width: 920, height: 52), role: "AXToolbar"),
+        AXFrame(roleDescription: "group", rect: CGRect(x: 504, y: 162, width: 81, height: 52), role: "AXGroup"),
+        AXFrame(roleDescription: "group", rect: CGRect(x: 871, y: 162, width: 164, height: 52), role: "AXGroup"),
+        AXFrame(roleDescription: "menu button", rect: CGRect(x: 1043, y: 162, width: 47, height: 52), role: "AXMenuButton"),
+        AXFrame(roleDescription: "group", rect: CGRect(x: 1217, y: 162, width: 40, height: 52), role: "AXGroup"),
+        AXFrame(roleDescription: "close button", rect: CGRect(x: 359, y: 180, width: 16, height: 16), role: "AXButton", subrole: "AXCloseButton"),
+        AXFrame(roleDescription: "full screen button", rect: CGRect(x: 405, y: 180, width: 16, height: 16), role: "AXButton", subrole: "AXFullScreenButton"),
+        AXFrame(roleDescription: "minimize button", rect: CGRect(x: 382, y: 180, width: 16, height: 16), role: "AXButton", subrole: "AXMinimizeButton"),
+        AXFrame(roleDescription: "text", rect: CGRect(x: 585, y: 162, width: 286, height: 52), role: "AXStaticText")]
+
+    /// The sidebar's scroll area stops 52 pt below the window's top, under the traffic lights, and only the traffic lights and elements
+    /// spanning the band lie there: the panel (341, 162, 159 x 436) is added above the scroll area, and Up from a row reaches the outline
+    /// (the scroll area's part), then the full sidebar, then the window.
+    @Test func upFromASidebarRowReachesTheFullSidebarBeforeTheWindow() async throws {
+        let sidebar = try #require(AccessibilityBounds.withSidebarPanel(hovered(3)))
+        let band = CGRect(x: 341, y: 162, width: 159, height: 52)
+        #expect(sidebar.band == band)
+        #expect(!titleBarElements.contains { AccessibilityBounds.occupies($0, band) }, "\(titleBarElements.filter { AccessibilityBounds.occupies($0, band) })")
+        let panel = CGRect(x: 341, y: 162, width: 159, height: 436)
+        #expect(sidebar.frames.map(\.rect) == hovered(3).prefix(5).map(\.rect) + [panel, split.rect, window.rect])
+        let found = try await AccessibilityBounds.candidates(frames: AccessibilityBounds.hoverLevel(sidebar.frames), displayOrigin: .zero, scale: 2, extent: extent)
+        #expect(found.map(\.bounds) == [pixels(cell(3).rect), pixels(CGRect(x: 341, y: 214, width: 159, height: 384)), pixels(panel)], "\(found.map(\.bounds))")
+        let windowCandidate = Candidate(id: "window-0", label: "Window", bounds: pixels(window.rect), score: 0, kind: .window)
+        let session = SelectionSession(candidates: [windowCandidate] + found, extent: extent, anchor: CGPoint(x: pixels(cell(3).rect).midX, y: pixels(cell(3).rect).midY))
+        #expect(session.selected?.bounds == pixels(cell(3).rect))
+        #expect(session.parents.prefix(3).map(\.bounds) == [pixels(CGRect(x: 341, y: 214, width: 159, height: 384)), pixels(panel), pixels(window.rect)],
+                "\(session.parents.map(\.bounds))")
+    }
+
+    /// Rows keep clipping to the scroll area, not to the panel: a row scrolled up under the title bar is cut at the scroll area's top.
+    @Test func rowsUnderTheTitleBarStayClippedToTheScrollArea() async throws {
+        let scrolled = AXFrame(roleDescription: "cell", rect: CGRect(x: 351, y: 200, width: 139, height: 32), role: "AXCell")
+        let sidebar = try #require(AccessibilityBounds.withSidebarPanel([scrolled] + sidebar))
+        let found = try await AccessibilityBounds.candidates(frames: AccessibilityBounds.hoverLevel(sidebar.frames), displayOrigin: .zero, scale: 2, extent: extent)
+        #expect(found.first?.bounds == pixels(CGRect(x: 351, y: 214, width: 139, height: 18)), "\(found.map(\.bounds))")
+    }
+
+    /// No panel where something else lies in the band, or the scroll area is not under the title bar.
+    @Test func otherScrollAreasGetNoPanel() throws {
+        // A list-view style content area right of the sidebar (inferred frame): Finder's Back/Forward group (504, 162, 81 x 52) lies in its band.
+        let content = AXFrame(roleDescription: "scroll area", rect: CGRect(x: 500, y: 214, width: 761, height: 384), role: "AXScrollArea")
+        let contentBand = try #require(AccessibilityBounds.withSidebarPanel([content, split, window])).band
+        #expect(titleBarElements.contains { AccessibilityBounds.occupies($0, contentBand) })
+        // Safari with one tab and no tab bar (inferred scroll area under the 52 pt toolbar of its 10-18 window): the toolbar's first
+        // group (176, 44, 71 x 52), read with notes/sidebar-debug/safari-ax-probe.swift, lies in the band.
+        let safariWindow = AXFrame(roleDescription: "standard window", rect: CGRect(x: 84, y: 44, width: 1242, height: 927), role: "AXWindow")
+        let page = AXFrame(roleDescription: "scroll area", rect: CGRect(x: 84, y: 96, width: 1242, height: 875), role: "AXScrollArea")
+        let safariBand = try #require(AccessibilityBounds.withSidebarPanel([page, safariWindow])).band
+        #expect(AccessibilityBounds.occupies(AXFrame(roleDescription: "group", rect: CGRect(x: 176, y: 44, width: 71, height: 52), role: "AXGroup"), safariBand))
+        // Safari with its tab bar: the page's scroll area starts 90 pt down, below the title bar.
+        let tabbed = AXFrame(roleDescription: "scroll area", rect: CGRect(x: 84, y: 134, width: 1242, height: 837), role: "AXScrollArea")
+        #expect(AccessibilityBounds.withSidebarPanel([tabbed, safariWindow]) == nil)
+        // The column view's scroll area already starts at the window's top; a scroll area short of the window's bottom is no sidebar.
+        #expect(AccessibilityBounds.withSidebarPanel([titleBarElements[4], split, window]) == nil)
+        let short = AXFrame(roleDescription: "scroll area", rect: CGRect(x: 341, y: 214, width: 159, height: 300), role: "AXScrollArea")
+        #expect(AccessibilityBounds.withSidebarPanel([short, split, window]) == nil)
+    }
+
     /// What Left and Right would pick, for their hint outlines, without picking it: Documents' peers are Developer and Downloads, and
     /// the first row's previous peer wraps to the last row inside the scroll area.
     @Test func peerNamesWhatLeftAndRightWouldPick() async throws {

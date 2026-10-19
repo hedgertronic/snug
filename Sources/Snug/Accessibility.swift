@@ -14,19 +14,35 @@ enum Accessibility {
     /// The frames of the element at `point` (global points, top-left origin) in `pid`'s app and its parents up to the window,
     /// innermost first, each with its role, title, subrole, identifier and description. When the hit test's answer and its parents are
     /// all unhoverable inside a window (`AccessibilityBounds.hoverLevel` is empty), the chain is instead the window walked down by
-    /// frames to the deepest element containing `point`.
+    /// frames to the deepest element containing `point`. A sidebar's full panel is added above its scroll area (`sidebarFrames`).
     /// Empty without permission, on a timeout, when nothing is there, or for Snug's own windows: AX against
     /// its own pid runs in this process, off main, and AppKit's hit test there trips the MainActor isolation check.
     @concurrent
     static func frames(at point: CGPoint, pid: pid_t) async -> [AXFrame] {
-        chain(at: point, pid: pid).map(\.frame)
+        sidebarFrames(chain(at: point, pid: pid))
     }
 
     /// `frames(at:pid:)` and, with them, the chains of the hovered element's peers (see `peers(of:)`).
     @concurrent
     static func framesAndPeers(at point: CGPoint, pid: pid_t) async -> (frames: [AXFrame], peers: [[AXFrame]]) {
         let chain = chain(at: point, pid: pid)
-        return (chain.map(\.frame), peers(of: chain))
+        return (sidebarFrames(chain), peers(of: chain))
+    }
+
+    /// `chain`'s frames, with a sidebar's full panel above its scroll area (`AccessibilityBounds.withSidebarPanel`) when no other
+    /// element of the window lies in the title-bar band the panel adds.
+    private static func sidebarFrames(_ chain: [(element: AXUIElement, frame: AXFrame)]) -> [AXFrame] {
+        guard let sidebar = AccessibilityBounds.withSidebarPanel(chain.map(\.frame)), !occupied(sidebar.band, under: chain.last!.element) else { return chain.map(\.frame) }
+        return sidebar.frames
+    }
+
+    /// Whether an element under `element` lies in `band` (`AccessibilityBounds.occupies`). The walk looks inside the elements that span
+    /// the whole band (Finder's toolbar and split groups) and not inside the others.
+    private static func occupied(_ band: CGRect, under element: AXUIElement) -> Bool {
+        (children(of: element, kAXChildrenAttribute) ?? []).contains { child in
+            guard let frame = frame(of: child) else { return false }
+            return frame.rect.contains(band) ? occupied(band, under: child) : AccessibilityBounds.occupies(frame, band)
+        }
     }
 
     private static func chain(at point: CGPoint, pid: pid_t) -> [(element: AXUIElement, frame: AXFrame)] {
