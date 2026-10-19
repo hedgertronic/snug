@@ -20,6 +20,19 @@ extension OverlayController {
         }
     }
 
+    /// The motion of chrome changes (seconds), ease out, and of a key's jump between hover candidates, which the outline and its chrome share.
+    static let motionDuration = 0.14, jumpDuration = 0.1
+
+    /// Runs `changes` in the one chrome animation: with `on`, frames and layers they set animate over `duration`, ease out.
+    func animate(_ on: Bool, duration: TimeInterval = motionDuration, _ changes: () -> Void) {
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = duration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            context.allowsImplicitAnimation = on
+            changes()
+        }
+    }
+
     /// Lights the caps of a key just pressed, for 150 ms.
     func flash(_ event: NSEvent) {
         chrome.pressed = KeyCap.pressed(by: event)
@@ -157,21 +170,19 @@ extension OverlayController {
         // Everything else, the hover outline and the selection among it, changes at once. Frames take their final values at once; the
         // layers animate to them.
         let motion = !isHeadless && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        func animate(_ on: Bool, _ changes: () -> Void) {
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.14
-                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                context.allowsImplicitAnimation = on
-                changes()
-            }
-        }
-        let fading: [NSView] = [c.hover, c.size, c.snap, c.ratio, c.radius, c.reading, c.status, c.strip]
+        // A key's jump to another hover candidate moves the chrome on the outline's own 100 ms animation, so nothing trails it.
+        let duration = jumping ? Self.jumpDuration : Self.motionDuration
+        // The chrome on the hover outline and where each piece showed, which a jump moves from there to its new place.
+        let attached: [NSView] = [c.hover, c.size, c.snap, c.snapTag, c.ratio, c.radius, c.legend, c.reading, c.status, c.upHint, c.downHint, c.list] + c.sideHints
+        let attachedBefore = jumping ? attached.filter { !$0.isHidden }.map { ($0, $0.frame.origin) } : []
+        let fading: [NSView] = [c.hover, c.size, c.snap, c.ratio, c.radius, c.reading, c.status, c.strip, c.toolTip]
         let wasShown = fading.map { !$0.isHidden }
         // The strip moves only from where it showed, against the same outline (checked once it is placed), and not while a drag moves the
         // selection under it. Its views and their frames now, and each one's subviews (a button's caps), to animate from once it is laid out.
         let stripMoves = motion && !c.strip.isHidden && draggedRect == nil
         func tree(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(tree) }
         let stripBefore = stripMoves ? tree(c.strip).map { ($0, $0.frame, $0.subviews) } : []
+        let buttonsBefore = stripMoves ? c.strip.groups.flatMap(\.subviews) : []
         for item in [c.hover, c.size, c.snap, c.snapTag, c.ratio, c.radius, c.legend, c.reading, c.status, c.strip] { item.isHidden = true }
         c.help.frame = bounds
         c.help.layoutPanel()
@@ -226,11 +237,14 @@ extension OverlayController {
             }
             c.copy.setTitle(copy?.title ?? "Copy")
             c.copy.setKeys(copy?.key ?? "\u{21A9}")
-            c.copy.isEnabled = copy != nil
             c.save.setTitle(shiftHeld && !optionHeld ? "Save As" : "Save")
             c.save.setKeys(shiftHeld && !optionHeld ? "\u{21E7}\u{2318}S" : "\u{2318}S")
-            c.save.isEnabled = !optionHeld
-            for button in [c.edit, c.scroll, c.record, c.cutout, c.colors] { button.isEnabled = held.isEmpty }
+            // A modifier dims what it changes, and releasing it brings that back, in the strip's motion.
+            animate(stripMoves, duration: duration) {
+                c.copy.isEnabled = copy != nil
+                c.save.isEnabled = !optionHeld
+                for button in [c.edit, c.scroll, c.record, c.cutout, c.colors] { button.isEnabled = held.isEmpty }
+            }
             c.stripSlack = Chrome.widest.copy - c.copy.frame.width + Chrome.widest.save - c.save.frame.width
             c.strip.show([[c.edit], [c.copy, c.save], (scrolls ? [c.scroll] : []) + (displayID != nil ? [c.record] : []) + [c.cutout, c.colors]])
         }
@@ -246,7 +260,7 @@ extension OverlayController {
             }
             c.copy.setTitle(copy?.title ?? "Copy")
             c.copy.setKeys(copy?.key ?? "\u{21A9}")
-            c.copy.isEnabled = copy != nil
+            animate(stripMoves, duration: duration) { c.copy.isEnabled = copy != nil }
             c.stripSlack = Chrome.widest.text - c.copy.frame.width
             c.strip.show([[c.copy]])
         }
@@ -332,7 +346,7 @@ extension OverlayController {
             frames.append((c.topBar, frame))
             if barAtTop { top = frame.minY } else { floor = frame.maxY + 8 }
         }
-        animate(motion && (barAtTop != c.barAtTop || ruler != c.ruler)) {
+        animate(motion && (barAtTop != c.barAtTop || ruler != c.ruler), duration: duration) {
             for (item, frame) in frames { item.frame = frame }
         }
         c.ruler = ruler
@@ -536,24 +550,32 @@ extension OverlayController {
         // caps were replaced cross-fades its old title and caps into the new ones. A new outline (a hover change, an arrow nudge) moves
         // the strip and every chip with it at once. The views are built and laid out outside the animation: a new text field, not yet
         // in a layer tree, would otherwise grow its frame from zero.
-        if !c.strip.isHidden, attachment?.box == c.anchor {
+        if !c.strip.isHidden, attachment?.box == c.anchor || jumping {
             let moved = stripBefore.filter { $0.0.frame != $0.1 && ($0.0 === c.strip || $0.0.isDescendant(of: c.strip)) }
             let relabeled = stripBefore.filter { $0.0 is BarButton && $0.0.subviews != $0.2 }.map(\.0)
+            // A session strip whose buttons changed (the scroll, recording or subject strip taking the capture strip's place) cross-fades whole.
+            let reshaped = !buttonsBefore.isEmpty && buttonsBefore != c.strip.groups.flatMap(\.subviews)
             let targets = moved.map(\.0.frame)
             for (item, frame, _) in moved { item.frame = frame }
-            animate(true) {
+            animate(true, duration: duration) {
                 for ((item, _, _), target) in zip(moved, targets) { item.animator().frame = target }
                 let fade = CATransition()
-                fade.duration = 0.14
+                fade.duration = duration
                 fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 for button in relabeled { button.layer!.add(fade, forKey: kCATransition) }
+                if reshaped { c.strip.layer!.add(fade, forKey: kCATransition) }
             }
         }
         c.anchor = attachment?.box
+        for (item, origin) in attachedBefore where !item.isHidden && item.frame.origin != origin {
+            let target = item.frame.origin
+            item.frame.origin = origin
+            animate(true, duration: duration) { item.animator().setFrameOrigin(target) }
+        }
         // A chip or the strip that appeared or went away fades: its hidden state is set again inside the animation.
         for (item, shown) in zip(fading, wasShown) where motion && item.isHidden == shown {
             item.isHidden = !shown
-            animate(true) { item.isHidden = shown }
+            animate(true, duration: duration) { item.isHidden = shown }
         }
         lightCaps(restyle: restyle)
     }
