@@ -25,6 +25,14 @@ public struct AXFrame: Sendable, Equatable {
     }
 }
 
+extension AXFrame {
+    /// The same element moved by `offset` points.
+    public func translated(by offset: CGSize) -> AXFrame {
+        AXFrame(roleDescription: roleDescription, rect: rect.offsetBy(dx: offset.width, dy: offset.height), role: role, title: title, subrole: subrole,
+                identifier: identifier, elementDescription: elementDescription)
+    }
+}
+
 /// Pure conversion and ranking for accessibility-derived candidates.
 public enum AccessibilityBounds {
     /// Score of the innermost element; every accessibility candidate outranks pixel geometry (at most 0.99).
@@ -64,6 +72,23 @@ public enum AccessibilityBounds {
                 && frame.rect.width >= minimumHoverSide && frame.rect.height >= minimumHoverSide
                 && !(window.map { frame.rect.isNear($0, within: paddingTolerance) } ?? false)
         }
+    }
+
+    /// Where a chain read from Safari is displaced: every web frame from an `AXScrollArea` or `AXWebArea` down can be reported a screen
+    /// height away from its window while its ancestors are right (user's log, 10-18: scroll area at (0, 1072, 1242, 837) in a window at
+    /// (84, 44, 1242, 927), whose parent group has the window's frame). `frames` is innermost first, ending at the window. The outermost
+    /// frame that does not touch the window is the anchor; it is moved so its bottom and right edges meet its parent's (Safari's sidebar is
+    /// on the left, so the page is flush right and bottom), and every frame inside it moves the same way. `through` is the anchor's index;
+    /// `offset` is the move, set only when it puts the innermost frame around `point`. Otherwise `offset` is nil: a wrong outline is worse
+    /// than none, so the caller drops the frames through `through`.
+    /// Nil when the innermost frame contains `point`, when the chain has no window, or when every frame touches the window.
+    public static func displacement(_ frames: [AXFrame], at point: CGPoint) -> (through: Int, offset: CGSize?)? {
+        guard frames.last?.role == "AXWindow", let leaf = frames.first, !leaf.rect.contains(point) else { return nil }
+        let window = frames.last!.rect
+        guard let anchor = frames.indices.dropLast().last(where: { !frames[$0].rect.intersects(window) }) else { return nil }
+        let (frame, parent) = (frames[anchor].rect, frames[anchor + 1].rect)
+        let offset = CGSize(width: parent.maxX - frame.maxX, height: parent.maxY - frame.maxY)
+        return (anchor, leaf.rect.offsetBy(dx: offset.width, dy: offset.height).contains(point) ? offset : nil)
     }
 
     /// The index in `frames` (innermost first) of the outline row when they start with a section header, such as "Favorites" in
