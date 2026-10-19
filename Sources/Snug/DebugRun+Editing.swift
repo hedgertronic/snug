@@ -73,8 +73,8 @@ extension DebugRun {
         // The key map: the help table lists the new keys, and every key the keys line used to show.
         open()
         let helpKeys = HelpSheet.columns.flatMap(\.rows).map(\.keys)
-        let keysLineKeys = ["drag", "\u{2325} click", "F", "W", "Tab", "C", "+ / -", "\u{2191} / \u{2193}", "\u{2190} \u{2192}", "\u{2325} arrow", "\u{2325} \u{2318} arrow",
-                            "\u{2318} arrow", "\u{21E7} \u{2318} arrow", "\u{2318} Z", "Text: drag", "Text: \u{21A9}", "Text: \u{21E7} \u{21A9}", "Text: Tab", "Text: \u{2325} \u{21A9}",
+        let keysLineKeys = ["drag", "\u{2325} click", "F", "W", "tab", "C", "+ / -", "\u{2191} / \u{2193}", "\u{2190} \u{2192}", "\u{2325} arrow", "\u{2325} \u{2318} arrow",
+                            "\u{2303} \u{2325} arrow", "\u{2303} \u{2325} \u{2318} arrow", "\u{2318} Z", "Text: drag", "Text: \u{21A9}", "Text: \u{21E7} \u{21A9}", "Text: tab", "Text: \u{2325} \u{21A9}",
                             "Menus: \u{2191} / \u{2193}", "Subject: K / esc", "?"]
         require(keysLineKeys.allSatisfy(helpKeys.contains) && !helpKeys.contains("B"),
                 "the help table lists every key the keys line showed, and no B: missing \(keysLineKeys.filter { !helpKeys.contains($0) })")
@@ -114,7 +114,8 @@ extension DebugRun {
         require(texts(in: overlay.chrome.radius).first?.split(separator: "/").count == 4, "unequal corners read as four values: \(texts(in: overlay.chrome.radius))")
         require(overlay.lastEditedCorner == .bottomRight, "the dragged corner is the last edited one")
 
-        // Per-corner apply: hovering a dot shows its "All corners" chip outside that corner; = and the chip copy the hovered corner to all four.
+        // Per-corner apply: hovering a dot shows its corner chip ("All corners" and the radius) outside that corner; = and the chip copy the
+        // hovered corner to all four.
         mouse(.mouseMoved, CGPoint(x: a.midX, y: a.midY))
         require(overlay.cornerChip.isHidden && overlay.hoveredCorner == nil, "no corner dot hovered: no chip")
         key(24, "=")
@@ -125,7 +126,11 @@ extension DebugRun {
         let box = overlay.view.viewRect(a)
         mouse(.mouseMoved, dot(.topLeft))
         require(overlay.hoveredCorner == .topLeft && !overlay.cornerChip.isHidden, "hovering a corner dot shows its chip")
-        require(texts(in: overlay.cornerChip).contains("All corners") && overlay.cornerChip.frame.maxX <= box.minX, "the top-left chip reads All corners, outside the selection's left edge")
+        // The 152 pt chip is wider than the 140 pt left of the selection, so it takes its next spot, inside the corner.
+        let shown = CornerRadii.corners.map { Int((radii()[$0] / scale).rounded()) }
+        require(texts(in: overlay.cornerChip) == ["All corners  r \(shown.min()!)-\(shown.max()!)", "="]
+                    && overlay.cornerChip.frame.maxY == box.maxY && overlay.cornerChip.frame.minX == box.minX + 14,
+                "the top-left chip reads All corners with the radius range, at the top-left corner: \(texts(in: overlay.cornerChip)) \(overlay.cornerChip.frame) \(box)")
         let topLeftRadius = radii().topLeft
         mouse(.mouseMoved, dot(.bottomRight))
         require(overlay.hoveredCorner == .bottomRight && overlay.cornerChip.frame.minX >= box.maxX, "the bottom-right chip sits outside the right edge")
@@ -408,8 +413,9 @@ extension DebugRun {
         require(overlay.selection?.rect == CGRect(x: drawn.minX, y: drawn.minY, width: drawn.width - 1, height: drawn.height), "Option-Command-Right shrinks a drawn selection's right side")
         overlay.dismiss()
 
-        // Cmd-arrow moves that side out to the next edge, then the next, then the extent; Cmd-Shift-arrow moves it back in, and stops short of
-        // the minimum size. The fixture is a 1200 x 800 white image with a gray panel (200-1000, 150-650) holding a dark one (400-800, 300-500).
+        // Control-Option-arrow moves that side out to the next edge, then the next, then the extent; Control-Option-Command-arrow moves it
+        // back in, and stops short of the minimum size; Shift changes neither. Command-arrow alone does nothing. The fixture is a 1200 x 800
+        // white image with a gray panel (200-1000, 150-650) holding a dark one (400-800, 300-500).
         let panels = CGContext(data: nil, width: 1200, height: 800, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         for (gray, rect) in [(1.0, CGRect(x: 0, y: 0, width: 1200, height: 800)), (0.63, CGRect(x: 200, y: 150, width: 800, height: 500)),
@@ -421,45 +427,49 @@ extension DebugRun {
         overlay.present(image: panels.makeImage()!, frame: CGRect(x: frame.minX, y: frame.minY, width: 600, height: 400), displayID: nil)
         overlay.detectionTask?.cancel()
         overlay.selection = AreaSelection(extent: overlay.extent, exact: CGRect(x: 450, y: 350, width: 300, height: 100))
+        let edge: NSEvent.ModifierFlags = [.control, .option], edgeIn: NSEvent.ModifierFlags = [.control, .option, .command]
+        let unmoved = overlay.selection!.rect
+        for code in [left, right, up, down] { key(code, "", .command) }
+        require(overlay.selection?.rect == unmoved, "Command-arrow alone leaves the selection as it was: \(String(describing: overlay.selection?.rect))")
         var rights: [CGFloat] = []
         for _ in 0..<4 {
-            key(right, "", .command)
+            key(right, "", edge)
             rights.append(overlay.selection!.rect.maxX)
         }
-        require(rights == [800, 1000, 1200, 1200], "Cmd-Right takes the right side to the dark panel's edge, the gray panel's, then the extent, then stays: \(rights)")
+        require(rights == [800, 1000, 1200, 1200], "Control-Option-Right takes the right side to the dark panel's edge, the gray panel's, then the extent, then stays: \(rights)")
         for _ in 0..<3 {
-            key(right, "", [.command, .shift])
+            key(right, "", rights.count == 4 ? edgeIn : edgeIn.union(.shift))
             rights.append(overlay.selection!.rect.maxX)
         }
-        require(rights.suffix(3) == [1000, 800, 800], "Cmd-Shift-Right takes it back in edge by edge and stops before the minimum size: \(rights)")
-        key(left, "", .command)
-        key(down, "", .command)
+        require(rights.suffix(3) == [1000, 800, 800], "Control-Option-Command-Right (Shift or not) takes it back in edge by edge and stops before the minimum size: \(rights)")
+        key(left, "", edge)
+        key(down, "", edge.union(.shift))
         var tops: [CGFloat] = []
         for _ in 0..<3 {
-            key(up, "", .command)
+            key(up, "", edge)
             tops.append(overlay.selection!.rect.minY)
         }
         rect = overlay.selection!.rect
         require(tops == [300, 150, 0] && rect == CGRect(x: 400, y: 0, width: 400, height: 500),
-                "Cmd-Left, Cmd-Down and Cmd-Up move the other sides to their next edges: \(tops) \(rect)")
+                "Control-Option-Left, -Down (with Shift, which changes nothing) and -Up move the other sides to their next edges: \(tops) \(rect)")
         overlay.dismiss()
-        // On the page: Cmd-Shift-Right on a selection wider than the cart panel takes the right side in to the panel's right border (the
-        // 2 px run at 2214-2215, counted at its middle), then to its left border (1656-1657), then stays at the minimum size's limit.
+        // On the page: Control-Option-Command-Right on a selection wider than the cart panel takes the right side in to the panel's right
+        // border (the 2 px run at 2214-2215, counted at its middle), then to its left border (1656-1657), then stays at the minimum size's limit.
         open()
         overlay.selection = AreaSelection(extent: overlay.extent, exact: CGRect(x: 1600, y: 450, width: 800, height: 400))
         var inward: [CGFloat] = []
         for _ in 0..<3 {
-            key(right, "", [.command, .shift])
+            key(right, "", edgeIn)
             inward.append(overlay.selection!.rect.maxX)
         }
-        require(inward == [2215, 1657, 1657], "Cmd-Shift-Right on the page steps the right side in to the cart panel's right edge, then its left: \(inward)")
+        require(inward == [2215, 1657, 1657], "Control-Option-Command-Right on the page steps the right side in to the cart panel's right edge, then its left: \(inward)")
         overlay.dismiss()
         // One press's cost on the page: a tall selection whose search reaches across most of the screen.
         open()
         overlay.selection = AreaSelection(extent: overlay.extent, exact: CGRect(x: 20, y: 100, width: 40, height: 1400))
         let pressed = ContinuousClock.now
-        key(right, "", .command)
-        print("Cmd-Right on a 40 x 1400 px selection: \(String(format: "%.1f", pressed.duration(to: .now).milliseconds)) ms, right side to \(overlay.selection!.rect.maxX)")
+        key(right, "", edge)
+        print("Control-Option-Right on a 40 x 1400 px selection: \(String(format: "%.1f", pressed.duration(to: .now).milliseconds)) ms, right side to \(overlay.selection!.rect.maxX)")
         overlay.dismiss()
 
         // + and - move every side out or in by 1 px, Option 10 px, within the extent and the minimum size.

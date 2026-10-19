@@ -178,6 +178,8 @@ final class KeyCap: NSView {
     }
 
     /// One cap per key of `chord`: each leading modifier glyph, then the key ("⌘S": ⌘ and S; "⌥⌘": ⌥ and ⌘; "esc" stays whole).
+    /// Keys are named one way everywhere: a key printed as a word is its lowercase word ("esc", "tab", "space"); the modifiers,
+    /// arrows and Return keep their glyphs; letters are uppercase.
     static func caps(_ chord: String) -> [KeyCap] {
         var key = Substring(chord)
         var texts: [String] = []
@@ -201,7 +203,7 @@ final class KeyCap: NSView {
         let (code, characters): (UInt16, String) = switch key {
         case "\u{21A9}": (36, "\r")
         case "esc": (53, "\u{1B}")
-        case "Tab": (48, "\t")
+        case "tab": (48, "\t")
         // No real key code: the overlay's keys match characters.
         default: (UInt16.max, flags.contains(.shift) ? String(key) : key.lowercased())
         }
@@ -215,7 +217,7 @@ final class KeyCap: NSView {
         let named: String? = switch event.keyCode {
         case 36, 76: "\u{21A9}"
         case 53: "esc"
-        case 48: "Tab"
+        case 48: "tab"
         case 123: "\u{2190}"
         case 124: "\u{2192}"
         case 125: "\u{2193}"
@@ -491,7 +493,7 @@ final class Chrome {
     let audio = BarButton("Audio", key: "J")
     let countIn = BarButton("Count-in", key: "I")
     let start = BarButton("Start", key: "\u{21A9}")
-    let subject = BarButton("Subject", key: "Tab")
+    let subject = BarButton("Subject", key: "tab")
     let crop = BarButton("Snap to subject", key: "S")
     /// The chip row above the object: the hovered element's name and size, or the size; Snap; then on a selection the ratio and radius.
     let hover = Pill.chip()
@@ -523,7 +525,8 @@ final class Chrome {
     /// modifiers held now.
     let sideHints = (0..<4).map { _ in Pill(radius: 7, insets: NSEdgeInsets(top: 3, left: 3, bottom: 3, right: 3), spacing: 0) }
     let legend = Pill.chip()
-    /// Beside the "All corners" chip of a hovered corner dot: the radius keys and Option for one corner.
+    /// Under the corner chip of a hovered dot or a focused corner: the radius keys, tab for one corner or the next, and esc for all
+    /// corners while one is focused.
     let cornerKeys = Pill(radius: 8, insets: NSEdgeInsets(top: 5, left: 8, bottom: 5, right: 5), spacing: 5, vertical: true)
     /// The outline the strip and chips were last placed against, in view points; nil with none.
     var anchor: CGRect?

@@ -464,19 +464,19 @@ extension DebugRun {
                 "? shows the keys sheet with every column, one cap per key: \(sheet.count) texts, chords in one cap \(chords)")
         let helpRows = HelpSheet.columns.flatMap(\.rows)
         require(["[ ]", "\u{21E7} [ ]", "=", "\u{2325} drag", "V", "K"].allSatisfy(helpRows.map(\.keys).contains)
-                    && helpRows.contains { $0.keys == "Arrows" && $0.action.contains("1 px") && $0.action.contains("10 px") },
+                    && helpRows.contains { $0.keys == "arrows" && $0.action.contains("1 px") && $0.action.contains("10 px") },
                 "the sheet lists the corner radius keys, V, K, and arrows in pixels")
         let helpActions = Dictionary(helpRows.map { ($0.keys, $0.action) }, uniquingKeysWith: { $1 })
         require(helpActions["P"] == "Ratio menu" && helpActions["\u{21E7} P"] == "Lock the ratio" && helpActions["W"] == "Capture the window"
-                    && helpActions["K"] == "Subject preview" && helpActions["Subject: Tab"] == "Next subject (Shift: back)" && helpActions["V"] == "Arm recording, hover or selection"
+                    && helpActions["K"] == "Subject preview" && helpActions["Subject: tab"] == "Next subject (Shift: back)" && helpActions["V"] == "Arm recording, hover or selection"
                     && helpActions["Armed: \u{21A9} / V"] == "Start recording" && helpActions["Armed: H"] == "Cursor on / off" && helpActions["Armed: I"] == "Count-in off, 3 s, 5 s"
                     && helpActions["hotkey"] == "Stop recording" && helpActions["G"] == "Scrolling capture, hover or selection" && helpActions["Subject: S"] == "Crop to subject"
-                    && helpActions["\u{2318} arrow"] == "Edge out, one side" && helpActions["\u{21E7} \u{2318} arrow"] == "Edge in, one side"
+                    && helpActions["\u{2303} \u{2325} arrow"] == "Edge out, one side" && helpActions["\u{2303} \u{2325} \u{2318} arrow"] == "Edge in, one side"
                     && helpActions["+ / -"] == "All sides 1 px (Option: 10)" && helpActions["\u{21E7} \u{21A9}"] == "Copy the text" && helpActions["\u{2318} \u{21A9}"] == "Copy for an agent"
                     && helpActions["\u{2325} \u{21A9}"] == "Translate" && helpActions["\u{21E7} \u{2318} S"] == "Save As"
-                    && helpActions["Tab"] == "Walk out (Shift: in)" && helpActions["[ ]"] == "Corner radius (Tab: one corner)"
+                    && helpActions["tab"] == "Walk out (Shift: in)" && helpActions["[ ]"] == "Corner radius (Tab: one corner)"
                     && !helpRows.contains { $0.action.contains("Aspect ratio lock") },
-                "the sheet lists the ratio menu and lock, W, the subject keys, G and V on a hover, the recording keys, Cmd-arrow, + and -, Shift-Return on a hover, Tab without other fits, and no P cycle")
+                "the sheet lists the ratio menu and lock, W, the subject keys, G and V on a hover, the recording keys, Control-Option-arrow edges, + and -, Shift-Return on a hover, Tab without other fits, and no P cycle")
         require(sheet.contains("Esc or ? closes this.") || sheet.contains { $0.hasSuffix("Esc or ? closes this.") }, "the sheet says how to close it")
         let panel = help.panel.frame
         require(panel.width == 900 && help.bounds.insetBy(dx: 1, dy: 1).contains(panel), "the sheet panel is 900 pt wide and inside the screen \(panel)")
@@ -1312,8 +1312,8 @@ extension DebugRun {
         require(!defaults.bool(forKey: Pref.snap) && texts(in: chrome.snap) == ["Exact", "S"] && !chrome.snap.lit, "clicking the Snap chip turns snap off: Exact, plain")
         key(1, "s")
         require(defaults.bool(forKey: Pref.snap) && chrome.snap.lit, "S turns snap back on and the Snap chip follows")
-        // The edge keys: the side arrows and the legend show while the pointer rests inside the selection or a modifier is held; the
-        // legend and the lit caps on the strip and legend follow the modifiers.
+        // The edge keys: the side arrows and the legend show while the pointer rests inside the selection or Option is held; the
+        // legend reads one action for the modifiers held, and the lit caps on the strip and legend follow them.
         let insideSelection = CGPoint(x: overlay.selection!.rect.midX, y: overlay.selection!.rect.midY)
         let sides = chrome.sideHints
         mouse(.mouseMoved, CGPoint(x: 40, y: 40))
@@ -1331,7 +1331,7 @@ extension DebugRun {
         flags(.option)
         // One cap per key: a held modifier lights its cap wherever it shows, alone or in a chord, and no other cap.
         func lit(_ glyphs: Set<String>, _ view: NSView) -> Bool {
-            ["\u{2325}", "\u{2318}", "\u{21E7}"].allSatisfy { glyph in keyCaps(glyph, in: view).allSatisfy { $0.pressed == glyphs.contains(glyph) } }
+            ["\u{2303}", "\u{2325}", "\u{2318}", "\u{21E7}"].allSatisfy { glyph in keyCaps(glyph, in: view).allSatisfy { $0.pressed == glyphs.contains(glyph) } }
         }
         require(keyCaps("\u{2325}", in: chrome.copy).count == 1 && lit(["\u{2325}"], chrome.strip) && lit(["\u{2325}"], chrome.legend)
                     && texts(in: chrome.legend) == ["grow", "\u{2325}"],
@@ -1361,28 +1361,53 @@ extension DebugRun {
         require(lit(["\u{2325}", "\u{2318}"], chrome.strip) && lit(["\u{2325}", "\u{2318}"], chrome.legend)
                     && texts(in: chrome.legend) == ["shrink", "\u{2325}", "\u{2318}"] && sides.allSatisfy { !$0.isHidden },
                 "holding Option-Command lights every Option and Command cap, the legend reads shrink, and the side arrows stay: \(texts(in: chrome.legend))")
+        flags([.control, .option])
+        require(lit(["\u{2303}", "\u{2325}"], chrome.legend) && texts(in: chrome.legend) == ["edge out", "\u{2303}", "\u{2325}"] && sides.allSatisfy { !$0.isHidden },
+                "holding Control-Option the legend reads edge out with both caps lit: \(texts(in: chrome.legend))")
+        dpad("holding Control-Option")
+        flags([.control, .option, .shift])
+        require(texts(in: chrome.legend) == ["edge out", "\u{2303}", "\u{2325}"], "Shift changes nothing with Control: \(texts(in: chrome.legend))")
+        flags([.control, .option, .command])
+        require(lit(["\u{2303}", "\u{2325}", "\u{2318}"], chrome.legend) && texts(in: chrome.legend) == ["edge in", "\u{2303}", "\u{2325}", "\u{2318}"],
+                "holding Control-Option-Command the legend reads edge in: \(texts(in: chrome.legend))")
+        dpad("holding Control-Option-Command")
+        flags([.control, .option, .command, .shift])
+        require(texts(in: chrome.legend) == ["edge in", "\u{2303}", "\u{2325}", "\u{2318}"], "Shift changes nothing with Control-Option-Command: \(texts(in: chrome.legend))")
         flags(.command)
-        require(lit(["\u{2318}"], chrome.strip) && lit(["\u{2318}"], chrome.legend) && texts(in: chrome.legend) == ["edge out", "\u{2318}", "edge in", "\u{2318}", "\u{21E7}"] && sides.allSatisfy { !$0.isHidden },
-                "holding Command lights the Command caps and the legend reads both edge directions: \(texts(in: chrome.legend))")
-        dpad("holding Command")
-        flags([.command, .shift])
-        require(lit(["\u{2318}", "\u{21E7}"], chrome.strip) && lit(["\u{2318}", "\u{21E7}"], chrome.legend)
-                    && texts(in: chrome.legend) == ["edge out", "\u{2318}", "edge in", "\u{2318}", "\u{21E7}"],
-                "holding Command-Shift lights the Command and Shift caps: \(texts(in: chrome.legend))")
+        require(lit(["\u{2318}"], chrome.strip) && sides.allSatisfy(\.isHidden) && chrome.legend.isHidden,
+                "holding Command alone lights the strip's Command caps and shows no edge keys, since Command-arrow is unbound")
+        flags(.control)
+        require(sides.allSatisfy(\.isHidden) && chrome.legend.isHidden, "Control alone with the pointer outside shows no edge keys")
+        mouse(.mouseMoved, insideSelection, .control)
+        require(overlay.controlHeld && texts(in: chrome.legend) == ["move"] && sides.allSatisfy { !$0.isHidden },
+                "Control alone with the pointer inside shows nothing new: the legend reads move")
+        flags(.command)
+        require(sides.allSatisfy(\.isHidden) && chrome.legend.isHidden, "Command with the pointer inside hides the edge keys")
+        flags([])
+        mouse(.mouseMoved, CGPoint(x: 40, y: 40))
         flags(.shift)
         require(sides.allSatisfy(\.isHidden) && chrome.legend.isHidden, "Shift alone with the pointer outside shows no edge keys")
         flags([])
         let snapped = overlay.selection!
         overlay.editedRadii[snapped.rect] = CornerRadii(12 * overlay.scale)
-        // Tab steps a focused corner: top-left, top-right, bottom-right, bottom-left, then all four; it lights the dot, shows the chip and
-        // keys, and [ ] change only that corner. Esc returns to all four first. Undo covers the edit.
+        // Tab cycles a focused corner: top-left, top-right, bottom-right, bottom-left, and around, never back to all corners; Shift-Tab
+        // goes back, and from all corners picks bottom-left. The focused corner lights its dot, the chip names it with its radius, and
+        // [ ] change only it. Only Esc returns to all corners. Undo covers the edit.
         let radius = 12 * overlay.scale
+        let focusedKeys = ["radius", "[", "]", "next corner", "tab", "all corners", "esc"], allKeys = ["radius", "[", "]", "one corner", "tab"]
         var focus: [Handle?] = []
         for _ in 0..<5 { key(48, "\t"); focus.append(overlay.focusedCorner) }
-        require(focus == [.topLeft, .topRight, .bottomRight, .bottomLeft, nil] && overlay.selection?.rect == snapped.rect, "Tab steps the corners TL, TR, BR, BL, then all four: \(focus)")
+        require(focus == [.topLeft, .topRight, .bottomRight, .bottomLeft, .topLeft] && overlay.selection?.rect == snapped.rect, "Tab cycles the corners TL, TR, BR, BL, TL: \(focus)")
+        focus = []
+        for _ in 0..<4 { key(48, "\t", .shift); focus.append(overlay.focusedCorner) }
+        require(focus == [.bottomLeft, .bottomRight, .topRight, .topLeft], "Shift-Tab cycles back BL, BR, TR, TL: \(focus)")
+        key(53, "\u{1B}")
+        key(48, "\t", .shift)
+        require(overlay.focusedCorner == .bottomLeft, "Shift-Tab from all corners picks bottom-left: \(String(describing: overlay.focusedCorner))")
+        key(53, "\u{1B}")
         key(48, "\t")
-        require(overlay.view.overlays.focusedCorner == .topLeft && !overlay.cornerChip.isHidden && texts(in: chrome.cornerKeys) == ["this corner", "[", "]", "next corner", "Tab", "all four", "esc"],
-                "a focused corner lights its dot and shows the chip and keys: \(texts(in: chrome.cornerKeys))")
+        require(overlay.view.overlays.focusedCorner == .topLeft && texts(in: overlay.cornerChip) == ["Top left  r 12", "="] && texts(in: chrome.cornerKeys) == focusedKeys,
+                "a focused corner lights its dot, the chip names it with its radius, and the keys follow: \(texts(in: overlay.cornerChip)) \(texts(in: chrome.cornerKeys))")
         key(93, "]")
         key(48, "\t")
         key(33, "[")
@@ -1401,12 +1426,22 @@ extension DebugRun {
         overlay.editedRadii[snapped.rect] = CornerRadii(radius)
         mouse(.mouseMoved, overlay.cornerRadii(of: snapped.rect).dot(of: .topLeft, in: snapped.rect, minimumInset: 8 * overlay.scale))
         let cornerKeys = chrome.cornerKeys, cornerChip = overlay.cornerChip
-        require(!cornerChip.isHidden && texts(in: cornerKeys) == ["radius", "[", "]", "one corner", "\u{2325}", "step corners", "Tab"]
+        require(!cornerChip.isHidden && texts(in: cornerChip) == ["All corners  r 12", "="] && texts(in: cornerKeys) == allKeys
                 && cornerKeys.frame.maxY <= cornerChip.frame.minY && abs(cornerKeys.frame.maxX - cornerChip.frame.maxX) < 0.5,
-                "hovering a corner dot shows radius [ ] and Option for one corner under the All corners chip: \(texts(in: cornerKeys)) \(cornerKeys.frame) \(cornerChip.frame)")
-        flags(.option)
-        require(keyCaps("\u{2325}", in: cornerKeys).allSatisfy(\.pressed) && !keyCaps("\u{2325}", in: cornerKeys).isEmpty, "holding Option lights the in-place Option cap by the corner")
-        flags([])
+                "hovering a corner dot shows the same group: All corners with the radius, then radius [ ] and tab for one corner: \(texts(in: cornerChip)) \(texts(in: cornerKeys)) \(cornerKeys.frame) \(cornerChip.frame)")
+        // Tab with the pointer on a dot: the focused corner leads the group, so the chip names the corner [ ] change, and a move on the
+        // same dot keeps it.
+        let bottomRightDot = overlay.cornerRadii(of: snapped.rect).dot(of: .bottomRight, in: snapped.rect, minimumInset: 8 * overlay.scale)
+        mouse(.mouseMoved, bottomRightDot)
+        key(48, "\t")
+        mouse(.mouseMoved, CGPoint(x: bottomRightDot.x + 1, y: bottomRightDot.y))
+        let snappedBox = overlay.view.viewRect(snapped.rect)
+        require(overlay.focusedCorner == .topLeft && overlay.hoveredCorner == .bottomRight && texts(in: cornerChip) == ["Top left  r 12", "="] && texts(in: cornerKeys) == focusedKeys
+                    && cornerChip.frame.midX < snappedBox.midX && cornerChip.frame.midY > snappedBox.midY,
+                "Tab on the bottom-right dot focuses top-left, and the group shows at top-left: \(String(describing: overlay.focusedCorner)) \(texts(in: cornerChip)) \(cornerChip.frame) \(snappedBox)")
+        key(53, "\u{1B}")
+        require(overlay.focusedCorner == nil && texts(in: cornerChip) == ["All corners  r 12", "="] && texts(in: cornerKeys) == allKeys && cornerChip.frame.midX > snappedBox.midX,
+                "Esc returns to all corners, and the hovered bottom-right dot's group shows again: \(texts(in: cornerChip)) \(cornerChip.frame)")
         mouse(.mouseMoved, CGPoint(x: snapped.rect.midX, y: snapped.rect.midY))
         require(cornerKeys.isHidden, "leaving the corner dot hides its keys")
         let released = overlay.view.viewRect(overlay.selection!.rect)
@@ -1605,7 +1640,7 @@ extension DebugRun {
             for corner in [Handle.topLeft, .topRight, .bottomRight, .bottomLeft] {
                 overlay.focusedCorner = corner
                 overlay.refresh()
-                require(!overlay.cornerChip.isHidden && texts(in: chrome.cornerKeys) == ["this corner", "[", "]", "next corner", "Tab", "all four", "esc"],
+                require(!overlay.cornerChip.isHidden && texts(in: chrome.cornerKeys) == ["radius", "[", "]", "next corner", "tab", "all corners", "esc"],
                         "the \(name) selection's focused \(corner) corner shows its chip and keys: \(overlay.cornerChip.isHidden) \(texts(in: chrome.cornerKeys)); box \(overlay.view.viewRect(rect)) \(([("bar", chrome.topBar), ("strip", chrome.strip), ("size", chrome.size), ("snap", chrome.snap), ("ratio", chrome.ratio), ("radius", chrome.radius), ("chip", overlay.cornerChip), ("keys", chrome.cornerKeys)] as [(String, NSView)]).map { "\($0.0) \($0.1.isHidden ? "hidden" : "\($0.1.frame)")" })")
                 chromeClear("the \(name) selection's focused \(corner) corner, set directly")
             }
@@ -1644,7 +1679,7 @@ extension DebugRun {
         defaults.set(false, forKey: Pref.rulers)
 
         // Must-show: in a 60 x 40 pt selection in the middle of the screen the legend and its arrow caps show under every modifier
-        // state, as one group on the same side of the selection each time.
+        // state that binds the arrows, as one group on the same side of the selection each time.
         let tight = CGRect(x: extent.midX, y: extent.midY, width: 60 * overlay.scale, height: 40 * overlay.scale)
         overlay.selection = AreaSelection(extent: extent, exact: tight)
         overlay.refresh()
@@ -1660,7 +1695,7 @@ extension DebugRun {
         }
         var tightSides: [String: String] = [:]
         for (label, held) in [("no modifier", NSEvent.ModifierFlags([])), ("Shift", .shift), ("Option", .option), ("Option-Shift", [.option, .shift]),
-                              ("Command", .command), ("Option-Command", [.option, .command])] {
+                              ("Option-Command", [.option, .command]), ("Control-Option", [.control, .option]), ("Control-Option-Command", [.control, .option, .command])] {
             flags(held)
             require(!chrome.legend.isHidden && chrome.sideHints.allSatisfy { !$0.isHidden }, "the 60 x 40 pt selection shows the legend and arrow caps under \(label)")
             chromeClear("the 60 x 40 pt selection under \(label)")
@@ -1690,7 +1725,8 @@ extension DebugRun {
             overlay.refresh()
             mouse(.mouseMoved, CGPoint(x: 40, y: 700))
             mouse(.mouseMoved, CGPoint(x: small.midX, y: small.midY))
-            for (label, held) in [("no modifier", NSEvent.ModifierFlags([])), ("Option", .option), ("Command", .command), ("Option-Command", [.option, .command])] {
+            for (label, held) in [("no modifier", NSEvent.ModifierFlags([])), ("Option", .option), ("Option-Command", [.option, .command]),
+                                  ("Control-Option-Command", [.control, .option, .command])] {
                 flags(held)
                 require(!chrome.legend.isHidden && chrome.sideHints.allSatisfy { !$0.isHidden }, "a 60 x 40 pt selection at (\(Int(x)), \(Int(y))) shows the legend and arrow caps under \(label)")
                 chromeClear("a 60 x 40 pt selection at (\(Int(x)), \(Int(y))) under \(label)")

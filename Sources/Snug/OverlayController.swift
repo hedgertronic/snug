@@ -115,6 +115,8 @@ final class OverlayController {
     var optionHeld = false
     /// Command is held: the hint key caps for it fill with the accent.
     var commandHeld = false
+    /// Control is held: with Option, the arrow legend reads edge out or edge in, and the Control caps fill with the accent.
+    var controlHeld = false
     /// Corner radius in pixels of each snap fit, settled selection, and hovered rectangle, measured once per rectangle.
     /// A rectangle that is not here (one being resized, or still being measured) has square corners.
     var radii: [CGRect: CGFloat] = [:]
@@ -131,11 +133,13 @@ final class OverlayController {
     var lastEdit: (key: String, at: ContinuousClock.Instant)?
     /// The corner a dot drag last changed; `=` copies its radius to the other corners.
     var lastEditedCorner: Handle?
-    /// The corner whose dot the pointer is on (or whose chip it is heading to), and its "All corners" chip.
+    /// The corner whose dot the pointer is on (or whose chip it is heading to).
     var hoveredCorner: Handle?
-    /// The corner Tab stepped to with a selection open: its dot lights, its chip shows as a hover's does, and `[` and `]` change only it.
-    /// Nil is all four. A pointer on another dot takes over, and a new capture clears it.
+    /// The corner Tab stepped to with a selection open: its dot lights, the corner group shows at it ahead of a hovered dot's, and `[`
+    /// and `]` change only it. Nil is all four. A pointer moving onto another dot takes over, and a new capture clears it.
     var focusedCorner: Handle?
+    /// The corner group's chip, at the focused or hovered corner: the target of `[` and `]` ("All corners", or the focused corner's
+    /// name) with its radius, and `=`, which a click presses.
     let cornerChip = BarButton("All corners", key: "=", height: 23, size: 11)
     /// The selection's locked aspect ratio, width over height, set with Shift-P or a preset from P's menu; nil is free. Handle drags,
     /// grow and shrink keep it. A fresh drag or closing the overlay drops it.
@@ -394,6 +398,7 @@ final class OverlayController {
     func flagsChanged(_ event: NSEvent) {
         optionHeld = event.modifierFlags.contains(.option)
         commandHeld = event.modifierFlags.contains(.command)
+        controlHeld = event.modifierFlags.contains(.control)
         let shift = event.modifierFlags.contains(.shift)
         if shift != shiftHeld, image != nil {
             shiftHeld = shift
@@ -409,6 +414,7 @@ final class OverlayController {
         guard image != nil, armedRecording == nil, chrome.colorMenu.isHidden else { return }
         optionHeld = event.modifierFlags.contains(.option)
         commandHeld = event.modifierFlags.contains(.command)
+        controlHeld = event.modifierFlags.contains(.control)
         shiftHeld = event.modifierFlags.contains(.shift)
         movedWithShift = shiftHeld
         let wasOnSelection = pointerOnSelection
@@ -774,6 +780,7 @@ final class OverlayController {
         let command = event.modifierFlags.contains(.command)
         let shift = event.modifierFlags.contains(.shift)
         let option = event.modifierFlags.contains(.option)
+        let control = event.modifierFlags.contains(.control)
         // Arrow steps are device pixels: selections are in the capture's pixels, one per device pixel.
         let step: CGFloat = shift ? 10 : 1
         let character = event.charactersIgnoringModifiers ?? ""
@@ -797,8 +804,11 @@ final class OverlayController {
         case (_, false, "="): applyRadiusToAll()
         case (_, false, "+") where !hovering: growSides(by: option ? 10 : 1)
         case (_, false, "-") where !hovering: growSides(by: option ? -10 : -1)
+        // On a selection: Option-arrow grows a side, Option-Command-arrow shrinks it; with Control they move it to the next edge out or
+        // in, and Shift does nothing. Command-arrow without Option is unbound.
+        case (123...126, _, _) where control && option && !hovering: moveSideToEdge(keyCode: event.keyCode, outward: !command)
         case (123...126, _, _) where option && !hovering: nudgeSide(keyCode: event.keyCode, outward: !command, by: step)
-        case (123...126, true, _) where !hovering: moveSideToEdge(keyCode: event.keyCode, outward: !shift)
+        case (123...126, true, _) where !hovering: return false
         case (_, true, "s") where hovering: clickHover(framed: framed, copy: false, save: true, takeDisplay: true)
         case (36, _, _) where shift || option, (76, _, _) where shift || option: copySelectionText(translating: option)
         case (36, _, _), (76, _, _): copy()
@@ -806,9 +816,10 @@ final class OverlayController {
             if event.keyCode == 125 || event.keyCode == 48 && shift { session?.shrink() } else { session?.expand() }
             walkedLevel = true
         case (48, _, _) where !command:
-            // Tab with a selection open: all four, top-left, top-right, bottom-right, bottom-left; Shift-Tab goes back.
-            let order: [Handle?] = [nil, .topLeft, .topRight, .bottomRight, .bottomLeft]
-            focusedCorner = order[(order.firstIndex { $0 == focusedCorner }! + (shift ? 4 : 1)) % 5]
+            // Tab with a selection open cycles top-left, top-right, bottom-right, bottom-left, and Shift-Tab goes back; from all
+            // corners Tab picks top-left and Shift-Tab bottom-left. Only Esc returns to all corners.
+            let order: [Handle] = [.topLeft, .topRight, .bottomRight, .bottomLeft]
+            focusedCorner = focusedCorner.map { order[(order.firstIndex(of: $0)! + (shift ? 3 : 1)) % 4] } ?? (shift ? .bottomLeft : .topLeft)
         case (123, false, _) where hovering && !option, (124, false, _) where hovering && !option:
             // The element beside the hovered one; it holds like an Up or Down pick.
             guard session?.step(right: event.keyCode == 124) == true else { beep(); break }

@@ -94,7 +94,7 @@ extension OverlayController {
     /// Every cap is pressed while its chord flashes, and a modifier's cap while its key is held;
     /// with `restyle` (a new tint), every button and cap redraws in the current tint.
     private func lightCaps(restyle: Bool = false) {
-        let held = heldGlyphs
+        let held = heldGlyphs.union(controlHeld ? ["\u{2303}"] : [])
         func light(_ view: NSView) {
             if let cap = view as? KeyCap { cap.pressed = chrome.pressed.contains(cap.chord) || cap.text.count == 1 && held.contains(cap.text.first!) }
             if restyle {
@@ -106,13 +106,16 @@ extension OverlayController {
         (chrome.all + [cornerChip, view.guides.readout] + chrome.buttons).forEach(light)
     }
 
-    /// What the arrow keys do with the modifiers held now: labels, each with its chord.
-    private var arrowLegend: [(keys: [String], label: String)] {
-        switch (optionHeld, commandHeld) {
-        case (true, true): shiftHeld ? [(["\u{2325}\u{21E7}\u{2318}"], "shrink 10 px")] : [(["\u{2325}\u{2318}"], "shrink")]
-        case (true, false): shiftHeld ? [(["\u{2325}\u{21E7}"], "grow 10 px")] : [(["\u{2325}"], "grow")]
-        case (false, true): [(["\u{2318}"], "edge out"), (["\u{2318}\u{21E7}"], "edge in")]
-        case (false, false): shiftHeld ? [(["\u{21E7}"], "move 10 px")] : [([], "move")]
+    /// What the arrow keys do on a selection with the modifiers held now, as one label with its chord; nil while Command is held
+    /// without Option (Command-arrow is unbound). Control matters only with Option, and Shift not with Control.
+    private var arrowLegend: (keys: [String], label: String)? {
+        switch (optionHeld, controlHeld, commandHeld) {
+        case (true, true, false): (["\u{2303}\u{2325}"], "edge out")
+        case (true, true, true): (["\u{2303}\u{2325}\u{2318}"], "edge in")
+        case (true, false, false): shiftHeld ? (["\u{2325}\u{21E7}"], "grow 10 px") : (["\u{2325}"], "grow")
+        case (true, false, true): shiftHeld ? (["\u{2325}\u{21E7}\u{2318}"], "shrink 10 px") : (["\u{2325}\u{2318}"], "shrink")
+        case (false, _, true): nil
+        case (false, _, false): shiftHeld ? (["\u{21E7}"], "move 10 px") : ([], "move")
         }
     }
 
@@ -406,7 +409,7 @@ extension OverlayController {
         // 5. the tool tip, which names the strip's button under the pointer: under the strip, then over it;
         // 6. the notice (a message the user must read): centered above the bar, then centered under the menu bar, then centered just
         //    below or above each item placed so far, nearest first;
-        // 7. the "All corners" chip of the hovered or focused corner with its keys stacked under it (over it at the bottom corners):
+        // 7. the corner chip of the focused or hovered corner with its keys stacked under it (over it at the bottom corners):
         //    outside the corner beside the selection's side, inside the corner, inside along the selection's top or bottom edge, then just
         //    below or above each item placed so far, nearest first, so a focused corner always shows;
         // 8. the legend with the arrow keys around it like a D-pad, as one group under every modifier: centered in the selection when it
@@ -469,11 +472,16 @@ extension OverlayController {
 
         cornerChip.isHidden = true
         c.cornerKeys.isHidden = true
-        if cornerShown, let corner = hoveredCorner ?? focusedCorner, let rect = selection?.rect {
-            if focusedCorner != nil && hoveredCorner == nil {
-                c.cornerKeys.show("focused corner") { [Pill.hint(["[", "]"], "this corner"), Pill.hint(["Tab"], "next corner"), Pill.hint(["esc"], "all four")] }
-            } else {
-                c.cornerKeys.show("corner") { [Pill.hint(["[", "]"], "radius"), Pill.hint(["\u{2325}"], "one corner"), Pill.hint(["Tab"], "step corners")] }
+        if cornerShown, let corner = focusedCorner ?? hoveredCorner, let rect = selection?.rect {
+            // One group for a hovered dot and a focused corner: the chip names what [ and ] change, with its radius in points (all
+            // corners' as a range when they differ), and the same rows follow, esc only while a corner is focused.
+            let names: [Handle: String] = [.topLeft: "Top left", .topRight: "Top right", .bottomRight: "Bottom right", .bottomLeft: "Bottom left"]
+            let points = (focusedCorner.map { [$0] } ?? CornerRadii.corners).map { Int((cornerRadii(of: rect)[$0] / scale).rounded()) }
+            let range = points.min()! == points.max()! ? "\(points[0])" : "\(points.min()!)-\(points.max()!)"
+            cornerChip.setTitle((focusedCorner.map { names[$0]! } ?? "All corners") + "  r " + range)
+            c.cornerKeys.show(focusedCorner == nil ? "all corners" : "one corner") {
+                [Pill.hint(["[", "]"], "radius"), Pill.hint(["tab"], focusedCorner == nil ? "one corner" : "next corner")]
+                    + (focusedCorner == nil ? [] : [Pill.hint(["esc"], "all corners")])
             }
             let box = view.viewRect(rect), chip = cornerChip.frame.size, keys = c.cornerKeys.frame.size
             let y = corner.movesTop ? box.maxY - chip.height : box.minY
@@ -491,17 +499,17 @@ extension OverlayController {
             settle(row, [rowHome] + past(x: rowHome.x, size, near: rowHome.y))
         }
 
-        // While the pointer rests inside a released selection or on its handles (pixels, as the handle cursors read them), or a modifier is held, the legend in the middle says what the arrows do.
+        // While the pointer rests inside a released selection or on its handles (pixels, as the handle cursors read them), or Option is held, the legend in the middle says what the arrows do.
         let resting = draggedRect == nil && pointerOnSelection
-        let showsEdgeKeys = editing && (optionHeld || commandHeld || resting)
+        let legend = arrowLegend
+        let showsEdgeKeys = editing && legend != nil && (optionHeld || resting)
         for (index, pill) in c.sideHints.enumerated() {
             let arrow = ["\u{2190}", "\u{2192}", "\u{2191}", "\u{2193}"][index]
             pill.isHidden = !showsEdgeKeys
             if showsEdgeKeys { pill.show(arrow) { [KeyCap(arrow)] } }
         }
-        if showsEdgeKeys, let rect = overlays.selection {
-            let legend = arrowLegend
-            c.legend.show(legend.map { $0.label + $0.keys.joined() }.joined(separator: "|")) { legend.map { Pill.hint($0.keys, $0.label) } }
+        if showsEdgeKeys, let legend, let rect = overlays.selection {
+            c.legend.show(legend.label + legend.keys.joined()) { [Pill.hint(legend.keys, legend.label)] }
             let box = view.viewRect(rect), gap: CGFloat = 6
             let (left, right, up, down) = (c.sideHints[0].frame.size, c.sideHints[1].frame.size, c.sideHints[2].frame.size, c.sideHints[3].frame.size)
             let size = c.legend.frame.size
