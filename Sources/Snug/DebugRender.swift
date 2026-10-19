@@ -659,7 +659,7 @@ extension DebugRun {
         SnugApp.showRecording(false, in: menu)
         require(menu.items.filter { !$0.isHidden }.map(\.title) == ["Capture", "Capture Text", "", "Settings...", "About Snug", "", "Quit Snug"],
                 "after the recording the menu is restored")
-        require(Shortcut.label(from: defaults) == "\u{2303}\u{21E7}Space", "the default shortcut displays as glyphs: \(Shortcut.label(from: defaults))")
+        require(Shortcut.label(from: defaults) == "\u{2303}\u{21E7}space", "the default shortcut displays as glyphs: \(Shortcut.label(from: defaults))")
         defaults.set(40, forKey: Pref.hotKeyCode)
         defaults.set(Int(NSEvent.ModifierFlags([.control, .option]).rawValue), forKey: Pref.hotKeyModifiers)
         capture.setShortcut(from: defaults)
