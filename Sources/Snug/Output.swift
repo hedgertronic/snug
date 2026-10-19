@@ -48,6 +48,9 @@ enum Pref {
     /// Off unless set with `defaults write local.snug SnugLogText -bool true`: each Text mode press, drag event and release appends
     /// Live Text's selection before and after Snug's fix to ~/Library/Logs/Snug/text.log.
     static let logText = "SnugLogText"
+    /// Off unless set with `defaults write local.snug SnugLogScroll -bool true`: each scrolling capture writes every frame it captures,
+    /// numbered in order, to a folder named for its start under ~/Library/Logs/Snug/scroll/, so a bad stitch can be replayed in a test.
+    static let logScroll = "SnugLogScroll"
     /// The modification date of the Snug binary whose `--warm-vision` child process warmed Vision's accurate OCR models.
     static let visionWarmedBuild = "SnugVisionWarmedBuild"
     /// The menu bar icon variant, "a" or "d" (see `SnugApp.menuBarIcon`). The status item redraws as soon as it changes, so

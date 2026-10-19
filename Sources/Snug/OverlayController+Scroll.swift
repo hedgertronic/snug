@@ -26,11 +26,23 @@ extension OverlayController {
         refresh()
         // The loop only captures and stitches; the display's filter is built once, and each frame's thumbnail is drawn in a task of its
         // own, which a newer frame's replaces.
+        let log = defaults.bool(forKey: Pref.logScroll)
+            ? FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Logs/Snug/scroll/\(Date.now.ISO8601Format())") : nil
         scrollTask = Task {
             do {
                 let filter = scrollFrames == nil ? try await DisplayCapture.filter(for: displayID!) : nil
-                let source = scrollFrames ?? { area in
+                let capture = scrollFrames ?? { area in
                     try await DisplayCapture.image(with: filter!, area: CGRect(x: area.minX / scale, y: area.minY / scale, width: area.width / scale, height: area.height / scale))
+                }
+                if let log { try FileManager.default.createDirectory(at: log, withIntermediateDirectories: true) }
+                var logged = 0
+                let source: (CGRect) async throws -> CGImage = { area in
+                    let frame = try await capture(area)
+                    if let log {
+                        try await Output.png(frame).write(to: log.appending(path: String(format: "%04d.png", logged)))
+                        logged += 1
+                    }
+                    return frame
                 }
                 let stitcher = ScrollStitcher(first: try await source(area))
                 try Task.checkCancellation()
