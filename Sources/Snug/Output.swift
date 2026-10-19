@@ -161,7 +161,7 @@ enum Output {
         if save {
             do {
                 if let destination {
-                    try png.write(to: destination)
+                    try png.write(to: destination, options: .atomic)
                     file = destination
                 } else {
                     file = try UniqueFile.write(png, to: defaultFile(defaults: defaults))
