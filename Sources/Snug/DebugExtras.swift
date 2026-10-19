@@ -1309,8 +1309,8 @@ extension DebugRun {
         require(!defaults.bool(forKey: Pref.snap) && texts(in: chrome.snap) == ["Exact", "S"] && !chrome.snap.lit, "clicking the Snap chip turns snap off: Exact, plain")
         key(1, "s")
         require(defaults.bool(forKey: Pref.snap) && chrome.snap.lit, "S turns snap back on and the Snap chip follows")
-        // The edge keys: the side arrows and the legend show while the pointer rests inside the selection or a modifier is held; the
-        // legend and the lit caps on the strip and legend follow the modifiers.
+        // The edge keys: the side arrows and the legend show while the pointer rests inside the selection or Option is held; the
+        // legend reads one action for the modifiers held, and the lit caps on the strip and legend follow them.
         let insideSelection = CGPoint(x: overlay.selection!.rect.midX, y: overlay.selection!.rect.midY)
         let sides = chrome.sideHints
         mouse(.mouseMoved, CGPoint(x: 40, y: 40))
@@ -1328,7 +1328,7 @@ extension DebugRun {
         flags(.option)
         // One cap per key: a held modifier lights its cap wherever it shows, alone or in a chord, and no other cap.
         func lit(_ glyphs: Set<String>, _ view: NSView) -> Bool {
-            ["\u{2325}", "\u{2318}", "\u{21E7}"].allSatisfy { glyph in keyCaps(glyph, in: view).allSatisfy { $0.pressed == glyphs.contains(glyph) } }
+            ["\u{2303}", "\u{2325}", "\u{2318}", "\u{21E7}"].allSatisfy { glyph in keyCaps(glyph, in: view).allSatisfy { $0.pressed == glyphs.contains(glyph) } }
         }
         require(keyCaps("\u{2325}", in: chrome.copy).count == 1 && lit(["\u{2325}"], chrome.strip) && lit(["\u{2325}"], chrome.legend)
                     && texts(in: chrome.legend) == ["grow", "\u{2325}"],
@@ -1358,14 +1358,30 @@ extension DebugRun {
         require(lit(["\u{2325}", "\u{2318}"], chrome.strip) && lit(["\u{2325}", "\u{2318}"], chrome.legend)
                     && texts(in: chrome.legend) == ["shrink", "\u{2325}", "\u{2318}"] && sides.allSatisfy { !$0.isHidden },
                 "holding Option-Command lights every Option and Command cap, the legend reads shrink, and the side arrows stay: \(texts(in: chrome.legend))")
+        flags([.control, .option])
+        require(lit(["\u{2303}", "\u{2325}"], chrome.legend) && texts(in: chrome.legend) == ["edge out", "\u{2303}", "\u{2325}"] && sides.allSatisfy { !$0.isHidden },
+                "holding Control-Option the legend reads edge out with both caps lit: \(texts(in: chrome.legend))")
+        dpad("holding Control-Option")
+        flags([.control, .option, .shift])
+        require(texts(in: chrome.legend) == ["edge out", "\u{2303}", "\u{2325}"], "Shift changes nothing with Control: \(texts(in: chrome.legend))")
+        flags([.control, .option, .command])
+        require(lit(["\u{2303}", "\u{2325}", "\u{2318}"], chrome.legend) && texts(in: chrome.legend) == ["edge in", "\u{2303}", "\u{2325}", "\u{2318}"],
+                "holding Control-Option-Command the legend reads edge in: \(texts(in: chrome.legend))")
+        dpad("holding Control-Option-Command")
+        flags([.control, .option, .command, .shift])
+        require(texts(in: chrome.legend) == ["edge in", "\u{2303}", "\u{2325}", "\u{2318}"], "Shift changes nothing with Control-Option-Command: \(texts(in: chrome.legend))")
         flags(.command)
-        require(lit(["\u{2318}"], chrome.strip) && lit(["\u{2318}"], chrome.legend) && texts(in: chrome.legend) == ["edge out", "\u{2318}", "edge in", "\u{2318}", "\u{21E7}"] && sides.allSatisfy { !$0.isHidden },
-                "holding Command lights the Command caps and the legend reads both edge directions: \(texts(in: chrome.legend))")
-        dpad("holding Command")
-        flags([.command, .shift])
-        require(lit(["\u{2318}", "\u{21E7}"], chrome.strip) && lit(["\u{2318}", "\u{21E7}"], chrome.legend)
-                    && texts(in: chrome.legend) == ["edge out", "\u{2318}", "edge in", "\u{2318}", "\u{21E7}"],
-                "holding Command-Shift lights the Command and Shift caps: \(texts(in: chrome.legend))")
+        require(lit(["\u{2318}"], chrome.strip) && sides.allSatisfy(\.isHidden) && chrome.legend.isHidden,
+                "holding Command alone lights the strip's Command caps and shows no edge keys, since Command-arrow is unbound")
+        flags(.control)
+        require(sides.allSatisfy(\.isHidden) && chrome.legend.isHidden, "Control alone with the pointer outside shows no edge keys")
+        mouse(.mouseMoved, insideSelection, .control)
+        require(overlay.controlHeld && texts(in: chrome.legend) == ["move"] && sides.allSatisfy { !$0.isHidden },
+                "Control alone with the pointer inside shows nothing new: the legend reads move")
+        flags(.command)
+        require(sides.allSatisfy(\.isHidden) && chrome.legend.isHidden, "Command with the pointer inside hides the edge keys")
+        flags([])
+        mouse(.mouseMoved, CGPoint(x: 40, y: 40))
         flags(.shift)
         require(sides.allSatisfy(\.isHidden) && chrome.legend.isHidden, "Shift alone with the pointer outside shows no edge keys")
         flags([])

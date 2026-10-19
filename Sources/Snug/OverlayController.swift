@@ -115,6 +115,8 @@ final class OverlayController {
     var optionHeld = false
     /// Command is held: the hint key caps for it fill with the accent.
     var commandHeld = false
+    /// Control is held: with Option, the arrow legend reads edge out or edge in, and the Control caps fill with the accent.
+    var controlHeld = false
     /// Corner radius in pixels of each snap fit, settled selection, and hovered rectangle, measured once per rectangle.
     /// A rectangle that is not here (one being resized, or still being measured) has square corners.
     var radii: [CGRect: CGFloat] = [:]
@@ -394,6 +396,7 @@ final class OverlayController {
     func flagsChanged(_ event: NSEvent) {
         optionHeld = event.modifierFlags.contains(.option)
         commandHeld = event.modifierFlags.contains(.command)
+        controlHeld = event.modifierFlags.contains(.control)
         let shift = event.modifierFlags.contains(.shift)
         if shift != shiftHeld, image != nil {
             shiftHeld = shift
@@ -409,6 +412,7 @@ final class OverlayController {
         guard image != nil, armedRecording == nil, chrome.colorMenu.isHidden else { return }
         optionHeld = event.modifierFlags.contains(.option)
         commandHeld = event.modifierFlags.contains(.command)
+        controlHeld = event.modifierFlags.contains(.control)
         shiftHeld = event.modifierFlags.contains(.shift)
         movedWithShift = shiftHeld
         let wasOnSelection = pointerOnSelection
@@ -774,6 +778,7 @@ final class OverlayController {
         let command = event.modifierFlags.contains(.command)
         let shift = event.modifierFlags.contains(.shift)
         let option = event.modifierFlags.contains(.option)
+        let control = event.modifierFlags.contains(.control)
         // Arrow steps are device pixels: selections are in the capture's pixels, one per device pixel.
         let step: CGFloat = shift ? 10 : 1
         let character = event.charactersIgnoringModifiers ?? ""
@@ -797,8 +802,11 @@ final class OverlayController {
         case (_, false, "="): applyRadiusToAll()
         case (_, false, "+") where !hovering: growSides(by: option ? 10 : 1)
         case (_, false, "-") where !hovering: growSides(by: option ? -10 : -1)
+        // On a selection: Option-arrow grows a side, Option-Command-arrow shrinks it; with Control they move it to the next edge out or
+        // in, and Shift does nothing. Command-arrow without Option is unbound.
+        case (123...126, _, _) where control && option && !hovering: moveSideToEdge(keyCode: event.keyCode, outward: !command)
         case (123...126, _, _) where option && !hovering: nudgeSide(keyCode: event.keyCode, outward: !command, by: step)
-        case (123...126, true, _) where !hovering: moveSideToEdge(keyCode: event.keyCode, outward: !shift)
+        case (123...126, true, _) where !hovering: return false
         case (_, true, "s") where hovering: clickHover(framed: framed, copy: false, save: true, takeDisplay: true)
         case (36, _, _) where shift || option, (76, _, _) where shift || option: copySelectionText(translating: option)
         case (36, _, _), (76, _, _): copy()

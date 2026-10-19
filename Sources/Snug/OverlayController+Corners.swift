@@ -158,8 +158,8 @@ extension OverlayController {
         carryRadii(from: old)
     }
 
-    /// Command-arrow moves the side facing the arrow outward to the next pixel edge along it, up to the extent; Command-Shift-arrow
-    /// moves it inward, keeping the minimum size. The search steps away from the side 128 px at a time, so a near edge is found
+    /// Control-Option-arrow moves the side facing the arrow outward to the next pixel edge along it, up to the extent;
+    /// Control-Option-Command-arrow moves it inward, keeping the minimum size. The search steps away from the side 128 px at a time, so a near edge is found
     /// without scanning to the extent. A sharp edge reads as a run of neighboring positions, so each run counts once, at its middle,
     /// and the run the side sits on is skipped. With no edge in the way, nothing moves.
     func moveSideToEdge(keyCode: UInt16, outward: Bool) {

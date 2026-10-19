@@ -127,7 +127,7 @@ final class HelpSheet: NSView {
                      ("G", "Scrolling capture, hover or selection"), ("K", "Subject preview"), ("Subject: Tab", "Next subject (Shift: back)"), ("Subject: S", "Crop to subject"),
                      ("C", "Copy color"), ("\u{21E7} C", "Cycle color format"), ("esc", "Cancel"), ("Space", "Hold while dragging to move")]),
         ("Adjust and text", [("Tab", "Walk out (Shift: in)"), ("Arrows", "Nudge 1 px (Shift: 10 px)"), ("\u{2325} arrow", "Grow a side (Shift: 10 px)"),
-                             ("\u{2325} \u{2318} arrow", "Shrink a side (Shift: 10)"), ("\u{2318} arrow", "Edge out, one side"), ("\u{21E7} \u{2318} arrow", "Edge in, one side"),
+                             ("\u{2325} \u{2318} arrow", "Shrink a side (Shift: 10)"), ("\u{2303} \u{2325} arrow", "Edge out, one side"), ("\u{2303} \u{2325} \u{2318} arrow", "Edge in, one side"),
                              ("+ / -", "All sides 1 px (Option: 10)"), ("\u{2318} Z", "Undo an edit (Shift: redo)"),
                              ("\u{2191} / \u{2193}", "Bigger / smaller element"), ("\u{21E7} click", "Add an element"),
                              ("[ ]", "Corner radius (Tab: one corner)"), ("\u{21E7} [ ]", "Corner radius by 4 pt"), ("=", "Same radius on all corners"), ("\u{2325} drag", "One corner's radius, on a dot"),
