@@ -169,6 +169,18 @@ extension DebugRun {
         require(overlay.window.isVisible && overlay.armedRecording == nil, "V does nothing on an opened image, which has no display to record")
         overlay.dismiss()
 
+        // With motion, arming cross-fades the capture strip into the recording strip in 140 ms; headless nothing animates.
+        open()
+        select(CGRect(x: 600, y: 300, width: 400, height: 200))
+        overlay.chrome.strip.layer!.removeAllAnimations()
+        overlay.isHeadless = false
+        key(9, "v")
+        overlay.isHeadless = true
+        let armFade = overlay.chrome.strip.layer!.animation(forKey: kCATransition)
+        require(overlay.armedRecording != nil && (NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? armFade == nil : armFade?.duration == 0.14),
+                "with motion, arming cross-fades the strip over 140 ms (Reduce Motion \(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)): \(String(describing: armFade))")
+        overlay.dismiss()
+
         // Armed, the loupe, crosshair and rulers are hidden and C does nothing; Esc brings the guides back.
         for key in [Pref.loupe, Pref.rulers, Pref.crosshair] { defaults.set(true, forKey: key) }
         open()

@@ -1095,6 +1095,10 @@ extension DebugRun {
                     ? animating.isEmpty : animating.contains("transition") && copyLayer.animation(forKey: "transition")?.duration == 0.14
                         && copyLayer.animation(forKey: "bounds")?.duration == 0.14,
                 "with motion, Command cross-fades Copy and animates its width (Reduce Motion \(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)): \(animating)")
+        // Command dims Edit and the tools in the same 140 ms, its alpha already at the dimmed value.
+        let editLayer = chrome.edit.layer!, dimming = editLayer.animationKeys() ?? []
+        require(chrome.edit.alphaValue < 0.5 && (NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? dimming.isEmpty : dimming.allSatisfy { editLayer.animation(forKey: $0)!.duration == 0.14 } && !dimming.isEmpty),
+                "with motion, Command dims Edit over 140 ms: \(dimming)")
         require(texts(in: chrome.copy) == ["Agent", "\u{2318}", "\u{21A9}"] && chrome.copy.frame.width == BarButton("Agent", key: "\u{2318}\u{21A9}").frame.width
                     && chrome.copy.frame.width > restCopy.width && chrome.strip.frame.minX == restLeft,
                 "while it animates, Copy's frame already reads Agent's width: \(texts(in: chrome.copy)) \(chrome.copy.frame) \(restCopy) \(chrome.strip.frame.minX) \(restLeft)")
@@ -1116,8 +1120,14 @@ extension DebugRun {
         flags(.command)
         require(chrome.toolTip.isHidden, "a held modifier dims the tool and hides its name")
         flags([])
+        // With motion the name's chip fades out when the pointer leaves the tool, and is hidden at once.
+        chrome.toolTip.layer!.removeAllAnimations()
+        overlay.isHeadless = false
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
-        require(chrome.toolTip.isHidden, "moving off the tool hides its name")
+        overlay.isHeadless = true
+        let tipFade = chrome.toolTip.layer!.animationKeys() ?? []
+        require(chrome.toolTip.isHidden && (NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? tipFade.isEmpty : chrome.toolTip.layer!.animation(forKey: "transition")?.duration == 0.14),
+                "moving off the tool hides its name at once, with a 140 ms fade under motion: \(tipFade)")
         mouse(.mouseMoved, viewPixel(centerOf(chrome.colors)))
         for _ in 0..<300 where chrome.toolTip.isHidden { try await Task.sleep(for: .milliseconds(10)) }
         mouse(.leftMouseDown, viewPixel(centerOf(chrome.colors)))
