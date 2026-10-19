@@ -105,7 +105,7 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: productName.midX, y: productName.midY))
         require(overlay.view.cursor == .iBeam, "the cursor is an I-beam over text")
         mouse(.mouseMoved, blank)
-        require(overlay.view.cursor == .arrow, "the cursor is an arrow away from text")
+        require(overlay.view.cursor == .crosshair, "the cursor is the crosshair away from text")
         pasteboard.clearContents()
         key(returnKey, "\r")
         require(overlay.window.isVisible && pasteboard.string(forType: .string) == nil, "Return with nothing selected copies nothing and keeps the overlay open")

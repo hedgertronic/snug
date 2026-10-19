@@ -430,9 +430,9 @@ final class OverlayController {
     }
 
     /// The crosshair over a button of the chrome or a row of its menus, inside the selection too; resize cursors on handles and edges,
-    /// an open hand inside the selection, a closed hand while moving, the crosshair elsewhere; in Text mode, the I-beam over text and
-    /// the arrow elsewhere. The panel does not activate, so cursor rects alone are unreliable: the choice is also set on each pointer
-    /// move. Headless runs record the choice on the view but leave the system cursor alone.
+    /// an open hand inside the selection, a closed hand while moving, the I-beam over text in Text mode, the crosshair elsewhere. The
+    /// panel does not activate, so cursor rects alone are unreliable: the choice is also set on each pointer move. Headless runs record
+    /// the choice on the view but leave the system cursor alone.
     func updateCursor() {
         guard window.isVisible else { return }
         let cursor: NSCursor
@@ -444,7 +444,7 @@ final class OverlayController {
         case .drawing: cursor = .crosshair
         case .none where mode == .text:
             // Live Text takes points from the top-left corner (measured), not the view's bottom-left.
-            cursor = view.liveText.hasText(at: CGPoint(x: pointer.x / scale, y: pointer.y / scale)) ? .iBeam : .arrow
+            cursor = view.liveText.hasText(at: CGPoint(x: pointer.x / scale, y: pointer.y / scale)) ? .iBeam : .crosshair
         case .none:
             if let selection {
                 cursor = cornerDot(at: pointer) != nil ? .pointingHand : selection.handle(at: pointer, tolerance: 8 * scale).map { Self.resizeCursors[$0]! }
