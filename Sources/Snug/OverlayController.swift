@@ -404,7 +404,7 @@ final class OverlayController {
         commandHeld = event.modifierFlags.contains(.command)
         shiftHeld = event.modifierFlags.contains(.shift)
         movedWithShift = shiftHeld
-        let wasInside = selection?.rect.contains(pointer)
+        let wasOnSelection = pointerOnSelection
         pointer = view.pixelPoint(event)
         // On the top bar, or crossing from the hovered element to its chips or strip, the hover holds so their buttons can be clicked;
         // the guides, loupe and crosshair still follow the pointer.
@@ -414,7 +414,7 @@ final class OverlayController {
             return updateCursor()
         }
         // The edge keys show while the pointer is inside a released selection.
-        if selection?.rect.contains(pointer) != wasInside { refresh() }
+        if pointerOnSelection != wasOnSelection { refresh() }
         updateHoveredCorner()
         updateHover(pixel: pointer)
         updateGuides()

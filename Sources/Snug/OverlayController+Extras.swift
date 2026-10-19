@@ -243,12 +243,12 @@ extension OverlayController {
                 tag.lit = snapEnabled
                 let text = "x \(Int(pointerPixel.x))  y \(Int(pointerPixel.y))"
                 coordinates.show(text) { [NSTextField(text, size: 12, mono: true, color: .chromeText)] }
-                let width = coordinates.frame.width + Guides.clusterGap + tag.frame.width
+                let size = CGSize(width: coordinates.frame.width + Guides.clusterGap + tag.frame.width, height: tag.frame.height)
                 let point = CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale)
-                let below = guides.readout.isHidden ? CGPoint(x: point.x + 16, y: point.y - 16 - tag.frame.height)
-                    : CGPoint(x: guides.readout.frame.midX - width / 2, y: guides.readout.frame.minY - Guides.clusterGap - tag.frame.height)
-                let origin = CGPoint(x: min(max(below.x, 8), view.bounds.width - width - 8),
-                                     y: min(max(below.y, 8), view.bounds.height - topInset - tag.frame.height - 4))
+                // Under the loupe's readout the cluster hangs where the loupe's placement kept room for it; with no loupe it takes the first
+                // free corner of the pointer.
+                let origin = guides.readout.isHidden ? Guides.clusterOrigin(point: point, size: size, bounds: view.bounds, topInset: topInset, avoiding: chromeFrames)
+                    : CGPoint(x: min(max(guides.readout.frame.midX - size.width / 2, 8), view.bounds.width - size.width - 8), y: guides.readout.frame.minY - Guides.clusterGap - size.height)
                 coordinates.frame.origin = origin
                 tag.frame.origin = CGPoint(x: origin.x + coordinates.frame.width + Guides.clusterGap, y: origin.y)
                 tag.isHidden = false
@@ -265,7 +265,13 @@ extension OverlayController {
         guides.update(point: CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale), pixel: pixel,
                       image: image, bounds: view.bounds, scale: scale, topInset: topInset,
                       selected: draggedRect ?? selection?.rect, dragging: draggedRect != nil,
-                      avoiding: [chrome.topBar, chrome.strip, chrome.list, chrome.hover, chrome.size, chrome.snap, chrome.ratio, chrome.radius, chrome.status,
-                                 chrome.reading, chrome.legend, chrome.colorMenu, chrome.ratioMenu].filter { !$0.isHidden }.map(\.frame))
+                      avoiding: chromeFrames)
+    }
+
+    /// The frames of the chrome showing now that the pointer cluster and the loupe keep clear of: everything the placement pass places.
+    var chromeFrames: [CGRect] {
+        let c = chrome
+        return ([c.topBar, c.strip, c.list, c.hover, c.size, c.snap, c.ratio, c.radius, c.status, c.reading, c.legend, c.toolTip, c.colorMenu, c.ratioMenu,
+                 c.cornerKeys, cornerChip, c.upHint, c.downHint] + c.sideHints).filter { !$0.isHidden }.map(\.frame)
     }
 }
