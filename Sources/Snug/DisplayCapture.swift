@@ -45,11 +45,17 @@ enum DisplayCapture {
         return try await SCScreenshotManager.captureScreenshot(contentFilter: filter, configuration: configuration).sdrImage!
     }
 
-    /// One area of the display, `area` in display points with a top-left origin, at full pixel resolution, without Snug's windows.
+    /// The display without Snug's windows (see `filter(for:in:excluding:)`), from the shareable content listed now. A scrolling capture
+    /// builds it once and passes it to each `image(with:area:)`.
     @concurrent
-    static func image(of displayID: CGDirectDisplayID, area: CGRect) async throws -> CGImage {
+    static func filter(for displayID: CGDirectDisplayID) async throws -> SCContentFilter {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        let filter = filter(for: displayID, in: content, excluding: await excludedWindowIDs())
+        return filter(for: displayID, in: content, excluding: await excludedWindowIDs())
+    }
+
+    /// One area of the display through `filter`, `area` in display points with a top-left origin, at full pixel resolution.
+    @concurrent
+    static func image(with filter: SCContentFilter, area: CGRect) async throws -> CGImage {
         let scale = CGFloat(SCShareableContent.info(for: filter).pointPixelScale)
         let configuration = SCScreenshotConfiguration()
         configuration.sourceRect = area

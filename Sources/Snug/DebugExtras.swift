@@ -1871,6 +1871,30 @@ extension DebugRun {
         pasteboard.clearContents()
         key(53, "")
         require(!overlay.window.isVisible && overlay.scrollArea == nil && pasteboard.data(forType: .png) == nil, "Esc cancels scrolling capture with the clipboard untouched")
+        // Esc while a frame is on its way to the stitcher: the third frame's capture closes the overlay before it returns a moved frame.
+        // The frame is still added, and nothing of it shows afterwards.
+        var (captures, inFlight) = (0, nil as Task<Void, Never>?)
+        overlay.scrollFrames = { area in
+            captures += 1
+            if captures == 3 {
+                inFlight = overlay.scrollTask
+                overlay.dismiss()
+            }
+            return image.cropping(to: area.offsetBy(dx: 0, dy: [0, 150, 300][min(captures - 1, 2)]))!
+        }
+        open()
+        overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        overlay.selection = AreaSelection(extent: extent, exact: page)
+        key(5, "g")
+        for _ in 0..<3000 where inFlight == nil { try await Task.sleep(for: .milliseconds(10)) }
+        await inFlight?.value
+        try await Task.sleep(for: .milliseconds(100))
+        require(captures == 3 && !overlay.window.isVisible && overlay.scrollArea == nil && overlay.stitcher == nil && overlay.scrollThumbnail == nil && overlay.scrollHeight == 0,
+                "Esc while a frame is being added closes cleanly, with no thumbnail or height left: \(captures) \(overlay.scrollHeight) \(overlay.scrollThumbnail != nil)")
+        overlay.scrollFrames = { area in
+            let offset = offsets.count > 1 ? offsets.removeFirst() : offsets[0]
+            return image.cropping(to: area.offsetBy(dx: 0, dy: CGFloat(offset)))!
+        }
         open()
         overlay.selection = AreaSelection(extent: extent, exact: CGRect(x: 1700, y: 100, width: 300, height: 300))
         key(5, "g")
