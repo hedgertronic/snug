@@ -1460,6 +1460,56 @@ extension DebugRun {
         require(texts(in: chrome.radius) == ["r 1", "[", "]"] && chrome.radius.frame.minY == chrome.hover.frame.minY && covering.isEmpty,
                 "] on a hovered element shows its radius in the chip row, uncovered: \(texts(in: chrome.radius)) covered by \(covering.map { "\(type(of: $0)) \($0.frame)" })")
 
+        // With motion, a key's jump to another hover candidate animates the outline, its dim and the chrome on it with one 100 ms
+        // animation, while every frame reads its final value at once; the pointer's hover change and key repeat animate nothing.
+        overlay.dismiss()
+        open()
+        let jumpInner = Candidate(id: "jump-inner", label: "Card", bounds: CGRect(x: 1250, y: 420, width: 500, height: 300), score: AccessibilityBounds.baseScore, kind: .element)
+        let jumpOuter = Candidate(id: "jump-outer", label: "Panel", bounds: jumpInner.bounds.insetBy(dx: -160, dy: -120), score: AccessibilityBounds.baseScore, kind: .element)
+        let jumpChild = Candidate(id: "jump-child", label: "Button", bounds: jumpInner.bounds.insetBy(dx: 90, dy: 70), score: AccessibilityBounds.baseScore, kind: .element)
+        overlay.detectionTask?.cancel()
+        let jumpAim = CGPoint(x: jumpInner.bounds.midX, y: jumpInner.bounds.midY)
+        overlay.session = SelectionSession(candidates: [jumpChild, jumpInner, jumpOuter], extent: extent, anchor: jumpAim)
+        mouse(.mouseMoved, jumpAim)
+        let jumpLayers = [overlay.view.hoverLayer, overlay.view.dimLayer, overlay.view.levelHintLayer, chrome.strip.layer!, chrome.hover.layer!]
+        func jumpAnimations() -> [[Double]] { jumpLayers.map { layer in (layer.animationKeys() ?? []).map { layer.animation(forKey: $0)!.duration } } }
+        func settleJump() { jumpLayers.forEach { $0.removeAllAnimations() } }
+        let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let hoverBefore = overlay.view.overlays.hover
+        settleJump()
+        overlay.isHeadless = false
+        key(126, "")
+        overlay.isHeadless = true
+        let jumped = jumpAnimations(), hoverAfter = overlay.view.overlays.hover, stripAfter = chrome.strip.frame, chipAfter = chrome.hover.frame
+        require(hoverAfter != hoverBefore && hoverAfter != nil, "Up moves the hover to another candidate: \(String(describing: hoverBefore)) to \(String(describing: hoverAfter))")
+        let outlinePath = overlay.view.hoverLayer.animation(forKey: "path")
+        require(reduced ? jumped.allSatisfy(\.isEmpty)
+                    : outlinePath?.duration == 0.1 && jumped[0].allSatisfy { $0 == 0.1 } && jumped[3...].allSatisfy { !$0.isEmpty && $0.allSatisfy { $0 == 0.1 } },
+                "with motion, an Up jump animates the outline, the strip and the hover chip over 100 ms (Reduce Motion \(reduced)): \(jumped)")
+        require(reduced || overlay.view.dimLayer.animation(forKey: "path")?.duration == 0.1 && overlay.view.dimLayer.animation(forKey: "dim") == nil,
+                "the dim's cutout moves with the outline instead of cross-fading: \(jumped[1])")
+        settleJump()
+        key(125, "")
+        key(126, "")
+        require(overlay.view.overlays.hover == hoverAfter && chrome.strip.frame == stripAfter && chrome.hover.frame == chipAfter && jumpAnimations().allSatisfy(\.isEmpty),
+                "the animated jump's frames equal an instant placement, and headless nothing animates: \(chrome.strip.frame) \(stripAfter)")
+        // The pointer's hover change moves outline and strip at once, and so does a repeated key.
+        settleJump()
+        overlay.isHeadless = false
+        mouse(.mouseMoved, CGPoint(x: jumpAim.x + 100, y: jumpAim.y))
+        overlay.isHeadless = true
+        require(overlay.view.overlays.hover != hoverAfter, "the pointer returns the hover to the element under it")
+        require(jumpAnimations().enumerated().allSatisfy { $0.offset == 1 || $0.element.isEmpty }, "with motion, a pointer hover change moves the outline, strip and chip at once: \(jumpAnimations())")
+        settleJump()
+        overlay.isHeadless = false
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            overlay.window.sendEvent(NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: true, keyCode: 126)!)
+        }
+        overlay.isHeadless = true
+        require(overlay.view.overlays.hover == hoverAfter && jumpAnimations().allSatisfy(\.isEmpty), "with motion, a repeated Up moves the hover at once: \(jumpAnimations())")
+        overlay.dismiss()
+
         // Chrome never overlaps or leaves the screen, and the loupe, which is on throughout, draws above all of it: a large and a small
         // selection, one at each screen edge (the bottom one moves the bar to the top), and the full screen with a 38 pt inset, each with
         // the pointer inside so the edge keys show, then on the top-left and bottom-right corner dots, then with the top-left corner focused.
