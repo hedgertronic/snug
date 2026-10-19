@@ -72,16 +72,19 @@ extension OverlayController {
         return true
     }
 
-    /// The stitched image takes the area's corner radii (Rounded, or edited with [ and ]) and Frame, as a crop of the area would.
+    /// The stitched image takes the area's corner radii (Rounded, or edited with [ and ]) and Frame, as a crop of the area would. When rows
+    /// joined after two frames disagreed on them, the toast says the image may be wrong there.
     private func finishScroll() {
         guard let stitcher, let scrollArea else { return }
         let (scale, framed, radii, copy, save) = (scale, framed, cornerRadii(of: scrollArea), true, afterCaptureSaves)
         dismiss()
         commitTask = Task { [pasteboard, defaults] in
             do {
-                let image = await stitcher.image()
+                let (image, unmatched) = (await stitcher.image(), await stitcher.unmatchedRows)
                 try await Output.deliver(image, crop: CGRect(x: 0, y: 0, width: image.width, height: image.height), framed: framed, scale: scale,
-                                         cornerRadii: radii, copy: copy, save: save, pasteboard: pasteboard, defaults: defaults)
+                                         cornerRadii: radii, copy: copy, save: save,
+                                         warning: unmatched > 0 ? "Pinned or moving content: \(unmatched) px may repeat" : nil,
+                                         pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
             }
