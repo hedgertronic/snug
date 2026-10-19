@@ -129,7 +129,8 @@ private func caption(_ text: String) -> some View {
     Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 4)
 }
 
-/// The app icon and name once, then shortcut, after capture, save folder, open at login, recording, and the permissions.
+/// The app icon and name once, then shortcut, after capture, save folder, open at login, recording, and the permissions; a footer
+/// with a link to Snug's Ko-fi page.
 private struct GeneralPane: View {
     @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
@@ -199,9 +200,12 @@ private struct GeneralPane: View {
                 }
             }
             Divider()
-            Text("Everything else lives in the capture overlay.")
+            HStack {
+                Text("Everything else is in the overlay.").foregroundStyle(.secondary)
+                Spacer(minLength: 12)
+                Link("Support Snug on Ko-fi", destination: URL(string: "https://ko-fi.com/hedgertronic")!)
+            }
                 .font(.system(size: 12))
-                .foregroundStyle(.secondary)
                 .padding(.init(top: 10, leading: 20, bottom: 14, trailing: 20))
                 .frame(width: SettingsTabs.width, alignment: .leading)
         }
