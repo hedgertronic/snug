@@ -202,16 +202,58 @@ final class Guides {
 
     /// The loupe's lower-left corner for a pointer at `point`: below and to the right of it, or the first of below-left, above-right and above-left
     /// whose frame, readout and the pointer cluster's depth under it included, lies inside the view under the inset and clear of every
-    /// `avoiding` frame. With none free it takes the first pushed inside the view. Above the pointer the loupe sits the cluster's depth
-    /// higher, so the cluster hangs between the readout and the pointer. The result is on whole device pixels so the magnified cells stay crisp.
+    /// `avoiding` frame. With none free, the same four with the frame slid down (below the pointer) or up (above it) past each frame it
+    /// meets, so the readout and cluster never sit under a bar or chip. With none of those free it takes the first pushed down or up inside the view.
+    /// Above the pointer the loupe sits the cluster's depth higher, so the cluster hangs between the readout and the pointer. The result is
+    /// on whole device pixels so the magnified cells stay crisp.
     static func loupeOrigin(point: CGPoint, bounds: CGRect, topInset: CGFloat, scale: CGFloat, avoiding: [CGRect]) -> CGPoint {
         let size = loupeSize, tall = size + readoutGap + Chrome.labelHeight, gap: CGFloat = 10
-        let usable = CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height - topInset - 4)
+        let usable = CGRect(x: 0, y: 4, width: bounds.width, height: bounds.height - topInset - 8)
         let xs = [point.x + gap, point.x - gap - size], ys = [point.y - gap - tall, point.y + gap + clusterDepth]
-        let frames = ys.flatMap { y in xs.map { CGRect(x: $0 - readoutOverhang, y: y - clusterDepth, width: size + 2 * readoutOverhang, height: tall + clusterDepth) } }
-        let frame = frames.first { candidate in usable.contains(candidate) && !avoiding.contains { candidate.intersects($0) } }
-            ?? frames[0].offsetBy(dx: max(usable.minX - frames[0].minX, min(usable.maxX - frames[0].maxX, 0)), dy: max(usable.minY - frames[0].minY, min(usable.maxY - frames[0].maxY, 0)))
-        return CGPoint(x: ((frame.minX + readoutOverhang) * scale).rounded() / scale, y: ((frame.minY + clusterDepth) * scale).rounded() / scale)
+        // A candidate is the loupe with its readout slot, and the stack of readout and cluster under it, which near a side edge shifts into the
+        // view while the loupe keeps its side of the pointer.
+        let candidates: [[CGRect]] = ys.flatMap { y in xs.map { x in
+            let stack = CGRect(x: x - readoutOverhang, y: y - clusterDepth, width: size + 2 * readoutOverhang, height: clusterDepth + Chrome.labelHeight)
+            return [CGRect(x: x, y: y, width: size, height: tall), stack.offsetBy(dx: max(usable.minX - stack.minX, min(usable.maxX - stack.maxX, 0)), dy: 0)]
+        } }
+        func free(_ pieces: [CGRect]) -> Bool { pieces.allSatisfy(usable.contains) && !pieces.contains { piece in avoiding.contains { piece.intersects($0) } } }
+        func slid(_ pieces: [CGRect], up: Bool) -> [CGRect] {
+            var pieces = pieces
+            while let hit = avoiding.first(where: { hit in pieces.contains { $0.intersects(hit) } }) {
+                let whole = pieces.reduce(pieces[0]) { $0.union($1) }
+                pieces = pieces.map { $0.offsetBy(dx: 0, dy: up ? hit.maxY + 4 - whole.minY : hit.minY - 4 - whole.maxY) }
+            }
+            return pieces
+        }
+        let loupe = (candidates.first(where: free)
+            ?? candidates.enumerated().map { slid($1, up: $0 >= 2) }.first(where: free)
+            ?? candidates[0].map { $0.offsetBy(dx: 0, dy: max(usable.minY - candidates[0][1].minY, min(usable.maxY - candidates[0][0].maxY, 0))) })[0]
+        return CGPoint(x: (loupe.minX * scale).rounded() / scale, y: (loupe.minY * scale).rounded() / scale)
+    }
+
+    /// The lower-left corner of the readout, for a loupe whose disc is `disc`: in the slot under the disc, with the pointer cluster's depth under
+    /// the readout, or when that slot is not free, in the first free slot of the same size above the disc, to its right, or to its left. With
+    /// none free it stays under the disc. The slot stays inside the view and clear of every `avoiding` frame, so a disc pushed over a bar or
+    /// chip still leaves its readout and cluster clear of them.
+    static func readoutOrigin(disc: CGRect, size: CGSize, bounds: CGRect, topInset: CGFloat, avoiding: [CGRect]) -> CGPoint {
+        let usable = CGRect(x: 0, y: 4, width: bounds.width, height: bounds.height - topInset - 8)
+        let width = loupeSize + 2 * readoutOverhang, height = Chrome.labelHeight + clusterDepth
+        let slots = [CGPoint(x: disc.midX - width / 2, y: disc.minY - readoutGap - height), CGPoint(x: disc.midX - width / 2, y: disc.maxY + readoutGap),
+                     CGPoint(x: disc.maxX + readoutGap, y: disc.midY - height / 2), CGPoint(x: disc.minX - readoutGap - width, y: disc.midY - height / 2)]
+            .map { CGRect(x: min(max($0.x, usable.minX), usable.maxX - width), y: $0.y, width: width, height: height) }
+        let slot = slots.first { usable.contains($0) && !avoiding.contains(where: $0.intersects) } ?? slots[0]
+        return CGPoint(x: min(max((slot.midX - size.width / 2).rounded(), 4), bounds.width - size.width - 4), y: (slot.minY + clusterDepth + (Chrome.labelHeight - size.height) / 2).rounded())
+    }
+
+    /// The pointer cluster's origin with no loupe: below and to the right of the pointer, or the first of below-left, above-right and above-left
+    /// that lies inside the view under the inset and clear of every `avoiding` frame, else the first clamped into the view.
+    static func clusterOrigin(point: CGPoint, size: CGSize, bounds: CGRect, topInset: CGFloat, avoiding: [CGRect]) -> CGPoint {
+        let usable = CGRect(x: 8, y: 8, width: bounds.width - 16, height: bounds.height - topInset - 12)
+        let spots = [(point.x + 16, point.y - 16 - size.height), (point.x - 16 - size.width, point.y - 16 - size.height),
+                     (point.x + 16, point.y + 16), (point.x - 16 - size.width, point.y + 16)]
+        let frames = spots.map { CGRect(x: $0.0, y: $0.1, width: size.width, height: size.height) }
+        let frame = frames.first { usable.contains($0) && !avoiding.contains(where: $0.intersects) } ?? frames[0]
+        return CGPoint(x: min(max(frame.minX, usable.minX), usable.maxX - size.width), y: min(max(frame.minY, usable.minY), usable.maxY - size.height))
     }
 
     /// Repositions the enabled guides. `point` is in view coordinates, `pixel` and `selected` (the selection or the rectangle being drawn)
@@ -366,7 +408,8 @@ final class Guides {
             }
             loupeOffset = offset
             loupe.position = CGPoint(x: origin.x + Self.loupeSize / 2, y: origin.y + loupe.bounds.height / 2)
-            readout.frame.origin = CGPoint(x: min(max((origin.x + (Self.loupeSize - readout.frame.width) / 2).rounded(), 4), bounds.width - readout.frame.width - 4), y: (origin.y + (Chrome.labelHeight - readout.frame.height) / 2).rounded())
+            let disc = CGRect(x: origin.x, y: origin.y + Chrome.labelHeight + Self.readoutGap, width: Self.loupeSize, height: Self.loupeSize)
+            readout.frame.origin = Self.readoutOrigin(disc: disc, size: readout.frame.size, bounds: bounds, topInset: topInset, avoiding: avoiding)
         }
     }
 }
