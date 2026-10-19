@@ -429,15 +429,15 @@ final class OverlayController {
         updateCursor()
     }
 
-    /// The arrow over a button of the chrome or a row of its menus (not the pointing hand, which macOS keeps for links); resize cursors
-    /// on handles and edges, an open hand inside the selection, a closed hand while moving, the crosshair elsewhere; in Text mode,
-    /// the I-beam over text and the arrow elsewhere. The panel does not activate, so cursor rects alone are unreliable: the choice
-    /// is also set on each pointer move. Headless runs record the choice on the view but leave the system cursor alone.
+    /// The crosshair over a button of the chrome or a row of its menus, inside the selection too; resize cursors on handles and edges,
+    /// an open hand inside the selection, a closed hand while moving, the crosshair elsewhere; in Text mode, the I-beam over text and
+    /// the arrow elsewhere. The panel does not activate, so cursor rects alone are unreliable: the choice is also set on each pointer
+    /// move. Headless runs record the choice on the view but leave the system cursor alone.
     func updateCursor() {
         guard window.isVisible else { return }
         let cursor: NSCursor
         switch interaction {
-        case .none where overClickableChrome: cursor = .arrow
+        case .none where overClickableChrome: cursor = .crosshair
         case .resizing(let handle, _): cursor = Self.resizeCursors[handle]!
         case .moving: cursor = .closedHand
         case .rounding: cursor = .pointingHand

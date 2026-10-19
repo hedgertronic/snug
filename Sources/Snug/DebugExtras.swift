@@ -1722,8 +1722,8 @@ extension DebugRun {
         }
         overlay.topInset = 0
 
-        // The cursor is the arrow over a button of the top bar and the strip and over a row of an open menu, and the capture cursor on the
-        // gaps between them and on the labels that pass the pointer through.
+        // The cursor is the crosshair over a button of the top bar and the strip, over a row of an open menu, on the gaps between them and
+        // on the labels that pass the pointer through, inside a selection too, where elsewhere it is the open hand.
         overlay.dismiss()
         open()
         await overlay.detectionTask?.value
@@ -1755,7 +1755,7 @@ extension DebugRun {
         let overButtons = [("Copy", chrome.copy), ("Edit", chrome.edit), ("Capture", chrome.modeButtons[.capture]!), ("Frame", chrome.styleToggles[1].1)]
         for (name, button) in overButtons {
             mouse(.mouseMoved, viewPixel(centerOf(button)))
-            require(overlay.view.cursor === NSCursor.arrow, "the cursor is the arrow over the \(name) button: \(overlay.view.cursor)")
+            require(overlay.view.cursor === NSCursor.crosshair, "the cursor is the crosshair over the \(name) button: \(overlay.view.cursor)")
         }
         let barGap = CGPoint(x: (top.groups[0].frame.maxX + top.groups[1].frame.minX) / 2 + top.frame.minX, y: top.frame.midY)
         mouse(.mouseMoved, viewPixel(barGap))
@@ -1769,10 +1769,22 @@ extension DebugRun {
         require(!chrome.ratioMenu.isHidden, "P opens the ratio menu")
         let menuRow = chrome.ratioMenu.panel.convert(CGPoint(x: chrome.ratioMenu.rows[0].frame.midX, y: chrome.ratioMenu.rows[0].frame.midY), to: overlay.view)
         mouse(.mouseMoved, viewPixel(menuRow))
-        require(overlay.view.cursor === NSCursor.arrow, "the cursor is the arrow over a menu row: \(overlay.view.cursor)")
-        mouse(.mouseMoved, CGPoint(x: 40, y: 40))
-        require(overlay.view.cursor !== NSCursor.arrow, "the cursor leaves the arrow off the menu's rows: \(overlay.view.cursor)")
+        require(overlay.view.cursor === NSCursor.crosshair, "the cursor is the crosshair over a menu row: \(overlay.view.cursor)")
         key(53, "\u{1B}")
+        overlay.topInset = 38
+        overlay.selection = AreaSelection(extent: extent, exact: extent)
+        overlay.refresh()
+        mouse(.mouseMoved, CGPoint(x: extent.midX, y: extent.midY))
+        require(overlay.view.cursor === NSCursor.openHand, "inside a full-screen selection the cursor is the open hand: \(overlay.view.cursor)")
+        mouse(.mouseMoved, viewPixel(centerOf(chrome.copy)))
+        require(overlay.view.viewRect(extent).contains(chrome.strip.frame) && overlay.view.cursor === NSCursor.crosshair,
+                "over the strip's Copy button inside a full-screen selection the cursor is the crosshair: \(overlay.view.cursor) strip \(chrome.strip.frame)")
+        key(35, "p")
+        let insideRow = chrome.ratioMenu.panel.convert(CGPoint(x: chrome.ratioMenu.rows[0].frame.midX, y: chrome.ratioMenu.rows[0].frame.midY), to: overlay.view)
+        mouse(.mouseMoved, viewPixel(insideRow))
+        require(!chrome.ratioMenu.isHidden && overlay.view.cursor === NSCursor.crosshair, "over a menu row inside a full-screen selection the cursor is the crosshair: \(overlay.view.cursor)")
+        key(53, "\u{1B}")
+        overlay.topInset = 0
         overlay.dismiss()
 
         // A lit Edit button draws exactly as a lit toggle (Loupe) does, and the current mode exactly as Copy, in the light and the dark look.
