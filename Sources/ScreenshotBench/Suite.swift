@@ -11,6 +11,7 @@ private struct SuiteTarget: Decodable {
     let id: String
     let image: String
     let split: String
+    let scale: Int
     let bounds: [Double]
     let requiredContent: [String]
     let excludedContent: [String]
@@ -26,14 +27,14 @@ private struct SuiteSnapRun: Codable {
     let rough: CGRect
     let suggestions: [CGRect]
     let firstEdgeError: Double?
-    let firstWithin8Pixels: Bool
+    let firstWithin8Points: Bool
     let fallsBackToExactDrag: Bool
 }
 
 private struct SuiteHoverResult: Codable {
     let detector: DetectorKind
-    let reachableWithinTwoTabs: Bool
-    let initialEdgeError: Double?
+    let reachableWithinTwoCorrections: Bool
+    let firstChoiceAccepted: Bool
 }
 
 private struct SuiteTargetResult: Codable {
@@ -49,7 +50,7 @@ private struct SuiteTargetResult: Codable {
     let excludedContent: [String]
     let labelQuality: String
     let maxEdgeError: Double?
-    let firstSuggestionWithin8Pixels: Bool
+    let firstSuggestionWithin8Points: Bool
     let exactDragFallbackCount: Int
     let hover: [SuiteHoverResult]
     let regressions: [String]
@@ -89,7 +90,7 @@ public enum ScreenshotBenchSuite {
             guard target.bounds.count == 4, target.bounds.allSatisfy(\.isFinite),
                   !target.roughDrags.isEmpty, target.roughDrags.allSatisfy({ $0.count == 4 && $0.allSatisfy(\.isFinite) }),
                   !target.hoverAnchors.isEmpty, target.hoverAnchors.allSatisfy({ $0.count == 2 && $0.allSatisfy(\.isFinite) }),
-                  ["development", "holdout"].contains(target.split), !target.labelQuality.isEmpty else {
+                  ["development", "holdout"].contains(target.split), target.scale > 0, !target.labelQuality.isEmpty else {
                 throw BenchError.message("Invalid target geometry, split, label quality, or missing inputs: \(target.id)")
             }
             let imageURL = URL(fileURLWithPath: target.image, relativeTo: base).standardizedFileURL
@@ -137,7 +138,7 @@ public enum ScreenshotBenchSuite {
                 let bounds = suggestions.map(\.bounds)
                 let error = bounds.first.map { edgeError($0, targetBounds) }
                 snapRuns.append(SuiteSnapRun(name: name, rough: rough, suggestions: bounds,
-                    firstEdgeError: error, firstWithin8Pixels: error.map { $0 <= 8 } ?? false,
+                    firstEdgeError: error, firstWithin8Points: suggestions.first.map { Acceptance.accepts($0.bounds, targetBounds, scale: target.scale) } ?? false,
                     fallsBackToExactDrag: suggestions.isEmpty))
             }
             reviewRuns[target.id] = snapRuns
@@ -152,21 +153,11 @@ public enum ScreenshotBenchSuite {
             }
             let hoverResults = DetectorKind.allCases.map { detector -> SuiteHoverResult in
                 let candidates = hoverByImage[imageKey]?[detector] ?? []
-                let reachable = anchors.contains { anchor in
-                    var session = SelectionSession(candidates: candidates, extent: extent, anchor: anchor)
-                    if session.selected.map({ edgeError($0.bounds, targetBounds) <= 8 }) == true { return true }
-                    for _ in 0..<2 {
-                        session.cycle()
-                        if session.selected.map({ edgeError($0.bounds, targetBounds) <= 8 }) == true { return true }
-                    }
-                    return false
-                }
-                let initialError = anchors.compactMap { anchor -> Double? in
-                    let session = SelectionSession(candidates: candidates, extent: extent, anchor: anchor)
-                    return session.selected.map { edgeError($0.bounds, targetBounds) }
-                }.min()
-                return SuiteHoverResult(detector: detector, reachableWithinTwoTabs: reachable,
-                                        initialEdgeError: initialError)
+                let accepts = { (rect: CGRect) in Acceptance.accepts(rect, targetBounds, scale: target.scale) }
+                let sessions = anchors.map { SelectionSession(candidates: candidates, extent: extent, anchor: $0) }
+                return SuiteHoverResult(detector: detector,
+                    reachableWithinTwoCorrections: sessions.contains { Acceptance.corrections(from: $0, candidateList: false, accepts: accepts) != nil },
+                    firstChoiceAccepted: sessions.contains { $0.selected.map { accepts($0.bounds) } ?? false })
             }
             resultRows.append(SuiteTargetResult(id: target.id, image: target.image, split: target.split,
                 target: targetBounds, pixelWidth: image.width, pixelHeight: image.height,
@@ -174,7 +165,7 @@ public enum ScreenshotBenchSuite {
                 requiredContent: target.requiredContent, excludedContent: target.excludedContent,
                 labelQuality: target.labelQuality,
                 maxEdgeError: snapRuns.compactMap(\.firstEdgeError).max(),
-                firstSuggestionWithin8Pixels: snapRuns.contains(where: \.firstWithin8Pixels),
+                firstSuggestionWithin8Points: snapRuns.contains(where: \.firstWithin8Points),
                 exactDragFallbackCount: snapRuns.count(where: \.fallsBackToExactDrag),
                 hover: hoverResults, regressions: []))
         }
@@ -193,16 +184,16 @@ public enum ScreenshotBenchSuite {
                 var regressions: [String] = []
                 if let oldError = old.maxEdgeError, let newError = resultRows[index].maxEdgeError,
                    newError > oldError + 0.001 { regressions.append("max edge error") }
-                if old.firstSuggestionWithin8Pixels && !resultRows[index].firstSuggestionWithin8Pixels {
-                    regressions.append("first suggestion within 8 px")
+                if old.firstSuggestionWithin8Points && !resultRows[index].firstSuggestionWithin8Points {
+                    regressions.append("first suggestion within 8 pt")
                 }
                 if resultRows[index].exactDragFallbackCount > old.exactDragFallbackCount {
                     regressions.append("exact-drag fallback count")
                 }
                 for detector in DetectorKind.allCases {
-                    let wasReachable = old.hover.first(where: { $0.detector == detector })?.reachableWithinTwoTabs ?? false
-                    let isReachable = resultRows[index].hover.first(where: { $0.detector == detector })?.reachableWithinTwoTabs ?? false
-                    if wasReachable && !isReachable { regressions.append("\(detector.rawValue) hover within 2 Tabs") }
+                    let wasReachable = old.hover.first(where: { $0.detector == detector })?.reachableWithinTwoCorrections ?? false
+                    let isReachable = resultRows[index].hover.first(where: { $0.detector == detector })?.reachableWithinTwoCorrections ?? false
+                    if wasReachable && !isReachable { regressions.append("\(detector.rawValue) hover within 2 corrections") }
                 }
                 resultRows[index] = replacing(resultRows[index], regressions: regressions)
             }
@@ -220,11 +211,11 @@ public enum ScreenshotBenchSuite {
             if !FileManager.default.fileExists(atPath: destination.path) { try PNG.write(image, to: destination) }
         }
         try writeSuiteHTML(report, runs: reviewRuns, to: outputURL.appendingPathComponent("review.html"))
-        print("TARGET\tMAX EDGE PX\tFIRST <=8\tGEOMETRY TABS\tVISION TABS\tEXACT FALLBACKS\tRESULT")
+        print("TARGET\tMAX EDGE PX\tFIRST <=8PT\tGEOMETRY 2-CORR\tVISION 2-CORR\tEXACT FALLBACKS\tRESULT")
         for row in resultRows {
-            let geometry = row.hover.first(where: { $0.detector == .geometry })?.reachableWithinTwoTabs == true ? "yes" : "no"
-            let vision = row.hover.first(where: { $0.detector == .vision })?.reachableWithinTwoTabs == true ? "yes" : "no"
-            print("\(row.id)\t\(row.maxEdgeError.map { String(format: "%.1f", $0) } ?? "n/a")\t\(row.firstSuggestionWithin8Pixels ? "yes" : "no")\t\(geometry)\t\(vision)\t\(row.exactDragFallbackCount)\t\(row.passed ? "PASS" : "FAIL: \(row.regressions.joined(separator: ", "))")")
+            let geometry = row.hover.first(where: { $0.detector == .geometry })?.reachableWithinTwoCorrections == true ? "yes" : "no"
+            let vision = row.hover.first(where: { $0.detector == .vision })?.reachableWithinTwoCorrections == true ? "yes" : "no"
+            print("\(row.id)\t\(row.maxEdgeError.map { String(format: "%.1f", $0) } ?? "n/a")\t\(row.firstSuggestionWithin8Points ? "yes" : "no")\t\(geometry)\t\(vision)\t\(row.exactDragFallbackCount)\t\(row.passed ? "PASS" : "FAIL: \(row.regressions.joined(separator: ", "))")")
         }
         if resultRows.contains(where: { !$0.passed }) { throw BenchError.message("Suite metrics regressed against baseline") }
     }
@@ -239,7 +230,7 @@ public enum ScreenshotBenchSuite {
             roughDrags: row.roughDrags, hoverAnchors: row.hoverAnchors,
             requiredContent: row.requiredContent, excludedContent: row.excludedContent,
             labelQuality: row.labelQuality, maxEdgeError: row.maxEdgeError,
-            firstSuggestionWithin8Pixels: row.firstSuggestionWithin8Pixels,
+            firstSuggestionWithin8Points: row.firstSuggestionWithin8Points,
             exactDragFallbackCount: row.exactDragFallbackCount, hover: row.hover, regressions: regressions)
     }
 
@@ -260,7 +251,7 @@ public enum ScreenshotBenchSuite {
                 overlays += rectangle(run.rough, color: "#e87522", width: 3, dash: true)
                 if let suggestion = run.suggestions.first { overlays += rectangle(suggestion, color: "#2176d2", width: 3) }
             }
-            html += "<section><h2>\(escaped(row.id)) <small>(\(escaped(row.split)), \(escaped(row.labelQuality)))</small></h2><figure><img src=\"assets/\(escaped(filename))\" width=\"\(row.pixelWidth)\" height=\"\(row.pixelHeight)\"><svg viewBox=\"0 0 \(row.pixelWidth) \(row.pixelHeight)\" preserveAspectRatio=\"none\">\(overlays)</svg></figure><p>Max edge error: \(row.maxEdgeError.map { String(format: "%.1f px", $0) } ?? "n/a"); first suggestion within 8 px: \(row.firstSuggestionWithin8Pixels); exact fallback: \(row.exactDragFallbackCount) drags</p><p>Required: \(escaped(row.requiredContent.joined(separator: "; ")))<br>Excluded: \(escaped(row.excludedContent.joined(separator: "; ")))</p></section>"
+            html += "<section><h2>\(escaped(row.id)) <small>(\(escaped(row.split)), \(escaped(row.labelQuality)))</small></h2><figure><img src=\"assets/\(escaped(filename))\" width=\"\(row.pixelWidth)\" height=\"\(row.pixelHeight)\"><svg viewBox=\"0 0 \(row.pixelWidth) \(row.pixelHeight)\" preserveAspectRatio=\"none\">\(overlays)</svg></figure><p>Max edge error: \(row.maxEdgeError.map { String(format: "%.1f px", $0) } ?? "n/a"); first suggestion within 8 pt: \(row.firstSuggestionWithin8Points); exact fallback: \(row.exactDragFallbackCount) drags</p><p>Required: \(escaped(row.requiredContent.joined(separator: "; ")))<br>Excluded: \(escaped(row.excludedContent.joined(separator: "; ")))</p></section>"
         }
         try html.write(to: url, atomically: true, encoding: .utf8)
     }
