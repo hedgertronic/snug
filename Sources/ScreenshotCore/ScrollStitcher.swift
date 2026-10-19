@@ -120,11 +120,37 @@ public actor ScrollStitcher {
 
     /// The stitched image: the first frame's header, the stitched rows, and the latest frame from where they end.
     public func image() -> CGImage {
-        let data = Data((body + latest[(cursor * bytesPerRow)...]).prefix(height * bytesPerRow)) as CFData
-        return CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: bytesPerRow,
-                       space: CGColorSpace(name: CGColorSpace.sRGB)!,
-                       bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue),
-                       provider: CGDataProvider(data: data)!, decode: nil, shouldInterpolate: false, intent: .defaultIntent)!
+        Self.cgImage(Data((body + latest[(cursor * bytesPerRow)...]).prefix(height * bytesPerRow)), width: width, height: height)
+    }
+
+    /// The stitched image scaled down (never up) to fit `size` in pixels, each pixel the average of 2 x 2 samples read in place, so a
+    /// frame costs a thumbnail's pixels, not the stitched image's.
+    public func thumbnail(fitting size: CGSize) -> CGImage {
+        let scale = min(size.width / CGFloat(width), size.height / CGFloat(height), 1)
+        let (thumbWidth, thumbHeight) = (max(1, Int(CGFloat(width) * scale)), max(1, Int(CGFloat(height) * scale)))
+        let bodyRows = body.count / bytesPerRow
+        var bytes = [UInt8](repeating: 0, count: thumbWidth * thumbHeight * 4)
+        for y in 0..<thumbHeight {
+            let sourceRows = (0..<2).map { (y * 2 + $0) * height / (thumbHeight * 2) }
+            for x in 0..<thumbWidth {
+                let columns = (0..<2).map { (x * 2 + $0) * width / (thumbWidth * 2) * 4 }
+                for channel in 0..<4 {
+                    let sum = sourceRows.reduce(0) { sum, row in
+                        let (source, start) = row < bodyRows ? (body, row * bytesPerRow) : (latest, (cursor + row - bodyRows) * bytesPerRow)
+                        return columns.reduce(sum) { $0 + Int(source[start + $1 + channel]) }
+                    }
+                    bytes[(y * thumbWidth + x) * 4 + channel] = UInt8(sum / 4)
+                }
+            }
+        }
+        return Self.cgImage(Data(bytes), width: thumbWidth, height: thumbHeight)
+    }
+
+    private static func cgImage(_ data: Data, width: Int, height: Int) -> CGImage {
+        CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: width * 4,
+                space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue),
+                provider: CGDataProvider(data: data as CFData)!, decode: nil, shouldInterpolate: false, intent: .defaultIntent)!
     }
 
     private static func rgba(_ image: CGImage) -> [UInt8] {

@@ -85,6 +85,21 @@ struct ScrollStitcherTests {
         #expect(stitched == expected)
     }
 
+    /// The thumbnail reads the stitched rows and the latest frame's rows in place: at full size it is the image, and scaled it keeps
+    /// the aspect ratio and the bands' shades.
+    @Test func thumbnailSamplesTheStitchedImageInPlace() async {
+        let stitcher = ScrollStitcher(first: frame(0))
+        for offset in [50, 170, 150, 320] { await stitcher.add(frame(offset)) }
+        let height = await stitcher.height
+        let full = await stitcher.thumbnail(fitting: CGSize(width: 1000, height: 5000))
+        #expect(full.width == width && full.height == height)
+        #expect(bytes(full) == bytes(await stitcher.image()))
+        let small = await stitcher.thumbnail(fitting: CGSize(width: 40, height: 5000))
+        let pixels = bytes(small)
+        #expect(small.width == 40 && small.height == height / 4)
+        #expect(pixels[0] == 200 && pixels[(small.height - 1) * small.width * 4] == 60)
+    }
+
     @Test func aFrameThatMatchesNowhereAddsNothing() async {
         let stitcher = ScrollStitcher(first: frame(0))
         #expect(await !stitcher.add(frame(5_000)))
