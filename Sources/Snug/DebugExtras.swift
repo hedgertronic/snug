@@ -1471,7 +1471,8 @@ extension DebugRun {
                 "] on a hovered element shows its radius in the chip row, uncovered: \(texts(in: chrome.radius)) covered by \(covering.map { "\(type(of: $0)) \($0.frame)" })")
 
         // With motion, a key's jump to another hover candidate animates the outline, its dim and the chrome on it with one 100 ms
-        // animation, while every frame reads its final value at once; the pointer's hover change and key repeat animate nothing.
+        // animation, while every frame reads its final value at once; the Up and Down outlines never morph: they hide and fade in over
+        // 80 ms once the outline lands. The pointer's hover change and key repeat animate nothing.
         overlay.dismiss()
         open()
         let jumpInner = Candidate(id: "jump-inner", label: "Card", bounds: CGRect(x: 1250, y: 420, width: 500, height: 300), score: AccessibilityBounds.baseScore, kind: .element)
@@ -1486,12 +1487,23 @@ extension DebugRun {
         func settleJump() { jumpLayers.forEach { $0.removeAllAnimations() } }
         let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let hoverBefore = overlay.view.overlays.hover
+        let hintsBefore = [overlay.view.overlays.upHint, overlay.view.overlays.downHint].compactMap { $0 }.count
         settleJump()
+        let jumpStart = overlay.view.levelHintLayer.convertTime(CACurrentMediaTime(), from: nil)
         overlay.isHeadless = false
         key(126, "")
         overlay.isHeadless = true
         let jumped = jumpAnimations(), hoverAfter = overlay.view.overlays.hover, stripAfter = chrome.strip.frame, chipAfter = chrome.hover.frame
         require(hoverAfter != hoverBefore && hoverAfter != nil, "Up moves the hover to another candidate: \(String(describing: hoverBefore)) to \(String(describing: hoverAfter))")
+        // The hint layer gets no path animation, only the delayed fade, even though the jump changes how many hints it holds.
+        let hintsAfter = [overlay.view.overlays.upHint, overlay.view.overlays.downHint].compactMap { $0 }.count
+        func hintFaded(_ layer: CALayer) -> Bool {
+            guard layer.animationKeys() == ["opacity"], let fade = layer.animation(forKey: "opacity") as? CABasicAnimation else { return false }
+            return fade.fromValue as? Double == 0 && fade.toValue as? Double == 1 && fade.duration == 0.08 && fade.fillMode == .backwards
+                && abs(fade.beginTime - jumpStart - 0.1) < 0.05
+        }
+        require(reduced || !overlay.view.levelHintLayer.path!.isEmpty && hintsAfter != hintsBefore && hintFaded(overlay.view.levelHintLayer),
+                "with motion, an Up jump that changes the hints from \(hintsBefore) to \(hintsAfter) gives the hint layer only an 80 ms fade-in once the 100 ms glide lands: \(jumped[2])")
         let outlinePath = overlay.view.hoverLayer.animation(forKey: "path")
         require(reduced ? jumped.allSatisfy(\.isEmpty)
                     : outlinePath?.duration == 0.1 && jumped[0].allSatisfy { $0 == 0.1 } && jumped[3...].allSatisfy { !$0.isEmpty && $0.allSatisfy { $0 == 0.1 } },
