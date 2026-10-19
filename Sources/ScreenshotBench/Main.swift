@@ -117,6 +117,11 @@ struct ScreenshotBench {
                                outputURL: URL(fileURLWithPath: output, isDirectory: true))
             return
         }
+        if args.first == "holdout", let manifest = option("--manifest") {
+            try await ScreenshotBenchSuite.holdout(manifestURL: URL(fileURLWithPath: manifest), split: option("--split") ?? "holdout",
+                                                   candidateList: args.contains("--candidate-list"))
+            return
+        }
         if args.first == "fixtures", args.count == 2 {
             try Fixtures.write(to: URL(fileURLWithPath: args[1], isDirectory: true))
             print("Wrote six synthetic fixtures and manifest to \(args[1])")
@@ -124,7 +129,7 @@ struct ScreenshotBench {
         }
         guard args.first == "analyze", let input = option("--image"), let output = option("--output"),
               let detector = DetectorKind(rawValue: option("--detector") ?? "geometry") else {
-            throw BenchError.message("Usage: ScreenshotBench fixtures DIR | analyze --image FILE --output DIR --detector geometry|vision [--repeat N] [--manifest FILE] | snap --image FILE --rect x,y,width,height --output DIR | evaluate --labels FILE --results DIR --output FILE | suite --manifest FILE [--baseline FILE] --output DIR | ocr-probe --image FILE --steps ocr,ocr [--level fast] [--correction off] [--detect-language off] [--languages en-US] [--width N] [--device cpu|gpu|neuralengine]")
+            throw BenchError.message("Usage: ScreenshotBench fixtures DIR | analyze --image FILE --output DIR --detector geometry|vision [--repeat N] [--manifest FILE] | snap --image FILE --rect x,y,width,height --output DIR | evaluate --labels FILE --results DIR --output FILE | suite --manifest FILE [--baseline FILE] --output DIR | holdout --manifest FILE [--split holdout|development|all] [--candidate-list] | ocr-probe --image FILE --steps ocr,ocr [--level fast] [--correction off] [--detect-language off] [--languages en-US] [--width N] [--device cpu|gpu|neuralengine]")
         }
         let repetitions = max(1, min(100, Int(option("--repeat") ?? "1") ?? 1))
         let inputURL = URL(fileURLWithPath: input)
