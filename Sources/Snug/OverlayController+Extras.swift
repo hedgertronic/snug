@@ -230,7 +230,7 @@ extension OverlayController {
         let animation = GuidesAnimation(rawValue: defaults.string(forKey: Pref.guidesAnimation)!)!
         let animated = !isHeadless && animation != GuidesAnimation.none
         guides.setShown(guides.rulers, !armed && defaults.bool(forKey: Pref.rulers), from: animation == .slide ? Guides.rulersHiddenTransform : CATransform3DIdentity, animated: animated)
-        guides.setShown(guides.loupe, !armed && defaults.bool(forKey: Pref.loupe), from: Guides.loupeHiddenTransform, animated: animated)
+        guides.setShown(guides.loupe, !armed && scrollArea == nil && defaults.bool(forKey: Pref.loupe), from: Guides.loupeHiddenTransform, animated: animated)
         guides.slidesPlacement = animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         // Hovering with nothing selected or dragged, the pointer cluster `[x 123  y 456] [Snap S]` sits 16 pt below and right of the pointer, or
         // centered under the loupe's readout, clamped into the view.

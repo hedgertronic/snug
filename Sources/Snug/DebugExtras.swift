@@ -1869,13 +1869,17 @@ extension DebugRun {
             let offset = offsets.count > 1 ? offsets.removeFirst() : offsets[0]
             return image.cropping(to: area.offsetBy(dx: 0, dy: CGFloat(offset)))!
         }
+        defaults.set(true, forKey: Pref.loupe)
         open()
         overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         overlay.selection = AreaSelection(extent: extent, exact: page)
         overlay.editedRadii[page] = CornerRadii(24 * overlay.scale)
+        require(!overlay.view.guides.loupe.isHidden && !overlay.view.guides.readout.isHidden, "the loupe shows before scrolling capture")
         key(5, "g")
         require(overlay.scrollArea == page && overlay.selection == nil && overlay.view.image == nil && overlay.window.ignoresMouseEvents && chrome.topBar.isHidden,
                 "G starts scrolling capture: the frozen image goes away, the top bar hides, and the pointer reaches the app below")
+        require(overlay.view.guides.loupe.isHidden && overlay.view.guides.readout.isHidden && chrome.coordinates.isHidden && chrome.snapTag.isHidden,
+                "the loupe hides during scrolling capture, with the pointer cluster")
         for _ in 0..<3000 where overlay.scrollHeight < 900 { try await Task.sleep(for: .milliseconds(10)) }
         let pageBox = overlay.view.viewRect(page)
         require(overlay.scrollHeight == 900 && texts(in: chrome.strip) == ["Scrolling 900 px", "Cancel", "esc", "Done", "\u{21A9}"] && chrome.done.primary
@@ -1917,9 +1921,12 @@ extension DebugRun {
         let differing = stride(from: 40, to: 900 - 40, by: 7).flatMap { y in stride(from: 40, to: 1000 - 40, by: 7).map { (x: $0, y: y) } }
             .filter { zip(srgb(stitched.colorAt(x: $0.x, y: $0.y)!), srgb(fixtureRows.colorAt(x: $0.x, y: $0.y)!)).contains { abs($0 - $1) > 0.01 } }
         require(differing.isEmpty, "the stitched image has no minimap pixels: \(differing.count) lattice points differ from the fixture, first \(differing.prefix(3))")
-        // G on a hovered element starts scrolling capture of it, as E then G does.
+        // G on a hovered element starts scrolling capture of it, as E then G does. The loupe is back once scrolling capture has ended.
         offsets = [0]
         open()
+        require(!overlay.view.guides.loupe.isHidden && !overlay.view.guides.readout.isHidden, "the loupe comes back after scrolling capture")
+        defaults.set(false, forKey: Pref.loupe)
+        overlay.refresh()
         let browser = CGRect(x: 100, y: 100, width: 1500, height: 1200)
         overlay.setWindows([browser], names: ["Browser"], pointer: CGPoint(x: frame.minX + 800 / overlay.scale, y: frame.maxY - 700 / overlay.scale))
         let hoveredArea = overlay.hoverRect
@@ -1937,6 +1944,30 @@ extension DebugRun {
         pasteboard.clearContents()
         key(53, "")
         require(!overlay.window.isVisible && overlay.scrollArea == nil && pasteboard.data(forType: .png) == nil, "Esc cancels scrolling capture with the clipboard untouched")
+        // Esc while a frame is on its way to the stitcher: the third frame's capture closes the overlay before it returns a moved frame.
+        // The frame is still added, and nothing of it shows afterwards.
+        var (captures, inFlight) = (0, nil as Task<Void, Never>?)
+        overlay.scrollFrames = { area in
+            captures += 1
+            if captures == 3 {
+                inFlight = overlay.scrollTask
+                overlay.dismiss()
+            }
+            return image.cropping(to: area.offsetBy(dx: 0, dy: [0, 150, 300][min(captures - 1, 2)]))!
+        }
+        open()
+        overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+        overlay.selection = AreaSelection(extent: extent, exact: page)
+        key(5, "g")
+        for _ in 0..<3000 where inFlight == nil { try await Task.sleep(for: .milliseconds(10)) }
+        await inFlight?.value
+        try await Task.sleep(for: .milliseconds(100))
+        require(captures == 3 && !overlay.window.isVisible && overlay.scrollArea == nil && overlay.stitcher == nil && overlay.scrollThumbnail == nil && overlay.scrollHeight == 0,
+                "Esc while a frame is being added closes cleanly, with no thumbnail or height left: \(captures) \(overlay.scrollHeight) \(overlay.scrollThumbnail != nil)")
+        overlay.scrollFrames = { area in
+            let offset = offsets.count > 1 ? offsets.removeFirst() : offsets[0]
+            return image.cropping(to: area.offsetBy(dx: 0, dy: CGFloat(offset)))!
+        }
         open()
         overlay.selection = AreaSelection(extent: extent, exact: CGRect(x: 1700, y: 100, width: 300, height: 300))
         key(5, "g")

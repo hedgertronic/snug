@@ -1,16 +1,25 @@
 import CoreGraphics
 import Foundation
 
-/// Joins same-size frames of one screen area, captured while its content scrolls, into one tall image that ends at the bottom
-/// of the latest frame: scrolling back up trims the end, and scrolling down again adds it back.
+/// Joins same-size frames of one screen area, captured while its content scrolls, into one tall image that ends with the latest
+/// frame: scrolling back up trims the end, and scrolling down again adds it back.
 ///
-/// Rows that stay identical at the top and bottom of the area when it first moves are fixed bands (a sticky header or
-/// footer): the header appears once at the top and the latest footer once at the bottom. Each frame is matched against the
-/// last matched frame on the samples that changed, so a fixed overlay over part of the width (a tooltip, a floating button)
-/// does not steer the offset. Rows that scrolled above the bottom band join the stitched image; the latest frame supplies the
-/// rest, from where they end down. A fixed overlay in the lower part of the area holds that point above it, so the overlay
-/// appears once, where the latest frame shows it. A frame that did not move, moved up past the first frame, or matches
-/// nowhere changes nothing.
+/// Rows that stay identical at the top and bottom of the area when it first moves are fixed bands (a sticky header or footer):
+/// the header appears once at the top. Each frame is matched against the last matched frame on 64 luminance samples a row, those
+/// that changed, so a fixed overlay does not steer the offset.
+///
+/// When the area first moves, the first frame joins the stitched image down to its lowest row that matches the new frame one move
+/// away, so a footer, the window's rounded corners or an overlay at the bottom stay out, and pinned content above stays where the
+/// first frame showed it. After that, a row joins once two matched frames agree on it one move apart, every pixel of it, in order
+/// from where the stitched rows end; the latest frame supplies the rest. Content that stays put or changes in place stops the
+/// joining there and appears once, where the latest frame shows it: an overlay scroller moving down the last columns, a tooltip, an
+/// animation. Between two frames the seam goes on the joined row that changed least. A row that scrolls out above the bands before
+/// two frames agreed on it joins as the latest frame showed it; `unmatchedRows` counts those whose comparison had failed, where the
+/// result can repeat or mix content. A frame that did not move, moved up past the first frame, or matches nowhere changes nothing.
+///
+/// Known limits: two frames agree on the inside of a plain overlay that moves slower than the content (a scroller longer than two
+/// moves), so it can join; and a move that starts the new frame's rows inside pinned content shows it a second time. Neither counts
+/// in `unmatchedRows`.
 public actor ScrollStitcher {
     /// The tallest stitched image, in pixels.
     public static let maximumHeight = 30_000
@@ -24,10 +33,12 @@ public actor ScrollStitcher {
     private var latest: [UInt8]
     private var latestRows: [[Int16]]
     private var cursor: Int
+    /// Whether the latest frame's row at `cursor` failed the comparison with the frame before it.
+    private var mismatched = false
     /// Fixed top and bottom bands, set when the area first moves.
     private var bands: (top: Int, bottom: Int)?
-    /// The rows and sample columns of an overlay that stayed put in the lower part of the area while the content moved.
-    private var overlay: (rows: Range<Int>, columns: ClosedRange<Int>)?
+    /// Rows that joined the stitched image as one frame showed them after failing the comparison between two frames.
+    public private(set) var unmatchedRows = 0
 
     public init(first: CGImage) {
         width = first.width
@@ -86,33 +97,48 @@ public actor ScrollStitcher {
             if best?.mismatches == 0 { break }
         }
         guard let best, height + best.shift >= frameHeight, best.shift < 0 || height < Self.maximumHeight else { return false }
+        let shift = best.shift
+        // How the new frame's row differs from the latest frame's row, over every channel of every pixel: the largest and the total
+        // difference. Rows match when no channel is more than 16 levels off.
+        func change(_ row: Int, _ latestRow: Int) -> (largest: Int, total: Int) {
+            var (largest, total) = (0, 0)
+            for index in 0..<bytesPerRow {
+                let difference = abs(Int(bytes[row * bytesPerRow + index]) - Int(latest[latestRow * bytesPerRow + index]))
+                (largest, total) = (max(largest, difference), total + difference)
+            }
+            return (largest, total)
+        }
         if bands == nil {
+            // The first frame joins down to its lowest row that matches the new frame one move away; the rows below it (a footer, the
+            // window's rounded corners, an overlay at the bottom) are left to the latest frame.
             bands = fixed
-            body.removeLast(fixed.bottom * bytesPerRow)
-            cursor = band.upperBound
+            cursor = ((band.lowerBound + shift)..<band.upperBound).last { change($0 - shift, $0).largest <= 16 }.map { $0 + 1 } ?? band.lowerBound
+            mismatched = cursor < band.upperBound
+            body.removeLast((frameHeight - cursor) * bytesPerRow)
         }
-        // An overlay that stayed put while the content moved, or appeared: rows with samples unlike what the move brought there.
-        // From the top of the highest such run in the lower part of the area, padded, the output takes only the latest frame.
-        // A frame that brings no such rows keeps the last overlay while its samples stay still.
-        let stray = band.map { row in band.contains(row + best.shift) ? (0..<64).filter { abs(Int(latestRows[row + best.shift][$0]) - Int(rows[row][$0])) > 16 } : [] }
-        if let start = band.first(where: { $0 >= band.lowerBound + band.count / 2 && !stray[$0 - band.lowerBound].isEmpty }) {
-            var top = start
-            for row in (band.lowerBound..<start).reversed() where top - row <= 16 && !stray[row - band.lowerBound].isEmpty { top = row }
-            var bottom = start
-            for row in start..<band.upperBound where row - bottom <= 16 && !stray[row - band.lowerBound].isEmpty { bottom = row }
-            let columns = stray[(top - band.lowerBound)...(bottom - band.lowerBound)].joined()
-            overlay = (top..<(bottom + 1), columns.min()!...columns.max()!)
-        } else if let overlay, !overlay.rows.allSatisfy({ row in overlay.columns.allSatisfy { still[row][$0] } }) {
-            self.overlay = nil
+        // Where the stitched rows end, in the new frame. Rows that scrolled out above the band before they joined join as the latest
+        // frame showed them; scrolling up past the band's bottom trims the stitched rows to it.
+        var start = cursor - shift
+        if start < band.lowerBound {
+            if mismatched { unmatchedRows += band.lowerBound - start }
+            body += latest[(cursor * bytesPerRow)..<((band.lowerBound + shift) * bytesPerRow)]
+            start = band.lowerBound
+        } else if start > band.upperBound {
+            body.removeLast((start - band.upperBound) * bytesPerRow)
+            start = band.upperBound
         }
-        let limit = overlay.map { $0.rows.lowerBound - 16 }.flatMap { $0 > band.lowerBound + band.count / 4 ? $0 : nil } ?? band.upperBound
-        cursor = max(cursor - best.shift, band.lowerBound)
-        if cursor > limit {
-            body.removeLast((cursor - limit) * bytesPerRow)
-        } else {
-            body += bytes[(cursor * bytesPerRow)..<(limit * bytesPerRow)]
+        // Rows from `start` down join while they match what the latest frame showed one move away. The latest frame supplies the joined
+        // rows above the seam, the new frame the rest.
+        var (end, seam, least) = (start, start, Int.max)
+        while end < band.upperBound, band.contains(end + shift) {
+            let change = change(end, end + shift)
+            guard change.largest <= 16 else { break }
+            if change.total < least { (seam, least) = (end, change.total) }
+            end += 1
         }
-        cursor = limit
+        body += latest[((start + shift) * bytesPerRow)..<((seam + shift) * bytesPerRow)] + bytes[(seam * bytesPerRow)..<(end * bytesPerRow)]
+        mismatched = end < band.upperBound && band.contains(end + shift)
+        cursor = end
         latest = bytes
         latestRows = rows
         return true
