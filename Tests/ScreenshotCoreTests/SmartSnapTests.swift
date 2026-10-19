@@ -213,7 +213,7 @@ final class SmartSnapTests: XCTestCase {
         // The user's logo fixture: a gray rounded square (39...360 px, its corners curving over about 80 px of each side) on a near-black
         // 400 x 400 image. A drag about 12 px outside the square takes the square; one hugging the image's border takes the border.
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("notes/fixtures/round9/logo-inner-squircle-snap.png")
+            .appendingPathComponent("Tests/Fixtures/logo-inner-squircle-snap.png")
         let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(try XCTUnwrap(CGImageSourceCreateWithURL(url as CFURL, nil)), 0, nil))
         let square = CGRect(x: 40, y: 40, width: 320, height: 320)
         for rough in [CGRect(x: 28, y: 28, width: 344, height: 344), CGRect(x: 30, y: 25, width: 340, height: 350)] {

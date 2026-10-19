@@ -307,16 +307,16 @@ extension DebugRun {
         try snapshot("hint-outlines-rounded")
         overlay.dismiss()
 
-        // Finder's sidebar (the round 13 fixture, a 920 x 436 pt window at 2x) with Documents hovered: Up outlines the sidebar, Down the
+        // Finder's sidebar (a synthetic 920 x 436 pt Finder window at 2x) with Documents hovered: Up outlines the sidebar, Down the
         // icon, and Left and Right outline nothing. The frames are the live AX tree's (FinderSidebarHoverTests), in window points; the
         // icon's is its glyph's pixel box in the fixture, as the AX tree read has no icon frame.
-        let finderURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../notes/fixtures/round13/finder-sidebar-recents.png").standardized
+        let finderURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../Tests/Fixtures/finder-window.png").standardized
         let finder = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(finderURL as CFURL, nil)!, 0, nil)!
         overlay.present(image: finder, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(finder.width) / 2, height: CGFloat(finder.height) / 2), displayID: nil)
         overlay.detectionTask?.cancel()
         func finderPixels(_ rect: CGRect) -> CGRect { CGRect(x: (rect.minX - 341) * 2, y: (rect.minY - 162) * 2, width: rect.width * 2, height: rect.height * 2) }
         let sidebarRows: [(name: String, y: CGFloat)] = [("Recents", 214), ("Shared", 246), ("Applications", 310), ("Desktop", 342), ("Developer", 374), ("Documents", 406),
-                                                         ("Downloads", 438), ("iCloud Drive", 502), ("hedgertronic", 534), ("Macintosh HD", 566)]
+                                                         ("Downloads", 438), ("iCloud Drive", 502), ("Home", 534), ("Macintosh HD", 566)]
         let finderCells = sidebarRows.map { Candidate(id: "ax-\($0.name)", label: "cell", bounds: finderPixels(CGRect(x: 351, y: $0.y, width: 139, height: 32)), score: AccessibilityBounds.baseScore, kind: .element) }
         let finderSidebar = Candidate(id: "ax-sidebar", label: "scroll area", bounds: finderPixels(CGRect(x: 341, y: 214, width: 159, height: 384)), score: AccessibilityBounds.baseScore, kind: .element)
         let documentsIcon = Candidate(id: "ax-icon", label: "image", bounds: CGRect(x: 44, y: 503, width: 28, height: 35), score: AccessibilityBounds.baseScore, kind: .element)
@@ -422,7 +422,7 @@ extension DebugRun {
             await OverlayController.visionWarmUp?.value
 
             // The cut-out preview of one icon, then of the second of three subjects, at 1 pt per pixel so the chrome leaves room.
-            let fixtures = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../notes/cutout/fixtures").standardized
+            let fixtures = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../Tests/Fixtures/cutout").standardized
             let spike = ["icon-flat-composite.png", "dock-tile-composite.png", "badge-real.png"].map {
                 CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(fixtures.appending(path: $0) as CFURL, nil)!, 0, nil)!
             }

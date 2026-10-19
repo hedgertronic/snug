@@ -14,7 +14,7 @@ struct FlatFillsTests {
 
     /// The Notion pill pasted at (1000, 800) on a display-sized canvas of its background color, as the 1x downsample hover reads.
     private func pillScreen() throws -> CGImage {
-        let pill = try load("notes/fixtures/round11/notion-pill.png")
+        let pill = try load("Tests/Fixtures/notion-pill.png")
         let context = CGContext(data: nil, width: 3024, height: 1964, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         context.setFillColor(CGColor(red: 25 / 255, green: 25 / 255, blue: 25 / 255, alpha: 1))
@@ -53,7 +53,7 @@ struct FlatFillsTests {
     }
 
     @Test func formTestAddsFewFills() async throws {
-        let screen = Detection.downsampled(try load("notes/real-web/form-test.png"), by: 2)
+        let screen = Detection.downsampled(try load("Tests/Fixtures/real-web/form-test.png"), by: 2)
         let fills = FlatFills(screen)
         var found: [Candidate] = []
         for y in stride(from: 0, to: screen.height, by: 24) {

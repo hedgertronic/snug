@@ -4,7 +4,7 @@ import Testing
 @testable import ScreenshotCore
 
 /// Left and Right in a Finder sidebar. The frames are the live AX tree of a Finder column-view window titled "build" (read from the
-/// shell on a 2x, 1512 x 982 pt display, not from the notes/fixtures/round12 capture): window (341, 162, 920 x 436), a scroll area
+/// shell on a 2x, 1512 x 982 pt display): window (341, 162, 920 x 436), a scroll area
 /// (341, 214, 159 x 384) over an outline (340, 213, 161 x 748) of 23 rows, each a 159 pt `AXRow` around a 139 pt `AXCell`; rows are 32 pt
 /// tall, section headers 19 pt. The hovered element is the cell: its row is only padding, and the rows are the row's siblings.
 struct FinderSidebarPeerTests {

@@ -136,7 +136,7 @@ struct CornerRadiusTests {
     @Test func aTableGridCornerFollowsNoArc() throws {
         // A Wikipedia table's cells at a grid corner: the first edges along the rays fit a 195 px circle to within 19 px, a tenth of it.
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("notes/real-web/wiki-test.png")
+            .appendingPathComponent("Tests/Fixtures/real-web/wiki-test.png")
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         #expect(cornerArcs(in: image, rect: CGRect(x: 990, y: 590, width: 908, height: 1010)) == .zero)
@@ -157,7 +157,7 @@ struct CornerRadiusTests {
         // The fixture is the crop of the view-mode capsule's AXRadioGroup frame (162 x 38 pt at 2x). The glass capsule is drawn 1 px inside
         // it horizontally and 2 px vertically, 322 x 72 px with a 36 px radius; on the frame, the concentric circle has the frame's half height.
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("notes/fixtures/round13/finder-toolbar-capsules.png")
+            .appendingPathComponent("Tests/Fixtures/finder-toolbar-capsules.png")
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         #expect(cornerArcs(in: image, rect: CGRect(x: 0, y: 0, width: 324, height: 76)) == CornerRadii(38))
@@ -169,7 +169,7 @@ struct CornerRadiusTests {
     @Test func smallRectsLeaveNoRoomForAnInsetArc() throws {
         // A short side of 16 to 19 px leaves no 8 px radius once the inset is taken; such rects over the capsule's ends still measure.
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("notes/fixtures/round13/finder-toolbar-capsules.png")
+            .appendingPathComponent("Tests/Fixtures/finder-toolbar-capsules.png")
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         for side in 16...19 {
@@ -184,7 +184,7 @@ struct CornerRadiusTests {
     @Test func measuresTheLogosRoundedSquare() throws {
         // The rounded square that a snap finds in the user's logo fixture (see SmartSnapTests).
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("notes/fixtures/round9/logo-inner-squircle-snap.png")
+            .appendingPathComponent("Tests/Fixtures/logo-inner-squircle-snap.png")
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         let radius = cornerRadius(in: image, rect: CGRect(x: 40, y: 40, width: 320, height: 320))

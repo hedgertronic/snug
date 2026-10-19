@@ -278,7 +278,7 @@ extension DebugRun {
 
             // The round 8 fixture: a drag from the first row of a numbered list to the last selects every row in between, the long
             // wrapped one too. Rows on the fixture, image pixels at 2x.
-            let rowsImage = fixtureImage("notes/fixtures/round8/text-select-row-skipped.png")
+            let rowsImage = fixtureImage("Tests/Fixtures/text-select-row-skipped.png")
             overlay.present(image: rowsImage, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(rowsImage.width) / 2, height: CGFloat(rowsImage.height) / 2), displayID: nil)
             key(tKey, "t")
             try await waitFor("the rows fixture's Live Text analysis attaches") { liveText.analysis != nil }
@@ -556,13 +556,13 @@ extension DebugRun {
 
         // K cuts the selection or the hovered element out with Vision's foreground mask and previews it in place: the area outside the
         // subject dimmed and the subject outlined in the highlight color, S crops to the subject, C copies the color, Return copies, Cmd-S saves, K or Esc go
-        // back. With no subject the overlay stays open with a notice. The fixtures are the background removal spike's (notes/cutout/fixtures).
+        // back. With no subject the overlay stays open with a notice. The fixtures are the background removal spike's (Tests/Fixtures/cutout).
         // Frame starts off, so the output is the area's size until a check turns it on.
         suffix = ""
         for key in [Pref.frame, Pref.cutoutCrop] { overlay.defaults.set(false, forKey: key) }
         overlay.defaults.set("#E5484D", forKey: Pref.highlightColor)
         let kKey: UInt16 = 40, sKey: UInt16 = 1, tab: UInt16 = 48
-        func spikeFixture(_ name: String) -> CGImage { fixtureImage("notes/cutout/fixtures/\(name)") }
+        func spikeFixture(_ name: String) -> CGImage { fixtureImage("Tests/Fixtures/cutout/\(name)") }
         func pixels(_ image: CGImage) -> (rgba: [UInt8], width: Int) {
             let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
                                     space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!

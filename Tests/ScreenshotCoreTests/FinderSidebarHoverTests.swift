@@ -4,7 +4,7 @@ import Testing
 @testable import ScreenshotCore
 
 /// Hover and Left/Right over Finder's sidebar in column view. The frames are the live AX tree of the round 13 "Recents" window
-/// (notes/fixtures/round13), read from the shell on a 2x, 1512 x 982 pt display (macOS 26): the window and two split groups are
+/// read from the shell on a 2x, 1512 x 982 pt display (macOS 26): the window and two split groups are
 /// (341, 162, 920 x 436); the sidebar is a scroll area (341, 214, 159 x 384) over an outline (340, 213, 161 x 748) of 159 pt `AXOutlineRow`s,
 /// each around a 139 pt `AXCell`. Item rows are 32 pt with an icon and a text starting 35 pt into the cell; section headers ("Favorites",
 /// "Locations") are 19 pt, and their cell holds only a text (356, y - 1, 141 x 21) that fills it. The content split group holds the column
@@ -132,7 +132,7 @@ struct FinderSidebarHoverTests {
         let contentBand = try #require(AccessibilityBounds.withSidebarPanel([content, split, window])).band
         #expect(titleBarElements.contains { AccessibilityBounds.occupies($0, contentBand) })
         // Safari with one tab and no tab bar (inferred scroll area under the 52 pt toolbar of its 10-18 window): the toolbar's first
-        // group (176, 44, 71 x 52), read with notes/sidebar-debug/safari-ax-probe.swift, lies in the band.
+        // group (176, 44, 71 x 52), read from Safari's AX tree, lies in the band.
         let safariWindow = AXFrame(roleDescription: "standard window", rect: CGRect(x: 84, y: 44, width: 1242, height: 927), role: "AXWindow")
         let page = AXFrame(roleDescription: "scroll area", rect: CGRect(x: 84, y: 96, width: 1242, height: 875), role: "AXScrollArea")
         let safariBand = try #require(AccessibilityBounds.withSidebarPanel([page, safariWindow])).band

@@ -1,9 +1,11 @@
-"""Build a standalone visual review of frozen selection evaluation results."""
+"""Build a standalone visual review of frozen selection evaluation results.
+
+Usage: review_evaluation.py DIR, where DIR holds labels.json and outcomes.json and has the screenshots in ../real-web/."""
 from pathlib import Path
 import json
+import sys
 
-root = Path(__file__).resolve().parents[1]
-directory = root / 'notes/evaluation'
+directory = Path(sys.argv[1])
 labels = json.loads((directory / 'labels.json').read_text())
 outcomes = json.loads((directory / 'outcomes.json').read_text())
 for item in outcomes:
