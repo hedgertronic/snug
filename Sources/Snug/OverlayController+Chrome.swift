@@ -183,7 +183,7 @@ extension OverlayController {
         func tree(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(tree) }
         let stripBefore = stripMoves ? tree(c.strip).map { ($0, $0.frame, $0.subviews) } : []
         let buttonsBefore = stripMoves ? c.strip.groups.flatMap(\.subviews) : []
-        for item in [c.hover, c.size, c.snap, c.snapTag, c.ratio, c.radius, c.legend, c.reading, c.status, c.strip] { item.isHidden = true }
+        for item in [c.hover, c.size, c.snap, c.snapTag, c.ratio, c.radius, c.legend, c.reading, c.status, c.strip, c.minimap] { item.isHidden = true }
         c.help.frame = bounds
         c.help.layoutPanel()
 
@@ -414,7 +414,8 @@ extension OverlayController {
         // 9. the hint caps: inside the top-left corner of their outlines, then inside the bottom-left;
         // 10. the reading chip: centered in the text region, then above it, then below it, then just below or above an item placed so far;
         // 11. the candidate list: beside the hovered outline on its right, then its left, then inside its top right and top left;
-        // 12. the pointer cluster and the loupe, placed last in `updateGuides` against every frame placed here and moved clear of all of
+        // 12. the scroll minimap, centered beside the scroll area: on its right, then its left, then inside its right edge;
+        // 13. the pointer cluster and the loupe, placed last in `updateGuides` against every frame placed here and moved clear of all of
         //     them: the loupe follows the pointer on its lower or upper side, sliding up or down past a bar or chip it would cover, and
         //     its readout and the cluster hang under it.
         let screen = CGRect(x: 4 + ruler, y: 4, width: bounds.width - 8 - ruler, height: topEdge - 8)
@@ -545,6 +546,14 @@ extension OverlayController {
             let box = view.viewRect(overlays.hover!), size = c.list.frame.size
             let y = onScreenY(box.maxY - size.height, size)
             settle([c.list], [CGPoint(x: box.maxX + 12, y: y), CGPoint(x: box.minX - 12 - size.width, y: y), CGPoint(x: box.maxX - 12 - size.width, y: y), CGPoint(x: box.minX + 12, y: y)])
+        }
+        if let scrollArea, let thumbnail = scrollThumbnail {
+            let box = view.viewRect(scrollArea)
+            c.minimapThumb.show(thumbnail, size: CGSize(width: CGFloat(thumbnail.width) / scale, height: CGFloat(thumbnail.height) / scale),
+                                shown: CGFloat(scrollArea.height) / CGFloat(scrollHeight), tint: tint)
+            c.minimap.show("minimap \(thumbnail.width) x \(thumbnail.height)") { [c.minimapThumb] }
+            let size = c.minimap.frame.size, y = (box.midY - size.height / 2).rounded()
+            settle([c.minimap], [CGPoint(x: box.maxX + 8, y: y), CGPoint(x: box.minX - 8 - size.width, y: y), CGPoint(x: box.maxX - 8 - size.width, y: y)])
         }
         // Against the same outline, the strip's views that stayed in it animate from their old frames to the new ones, and a button whose
         // caps were replaced cross-fades its old title and caps into the new ones. A new outline (a hover change, an arrow nudge) moves

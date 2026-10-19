@@ -219,6 +219,8 @@ final class OverlayController {
     /// Debug runs replace the live frame source.
     var scrollArea: CGRect?
     var scrollHeight = 0
+    /// The stitched image so far, scaled to fit beside the area (see `Minimap`).
+    var scrollThumbnail: CGImage?
     var stitcher: ScrollStitcher?
     var scrollTask: Task<Void, Never>?
     var scrollFrames: ((CGRect) async throws -> CGImage)?
@@ -336,6 +338,7 @@ final class OverlayController {
         scrollTask = nil
         scrollArea = nil
         scrollHeight = 0
+        scrollThumbnail = nil
         stitcher = nil
         window.isOpaque = true
         window.backgroundColor = .black

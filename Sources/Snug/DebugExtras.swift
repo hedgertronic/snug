@@ -1531,7 +1531,7 @@ extension DebugRun {
                                                ("ratio", chrome.ratio), ("radius", chrome.radius), ("status", chrome.status), ("legend", chrome.legend),
                                                ("corner chip", overlay.cornerChip), ("corner keys", chrome.cornerKeys), ("up cap", chrome.upHint), ("down cap", chrome.downHint),
                                                ("cluster", chrome.coordinates), ("snap tag", chrome.snapTag), ("tool tip", chrome.toolTip), ("list", chrome.list),
-                                               ("reading", chrome.reading), ("readout", guides2.readout)]
+                                               ("reading", chrome.reading), ("minimap", chrome.minimap), ("readout", guides2.readout)]
                 + chrome.sideHints.enumerated().map { ("side \($0.offset)", $0.element) }
             let shown = pieces.filter { !$0.1.isHidden }
             let overlaps = shown.indices.flatMap { i in shown.indices.filter { $0 > i && shown[i].1.frame.intersects(shown[$0].1.frame) }.map { "\(shown[i].0) x \(shown[$0].0)" } }
@@ -1816,6 +1816,17 @@ extension DebugRun {
                     && chrome.strip.frame.maxY == pageBox.minY - 8 && texts(in: chrome.status) == ["Scroll the app under the outline"]
                     && chrome.status.frame.origin == CGPoint(x: pageBox.minX, y: pageBox.maxY + 8),
                 "frames stitch as the area scrolls, the strip under the area counts the height, and a status chip over its left edge says what to do: \(overlay.scrollHeight) \(texts(in: chrome.strip)) \(texts(in: chrome.status)) \(chrome.status.frame)")
+        // The minimap: the stitched image so far, beside the area on its right, centered on it and shorter than it, 80 pt wide at most, with
+        // the markerLayer over the bottom 600 of the 900 px, which is what the area shows now. It lives in the overlay window, which every
+        // capture leaves out.
+        let minimap = chrome.minimap, thumb = chrome.minimapThumb, markerLayer = thumb.layer!.sublayers!.first!
+        require(!minimap.isHidden && minimap.frame.minX == pageBox.maxX + 8 && abs(minimap.frame.midY - pageBox.midY) <= 1 && minimap.frame.height <= pageBox.height - 8
+                    && minimap.frame.width <= 80 && thumb.superview === minimap && minimap.superview === overlay.view
+                    && abs(thumb.frame.height - thumb.frame.width * 900 / 1000) <= 1.5 * thumb.frame.width / 1000 + 1
+                    && abs(markerLayer.frame.height / thumb.frame.height - 600.0 / 900) < 0.01 && markerLayer.frame.minY == 0,
+                "the minimap sits right of the area with the markerLayer over the bottom two thirds: \(minimap.frame) \(thumb.frame) \(markerLayer.frame) \(pageBox)")
+        require(minimap.window === overlay.window && overlay.window is CaptureExcluded && DisplayCapture.excludedWindowIDs().contains(CGWindowID(overlay.window.windowNumber)),
+                "the minimap is in the overlay window, which captures leave out: \(overlay.window.windowNumber) \(DisplayCapture.excludedWindowIDs().sorted())")
         offsets = [200]
         for _ in 0..<3000 where overlay.scrollHeight > 800 { try await Task.sleep(for: .milliseconds(10)) }
         require(overlay.scrollHeight == 800 && texts(in: chrome.strip).first == "Scrolling 800 px",
@@ -1834,6 +1845,12 @@ extension DebugRun {
         let corners = [(0, 0), (999, 0), (0, 899), (999, 899)].map { stitched.colorAt(x: $0.0, y: $0.1)!.alphaComponent }
         require(corners.allSatisfy { $0 == 0 } && stitched.colorAt(x: 500, y: 0)!.alphaComponent == 1 && stitched.colorAt(x: 500, y: 899)!.alphaComponent == 1,
                 "the stitched image takes the area's corner radii: corner alphas \(corners)")
+        // No minimap pixel reaches the stitched image, wherever the minimap sat: it equals the fixture rows the area showed, on a 7 px lattice.
+        let fixtureRows = NSBitmapImageRep(cgImage: image.cropping(to: CGRect(x: page.minX, y: page.minY, width: 1000, height: 900))!)
+        func srgb(_ color: NSColor) -> [CGFloat] { let c = color.usingColorSpace(.sRGB)!; return [c.redComponent, c.greenComponent, c.blueComponent] }
+        let differing = stride(from: 40, to: 900 - 40, by: 7).flatMap { y in stride(from: 40, to: 1000 - 40, by: 7).map { (x: $0, y: y) } }
+            .filter { zip(srgb(stitched.colorAt(x: $0.x, y: $0.y)!), srgb(fixtureRows.colorAt(x: $0.x, y: $0.y)!)).contains { abs($0 - $1) > 0.01 } }
+        require(differing.isEmpty, "the stitched image has no minimap pixels: \(differing.count) lattice points differ from the fixture, first \(differing.prefix(3))")
         // G on a hovered element starts scrolling capture of it, as E then G does.
         offsets = [0]
         open()
@@ -1860,6 +1877,30 @@ extension DebugRun {
         require(overlay.scrollArea == nil, "G does nothing for an area outside every window")
         key(53, "")
         overlay.scrollFrames = nil
+
+        // The minimap's spots, with a stitched image and no session: beside the area on its right, else its left, else inside its right edge,
+        // and hidden when none is free (a 300 pt wide screen, the area as tall as the screen, the strip inside its bottom).
+        let tall = ScrollStitcher(first: image.cropping(to: CGRect(x: 0, y: 0, width: 100, height: extent.height))!)
+        func minimapSpot(_ area: CGRect) async -> CGRect? {
+            overlay.scrollArea = area
+            overlay.scrollThumbnail = await tall.thumbnail(fitting: CGSize(width: 72 * overlay.scale, height: area.height - 16 * overlay.scale))
+            overlay.scrollHeight = Int(area.height)
+            overlay.refresh()
+            return minimap.isHidden ? nil : minimap.frame
+        }
+        open()
+        let scale0 = overlay.scale
+        let midArea = CGRect(x: 600, y: 300, width: 800, height: 600), atEdge = CGRect(x: extent.width - 30 * scale0 - 800, y: 300, width: 800, height: 600)
+        let boxOfArea = overlay.view.viewRect
+        let rightSpot = await minimapSpot(midArea), leftSpot = await minimapSpot(atEdge), insideSpot = await minimapSpot(CGRect(x: 12 * scale0, y: 300, width: extent.width - 24 * scale0, height: 600))
+        require(rightSpot?.minX == boxOfArea(midArea).maxX + 8 && leftSpot?.maxX == boxOfArea(atEdge).minX - 8 && insideSpot.map { $0.maxX == extent.width / scale0 - 12 - 8 } == true,
+                "the minimap takes the right of the area, the left when the right has no room, and the inside of its right edge when neither does: \(String(describing: rightSpot)) \(String(describing: leftSpot)) \(String(describing: insideSpot))")
+        overlay.view.setFrameSize(CGSize(width: 300, height: overlay.view.bounds.height))
+        let bottomArea = CGRect(x: 10 * scale0, y: 0, width: 280 * scale0, height: extent.height)
+        require(await minimapSpot(bottomArea) == nil && minimap.isHidden,
+                "with no spot free the minimap hides: \(minimap.frame) strip \(chrome.strip.frame)")
+        overlay.view.setFrameSize(CGSize(width: width0, height: overlay.view.bounds.height))
+        overlay.dismiss()
 
         // On a narrow screen the settings bar keeps only its ? button.
         open()

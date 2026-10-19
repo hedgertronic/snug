@@ -482,6 +482,9 @@ final class Chrome {
         [("Save", "\u{2318}S"), ("Save As", "\u{21E7}\u{2318}S")].map { BarButton($0, key: $1).frame.width }.max()!,
         [("Copy", "\u{21A9}"), ("Rows", "\u{21E7}\u{21A9}"), ("Translate", "\u{2325}\u{21A9}")].map { BarButton($0, key: $1).frame.width }.max()!)
     let scrolled = BarButton("Scrolling", key: nil)
+    /// Scrolling: the stitched image so far, beside the area.
+    let minimap = Pill(radius: 8, insets: NSEdgeInsets(top: 4, left: 4, bottom: 4, right: 4), spacing: 0)
+    let minimapThumb = Minimap()
     let done = BarButton("Done", key: "\u{21A9}")
     let cancel = BarButton("Cancel", key: "esc")
     let cursor = BarButton("Cursor", key: "H")
@@ -560,5 +563,5 @@ final class Chrome {
 
     /// Lowest first, in tiers: the hint caps, the chips, the strip and settings bar with their tool tip and menus, then the keys sheet.
     /// The cut-out preview goes under all of them, and the loupe over them.
-    var all: [NSView] { [upHint, downHint, hover, size, snap, ratio, radius, status, reading, legend] + sideHints + [cornerKeys, snapTag, coordinates, list, topBar, strip, toolTip, ratioMenu, colorMenu, help] }
+    var all: [NSView] { [upHint, downHint, hover, size, snap, ratio, radius, status, reading, legend] + sideHints + [cornerKeys, snapTag, coordinates, list, minimap, topBar, strip, toolTip, ratioMenu, colorMenu, help] }
 }
