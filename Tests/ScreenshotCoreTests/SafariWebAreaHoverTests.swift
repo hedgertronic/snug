@@ -45,12 +45,67 @@ struct SafariWebAreaHoverTests {
     private static let window = CGRect(x: 84, y: 44, width: 1242, height: 927)
 
     /// A chain of the user's ko-fi log (hover.log, 10-18) above the page: `inner` frames, then the web area and the scroll area as logged,
-    /// then the wrappers and window at (84, 44, 1242, 927).
-    private static func kofiChain(inner: [AXFrame], webArea: CGRect) -> [AXFrame] {
+    /// then the wrappers and window at `window` ((84, 44, 1242, 927) unless the window was moved).
+    private static func kofiChain(inner: [AXFrame], webArea: CGRect, window: CGRect = window) -> [AXFrame] {
         inner + [AXFrame(roleDescription: "HTML content", rect: webArea, role: "AXWebArea"),
                  AXFrame(roleDescription: "scroll area", rect: CGRect(x: 0, y: 1072, width: 1242, height: 837), role: "AXScrollArea")]
             + ["AXGroup", "AXGroup", "AXTabGroup", "AXSplitGroup"].map { AXFrame(roleDescription: "group", rect: window, role: $0) }
             + [AXFrame(roleDescription: "standard window", rect: window, role: "AXWindow", subrole: "AXStandardWindow")]
+    }
+
+    /// The same window moved to (111, 251) (hover.log lines 106-204). The scroll area is still logged at (0, 1072, 1242, 837), which now
+    /// overlaps the window (y 251-1178), but its parent does not contain it: moved to meet its parent's bottom and right it is
+    /// (111, 341, 1242, 837), under the tab bar at y 303 + 38.
+    private static let movedWindow = CGRect(x: 111, y: 251, width: 1242, height: 927)
+    private static let movedOffset = CGSize(width: 111, height: -731)
+    private static let navigation = AXFrame(roleDescription: "navigation", rect: CGRect(x: 0, y: 1072, width: 1242, height: 60), role: "AXGroup")
+    private static let kofiPage = CGRect(x: 0, y: 1072, width: 1242, height: 4928)
+
+    /// Line 106: the hit is the web area itself; moved, it contains the pointer, and hover gets the content area.
+    @Test func aMovedWindowsDisplacedWebAreaGivesTheContentArea() async throws {
+        let frames = Self.kofiChain(inner: [], webArea: Self.kofiPage, window: Self.movedWindow)
+        let point = CGPoint(x: 961.92578125, y: 746.50390625)
+        let displaced = try #require(AccessibilityBounds.displacement(frames, at: point))
+        #expect(displaced.through == 1)
+        #expect(displaced.offset == Self.movedOffset)
+        let moved = frames.enumerated().map { $0.offset <= displaced.through ? $0.element.translated(by: displaced.offset!) : $0.element }
+        let extent = CGRect(x: 0, y: 0, width: 3024, height: 1964)
+        let found = try await AccessibilityBounds.candidates(frames: AccessibilityBounds.hoverLevel(moved), displayOrigin: .zero, scale: 2, extent: extent)
+        let content = CGRect(x: 111, y: 341, width: 1242, height: 837)
+        #expect(found.map(\.bounds) == [AccessibilityBounds.pixels(of: content, displayOrigin: .zero, scale: 2, extent: extent)], "\(found.map(\.bounds))")
+    }
+
+    /// Line 118: "How it works" (796, 1091, 98, 22) moves to (907, 360, 98, 22), around the pointer at (990, 379).
+    @Test func aMovedWindowsDisplacedLinkIsMovedBack() throws {
+        let inner = [AXFrame(roleDescription: "text", rect: CGRect(x: 796, y: 1091, width: 98, height: 22), role: "AXStaticText"),
+                     AXFrame(roleDescription: "link", rect: CGRect(x: 796, y: 1091, width: 99, height: 22), role: "AXLink", title: "How it works"),
+                     AXFrame(roleDescription: "group", rect: CGRect(x: 796, y: 1090, width: 99, height: 24), role: "AXGroup"),
+                     AXFrame(roleDescription: "content list", rect: CGRect(x: 796, y: 1090, width: 240, height: 24), role: "AXList"), Self.navigation]
+        let frames = Self.kofiChain(inner: inner, webArea: Self.kofiPage, window: Self.movedWindow)
+        let point = CGPoint(x: 989.97265625, y: 378.67578125)
+        let displaced = try #require(AccessibilityBounds.displacement(frames, at: point))
+        #expect(displaced.through == 6)
+        #expect(displaced.offset == Self.movedOffset)
+        let moved = frames[0].translated(by: displaced.offset!).rect
+        #expect(moved == CGRect(x: 907, y: 360, width: 98, height: 22) && moved.contains(point))
+    }
+
+    /// Line 109: the page's navigation bar (0, 1072, 1242, 60) moves to the top of the content area, around the pointer at (921, 357).
+    @Test func aMovedWindowsDisplacedNavigationBarIsMovedBack() throws {
+        let frames = Self.kofiChain(inner: [Self.navigation], webArea: Self.kofiPage, window: Self.movedWindow)
+        let point = CGPoint(x: 920.890625, y: 356.5859375)
+        let displaced = try #require(AccessibilityBounds.displacement(frames, at: point))
+        #expect(displaced.through == 2)
+        #expect(displaced.offset == Self.movedOffset)
+        #expect(frames[0].translated(by: displaced.offset!).rect == CGRect(x: 111, y: 341, width: 1242, height: 60))
+    }
+
+    /// The gate holds in the moved window: a pointer the moved hit does not contain drops the displaced frames.
+    @Test func aMovedWindowsDisplacedPageIsDroppedWhenTheMoveMissesThePointer() throws {
+        let frames = Self.kofiChain(inner: [Self.navigation], webArea: Self.kofiPage, window: Self.movedWindow)
+        let displaced = try #require(AccessibilityBounds.displacement(frames, at: CGPoint(x: 700, y: 900)))
+        #expect(displaced.through == 2)
+        #expect(displaced.offset == nil)
     }
 
     /// Log line 61: every frame from the scroll area down is displaced by (-84, +938) and the hit, "How it works", is 98 x 22 at (796, 1091).

@@ -205,7 +205,7 @@ extension OverlayController {
                                                            frames: frames, in: image, scale: scale)
                 .filter { peer in windows.firstIndex { $0.contains(CGPoint(x: peer.bounds.midX, y: peer.bounds.midY)) } == index }
             Pref.logHoverLine("hover \(point) scale \(scale) frames " + frames.map { "\($0.role) '\($0.roleDescription)' '\($0.title)' \($0.rect)" }.joined(separator: " | ")
-                + " -> " + found.map { "\($0.label) \($0.bounds)" }.joined(separator: " | ") + " | lookup with \(peers.count) peers \(lookup), \(peerFound.count) candidates")
+                + " -> " + found.map { "\($0.label) \($0.bounds)" }.joined(separator: " | ") + " | lookup \(lookup): \(found.count) hit candidates, \(peers.count) peers giving \(peerFound.count) peer candidates")
             guard !found.isEmpty else { return }
             let grown = await Task.detached { (found + peerFound).map { $0.grownToBorder(in: image) } }.value
             guard !Task.isCancelled, session != nil else { return }

@@ -76,19 +76,55 @@ public enum AccessibilityBounds {
 
     /// Where a chain read from Safari is displaced: every web frame from an `AXScrollArea` or `AXWebArea` down can be reported a screen
     /// height away from its window while its ancestors are right (user's log, 10-18: scroll area at (0, 1072, 1242, 837) in a window at
-    /// (84, 44, 1242, 927), whose parent group has the window's frame). `frames` is innermost first, ending at the window. The outermost
-    /// frame that does not touch the window is the anchor; it is moved so its bottom and right edges meet its parent's (Safari's sidebar is
-    /// on the left, so the page is flush right and bottom), and every frame inside it moves the same way. `through` is the anchor's index;
-    /// `offset` is the move, set only when it puts the innermost frame around `point`. Otherwise `offset` is nil: a wrong outline is worse
-    /// than none, so the caller drops the frames through `through`.
-    /// Nil when the innermost frame contains `point`, when the chain has no window, or when every frame touches the window.
+    /// (84, 44, 1242, 927), whose parent group has the window's frame; the same scroll area with the window moved to (111, 251), where it
+    /// overlaps the window). `frames` is innermost first, ending at the window. The outermost frame its parent does not contain (within
+    /// `paddingTolerance`) is the anchor; it is moved so its bottom and right edges meet its parent's (Safari's sidebar is on the left, so
+    /// the page is flush right and bottom), and every frame inside it moves the same way. `through` is the anchor's index; `offset` is the
+    /// move, set only when it puts the innermost frame around `point`. Otherwise `offset` is nil: a wrong outline is worse than none, so
+    /// the caller drops the frames through `through`.
+    /// Nil when the innermost frame contains `point`, when the chain has no window, or when every frame is inside its parent.
     public static func displacement(_ frames: [AXFrame], at point: CGPoint) -> (through: Int, offset: CGSize?)? {
         guard frames.last?.role == "AXWindow", let leaf = frames.first, !leaf.rect.contains(point) else { return nil }
-        let window = frames.last!.rect
-        guard let anchor = frames.indices.dropLast().last(where: { !frames[$0].rect.intersects(window) }) else { return nil }
+        guard let anchor = frames.indices.dropLast().last(where: {
+            !frames[$0 + 1].rect.insetBy(dx: -paddingTolerance, dy: -paddingTolerance).contains(frames[$0].rect)
+        }) else { return nil }
         let (frame, parent) = (frames[anchor].rect, frames[anchor + 1].rect)
         let offset = CGSize(width: parent.maxX - frame.maxX, height: parent.maxY - frame.maxY)
         return (anchor, leaf.rect.offsetBy(dx: offset.width, dy: offset.height).contains(point) ? offset : nil)
+    }
+
+    /// The farthest below its window's top a sidebar's scroll area starts and still sits under the title bar.
+    public static let titleBarDepth: CGFloat = 60
+
+    /// `frames` (innermost first, window last) with a sidebar's full panel added above its scroll area, and `band`, the strip of the
+    /// title bar above the scroll area that the panel adds. The sidebar is an `AXScrollArea` flush with the window's left or right side
+    /// and its bottom (within `paddingTolerance`) whose top is below the window's top by at most `titleBarDepth`. Finder's glass sidebar
+    /// is one: its scroll area (341, 214, 159 x 384) stops 52 pt below the top of its window (341, 162, 920 x 436), and no element covers
+    /// the traffic-light band above it. The panel is the scroll area's frame run up to the window's top; the scroll area stays, so what it
+    /// holds is still clipped to it. Found by frames alone. The caller adds the panel only when no other element of the window
+    /// `occupies` the band. Nil when the chain has no such scroll area.
+    public static func withSidebarPanel(_ frames: [AXFrame]) -> (frames: [AXFrame], band: CGRect)? {
+        guard let window = frames.last, window.role == "AXWindow", let index = frames.firstIndex(where: { frame in
+            let rect = frame.rect
+            return frame.role == "AXScrollArea" && abs(rect.maxY - window.rect.maxY) <= paddingTolerance
+                && (abs(rect.minX - window.rect.minX) <= paddingTolerance || abs(rect.maxX - window.rect.maxX) <= paddingTolerance)
+                && rect.minY > window.rect.minY && rect.minY - window.rect.minY <= titleBarDepth
+        }) else { return nil }
+        let area = frames[index]
+        let band = CGRect(x: area.rect.minX, y: window.rect.minY, width: area.rect.width, height: area.rect.minY - window.rect.minY)
+        var withPanel = frames
+        withPanel.insert(AXFrame(roleDescription: area.roleDescription, rect: band.union(area.rect), role: area.role, title: area.title, subrole: area.subrole,
+                                 identifier: area.identifier, elementDescription: area.elementDescription), at: index + 1)
+        return (withPanel, band)
+    }
+
+    /// Whether `frame`, an element of a window, lies in the title-bar `band` above a sidebar (`withSidebarPanel`): it overlaps the band by
+    /// more than 1 pt each way (Finder's outline pokes 1 pt into it), it does not span the whole band (the toolbar and the split groups do,
+    /// and what lies in the band is inside them), and it is not one of the window's own title-bar buttons.
+    public static func occupies(_ frame: AXFrame, _ band: CGRect) -> Bool {
+        let overlap = frame.rect.intersection(band)
+        return !overlap.isNull && overlap.width > 1 && overlap.height > 1 && !frame.rect.contains(band)
+            && !["AXCloseButton", "AXMinimizeButton", "AXFullScreenButton", "AXZoomButton"].contains(frame.subrole)
     }
 
     /// The index in `frames` (innermost first) of the outline row when they start with a section header, such as "Favorites" in
