@@ -424,6 +424,34 @@ extension DebugRun {
         require(!overlay.window.isVisible && pasteboard.string(forType: .string) == palette[0], "a click on a row copies its value \(palette[0])")
         overlay.dismiss()
 
+        // The ratio menu numbers its nine rows 1-9 (the separator has no cap). Each digit picks its row and closes the menu as a click does,
+        // as one undo step; Cmd-Z restores the selection and the lock.
+        open()
+        let box = CGRect(x: 1000, y: 500, width: 300, height: 200)
+        drag(box)
+        let ratioMenu = overlay.chrome.ratioMenu
+        key(35, "p")
+        require(ratioMenu.items.map(\.cap) == ["1", "2", "3", "4", "5", "6", "7", "8", nil, "9"],
+                "the ratio menu numbers its rows 1-9 and skips the separator: \(ratioMenu.items.map(\.cap))")
+        key(53, "\u{1B}")
+        let digitCodes: [UInt16] = [18, 19, 20, 21, 23, 22, 26, 28, 25]
+        for (number, code) in digitCodes.enumerated() {
+            let index = ratioMenu.items.firstIndex { $0.cap == "\(number + 1)" }!
+            key(35, "p")
+            ratioMenu.pick(index)
+            let byClick = (overlay.selection!.rect, overlay.ratioLocked, overlay.ratioReadout)
+            key(6, "z", .command)
+            require(overlay.selection!.rect == box && !overlay.ratioLocked, "undo restores the box after the click on row \(number + 1)")
+            key(35, "p")
+            key(code, "\(number + 1)")
+            require(ratioMenu.isHidden && overlay.window.isVisible && overlay.window.firstResponder === overlay.view
+                        && overlay.selection!.rect == byClick.0 && overlay.ratioLocked == byClick.1 && overlay.ratioReadout == byClick.2,
+                    "the \(number + 1) key picks \(ratioMenu.items[index].title) as a click does and closes the menu: \(overlay.selection!.rect) vs \(byClick.0)")
+            key(6, "z", .command)
+            require(overlay.selection!.rect == box && !overlay.ratioLocked, "undo restores the selection and the lock after the \(number + 1) key")
+        }
+        overlay.dismiss()
+
         // ? shows and hides the keys sheet; Esc closes it without closing the overlay.
         open()
         let help = overlay.chrome.help
