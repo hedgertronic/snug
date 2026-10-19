@@ -650,7 +650,10 @@ extension DebugRun {
         let thumbnail = withPreview.preview!.frame.size
         require(withPreview.preview != nil && without.preview == nil, "the preview setting adds or removes the thumbnail card")
         require(thumbnail.width <= 240 && thumbnail.height <= 160 && abs(thumbnail.width / thumbnail.height - 3) < 0.02, "the thumbnail is aspect-fit within 240 x 160: \(thumbnail)")
-        require(withPreview.frame.height - without.frame.height >= thumbnail.height + 8 && withPreview.lifetime == .seconds(4) && without.lifetime == .seconds(2), "the thumbnail card sits apart from the pill and lasts 4 s")
+        require(withPreview.frame.height - without.frame.height >= thumbnail.height + 8, "the thumbnail card sits apart from the pill")
+        let quick = toast { $0.set(2, forKey: Pref.toastLifetime) }, slow = toast { $0.set(10, forKey: Pref.toastLifetime); $0.set(false, forKey: Pref.toastPreview) }
+        require(withPreview.lifetime == .seconds(4) && without.lifetime == .seconds(4) && quick.lifetime == .seconds(2) && slow.lifetime == .seconds(10),
+                "the toast lasts 4 s by default with or without a preview, and the lifetime setting sets it: \(quick.lifetime) \(slow.lifetime)")
         let card = withPreview.card, thumbnailFrame = withPreview.preview!.frame
         require(card.frame.size == without.card.frame.size && thumbnailFrame.minY - card.frame.maxY == 8 && thumbnailFrame.width <= withPreview.contentView!.bounds.width,
                 "the thumbnail is its own card, a gap above the pill, and the pill is the same size without it: \(thumbnailFrame) \(card.frame)")

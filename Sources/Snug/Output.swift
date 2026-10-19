@@ -37,9 +37,11 @@ enum Pref {
     static let highlightGlow = "SnugHighlightGlow"
     /// The overlay chrome's look: "system" follows macOS, "light" and "dark" force one.
     static let overlayAppearance = "SnugOverlayAppearance"
-    /// Whether the toast shows a thumbnail of the capture, and where the toast sits: bottomCenter, bottomRight, or topRight.
+    /// Whether the toast shows a thumbnail of the capture, where the toast sits (bottomCenter, bottomRight, or topRight), and how many
+    /// seconds it stays while the pointer is elsewhere (one of `Toast.lifetimes`).
     static let toastPreview = "SnugToastPreview"
     static let toastPosition = "SnugToastPosition"
+    static let toastLifetime = "SnugToastLifetime"
     /// Off unless set with `defaults write local.snug SnugLogHover -bool true`: each hover lookup and the Dock's window rect append to
     /// ~/Library/Logs/Snug/hover.log, so live accessibility frames can be read back without Accessibility in a terminal.
     static let logHover = "SnugLogHover"
@@ -87,6 +89,7 @@ enum Pref {
             guidesAnimation: GuidesAnimation.fade.rawValue,
             toastPreview: true,
             toastPosition: "bottomCenter",
+            toastLifetime: 4,
             roundCorners: true,
             menuBarIcon: "a",
             cutoutCrop: false,

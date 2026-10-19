@@ -231,6 +231,7 @@ private struct AppearancePane: View {
     @AppStorage(Pref.highlightGlow) private var highlightGlow = 0.5
     @AppStorage(Pref.toastPreview) private var toastPreview = true
     @AppStorage(Pref.toastPosition) private var toastPosition = "bottomCenter"
+    @AppStorage(Pref.toastLifetime) private var toastLifetime = 4
 
     private static let positions: [(tag: String, title: String, alignment: Alignment)] = [
         ("bottomCenter", "Bottom center", .bottom), ("bottomRight", "Bottom right", .bottomTrailing), ("topRight", "Top right", .topTrailing)
@@ -265,6 +266,17 @@ private struct AppearancePane: View {
                     Toggle("Show a preview", isOn: $toastPreview).labelsHidden().toggleStyle(.switch)
                 } label: {
                     detailed("Show a preview", "Thumbnail above the toast. Drag it out to drop the image.")
+                }
+                .padding(.vertical, 8)
+                LabeledContent {
+                    Picker("Keep the toast for", selection: $toastLifetime) {
+                        ForEach(Toast.lifetimes, id: \.self) { Text("\($0) s").tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                } label: {
+                    detailed("Keep the toast for", "With or without a preview. It stays while the pointer is over it.")
                 }
                 .padding(.vertical, 8)
                 VStack(alignment: .leading, spacing: 8) {
