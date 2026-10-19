@@ -44,6 +44,15 @@ enum Accessibility {
                   let parent else { break }
             element = parent as! AXUIElement
         }
+        // Safari can report a page's frames a screen height off (`AccessibilityBounds.displacement`): moved back, or dropped when that
+        // does not put the hit under the pointer.
+        if let displaced = AccessibilityBounds.displacement(chain.map(\.frame), at: point) {
+            if let offset = displaced.offset {
+                for index in 0...displaced.through { chain[index].frame = chain[index].frame.translated(by: offset) }
+            } else {
+                chain.removeFirst(displaced.through + 1)
+            }
+        }
         guard AccessibilityBounds.hoverLevel(chain.map(\.frame)).isEmpty, let window = chain.last, window.frame.role == kAXWindowRole else { return chain }
         // Finder's column view can answer with its AXBrowser, 1 pt past the window on every side and spanning the sidebar, which is a
         // sibling of the browser's split group. Then the window is walked down by frames: at each level, the smallest child that contains the point.
@@ -67,14 +76,17 @@ enum Accessibility {
               let siblings = children(of: chain[level + 1].element, [kAXOutlineRole, kAXTableRole].contains(frames[level + 1].role) ? kAXRowsAttribute : kAXChildrenAttribute)
         else { return [] }
         let start = max(0, min((siblings.firstIndex { CFEqual($0, chain[level].element) } ?? 0) - AccessibilityBounds.maximumPeers / 2, siblings.count - AccessibilityBounds.maximumPeers))
+        // A displaced chain was moved back (see `chain(at:pid:)`); its siblings are displaced the same way.
+        let live = frame(of: chain[level].element)!.rect
+        let shift = CGSize(width: frames[level].rect.minX - live.minX, height: frames[level].rect.minY - live.minY)
         let began = ContinuousClock.now
         var chains: [[AXFrame]] = []
         for sibling in siblings[start..<min(siblings.count, start + AccessibilityBounds.maximumPeers)] where !CFEqual(sibling, chain[level].element) {
             guard began.duration(to: .now) < peerBudget else { break }
-            guard let frame = frame(of: sibling) else { continue }
+            guard let frame = frame(of: sibling)?.translated(by: shift) else { continue }
             var down = [frame]
             var element = sibling
-            while let only = children(of: element, kAXChildrenAttribute), only.count == 1, let child = self.frame(of: only[0]),
+            while let only = children(of: element, kAXChildrenAttribute), only.count == 1, let child = self.frame(of: only[0])?.translated(by: shift),
                   child.rect.isNear(down.last!.rect, within: AccessibilityBounds.paddingTolerance) {
                 down.append(child)
                 element = only[0]
