@@ -1803,13 +1803,17 @@ extension DebugRun {
             let offset = offsets.count > 1 ? offsets.removeFirst() : offsets[0]
             return image.cropping(to: area.offsetBy(dx: 0, dy: CGFloat(offset)))!
         }
+        defaults.set(true, forKey: Pref.loupe)
         open()
         overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         overlay.selection = AreaSelection(extent: extent, exact: page)
         overlay.editedRadii[page] = CornerRadii(24 * overlay.scale)
+        require(!overlay.view.guides.loupe.isHidden && !overlay.view.guides.readout.isHidden, "the loupe shows before scrolling capture")
         key(5, "g")
         require(overlay.scrollArea == page && overlay.selection == nil && overlay.view.image == nil && overlay.window.ignoresMouseEvents && chrome.topBar.isHidden,
                 "G starts scrolling capture: the frozen image goes away, the top bar hides, and the pointer reaches the app below")
+        require(overlay.view.guides.loupe.isHidden && overlay.view.guides.readout.isHidden && chrome.coordinates.isHidden && chrome.snapTag.isHidden,
+                "the loupe hides during scrolling capture, with the pointer cluster")
         for _ in 0..<3000 where overlay.scrollHeight < 900 { try await Task.sleep(for: .milliseconds(10)) }
         let pageBox = overlay.view.viewRect(page)
         require(overlay.scrollHeight == 900 && texts(in: chrome.strip) == ["Scrolling 900 px", "Cancel", "esc", "Done", "\u{21A9}"] && chrome.done.primary
@@ -1851,9 +1855,12 @@ extension DebugRun {
         let differing = stride(from: 40, to: 900 - 40, by: 7).flatMap { y in stride(from: 40, to: 1000 - 40, by: 7).map { (x: $0, y: y) } }
             .filter { zip(srgb(stitched.colorAt(x: $0.x, y: $0.y)!), srgb(fixtureRows.colorAt(x: $0.x, y: $0.y)!)).contains { abs($0 - $1) > 0.01 } }
         require(differing.isEmpty, "the stitched image has no minimap pixels: \(differing.count) lattice points differ from the fixture, first \(differing.prefix(3))")
-        // G on a hovered element starts scrolling capture of it, as E then G does.
+        // G on a hovered element starts scrolling capture of it, as E then G does. The loupe is back once scrolling capture has ended.
         offsets = [0]
         open()
+        require(!overlay.view.guides.loupe.isHidden && !overlay.view.guides.readout.isHidden, "the loupe comes back after scrolling capture")
+        defaults.set(false, forKey: Pref.loupe)
+        overlay.refresh()
         let browser = CGRect(x: 100, y: 100, width: 1500, height: 1200)
         overlay.setWindows([browser], names: ["Browser"], pointer: CGPoint(x: frame.minX + 800 / overlay.scale, y: frame.maxY - 700 / overlay.scale))
         let hoveredArea = overlay.hoverRect
