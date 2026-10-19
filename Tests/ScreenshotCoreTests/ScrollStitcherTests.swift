@@ -194,6 +194,27 @@ struct ScrollStitcherTests {
         #expect(await stitcher.unmatchedRows > 0)
     }
 
+    /// A frosted header: its rows change with every move and never match, as a blur of the content passing under it. Offsets come
+    /// from the content below it, and the stitched image ends with the page whole below the header.
+    @Test func aFrostedHeaderThatNeverMatchesKeepsTheOffsets() async {
+        func frosted(_ offset: Int) -> [UInt8] {
+            var bytes = area(offset)
+            for index in stride(from: 0, to: header * width * 4, by: 4) {
+                let value = UInt8((index / 4 * 31 + offset * 97) % 251)
+                bytes.replaceSubrange(index..<(index + 3), with: [value, value, value])
+            }
+            return bytes
+        }
+        let stitcher = ScrollStitcher(first: image(frosted(0)))
+        for offset in [20, 45, 80, 120, 150, 190] {
+            #expect(await stitcher.add(image(frosted(offset))), "offset \(offset)")
+            #expect(await stitcher.height == header + offset + view + footer, "offset \(offset)")
+        }
+        let stitched = bytes(await stitcher.image())
+        let below = header * width * 4
+        #expect(Array(stitched[below...]) == rows(start: 10_000, count: 190 + view) + [UInt8](repeating: 60, count: footer * width * 4))
+    }
+
     /// Real pixels: crops of a web page scrolled under the round 10 fixture's tooltip, pasted 15 px above the area's bottom from the
     /// third frame on, with a fast jump and a slowing tail. The output is the clean page with the tooltip once, in the latest frame.
     @Test func aRealTooltipOverARealPageAppearsOnce() async throws {

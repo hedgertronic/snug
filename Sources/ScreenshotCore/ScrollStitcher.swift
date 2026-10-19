@@ -54,9 +54,9 @@ public actor ScrollStitcher {
     /// Stitched height in pixels, the height of `image()`.
     public var height: Int { min(body.count / bytesPerRow + frameHeight - cursor, Self.maximumHeight) }
 
-    /// Adds a frame; returns whether it matched a move.
+    /// Adds a frame, trying only the shifts in `expected` when given; returns whether it matched a move.
     @discardableResult
-    public func add(_ frame: CGImage) -> Bool {
+    public func add(_ frame: CGImage, expected: ClosedRange<Int>? = nil) -> Bool {
         guard frame.width == width, frame.height == frameHeight else { return false }
         let bytes = Self.rgba(frame)
         let rows = Self.rows(bytes, width: width, height: frameHeight)
@@ -70,33 +70,32 @@ public actor ScrollStitcher {
             bottom: min(same.reversed().prefix { $0 }.count, frameHeight / 3)
         )
         let band = fixed.top..<(frameHeight - fixed.bottom)
-        let changed = still.map { $0.count(where: { !$0 }) }
-        // The content moved down by `shift` when the new frame's row r shows what the latest frame's row r + shift showed. Only
-        // samples that changed in both rows count; one mismatches when it is more than 8 levels off. The fewest mismatches per
-        // compared sample wins, counting one mismatch more so that a shift with few samples cannot win on a lucky zero; the
-        // smaller distance wins a tie. A shift needs 64 compared samples, and at most 1 in 10 may mismatch (an overlay appearing, say).
-        var best: (shift: Int, mismatches: Int, compared: Int)?
+        // The content moved down by `shift` when the new frame's row r shows what the latest frame's row r + shift showed. A row votes
+        // when at least 4 of its samples changed in both rows, and agrees when at most 1 in 8 of those are more than 8 levels off, so a
+        // frosted header or an animation costs only its own rows. The most agreeing rows win, the nearer shift a tie; a shift needs 16
+        // and half the voting rows, and must keep the image at least a frame tall and under the limit. Shifts walk outward, and stop
+        // once the overlap holds fewer rows than the best count, so a tiny overlap of plain background cannot win. `expected`, when
+        // given, holds the only shifts tried.
+        var best: (shift: Int, rows: Int)?
         for distance in 1..<max(1, band.count - 16) {
-            for shift in [distance, -distance] {
-                let overlap = max(band.lowerBound, band.lowerBound - shift)..<min(band.upperBound, band.upperBound - shift)
-                // At most `bound` samples compare, so past this many mismatches the shift cannot win.
-                let bound = changed[overlap].reduce(0, +)
-                let ceiling = best.map { ($0.mismatches + 1) * bound / $0.compared } ?? bound / 10
-                var mismatches = 0, compared = 0
-                for row in overlap {
+            if let best, band.count - distance <= best.rows { break }
+            for shift in [distance, -distance] where expected?.contains(shift) ?? true {
+                guard height + shift >= frameHeight, shift < 0 || height < Self.maximumHeight else { continue }
+                var (agreeing, voting) = (0, 0)
+                for row in max(band.lowerBound, band.lowerBound - shift)..<min(band.upperBound, band.upperBound - shift) {
+                    var mismatches = 0, compared = 0
                     for column in 0..<64 where !still[row][column] && !still[row + shift][column] {
                         compared += 1
                         if abs(Int(latestRows[row + shift][column]) - Int(rows[row][column])) > 8 { mismatches += 1 }
                     }
-                    if mismatches > ceiling { break }
+                    guard compared >= 4 else { continue }
+                    voting += 1
+                    if mismatches * 8 <= compared { agreeing += 1 }
                 }
-                if compared >= 64, mismatches * 10 <= compared, best.map({ (mismatches + 1) * $0.compared < ($0.mismatches + 1) * compared }) ?? true {
-                    best = (shift, mismatches, compared)
-                }
+                if agreeing >= 16, agreeing * 2 >= voting, agreeing > best?.rows ?? 0 { best = (shift, agreeing) }
             }
-            if best?.mismatches == 0 { break }
         }
-        guard let best, height + best.shift >= frameHeight, best.shift < 0 || height < Self.maximumHeight else { return false }
+        guard let best else { return false }
         let shift = best.shift
         // How the new frame's row differs from the latest frame's row, over every channel of every pixel: the largest and the total
         // difference. Rows match when no channel is more than 16 levels off.
