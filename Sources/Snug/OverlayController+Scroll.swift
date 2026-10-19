@@ -24,6 +24,12 @@ extension OverlayController {
         window.backgroundColor = .clear
         window.ignoresMouseEvents = true
         refresh()
+        // The pointer's scrolling and dragging go to the app below; a global monitor sees a copy of each event.
+        if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor) }
+        scrollInput = []
+        scrollMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.scrollWheel, .leftMouseDragged]) { [weak self] event in
+            MainActor.assumeIsolated { self?.scrollInput.append(event) }
+        }
         // The loop only captures and stitches; the display's filter is built once, and each frame's thumbnail is drawn in a task of its
         // own, which a newer frame's replaces.
         let log = defaults.bool(forKey: Pref.logScroll)
@@ -34,23 +40,54 @@ extension OverlayController {
                 let capture = scrollFrames ?? { area in
                     try await DisplayCapture.image(with: filter!, area: CGRect(x: area.minX / scale, y: area.minY / scale, width: area.width / scale, height: area.height / scale))
                 }
-                if let log { try FileManager.default.createDirectory(at: log, withIntermediateDirectories: true) }
-                var logged = 0
-                let source: (CGRect) async throws -> CGImage = { area in
+                // The log holds each frame as a PNG, and in events.txt each event since the frame before it and the frame's time, all
+                // in seconds of system uptime: "scroll <time> <delta y> <precise> <phase> <momentum phase>", "drag <time>",
+                // "frame <index> <time>".
+                let events = log?.appending(path: "events.txt")
+                if let log, let events {
+                    try FileManager.default.createDirectory(at: log, withIntermediateDirectories: true)
+                    try Data().write(to: events)
+                }
+                var (logged, loggedInput) = (0, 0)
+                let source: (CGRect) async throws -> (CGImage, TimeInterval) = { area in
                     let frame = try await capture(area)
-                    if let log {
+                    let time = ProcessInfo.processInfo.systemUptime
+                    if let log, let events {
+                        let input = self.scrollInput[loggedInput...].map { event in
+                            event.type == .scrollWheel
+                                ? "scroll \(event.timestamp) \(event.scrollingDeltaY) \(event.hasPreciseScrollingDeltas) \(event.phase.rawValue) \(event.momentumPhase.rawValue)\n"
+                                : "drag \(event.timestamp)\n"
+                        }
+                        loggedInput = self.scrollInput.count
+                        let file = try FileHandle(forWritingTo: events)
+                        try file.seekToEnd()
+                        try file.write(contentsOf: Data((input.joined() + String(format: "frame %04d \(time)\n", logged)).utf8))
+                        try file.close()
                         try await Output.png(frame).write(to: log.appending(path: String(format: "%04d.png", logged)))
                         logged += 1
                     }
-                    return frame
+                    return (frame, time)
                 }
-                let stitcher = ScrollStitcher(first: try await source(area))
+                var (first, matched) = try await source(area)
+                let stitcher = ScrollStitcher(first: first)
                 try Task.checkCancellation()
                 self.stitcher = stitcher
                 var shown = showStitched(stitcher, area: area)
                 while true {
                     try await Task.sleep(for: .milliseconds(70))
-                    if await stitcher.add(try await source(area)) {
+                    let (frame, time) = try await source(area)
+                    // Live, once the monitor has seen an event: a frame with no scrolling or dragging in the last half second only
+                    // animated in place, and the shifts tried are those the scroll events explain, with the app's scrolling up to a
+                    // quarter second behind them. A drag (a scroll bar) tries every shift.
+                    var expected: ClosedRange<Int>?
+                    if scrollFrames == nil, !scrollInput.isEmpty {
+                        guard scrollInput.contains(where: { $0.timestamp > time - 0.5 }) else { continue }
+                        expected = scrollInput.contains { $0.type != .scrollWheel && $0.timestamp > matched - 0.25 } ? nil
+                            : ScrollStitcher.expectedShifts(scrollInput.map { ($0.timestamp, $0.scrollingDeltaY, $0.hasPreciseScrollingDeltas) },
+                                                            matched: matched, now: time, lag: 0.25, scale: scale)
+                    }
+                    if await stitcher.add(frame, expected: expected) {
+                        matched = time
                         shown.cancel()
                         shown = showStitched(stitcher, area: area)
                     }

@@ -228,6 +228,9 @@ final class OverlayController {
     var stitcher: ScrollStitcher?
     var scrollTask: Task<Void, Never>?
     var scrollFrames: ((CGRect) async throws -> CGImage)?
+    /// The scroll-wheel and drag events sent to other apps since scrolling capture started, and the monitor that collects them.
+    var scrollInput: [NSEvent] = []
+    var scrollMonitor: Any?
     /// V armed recording of the selection (see `OverlayController+Recording.swift`).
     var armedRecording: ArmedRecording?
     /// K's cut-out preview while it is open.
@@ -340,6 +343,9 @@ final class OverlayController {
         disarmRecording()
         scrollTask?.cancel()
         scrollTask = nil
+        if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor) }
+        scrollMonitor = nil
+        scrollInput = []
         scrollArea = nil
         scrollHeight = 0
         scrollThumbnail = nil

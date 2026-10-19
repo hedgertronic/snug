@@ -73,7 +73,7 @@ public actor ScrollStitcher {
         // The content moved down by `shift` when the new frame's row r shows what the latest frame's row r + shift showed. A row votes
         // when at least 4 of its samples changed in both rows, and agrees when at most 1 in 8 of those are more than 8 levels off, so a
         // frosted header or an animation costs only its own rows. The most agreeing rows win, the nearer shift a tie; a shift needs 16
-        // and half the voting rows, and must keep the image at least a frame tall and under the limit. Shifts walk outward, and stop
+        // agreeing rows and must keep the image at least a frame tall and under the limit. Shifts walk outward, and stop
         // once the overlap holds fewer rows than the best count, so a tiny overlap of plain background cannot win. `expected`, when
         // given, holds the only shifts tried.
         var best: (shift: Int, rows: Int)?
@@ -92,7 +92,7 @@ public actor ScrollStitcher {
                     voting += 1
                     if mismatches * 8 <= compared { agreeing += 1 }
                 }
-                if agreeing >= 16, agreeing * 2 >= voting, agreeing > best?.rows ?? 0 { best = (shift, agreeing) }
+                if agreeing >= 16, agreeing > best?.rows ?? 0 { best = (shift, agreeing) }
             }
         }
         guard let best else { return false }
@@ -141,6 +141,33 @@ public actor ScrollStitcher {
         latest = bytes
         latestRows = rows
         return true
+    }
+
+    /// The shifts, in pixels, that scroll-wheel events can explain between a frame captured at `matched` and one captured at `now`,
+    /// for `add`'s `expected`. Each delta is in points, at a time in seconds. The app shows the deltas' running sum up to `lag`
+    /// seconds late, so each frame shows the sum at some time in the `lag` before its capture, and the shift is the difference of
+    /// the two; a quarter more and 24 pt spare cover the app's own easing. Line deltas (a mouse wheel) give only the direction, and
+    /// nil (every shift) when it changed.
+    public static func expectedShifts(_ deltas: [(time: TimeInterval, points: CGFloat, precise: Bool)], matched: TimeInterval,
+                                      now: TimeInterval, lag: TimeInterval, scale: CGFloat) -> ClosedRange<Int>? {
+        // A negative delta scrolls the content up, toward the end of the page: a positive shift.
+        let deltas = deltas.filter { $0.time > matched - lag && $0.time <= now }
+        if deltas.contains(where: { !$0.precise }) {
+            if deltas.allSatisfy({ $0.points <= 0 }) { return 1...maximumHeight }
+            if deltas.allSatisfy({ $0.points >= 0 }) { return -maximumHeight...(-1) }
+            return nil
+        }
+        // The running sum from `matched - lag`, at each time either frame could show.
+        var (sum, before, after) = (CGFloat(0), [CGFloat(0)], [CGFloat]())
+        for delta in deltas {
+            if delta.time > now - lag, after.isEmpty { after.append(sum) }
+            sum -= delta.points * scale
+            if delta.time <= matched { before.append(sum) }
+            if delta.time > now - lag { after.append(sum) }
+        }
+        if after.isEmpty { after.append(sum) }
+        let (low, high) = (after.min()! - before.max()!, after.max()! - before.min()!)
+        return Int((low * 1.25 - 24 * scale).rounded(.down))...Int((high * 1.25 + 24 * scale).rounded(.up))
     }
 
     /// The stitched image: the first frame's header, the stitched rows, and the latest frame from where they end.
