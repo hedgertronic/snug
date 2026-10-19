@@ -64,27 +64,13 @@ extension OverlayController {
         chrome.tipButton = tool
         chrome.tipDue = false
         chrome.tipTask?.cancel()
-        placeToolTip()
+        refreshExtras()
         guard tool != nil else { return }
         chrome.tipTask = Task {
             try await Task.sleep(for: .milliseconds(500))
             chrome.tipDue = true
-            placeToolTip()
+            refreshExtras()
         }
-    }
-
-    /// Shows the tool tip chip centered under its button (over the strip when there is no room below) once its delay has passed and
-    /// while the pointer is on the button and the button takes clicks (not dimmed, not under an open menu); hides it otherwise.
-    private func placeToolTip() {
-        let c = chrome
-        let point = CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale)
-        guard c.tipDue, let tool = c.tipButton, !c.strip.isHidden, view.hitTest(view.convert(point, to: view.superview)) === tool else { return c.toolTip.isHidden = true }
-        let name = tool.accessibilityLabel()!
-        c.toolTip.show(name) { [NSTextField(name, size: 12, weight: .semibold, color: .chromeText)] }
-        let button = view.convert(tool.bounds, from: tool), size = c.toolTip.frame.size
-        let below = c.strip.frame.minY - 4 - size.height
-        c.toolTip.frame.origin = CGPoint(x: min(max((button.midX - size.width / 2).rounded(), 8), view.bounds.width - size.width - 8),
-                                         y: below >= 8 ? below : c.strip.frame.maxY + 4)
     }
 
     /// The glyphs of the modifiers held now; each one's cap is lit.
@@ -349,7 +335,7 @@ extension OverlayController {
 
         /// Attaches the strip below `box` (above when the bottom has no room, else inside), then the chip row above it (above the strip
         /// when that is above, else inside the top): `left` from the box's left edge, `right` ending at its right edge, or after `left`
-        /// when they would meet, or a row higher (lower, inside) when the screen ends first. Only the box's edges place them. Outside, chrome
+        /// when they would meet, or a row higher (lower, inside) when the screen ends first, unless inside a box too narrow to hold the row, where it stays in the row. Only the box's edges place them. Outside, chrome
         /// sits 8 pt off the outline; inside, 8 pt in from it on every side. A box wholly above the bar's lower edge with the bar at the
         /// top, or above the top ruler's lower edge, has no room there: the strip hangs from that edge and the chip row stacks under it. With
         /// the bar at the bottom, a box that ends below the bar's upper edge gets its strip and chips standing on that edge.
@@ -378,9 +364,11 @@ extension OverlayController {
             }
             let width = right.reduce(-6) { $0 + $1.frame.width + 6 }
             var start = min(max(box.maxX - inset - width, x), bounds.width - 8 - width)
-            if start < x - 0.5 || inside && start + width > box.maxX - inset + 0.5 {
+            if start < x - 0.5 || inside && start + width > box.maxX - inset + 0.5 && width <= box.width - 2 * inset {
                 start = min(max(box.maxX - inset - width, leftEdge, box.minX + inset), bounds.width - 8 - width)
                 y += inside ? -(height + 6) : height + 6
+                // A row dropped inside the top, onto a strip standing just under a short box, goes under the strip instead.
+                if strip, inside, c.strip.frame.intersects(CGRect(x: start, y: y, width: width, height: height)) { y = c.strip.frame.minY - 6 - height }
             }
             for chip in right {
                 chip.frame.origin = CGPoint(x: start, y: y)
@@ -389,18 +377,28 @@ extension OverlayController {
         }
         if let attachment { attach(to: attachment.box, strip: attachment.strip, left: attachment.left, right: attachment.right) }
 
-        // One placement pass, in priority order. The bar and `attach` place the first four, each clear of those before it; from the fifth,
+        // One placement pass, in priority order, on the screen under the menu bar and clear of the rulers' bands. The bar and `attach` place the first four, each clear of those before it; from the fifth,
         // each item takes the first of its spots that is on the screen and clear of every item placed before it, and hides when none is:
         // 1. the settings bar: at the bottom, or at the top while an object is near the bottom (placed above);
         // 2. the strip: below the object, above it, or inside its bottom (`attach`);
         // 3. the size chip row (size and Snap, the hover chip, or the status chip): above the object, inside its top, or under the strip (`attach`);
-        // 4. the radius chip row (ratio and radius): ending at the object's right edge, or a row past the size chips (`attach`);
-        // 5. the "All corners" chip of the hovered or focused corner, its keys stacked under it (over it at the bottom corners): outside the
-        //    corner beside the selection's side, then inside the corner;
-        // 6. the legend with the arrow keys around it like a D-pad: centered in the selection and kept on the screen, then just below
-        //    each item placed so far that sits lower, nearest first, then just above each that sits higher, nearest first;
-        // 7. the hint caps: inside the top-left corner of their outlines, then inside the bottom-left.
-        let screen = CGRect(x: 4, y: 4, width: bounds.width - 8, height: topEdge - 8)
+        // 4. the radius chip row (ratio and radius): ending at the object's right edge, or a row past the size chips (`attach`); while a corner shows, the row waits
+        //    for item 7 and then takes its place or the nearest spot past the chrome;
+        // 5. the tool tip, which names the strip's button under the pointer: under the strip, then over it;
+        // 6. the notice (a message the user must read): centered above the bar, then centered under the menu bar, then centered just
+        //    below or above each item placed so far, nearest first;
+        // 7. the "All corners" chip of the hovered or focused corner with its keys stacked under it (over it at the bottom corners):
+        //    outside the corner beside the selection's side, inside the corner, inside along the selection's top or bottom edge, then just
+        //    below or above each item placed so far, nearest first, so a focused corner always shows;
+        // 8. the legend with the arrow keys around it like a D-pad, as one group under every modifier: centered in the selection when it
+        //    fits, else wholly outside it on the nearest free side (below, above, right, left), else just below or above an item placed so far;
+        // 9. the hint caps: inside the top-left corner of their outlines, then inside the bottom-left;
+        // 10. the reading chip: centered in the text region, then above it, then below it, then just below or above an item placed so far;
+        // 11. the candidate list: beside the hovered outline on its right, then its left, then inside its top right and top left;
+        // 12. the pointer cluster and the loupe, placed last in `updateGuides` against every frame placed here and moved clear of all of
+        //     them: the loupe follows the pointer on its lower or upper side, sliding up or down past a bar or chip it would cover, and
+        //     its readout and the cluster hang under it.
+        let screen = CGRect(x: 4 + ruler, y: 4, width: bounds.width - 8 - ruler, height: topEdge - 8)
         var placed = [c.topBar, c.strip].filter { !$0.isHidden }.map(\.frame)
         /// Moves `group` as one so its first view's origin takes the first free spot, or hides it.
         func settle(_ group: [NSView], _ spots: [CGPoint]) {
@@ -417,12 +415,41 @@ extension OverlayController {
             }
             if spot != nil { placed += group.map(\.frame) }
         }
-        // `attach` already kept the chip rows clear of the bar and strip and as far on the screen as it could.
-        if let attachment { placed += (attachment.left + attachment.right).map(\.frame) }
+        /// `x` clamped so a frame of `size` starting there is on the screen, and likewise `y`.
+        func onScreenX(_ x: CGFloat, _ size: CGSize) -> CGFloat { min(max(x, screen.minX), max(screen.maxX - size.width, screen.minX)) }
+        func onScreenY(_ y: CGFloat, _ size: CGSize) -> CGFloat { min(max(y, screen.minY), max(screen.maxY - size.height, screen.minY)) }
+        /// Spots for a `size` frame at `x` (kept on the screen): just below and just above each item placed so far, nearest to `y` first.
+        func past(x: CGFloat, _ size: CGSize, near y: CGFloat) -> [CGPoint] {
+            placed.flatMap { [CGPoint(x: onScreenX(x, size), y: $0.minY - 6 - size.height), CGPoint(x: onScreenX(x, size), y: $0.maxY + 6)] }.sorted { abs($0.y - y) < abs($1.y - y) }
+        }
+        // `attach` already kept the chip rows clear of the bar and strip and as far on the screen as it could. While a corner shows, the
+        // ratio and radius row waits: the corner's chip and keys are placed first and the row moves if they take its place.
+        let cornerShown = (hoveredCorner ?? focusedCorner) != nil && selection != nil && scrollArea == nil && mode == .capture
+        let row = cornerShown ? attachment?.right ?? [] : []
+        let rowHome = row.first?.frame.origin
+        if let attachment { placed += (attachment.left + attachment.right.filter { !row.contains($0) }).map(\.frame) }
+
+        // The tool tip, once its delay has passed and while the pointer is on the button and the button takes clicks (not dimmed, not under
+        // an open menu).
+        let point = CGPoint(x: pointer.x / scale, y: bounds.height - pointer.y / scale)
+        c.toolTip.isHidden = true
+        if c.tipDue, let tool = c.tipButton, !c.strip.isHidden, view.hitTest(view.convert(point, to: view.superview)) === tool {
+            let name = tool.accessibilityLabel()!
+            c.toolTip.show(name) { [NSTextField(name, size: 12, weight: .semibold, color: .chromeText)] }
+            let button = view.convert(tool.bounds, from: tool), size = c.toolTip.frame.size
+            let x = min(max((button.midX - size.width / 2).rounded(), 8), bounds.width - size.width - 8)
+            settle([c.toolTip], [CGPoint(x: x, y: c.strip.frame.minY - 4 - size.height), CGPoint(x: x, y: c.strip.frame.maxY + 4)])
+        }
+
+        if let notice = text.notice {
+            c.status.show(notice) { [NSTextField(notice, size: 12, color: .chromeText)] }
+            let size = c.status.frame.size, x = ((bounds.width - size.width) / 2).rounded()
+            settle([c.status], [CGPoint(x: x, y: floor), CGPoint(x: x, y: top - 8 - size.height)] + past(x: x, size, near: floor))
+        }
 
         cornerChip.isHidden = true
         c.cornerKeys.isHidden = true
-        if let corner = hoveredCorner ?? focusedCorner, let rect = selection?.rect, scrollArea == nil, mode == .capture {
+        if cornerShown, let corner = hoveredCorner ?? focusedCorner, let rect = selection?.rect {
             if focusedCorner != nil && hoveredCorner == nil {
                 c.cornerKeys.show("focused corner") { [Pill.hint(["[", "]"], "this corner"), Pill.hint(["Tab"], "next corner"), Pill.hint(["esc"], "all four")] }
             } else {
@@ -433,7 +460,15 @@ extension OverlayController {
             cornerChip.frame.origin = CGPoint(x: corner.movesLeft ? box.minX - 6 - chip.width : box.maxX + 6, y: y)
             c.cornerKeys.frame.origin = CGPoint(x: corner.movesLeft ? cornerChip.frame.maxX - keys.width : cornerChip.frame.minX,
                                                 y: corner.movesTop ? y - 4 - keys.height : y + chip.height + 4)
-            settle([cornerChip, c.cornerKeys], [cornerChip.frame.origin, CGPoint(x: corner.movesLeft ? box.minX + 14 : box.maxX - 14 - chip.width, y: y)])
+            let group = cornerChip.frame.union(c.cornerKeys.frame), toGroup = CGPoint(x: group.minX - cornerChip.frame.minX, y: group.minY - cornerChip.frame.minY)
+            let edgeY = corner.movesTop ? box.maxY - 8 - chip.height : box.minY + 8
+            settle([cornerChip, c.cornerKeys],
+                   [cornerChip.frame.origin, CGPoint(x: corner.movesLeft ? box.minX + 14 : box.maxX - 14 - chip.width, y: y), CGPoint(x: (box.midX - chip.width / 2).rounded(), y: edgeY)]
+                    + past(x: group.minX, group.size, near: group.minY).map { CGPoint(x: $0.x - toGroup.x, y: $0.y - toGroup.y) })
+        }
+        if let rowHome {
+            let size = row.reduce(CGSize.zero) { CGSize(width: $0.width + $1.frame.width + 6, height: $1.frame.height) }
+            settle(row, [rowHome] + past(x: rowHome.x, size, near: rowHome.y))
         }
 
         // While the pointer rests inside a released selection, or a modifier is held, the legend in the middle says what the arrows do.
@@ -451,19 +486,21 @@ extension OverlayController {
             let (left, right, up, down) = (c.sideHints[0].frame.size, c.sideHints[1].frame.size, c.sideHints[2].frame.size, c.sideHints[3].frame.size)
             let size = c.legend.frame.size
             let group = CGSize(width: left.width + gap + size.width + gap + right.width, height: up.height + gap + size.height + gap + down.height)
-            let origin = CGPoint(x: min(max((box.midX - group.width / 2).rounded(), screen.minX), max(screen.maxX - group.width, screen.minX)),
-                                 y: min(max((box.midY - group.height / 2).rounded(), screen.minY), max(screen.maxY - group.height, screen.minY)))
-            let center = CGPoint(x: origin.x + left.width + gap + size.width / 2, y: origin.y + down.height + gap + size.height / 2)
+            // The group is laid out centered in the selection and moves as one to its spot, given as the group's lower-left corner.
+            let centered = CGPoint(x: (box.midX - group.width / 2).rounded(), y: (box.midY - group.height / 2).rounded())
+            let center = CGPoint(x: centered.x + left.width + gap + size.width / 2, y: centered.y + down.height + gap + size.height / 2)
             c.legend.frame.origin = CGPoint(x: center.x - size.width / 2, y: center.y - size.height / 2)
             c.sideHints[0].frame.origin = CGPoint(x: c.legend.frame.minX - gap - left.width, y: center.y - left.height / 2)
             c.sideHints[1].frame.origin = CGPoint(x: c.legend.frame.maxX + gap, y: center.y - right.height / 2)
             c.sideHints[2].frame.origin = CGPoint(x: center.x - up.width / 2, y: c.legend.frame.maxY + gap)
             c.sideHints[3].frame.origin = CGPoint(x: center.x - down.width / 2, y: c.legend.frame.minY - gap - down.height)
-            // The down cap is the group's lowest view, so its origin's y is the group's.
+            let fits = box.contains(CGRect(origin: centered, size: group))
+            let outside = [CGPoint(x: onScreenX(centered.x, group), y: box.minY - 8 - group.height), CGPoint(x: onScreenX(centered.x, group), y: box.maxY + 8),
+                           CGPoint(x: box.maxX + 8, y: onScreenY(centered.y, group)), CGPoint(x: box.minX - 8 - group.width, y: onScreenY(centered.y, group))]
+            // The down cap is the group's lowest view, so its origin moves by the group's.
             let lowest = c.sideHints[3]
-            let below = placed.map { $0.minY - gap - group.height }.filter { $0 <= origin.y }.sorted(by: >)
-            let above = placed.map { $0.maxY + gap }.filter { $0 >= origin.y }.sorted()
-            settle([lowest, c.legend] + c.sideHints.prefix(3), ([origin.y] + below + above).map { CGPoint(x: lowest.frame.minX, y: $0) })
+            // With no side free the group goes past the chrome.
+            settle([lowest, c.legend] + c.sideHints.prefix(3), ((fits ? [centered] : outside) + past(x: centered.x, group, near: centered.y)).map { CGPoint(x: lowest.frame.minX + $0.x - centered.x, y: lowest.frame.minY + $0.y - centered.y) })
         }
 
         // The key caps of the faint outlines.
@@ -478,24 +515,17 @@ extension OverlayController {
 
         if let rect = text.reading {
             c.reading.show("reading") { [NSTextField("Reading text...", size: 12, color: .chromeText)] }
-            let box = view.viewRect(rect)
-            c.reading.frame.origin = CGPoint(x: min(max(box.midX - c.reading.frame.width / 2, 8), bounds.width - c.reading.frame.width - 8),
-                                             y: min(max(box.midY - c.reading.frame.height / 2, 8), top - c.reading.frame.height - 8))
-        }
-
-        if let notice = text.notice {
-            c.status.show(notice) { [NSTextField(notice, size: 12, color: .chromeText)] }
-            c.status.frame.origin = CGPoint(x: ((bounds.width - c.status.frame.width) / 2).rounded(), y: floor)
+            let box = view.viewRect(rect), size = c.reading.frame.size, x = onScreenX((box.midX - size.width / 2).rounded(), size)
+            settle([c.reading], [CGPoint(x: x, y: onScreenY((box.midY - size.height / 2).rounded(), size)), CGPoint(x: x, y: box.maxY + 8), CGPoint(x: x, y: box.minY - 8 - size.height)] + past(x: x, size, near: box.midY))
         }
 
         c.list.isHidden = !(overlays.hover != nil && selection == nil && defaults.bool(forKey: Pref.candidates))
         if !c.list.isHidden, let session {
             let allow = displayID != nil && !isHeadless && !AXIsProcessTrusted()
             c.list.update(session.shortlist, parents: session.parents, current: session.selected?.id, onAllowAccessibility: allow ? { Accessibility.requestTrust() } : nil)
-            let box = view.viewRect(overlays.hover!)
-            let width = c.list.frame.width, height = c.list.frame.height
-            let x = box.maxX + 12 + width <= bounds.width - 8 ? box.maxX + 12 : (box.minX - 12 - width >= 8 ? box.minX - 12 - width : 12)
-            c.list.frame.origin = CGPoint(x: x, y: min(max(box.maxY - height, 8), top - height - 8))
+            let box = view.viewRect(overlays.hover!), size = c.list.frame.size
+            let y = onScreenY(box.maxY - size.height, size)
+            settle([c.list], [CGPoint(x: box.maxX + 12, y: y), CGPoint(x: box.minX - 12 - size.width, y: y), CGPoint(x: box.maxX - 12 - size.width, y: y), CGPoint(x: box.minX + 12, y: y)])
         }
         // Against the same outline, the strip's views that stayed in it animate from their old frames to the new ones, and a button whose
         // caps were replaced cross-fades its old title and caps into the new ones. A new outline (a hover change, an arrow nudge) moves
@@ -520,7 +550,6 @@ extension OverlayController {
             item.isHidden = !shown
             animate(true) { item.isHidden = shown }
         }
-        placeToolTip()
         lightCaps(restyle: restyle)
     }
 }
