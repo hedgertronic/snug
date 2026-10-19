@@ -525,7 +525,8 @@ final class Chrome {
     /// modifiers held now.
     let sideHints = (0..<4).map { _ in Pill(radius: 7, insets: NSEdgeInsets(top: 3, left: 3, bottom: 3, right: 3), spacing: 0) }
     let legend = Pill.chip()
-    /// Beside the "All corners" chip of a hovered corner dot: the radius keys and Option for one corner.
+    /// Under the corner chip of a hovered dot or a focused corner: the radius keys, tab for one corner or the next, and esc for all
+    /// corners while one is focused.
     let cornerKeys = Pill(radius: 8, insets: NSEdgeInsets(top: 5, left: 8, bottom: 5, right: 5), spacing: 5, vertical: true)
     /// The outline the strip and chips were last placed against, in view points; nil with none.
     var anchor: CGRect?

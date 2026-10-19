@@ -1387,15 +1387,24 @@ extension DebugRun {
         flags([])
         let snapped = overlay.selection!
         overlay.editedRadii[snapped.rect] = CornerRadii(12 * overlay.scale)
-        // Tab steps a focused corner: top-left, top-right, bottom-right, bottom-left, then all four; it lights the dot, shows the chip and
-        // keys, and [ ] change only that corner. Esc returns to all four first. Undo covers the edit.
+        // Tab cycles a focused corner: top-left, top-right, bottom-right, bottom-left, and around, never back to all corners; Shift-Tab
+        // goes back, and from all corners picks bottom-left. The focused corner lights its dot, the chip names it with its radius, and
+        // [ ] change only it. Only Esc returns to all corners. Undo covers the edit.
         let radius = 12 * overlay.scale
+        let focusedKeys = ["radius", "[", "]", "next corner", "tab", "all corners", "esc"], allKeys = ["radius", "[", "]", "one corner", "tab"]
         var focus: [Handle?] = []
         for _ in 0..<5 { key(48, "\t"); focus.append(overlay.focusedCorner) }
-        require(focus == [.topLeft, .topRight, .bottomRight, .bottomLeft, nil] && overlay.selection?.rect == snapped.rect, "Tab steps the corners TL, TR, BR, BL, then all four: \(focus)")
+        require(focus == [.topLeft, .topRight, .bottomRight, .bottomLeft, .topLeft] && overlay.selection?.rect == snapped.rect, "Tab cycles the corners TL, TR, BR, BL, TL: \(focus)")
+        focus = []
+        for _ in 0..<4 { key(48, "\t", .shift); focus.append(overlay.focusedCorner) }
+        require(focus == [.bottomLeft, .bottomRight, .topRight, .topLeft], "Shift-Tab cycles back BL, BR, TR, TL: \(focus)")
+        key(53, "\u{1B}")
+        key(48, "\t", .shift)
+        require(overlay.focusedCorner == .bottomLeft, "Shift-Tab from all corners picks bottom-left: \(String(describing: overlay.focusedCorner))")
+        key(53, "\u{1B}")
         key(48, "\t")
-        require(overlay.view.overlays.focusedCorner == .topLeft && !overlay.cornerChip.isHidden && texts(in: chrome.cornerKeys) == ["this corner", "[", "]", "next corner", "Tab", "all four", "esc"],
-                "a focused corner lights its dot and shows the chip and keys: \(texts(in: chrome.cornerKeys))")
+        require(overlay.view.overlays.focusedCorner == .topLeft && texts(in: overlay.cornerChip) == ["Top left  r 12", "="] && texts(in: chrome.cornerKeys) == focusedKeys,
+                "a focused corner lights its dot, the chip names it with its radius, and the keys follow: \(texts(in: overlay.cornerChip)) \(texts(in: chrome.cornerKeys))")
         key(93, "]")
         key(48, "\t")
         key(33, "[")
@@ -1414,12 +1423,22 @@ extension DebugRun {
         overlay.editedRadii[snapped.rect] = CornerRadii(radius)
         mouse(.mouseMoved, overlay.cornerRadii(of: snapped.rect).dot(of: .topLeft, in: snapped.rect, minimumInset: 8 * overlay.scale))
         let cornerKeys = chrome.cornerKeys, cornerChip = overlay.cornerChip
-        require(!cornerChip.isHidden && texts(in: cornerKeys) == ["radius", "[", "]", "one corner", "\u{2325}", "step corners", "Tab"]
+        require(!cornerChip.isHidden && texts(in: cornerChip) == ["All corners  r 12", "="] && texts(in: cornerKeys) == allKeys
                 && cornerKeys.frame.maxY <= cornerChip.frame.minY && abs(cornerKeys.frame.maxX - cornerChip.frame.maxX) < 0.5,
-                "hovering a corner dot shows radius [ ] and Option for one corner under the All corners chip: \(texts(in: cornerKeys)) \(cornerKeys.frame) \(cornerChip.frame)")
-        flags(.option)
-        require(keyCaps("\u{2325}", in: cornerKeys).allSatisfy(\.pressed) && !keyCaps("\u{2325}", in: cornerKeys).isEmpty, "holding Option lights the in-place Option cap by the corner")
-        flags([])
+                "hovering a corner dot shows the same group: All corners with the radius, then radius [ ] and tab for one corner: \(texts(in: cornerChip)) \(texts(in: cornerKeys)) \(cornerKeys.frame) \(cornerChip.frame)")
+        // Tab with the pointer on a dot: the focused corner leads the group, so the chip names the corner [ ] change, and a move on the
+        // same dot keeps it.
+        let bottomRightDot = overlay.cornerRadii(of: snapped.rect).dot(of: .bottomRight, in: snapped.rect, minimumInset: 8 * overlay.scale)
+        mouse(.mouseMoved, bottomRightDot)
+        key(48, "\t")
+        mouse(.mouseMoved, CGPoint(x: bottomRightDot.x + 1, y: bottomRightDot.y))
+        let snappedBox = overlay.view.viewRect(snapped.rect)
+        require(overlay.focusedCorner == .topLeft && overlay.hoveredCorner == .bottomRight && texts(in: cornerChip) == ["Top left  r 12", "="] && texts(in: cornerKeys) == focusedKeys
+                    && cornerChip.frame.midX < snappedBox.midX && cornerChip.frame.midY > snappedBox.midY,
+                "Tab on the bottom-right dot focuses top-left, and the group shows at top-left: \(String(describing: overlay.focusedCorner)) \(texts(in: cornerChip)) \(cornerChip.frame) \(snappedBox)")
+        key(53, "\u{1B}")
+        require(overlay.focusedCorner == nil && texts(in: cornerChip) == ["All corners  r 12", "="] && texts(in: cornerKeys) == allKeys && cornerChip.frame.midX > snappedBox.midX,
+                "Esc returns to all corners, and the hovered bottom-right dot's group shows again: \(texts(in: cornerChip)) \(cornerChip.frame)")
         mouse(.mouseMoved, CGPoint(x: snapped.rect.midX, y: snapped.rect.midY))
         require(cornerKeys.isHidden, "leaving the corner dot hides its keys")
         let released = overlay.view.viewRect(overlay.selection!.rect)
@@ -1603,7 +1622,7 @@ extension DebugRun {
             for corner in [Handle.topLeft, .topRight, .bottomRight, .bottomLeft] {
                 overlay.focusedCorner = corner
                 overlay.refresh()
-                require(!overlay.cornerChip.isHidden && texts(in: chrome.cornerKeys) == ["this corner", "[", "]", "next corner", "Tab", "all four", "esc"],
+                require(!overlay.cornerChip.isHidden && texts(in: chrome.cornerKeys) == ["radius", "[", "]", "next corner", "tab", "all corners", "esc"],
                         "the \(name) selection's focused \(corner) corner shows its chip and keys: \(overlay.cornerChip.isHidden) \(texts(in: chrome.cornerKeys)); box \(overlay.view.viewRect(rect)) \(([("bar", chrome.topBar), ("strip", chrome.strip), ("size", chrome.size), ("snap", chrome.snap), ("ratio", chrome.ratio), ("radius", chrome.radius), ("chip", overlay.cornerChip), ("keys", chrome.cornerKeys)] as [(String, NSView)]).map { "\($0.0) \($0.1.isHidden ? "hidden" : "\($0.1.frame)")" })")
                 chromeClear("the \(name) selection's focused \(corner) corner, set directly")
             }

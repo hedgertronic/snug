@@ -98,11 +98,12 @@ extension OverlayController {
         return detected[corner] > 0 ? detected[corner] : nil
     }
 
-    /// `=` and the chip: the hovered corner's radius (else the last-edited corner's, else the largest) goes to all four corners.
+    /// `=` and the chip: the focused corner's radius (else the hovered one's, else the last-edited one's, else the largest) goes to all
+    /// four corners.
     func applyRadiusToAll() {
         guard let rect = selection?.rect else { return }
         let current = cornerRadii(of: rect)
-        let radius = (hoveredCorner ?? focusedCorner ?? lastEditedCorner).map { current[$0] } ?? CornerRadii.corners.map { current[$0] }.max()!
+        let radius = (focusedCorner ?? hoveredCorner ?? lastEditedCorner).map { current[$0] } ?? CornerRadii.corners.map { current[$0] }.max()!
         editedRadii[rect] = CornerRadii(radius).offset(by: 0, in: rect.size)
         refresh()
     }
@@ -117,9 +118,9 @@ extension OverlayController {
         refresh()
     }
 
-    /// The chip and the gap between it and the hovered corner's dot, in view points.
+    /// The chip and the gap between it and the hovered corner's dot, in view points; none while a focused corner holds the chip.
     private var cornerChipPath: CGRect {
-        guard let corner = hoveredCorner, let rect = selection?.rect else { return .null }
+        guard focusedCorner == nil, let corner = hoveredCorner, let rect = selection?.rect else { return .null }
         let dot = cornerRadii(of: rect).dot(of: corner, in: rect, minimumInset: 8 * scale)
         let dotBox = CGRect(x: dot.x / scale - 6, y: view.bounds.height - dot.y / scale - 6, width: 12, height: 12)
         return cornerChip.frame.union(dotBox).insetBy(dx: -2, dy: -2)

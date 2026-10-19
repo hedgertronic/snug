@@ -409,7 +409,7 @@ extension OverlayController {
         // 5. the tool tip, which names the strip's button under the pointer: under the strip, then over it;
         // 6. the notice (a message the user must read): centered above the bar, then centered under the menu bar, then centered just
         //    below or above each item placed so far, nearest first;
-        // 7. the "All corners" chip of the hovered or focused corner with its keys stacked under it (over it at the bottom corners):
+        // 7. the corner chip of the focused or hovered corner with its keys stacked under it (over it at the bottom corners):
         //    outside the corner beside the selection's side, inside the corner, inside along the selection's top or bottom edge, then just
         //    below or above each item placed so far, nearest first, so a focused corner always shows;
         // 8. the legend with the arrow keys around it like a D-pad, as one group under every modifier: centered in the selection when it
@@ -472,11 +472,14 @@ extension OverlayController {
 
         cornerChip.isHidden = true
         c.cornerKeys.isHidden = true
-        if cornerShown, let corner = hoveredCorner ?? focusedCorner, let rect = selection?.rect {
-            if focusedCorner != nil && hoveredCorner == nil {
-                c.cornerKeys.show("focused corner") { [Pill.hint(["[", "]"], "this corner"), Pill.hint(["Tab"], "next corner"), Pill.hint(["esc"], "all four")] }
-            } else {
-                c.cornerKeys.show("corner") { [Pill.hint(["[", "]"], "radius"), Pill.hint(["\u{2325}"], "one corner"), Pill.hint(["Tab"], "step corners")] }
+        if cornerShown, let corner = focusedCorner ?? hoveredCorner, let rect = selection?.rect {
+            // One group for a hovered dot and a focused corner: the chip names what [ and ] change, with its radius, and the same rows
+            // follow, esc only while a corner is focused.
+            let names: [Handle: String] = [.topLeft: "Top left", .topRight: "Top right", .bottomRight: "Bottom right", .bottomLeft: "Bottom left"]
+            cornerChip.setTitle(focusedCorner.map { "\(names[$0]!)  r \(Int((cornerRadii(of: rect)[$0] / scale).rounded()))" } ?? "All corners  " + radiusText(rect))
+            c.cornerKeys.show(focusedCorner == nil ? "all corners" : "one corner") {
+                [Pill.hint(["[", "]"], "radius"), Pill.hint(["tab"], focusedCorner == nil ? "one corner" : "next corner")]
+                    + (focusedCorner == nil ? [] : [Pill.hint(["esc"], "all corners")])
             }
             let box = view.viewRect(rect), chip = cornerChip.frame.size, keys = c.cornerKeys.frame.size
             let y = corner.movesTop ? box.maxY - chip.height : box.minY

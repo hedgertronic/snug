@@ -114,7 +114,8 @@ extension DebugRun {
         require(texts(in: overlay.chrome.radius).first?.split(separator: "/").count == 4, "unequal corners read as four values: \(texts(in: overlay.chrome.radius))")
         require(overlay.lastEditedCorner == .bottomRight, "the dragged corner is the last edited one")
 
-        // Per-corner apply: hovering a dot shows its "All corners" chip outside that corner; = and the chip copy the hovered corner to all four.
+        // Per-corner apply: hovering a dot shows its corner chip ("All corners" and the radius) outside that corner; = and the chip copy the
+        // hovered corner to all four.
         mouse(.mouseMoved, CGPoint(x: a.midX, y: a.midY))
         require(overlay.cornerChip.isHidden && overlay.hoveredCorner == nil, "no corner dot hovered: no chip")
         key(24, "=")
@@ -125,7 +126,8 @@ extension DebugRun {
         let box = overlay.view.viewRect(a)
         mouse(.mouseMoved, dot(.topLeft))
         require(overlay.hoveredCorner == .topLeft && !overlay.cornerChip.isHidden, "hovering a corner dot shows its chip")
-        require(texts(in: overlay.cornerChip).contains("All corners") && overlay.cornerChip.frame.maxX <= box.minX, "the top-left chip reads All corners, outside the selection's left edge")
+        require(texts(in: overlay.cornerChip).first?.hasPrefix("All corners  r ") == true && overlay.cornerChip.frame.maxX <= box.minX,
+                "the top-left chip reads All corners with the radius, outside the selection's left edge: \(texts(in: overlay.cornerChip))")
         let topLeftRadius = radii().topLeft
         mouse(.mouseMoved, dot(.bottomRight))
         require(overlay.hoveredCorner == .bottomRight && overlay.cornerChip.frame.minX >= box.maxX, "the bottom-right chip sits outside the right edge")
