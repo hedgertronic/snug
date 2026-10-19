@@ -464,17 +464,17 @@ extension DebugRun {
                 "? shows the keys sheet with every column, one cap per key: \(sheet.count) texts, chords in one cap \(chords)")
         let helpRows = HelpSheet.columns.flatMap(\.rows)
         require(["[ ]", "\u{21E7} [ ]", "=", "\u{2325} drag", "V", "K"].allSatisfy(helpRows.map(\.keys).contains)
-                    && helpRows.contains { $0.keys == "Arrows" && $0.action.contains("1 px") && $0.action.contains("10 px") },
+                    && helpRows.contains { $0.keys == "arrows" && $0.action.contains("1 px") && $0.action.contains("10 px") },
                 "the sheet lists the corner radius keys, V, K, and arrows in pixels")
         let helpActions = Dictionary(helpRows.map { ($0.keys, $0.action) }, uniquingKeysWith: { $1 })
         require(helpActions["P"] == "Ratio menu" && helpActions["\u{21E7} P"] == "Lock the ratio" && helpActions["W"] == "Capture the window"
-                    && helpActions["K"] == "Subject preview" && helpActions["Subject: Tab"] == "Next subject (Shift: back)" && helpActions["V"] == "Arm recording, hover or selection"
+                    && helpActions["K"] == "Subject preview" && helpActions["Subject: tab"] == "Next subject (Shift: back)" && helpActions["V"] == "Arm recording, hover or selection"
                     && helpActions["Armed: \u{21A9} / V"] == "Start recording" && helpActions["Armed: H"] == "Cursor on / off" && helpActions["Armed: I"] == "Count-in off, 3 s, 5 s"
                     && helpActions["hotkey"] == "Stop recording" && helpActions["G"] == "Scrolling capture, hover or selection" && helpActions["Subject: S"] == "Crop to subject"
                     && helpActions["\u{2318} arrow"] == "Edge out, one side" && helpActions["\u{21E7} \u{2318} arrow"] == "Edge in, one side"
                     && helpActions["+ / -"] == "All sides 1 px (Option: 10)" && helpActions["\u{21E7} \u{21A9}"] == "Copy the text" && helpActions["\u{2318} \u{21A9}"] == "Copy for an agent"
                     && helpActions["\u{2325} \u{21A9}"] == "Translate" && helpActions["\u{21E7} \u{2318} S"] == "Save As"
-                    && helpActions["Tab"] == "Walk out (Shift: in)" && helpActions["[ ]"] == "Corner radius (Tab: one corner)"
+                    && helpActions["tab"] == "Walk out (Shift: in)" && helpActions["[ ]"] == "Corner radius (Tab: one corner)"
                     && !helpRows.contains { $0.action.contains("Aspect ratio lock") },
                 "the sheet lists the ratio menu and lock, W, the subject keys, G and V on a hover, the recording keys, Cmd-arrow, + and -, Shift-Return on a hover, Tab without other fits, and no P cycle")
         require(sheet.contains("Esc or ? closes this.") || sheet.contains { $0.hasSuffix("Esc or ? closes this.") }, "the sheet says how to close it")

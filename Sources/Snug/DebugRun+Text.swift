@@ -743,7 +743,7 @@ extension DebugRun {
         let count = (overlay.cutout?.subjects.count ?? 1) - 1
         print("Subjects fixture: \(count) instances")
         require(count > 1, "the subjects fixture has more than one instance: \(count)")
-        require(texts(in: overlay.chrome.strip).prefix(2) == ["All \(count) subjects", "Tab"], "the strip says all subjects are shown and names Tab: \(texts(in: overlay.chrome.strip))")
+        require(texts(in: overlay.chrome.strip).prefix(2) == ["All \(count) subjects", "tab"], "the strip says all subjects are shown and names tab: \(texts(in: overlay.chrome.strip))")
         key(tab, "\t")
         require(overlay.cutout?.shown == 1 && texts(in: overlay.chrome.strip).first == "Subject 1 of \(count)"
                 && overlay.cutout!.view.subject.contents as! CGImage === overlay.cutout!.subjects[1].image, "Tab shows the first subject alone: \(texts(in: overlay.chrome.strip))")

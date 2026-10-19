@@ -73,8 +73,8 @@ extension DebugRun {
         // The key map: the help table lists the new keys, and every key the keys line used to show.
         open()
         let helpKeys = HelpSheet.columns.flatMap(\.rows).map(\.keys)
-        let keysLineKeys = ["drag", "\u{2325} click", "F", "W", "Tab", "C", "+ / -", "\u{2191} / \u{2193}", "\u{2190} \u{2192}", "\u{2325} arrow", "\u{2325} \u{2318} arrow",
-                            "\u{2303} \u{2325} arrow", "\u{2303} \u{2325} \u{2318} arrow", "\u{2318} Z", "Text: drag", "Text: \u{21A9}", "Text: \u{21E7} \u{21A9}", "Text: Tab", "Text: \u{2325} \u{21A9}",
+        let keysLineKeys = ["drag", "\u{2325} click", "F", "W", "tab", "C", "+ / -", "\u{2191} / \u{2193}", "\u{2190} \u{2192}", "\u{2325} arrow", "\u{2325} \u{2318} arrow",
+                            "\u{2303} \u{2325} arrow", "\u{2303} \u{2325} \u{2318} arrow", "\u{2318} Z", "Text: drag", "Text: \u{21A9}", "Text: \u{21E7} \u{21A9}", "Text: tab", "Text: \u{2325} \u{21A9}",
                             "Menus: \u{2191} / \u{2193}", "Subject: K / esc", "?"]
         require(keysLineKeys.allSatisfy(helpKeys.contains) && !helpKeys.contains("B"),
                 "the help table lists every key the keys line showed, and no B: missing \(keysLineKeys.filter { !helpKeys.contains($0) })")

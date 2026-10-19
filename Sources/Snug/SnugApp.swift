@@ -436,7 +436,7 @@ extension NSMenuItem {
             keyEquivalent = String(Character(UnicodeScalar(function.character)!))
         } else {
             let name = Shortcut.keyNames[code]!
-            keyEquivalent = name == "Space" ? " " : name.lowercased()
+            keyEquivalent = name == "space" ? " " : name.lowercased()
         }
         keyEquivalentModifierMask = NSEvent.ModifierFlags(rawValue: UInt(defaults.integer(forKey: Pref.hotKeyModifiers)))
     }
