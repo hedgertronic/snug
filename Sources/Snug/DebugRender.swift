@@ -178,6 +178,17 @@ extension DebugRun {
             mouse(.mouseMoved, CGPoint(x: 40, y: 40))
             mouse(.mouseMoved, CGPoint(x: rect.midX, y: rect.midY))
             try snapshot("edit-chrome-\(name)")
+            guard name == "small" else { continue }
+            // The 60 x 40 pt selection keeps its legend group in one place under a modifier, and a focused corner shows its chip and keys.
+            overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: .option, timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
+            try snapshot("edit-chrome-small-option")
+            overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
+            overlay.focusedCorner = .topRight
+            overlay.refresh()
+            try snapshot("edit-chrome-small-corner-focused")
+            overlay.focusedCorner = nil
         }
         overlay.dismiss()
 
@@ -231,6 +242,31 @@ extension DebugRun {
         }
         defaults.set(false, forKey: Pref.loupe)
         overlay.dismiss()
+
+        // The loupe's readout with the pointer over and next to the bottom chrome (the settings bar and the strip), in hover and in edit.
+        defaults.set(true, forKey: Pref.loupe)
+        let chrome = overlay.chrome
+        for state in ["hover", "edit"] {
+            open()
+            if state == "hover" {
+                overlay.setWindows([CGRect(x: 300, y: 300, width: 1300, height: 1000)], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+                mouse(.mouseMoved, CGPoint(x: 900, y: 700))
+            } else {
+                overlay.selection = AreaSelection(extent: editExtent, exact: editRect)
+                overlay.refresh()
+            }
+            func center(_ view: NSView, dx: CGFloat = 0, dy: CGFloat = 0) -> CGPoint { CGPoint(x: (view.frame.midX + dx) * overlay.scale, y: (overlay.view.bounds.height - view.frame.midY + dy) * overlay.scale) }
+            let spots: [(String, CGPoint)] = [("strip", center(chrome.strip)), ("strip-left", center(chrome.strip, dx: -chrome.strip.frame.width / 2 - 30)),
+                                              ("strip-below", center(chrome.strip, dy: chrome.strip.frame.height / 2 + 20)), ("bar", center(chrome.topBar)),
+                                              ("bar-left", center(chrome.topBar, dx: -chrome.topBar.frame.width / 2 - 30)), ("bottom-edge", CGPoint(x: 1280, y: editExtent.height - 4))]
+            for (name, spot) in spots {
+                mouse(.mouseMoved, CGPoint(x: 40, y: 40))
+                mouse(.mouseMoved, spot)
+                try snapshot("readout-\(state)-\(name)")
+            }
+            overlay.dismiss()
+        }
+        defaults.set(false, forKey: Pref.loupe)
 
         open()
         mouse(.leftMouseDown, CGPoint(x: 900, y: 500))
