@@ -83,3 +83,11 @@ build/ScreenshotBench suite --manifest FILE --baseline FILE --output DIR
 ```
 
 Run `build/ScreenshotBench` with no arguments for every subcommand. Design and decisions are in `notes/snug-design.md`; the agent handoff is in `notes/snug-agent-handoff.md`.
+
+## Support
+
+Snug is free. If it saves you time, you can support it at [ko-fi.com/hedgertronic](https://ko-fi.com/hedgertronic).
+
+## License
+
+MIT. See `LICENSE`.

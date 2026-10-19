@@ -262,9 +262,12 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         capture()
     }
 
+    /// The standard About panel, its credits a link to Snug's Ko-fi page.
     @objc private func showAbout() {
         NSApp.activate()
-        NSApp.orderFrontStandardAboutPanel(nil)
+        let credits = NSAttributedString(string: "Support Snug on Ko-fi", attributes: [.link: URL(string: "https://ko-fi.com/hedgertronic")!,
+                                                                                      .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)])
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
     }
 
     @objc private func copyTextFromMenu() { capture(text: true) }
