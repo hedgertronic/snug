@@ -29,20 +29,23 @@ extension OverlayController {
             do {
                 let stitcher = ScrollStitcher(first: try await source(area))
                 self.stitcher = stitcher
-                scrollHeight = await stitcher.height
-                refresh()
+                await showStitched(stitcher)
                 while true {
                     try await Task.sleep(for: .milliseconds(70))
-                    if await stitcher.add(try await source(area)) {
-                        scrollHeight = await stitcher.height
-                        refresh()
-                    }
+                    if await stitcher.add(try await source(area)) { await showStitched(stitcher) }
                 }
             } catch is CancellationError {
             } catch {
                 report(error)
             }
         }
+    }
+
+    /// The stitched height and a thumbnail that fits beside the area: at most 72 pt wide and 16 pt shorter than the area.
+    private func showStitched(_ stitcher: ScrollStitcher) async {
+        scrollThumbnail = await stitcher.thumbnail(fitting: CGSize(width: 72 * scale, height: scrollArea!.height - 16 * scale))
+        scrollHeight = await stitcher.height
+        refresh()
     }
 
     /// While scrolling: Return delivers the stitched image, Esc closes; other keys do nothing.

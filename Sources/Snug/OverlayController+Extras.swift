@@ -271,7 +271,7 @@ extension OverlayController {
     /// The frames of the chrome showing now that the pointer cluster and the loupe keep clear of: everything the placement pass places.
     var chromeFrames: [CGRect] {
         let c = chrome
-        return ([c.topBar, c.strip, c.list, c.hover, c.size, c.snap, c.ratio, c.radius, c.status, c.reading, c.legend, c.toolTip, c.colorMenu, c.ratioMenu,
+        return ([c.topBar, c.strip, c.list, c.hover, c.size, c.snap, c.ratio, c.radius, c.status, c.reading, c.legend, c.minimap, c.toolTip, c.colorMenu, c.ratioMenu,
                  c.cornerKeys, cornerChip, c.upHint, c.downHint] + c.sideHints).filter { !$0.isHidden }.map(\.frame)
     }
 }

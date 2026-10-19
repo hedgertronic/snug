@@ -523,11 +523,16 @@ extension DebugRun {
 
         // Scrolling capture of an area inside a window, frames cut from the fixture; the live screen would show through.
         open()
-        overlay.scrollFrames = { image.cropping(to: $0)! }
+        var scrolled: CGFloat = 0
+        overlay.scrollFrames = { image.cropping(to: $0.offsetBy(dx: 0, dy: scrolled))! }
         overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         overlay.selection = AreaSelection(extent: editExtent, exact: editRect)
         key(5, "g")
         try await waitFor("the first frame") { overlay.scrollHeight > 0 }
+        for offset in [150, 300, 450] as [CGFloat] {
+            scrolled = offset
+            try await waitFor("the frame at \(offset)") { overlay.scrollHeight == Int(editRect.height + offset) }
+        }
         try snapshot("scrolling")
         overlay.dismiss()
         overlay.scrollFrames = nil
