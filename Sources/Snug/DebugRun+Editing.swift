@@ -322,8 +322,9 @@ extension DebugRun {
         require(!menu.isHidden && menu.items.map(\.title) == ["Free", "Original", "1:1", "4:3", "3:2", "16:10", "16:9", "21:9", "", "Portrait"],
                 "P opens the presets: \(menu.items.map(\.title))")
         let widest = menu.rows.flatMap(\.subviews).compactMap { ($0 as? NSTextField)?.frame.maxX }.max()!
-        require(menu.panel.frame.width <= 100 && widest + menu.rows[0].frame.minX <= menu.panel.frame.width - 8,
-                "the menu is as wide as its longest title: panel \(menu.panel.frame.width), title ends at \(widest)")
+        let capLeft = menu.rows.flatMap(\.subviews).compactMap { ($0 as? KeyCap)?.frame.minX }.min()!
+        require(menu.panel.frame.width <= 124 && widest + 12 <= capLeft && capLeft + menu.rows[0].frame.minX < menu.panel.frame.width - 8,
+                "the menu is as wide as its longest title and a cap: panel \(menu.panel.frame.width), title ends at \(widest), caps start at \(capLeft)")
         func pick(_ title: String) {
             if menu.isHidden { key(35, "p") }
             menu.pick(menu.items.firstIndex { $0.title == title }!)

@@ -34,8 +34,11 @@ extension OverlayController {
         let before = selectionState
         let items = [free, RatioMenu.Item(title: "Original", on: lockedRatio == original) { [self] in conformSelection(base, to: original) }]
             + presets + [RatioMenu.Item(title: "", on: false) {}, flip]
+        // Caps number the rows 1-9; the separator has none.
+        var number = 0
         chrome.ratioMenu.open(items.map { item in
-            RatioMenu.Item(title: item.title, on: item.on) { [self] in
+            if !item.title.isEmpty { number += 1 }
+            return RatioMenu.Item(title: item.title, on: item.on, cap: item.title.isEmpty ? nil : "\(number)") { [self] in
                 item.pick()
                 recordEdit(from: before)
             }
