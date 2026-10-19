@@ -1545,19 +1545,38 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: 40, y: 40))
         mouse(.mouseMoved, CGPoint(x: tight.midX, y: tight.midY))
         let tightBox = overlay.view.viewRect(tight)
+        /// The legend group's side of `box` and the group's anchor on that side, which stay the same when its labels change width.
+        func legendSpot(_ box: CGRect) -> String {
+            let group = chrome.sideHints.map(\.frame).reduce(chrome.legend.frame) { $0.union($1) }
+            let side = box.contains(group) ? "inside" : group.minY >= box.maxY ? "above" : group.maxY <= box.minY ? "below" : group.minX >= box.maxX ? "right" : "left"
+            let anchor = switch side { case "above", "below": group.midX; case "right": group.minX; case "left": group.maxX; default: group.midX }
+            return "\(side) \(anchor.rounded())"
+        }
         var tightSides: [String: String] = [:]
         for (label, held) in [("no modifier", NSEvent.ModifierFlags([])), ("Shift", .shift), ("Option", .option), ("Option-Shift", [.option, .shift]),
                               ("Command", .command), ("Option-Command", [.option, .command])] {
             flags(held)
-            let group = chrome.sideHints.map(\.frame).reduce(chrome.legend.frame) { $0.union($1) }
-            let side = tightBox.contains(group) ? "inside" : group.minY >= tightBox.maxY ? "above" : group.maxY <= tightBox.minY ? "below" : group.minX >= tightBox.maxX ? "right" : "left"
-            let anchor = switch side { case "above", "below": group.midX; case "right": group.minX; case "left": group.maxX; default: group.midX }
             require(!chrome.legend.isHidden && chrome.sideHints.allSatisfy { !$0.isHidden }, "the 60 x 40 pt selection shows the legend and arrow caps under \(label)")
             chromeClear("the 60 x 40 pt selection under \(label)")
-            tightSides[label] = "\(side) \(anchor.rounded())"
+            tightSides[label] = legendSpot(tightBox)
         }
         flags([])
         require(Set(tightSides.values).count == 1, "the 60 x 40 pt selection's legend group keeps one position under every modifier state: \(tightSides)")
+        // Must-show: right after a drag of a 60 x 40 pt area is released, with the pointer on its far corner and no modifier, the legend
+        // shows in the same spot as under Option.
+        overlay.dismiss()
+        open()
+        defaults.set(true, forKey: Pref.loupe)
+        drag(CGRect(x: 1200, y: 700, width: 60 * overlay.scale, height: 40 * overlay.scale))
+        let releasedBox = overlay.view.viewRect(overlay.selection!.rect)
+        require(!chrome.legend.isHidden && chrome.sideHints.allSatisfy { !$0.isHidden },
+                "right after releasing a 60 x 40 pt drag, the legend shows with no modifier: pointer \(overlay.pointer) selection \(overlay.selection!.rect)")
+        let afterDrag = legendSpot(releasedBox)
+        flags(.option)
+        let underOption = legendSpot(releasedBox)
+        flags([])
+        require(afterDrag == underOption, "after the release the legend sits where it does under Option: \(afterDrag) \(underOption)")
+
         // The same at the screen's edges and corners: a 60 x 40 pt selection shows its legend and arrow caps under every modifier state.
         for (x, y) in [0, 600, extent.width - 60 * overlay.scale].flatMap({ x in [0, 700, extent.height - 40 * overlay.scale].map { (x, $0) } }) {
             let small = CGRect(x: x, y: y, width: 60 * overlay.scale, height: 40 * overlay.scale)

@@ -130,6 +130,11 @@ extension OverlayController {
         return "  + frame \(Int(output.width - crop.width)) x \(Int(output.height - crop.height))"
     }
 
+    /// Whether the pointer is inside the released selection or on its handles and edge band, the zone the resize cursors use (pixels).
+    var pointerOnSelection: Bool {
+        selection.map { $0.rect.contains(pointer) || $0.handle(at: pointer, tolerance: 8 * scale) != nil } == true
+    }
+
     func refreshChrome() {
         let c = chrome
         let bounds = view.bounds
@@ -471,8 +476,8 @@ extension OverlayController {
             settle(row, [rowHome] + past(x: rowHome.x, size, near: rowHome.y))
         }
 
-        // While the pointer rests inside a released selection, or a modifier is held, the legend in the middle says what the arrows do.
-        let resting = draggedRect == nil && selection?.rect.contains(pointer) == true
+        // While the pointer rests inside a released selection or on its handles (pixels, as the handle cursors read them), or a modifier is held, the legend in the middle says what the arrows do.
+        let resting = draggedRect == nil && pointerOnSelection
         let showsEdgeKeys = editing && (optionHeld || commandHeld || resting)
         for (index, pill) in c.sideHints.enumerated() {
             let arrow = ["\u{2190}", "\u{2192}", "\u{2191}", "\u{2193}"][index]
