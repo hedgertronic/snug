@@ -76,16 +76,18 @@ public enum AccessibilityBounds {
 
     /// Where a chain read from Safari is displaced: every web frame from an `AXScrollArea` or `AXWebArea` down can be reported a screen
     /// height away from its window while its ancestors are right (user's log, 10-18: scroll area at (0, 1072, 1242, 837) in a window at
-    /// (84, 44, 1242, 927), whose parent group has the window's frame). `frames` is innermost first, ending at the window. The outermost
-    /// frame that does not touch the window is the anchor; it is moved so its bottom and right edges meet its parent's (Safari's sidebar is
-    /// on the left, so the page is flush right and bottom), and every frame inside it moves the same way. `through` is the anchor's index;
-    /// `offset` is the move, set only when it puts the innermost frame around `point`. Otherwise `offset` is nil: a wrong outline is worse
-    /// than none, so the caller drops the frames through `through`.
-    /// Nil when the innermost frame contains `point`, when the chain has no window, or when every frame touches the window.
+    /// (84, 44, 1242, 927), whose parent group has the window's frame; the same scroll area with the window moved to (111, 251), where it
+    /// overlaps the window). `frames` is innermost first, ending at the window. The outermost frame its parent does not contain (within
+    /// `paddingTolerance`) is the anchor; it is moved so its bottom and right edges meet its parent's (Safari's sidebar is on the left, so
+    /// the page is flush right and bottom), and every frame inside it moves the same way. `through` is the anchor's index; `offset` is the
+    /// move, set only when it puts the innermost frame around `point`. Otherwise `offset` is nil: a wrong outline is worse than none, so
+    /// the caller drops the frames through `through`.
+    /// Nil when the innermost frame contains `point`, when the chain has no window, or when every frame is inside its parent.
     public static func displacement(_ frames: [AXFrame], at point: CGPoint) -> (through: Int, offset: CGSize?)? {
         guard frames.last?.role == "AXWindow", let leaf = frames.first, !leaf.rect.contains(point) else { return nil }
-        let window = frames.last!.rect
-        guard let anchor = frames.indices.dropLast().last(where: { !frames[$0].rect.intersects(window) }) else { return nil }
+        guard let anchor = frames.indices.dropLast().last(where: {
+            !frames[$0 + 1].rect.insetBy(dx: -paddingTolerance, dy: -paddingTolerance).contains(frames[$0].rect)
+        }) else { return nil }
         let (frame, parent) = (frames[anchor].rect, frames[anchor + 1].rect)
         let offset = CGSize(width: parent.maxX - frame.maxX, height: parent.maxY - frame.maxY)
         return (anchor, leaf.rect.offsetBy(dx: offset.width, dy: offset.height).contains(point) ? offset : nil)
