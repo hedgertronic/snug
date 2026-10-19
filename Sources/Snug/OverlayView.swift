@@ -214,6 +214,20 @@ final class OverlayView: NSView {
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         let o = overlays
+        // A key's jump to another candidate moves each outline path from its old shape to the new one over the jump's duration, ease out
+        // (an explicit animation: implicit ones are not added to layers of a window that is not on screen); anything else changes at once.
+        let jumping = controller?.jumping == true
+        func slide(_ layer: CALayer, _ keyPath: String, to path: CGPath?) {
+            let old = layer.value(forKey: keyPath) as! CGPath?
+            layer.setValue(path, forKey: keyPath)
+            guard jumping, let old, let path else { return }
+            let move = CABasicAnimation(keyPath: keyPath)
+            move.fromValue = (layer.presentation()?.value(forKey: keyPath) as! CGPath?) ?? old
+            move.toValue = path
+            move.duration = OverlayController.jumpDuration
+            move.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            layer.add(move, forKey: keyPath)
+        }
         /// The outline of `rect`, moved in by `inset` on any side at the view's edge so a stroke there shows its full width
         /// (a full-screen outline), and grown by `outset` elsewhere with its radii.
         func path(_ rect: CGRect, radii: CornerRadii = .zero, inset: CGFloat = 0, outset: CGFloat = 0) -> CGPath {
@@ -245,7 +259,7 @@ final class OverlayView: NSView {
         }
         // A new hover target, or none, crossfades the dim in 150 ms; a drag or selection changes it at once.
         let hovering = o.selection == nil && o.preview == nil && o.ghost == nil
-        if hovering, let previous = dimTarget, previous != o.hover, controller?.isHeadless == false {
+        if hovering, let previous = dimTarget, previous != o.hover, !jumping, controller?.isHeadless == false {
             let fade = CATransition()
             fade.type = .fade
             fade.duration = 0.15
@@ -253,25 +267,26 @@ final class OverlayView: NSView {
             dimLayer.add(fade, forKey: "dim")
         }
         dimTarget = o.dimResolved ? .some(hovering ? o.hover : nil) : nil
-        dimLayer.path = dim
-        hoverLayer.path = o.hover.map { path($0, radii: o.hoverRadii, inset: 0.75) }
-        glowLayer.path = hoverLayer.path
+        slide(dimLayer, "path", to: dim)
+        let hoverPath = o.hover.map { path($0, radii: o.hoverRadii, inset: 0.75) }
+        slide(hoverLayer, "path", to: hoverPath)
+        slide(glowLayer, "path", to: hoverPath)
         // Core Animation scales a shadow by its layer's content alpha, so the shape is filled opaque; the mask hides the fill.
         glowLayer.fillColor = NSColor.black.cgColor
         glowLayer.frame = bounds
         glowMask.frame = bounds
-        glowLayer.shadowPath = o.hover.map { path($0, radii: o.hoverRadii) }
+        slide(glowLayer, "shadowPath", to: o.hover.map { path($0, radii: o.hoverRadii) })
         let outside = CGMutablePath()
         if let shape = glowLayer.shadowPath {
             outside.addRect(bounds.insetBy(dx: -64, dy: -64))
             outside.addPath(shape)
         }
-        glowMask.path = outside
-        hoverRingLayer.path = o.hover.map { path($0, radii: o.hoverRadii, inset: 3, outset: 2.25) }
+        slide(glowMask, "path", to: outside)
+        slide(hoverRingLayer, "path", to: o.hover.map { path($0, radii: o.hoverRadii, inset: 3, outset: 2.25) })
         let hints = CGMutablePath()
         if let rect = o.upHint { hints.addPath(path(rect, radii: o.upHintRadii, inset: 0.5)) }
         if let rect = o.downHint { hints.addPath(path(rect, radii: o.downHintRadii, inset: 0.5)) }
-        levelHintLayer.path = hints
+        slide(levelHintLayer, "path", to: hints)
         styleLayer.path = o.styleFrame.map { path($0) }
         ghostLayer.path = o.ghost.map { path($0) }
         outlineLayer.path = o.showsOutline ? o.selection.map { path($0, radii: o.radii, inset: 0.75) } : nil

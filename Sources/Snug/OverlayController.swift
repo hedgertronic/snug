@@ -175,6 +175,10 @@ final class OverlayController {
     var pointer = CGPoint.zero
     /// Capture mode: what the pointer is over (accessibility elements, pixel geometry, windows, the display), and the running geometry analysis.
     var session: SelectionSession?
+    /// A fresh key press (not a repeat) is being handled; a hover change it makes is a jump.
+    var keyJump = false
+    /// This refresh moves the hover outline to another candidate after a key jump with motion on: the outline and its chrome animate.
+    var jumping = false
     var detectionTask: Task<Void, Never>?
     var detected: [Candidate] = []
     /// Small uniform fills read from the 1x capture (built off main), and the task building them; hover adds the one under the pointer.
@@ -713,6 +717,8 @@ final class OverlayController {
     func handleKey(_ event: NSEvent) -> Bool {
         flash(event)
         text.notice = nil
+        keyJump = !event.isARepeat
+        defer { keyJump = false }
         if scrollArea != nil { return handleScrollKey(event) }
         if armedRecording != nil { return handleRecordingKey(event) }
         if cutout != nil { return handleCutoutKey(event) }
@@ -1048,8 +1054,11 @@ final class OverlayController {
         overlays.downHintRadii = overlays.downHint.map(cornerRadii) ?? .zero
         // The padded card of an area or element; a live window's real shadow has no card to preview.
         if let rect = selection?.rect, framed, !capturesLiveWindow(rect) { overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, framed: true) }
+        jumping = keyJump && !isHeadless && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion && selection == nil
+            && overlays.hover != nil && view.overlays.hover != nil && overlays.hover != view.overlays.hover
         view.overlays = overlays
         refreshExtras()
+        jumping = false
         refreshRecording()
     }
 }
