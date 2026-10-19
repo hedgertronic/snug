@@ -77,7 +77,7 @@ enum Accessibility {
         else { return [] }
         let start = max(0, min((siblings.firstIndex { CFEqual($0, chain[level].element) } ?? 0) - AccessibilityBounds.maximumPeers / 2, siblings.count - AccessibilityBounds.maximumPeers))
         // A displaced chain was moved back (see `chain(at:pid:)`); its siblings are displaced the same way.
-        let live = frame(of: chain[level].element)!.rect
+        guard let live = frame(of: chain[level].element)?.rect else { return [] }
         let shift = CGSize(width: frames[level].rect.minX - live.minX, height: frames[level].rect.minY - live.minY)
         let began = ContinuousClock.now
         var chains: [[AXFrame]] = []
