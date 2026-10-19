@@ -3,9 +3,9 @@ import ScreenshotCore
 
 /// A small non-activating confirmation: a pill with the message and size, and, when the preview is on, a separate rounded card with a
 /// thumbnail of the capture a gap away (above the pill, or below it at the top right). Each piece has its own shadow. It goes away after
-/// 2 s (4 s with a thumbnail) while the pointer is elsewhere, and stays while it is over the toast. Over it, a close button sits on the
-/// top-left corner and, when it holds a capture, icon buttons replace the pill's text: Share, Trash (a saved file), Save (an unsaved
-/// capture), and Open (Preview, or QuickTime Player for a recording). Drag it to drop the image; a saved toast reveals the file when clicked.
+/// the lifetime setting (4 s unless changed) while the pointer is elsewhere, and stays while it is over the toast; leaving starts the
+/// full lifetime again. Over it, a close button sits on the top-left corner and, when it holds a capture, icon buttons replace the pill's
+/// text: Share, Trash (a saved file), Save (an unsaved capture), and Open (Preview, or QuickTime Player for a recording). Drag it to drop the image; a saved toast reveals the file when clicked.
 /// The capture is held only while the toast is visible: `dismiss` releases it.
 @MainActor
 final class Toast: NSPanel, NSDraggingSource {
@@ -16,6 +16,8 @@ final class Toast: NSPanel, NSDraggingSource {
     private static let margin: CGFloat = 10
     /// The space between the pill and the preview card.
     private static let gap: CGFloat = 8
+    /// The lifetime setting's choices, in seconds.
+    static let lifetimes = [2, 4, 6, 10]
     private(set) var png: Data?
     private(set) var file: URL?
     private var reveals: Bool
@@ -77,7 +79,7 @@ final class Toast: NSPanel, NSDraggingSource {
         self.pasteboard = pasteboard
         reveals = file != nil
         let thumbnail = png.flatMap { defaults.bool(forKey: Pref.toastPreview) ? NSImage(data: $0) : nil }
-        lifetime = thumbnail == nil ? .seconds(2) : .seconds(4)
+        lifetime = .seconds(defaults.integer(forKey: Pref.toastLifetime))
         let fit = thumbnail.map { min(1, 240 / $0.size.width, 160 / $0.size.height) } ?? 1
         let previewSize = thumbnail.map { CGSize(width: ($0.size.width * fit).rounded(), height: ($0.size.height * fit).rounded()) } ?? .zero
         preview = thumbnail.map {

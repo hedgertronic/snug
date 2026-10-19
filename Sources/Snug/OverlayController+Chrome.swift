@@ -173,7 +173,7 @@ extension OverlayController {
         // A key's jump to another hover candidate moves the chrome on the outline's own 100 ms animation, so nothing trails it.
         let duration = jumping ? Self.jumpDuration : Self.motionDuration
         // The chrome on the hover outline and where each piece showed, which a jump moves from there to its new place.
-        let attached: [NSView] = [c.hover, c.size, c.snap, c.snapTag, c.ratio, c.radius, c.legend, c.reading, c.status, c.upHint, c.downHint, c.list] + c.sideHints
+        let attached: [NSView] = [c.hover, c.size, c.snap, c.snapTag, c.ratio, c.radius, c.legend, c.reading, c.status, c.list] + c.sideHints
         let attachedBefore = jumping ? attached.filter { !$0.isHidden }.map { ($0, $0.frame.origin) } : []
         let fading: [NSView] = [c.hover, c.size, c.snap, c.ratio, c.radius, c.reading, c.status, c.strip, c.toolTip]
         let wasShown = fading.map { !$0.isHidden }
@@ -523,13 +523,14 @@ extension OverlayController {
             settle([lowest, c.legend] + c.sideHints.prefix(3), ((fits ? [centered] : outside) + past(x: centered.x, group, near: centered.y)).map { CGPoint(x: lowest.frame.minX + $0.x - centered.x, y: lowest.frame.minY + $0.y - centered.y) })
         }
 
-        // The key caps of the faint outlines.
+        // The key caps of the faint outlines. At a jump they move at once and fade in with their outlines.
         for (cap, rect) in [(c.upHint, overlays.upHint), (c.downHint, overlays.downHint)] {
             cap.isHidden = rect == nil
             if let rect {
                 let box = view.viewRect(rect)
                 cap.frame.origin = CGPoint(x: box.minX + 4, y: box.maxY - cap.frame.height - 4)
                 settle([cap], [cap.frame.origin, CGPoint(x: box.minX + 4, y: box.minY + 4)])
+                if jumping { cap.layer!.add(view.levelHintLayer.animation(forKey: "opacity")!, forKey: "opacity") }
             }
         }
 

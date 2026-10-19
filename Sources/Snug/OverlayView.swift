@@ -91,6 +91,8 @@ final class OverlayView: NSView {
     private let glowMask = CAShapeLayer()
     private let hoverRingLayer = CAShapeLayer()
     let levelHintLayer = CAShapeLayer()
+    /// The fade-in of the Up and Down outlines and their caps after a key's jump, in seconds.
+    static let hintFadeDuration = 0.08
     private let styleLayer = CAShapeLayer()
     private let ghostLayer = CAShapeLayer()
     let outlineLayer = CAShapeLayer()
@@ -283,10 +285,20 @@ final class OverlayView: NSView {
         }
         slide(glowMask, "path", to: outside)
         slide(hoverRingLayer, "path", to: o.hover.map { path($0, radii: o.hoverRadii, inset: 3, outset: 2.25) })
+        // The Up and Down outlines never morph: at a jump they take their new path at once, hidden, and fade in once the outline lands.
         let hints = CGMutablePath()
         if let rect = o.upHint { hints.addPath(path(rect, radii: o.upHintRadii, inset: 0.5)) }
         if let rect = o.downHint { hints.addPath(path(rect, radii: o.downHintRadii, inset: 0.5)) }
-        slide(levelHintLayer, "path", to: hints)
+        levelHintLayer.path = hints
+        if jumping {
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 0
+            fade.toValue = 1
+            fade.beginTime = levelHintLayer.convertTime(CACurrentMediaTime(), from: nil) + OverlayController.jumpDuration
+            fade.duration = Self.hintFadeDuration
+            fade.fillMode = .backwards
+            levelHintLayer.add(fade, forKey: "opacity")
+        }
         styleLayer.path = o.styleFrame.map { path($0) }
         ghostLayer.path = o.ghost.map { path($0) }
         outlineLayer.path = o.showsOutline ? o.selection.map { path($0, radii: o.radii, inset: 0.75) } : nil

@@ -650,7 +650,10 @@ extension DebugRun {
         let thumbnail = withPreview.preview!.frame.size
         require(withPreview.preview != nil && without.preview == nil, "the preview setting adds or removes the thumbnail card")
         require(thumbnail.width <= 240 && thumbnail.height <= 160 && abs(thumbnail.width / thumbnail.height - 3) < 0.02, "the thumbnail is aspect-fit within 240 x 160: \(thumbnail)")
-        require(withPreview.frame.height - without.frame.height >= thumbnail.height + 8 && withPreview.lifetime == .seconds(4) && without.lifetime == .seconds(2), "the thumbnail card sits apart from the pill and lasts 4 s")
+        require(withPreview.frame.height - without.frame.height >= thumbnail.height + 8, "the thumbnail card sits apart from the pill")
+        let quick = toast { $0.set(2, forKey: Pref.toastLifetime) }, slow = toast { $0.set(10, forKey: Pref.toastLifetime); $0.set(false, forKey: Pref.toastPreview) }
+        require(withPreview.lifetime == .seconds(4) && without.lifetime == .seconds(4) && quick.lifetime == .seconds(2) && slow.lifetime == .seconds(10),
+                "the toast lasts 4 s by default with or without a preview, and the lifetime setting sets it: \(quick.lifetime) \(slow.lifetime)")
         let card = withPreview.card, thumbnailFrame = withPreview.preview!.frame
         require(card.frame.size == without.card.frame.size && thumbnailFrame.minY - card.frame.maxY == 8 && thumbnailFrame.width <= withPreview.contentView!.bounds.width,
                 "the thumbnail is its own card, a gap above the pill, and the pill is the same size without it: \(thumbnailFrame) \(card.frame)")
@@ -1471,7 +1474,8 @@ extension DebugRun {
                 "] on a hovered element shows its radius in the chip row, uncovered: \(texts(in: chrome.radius)) covered by \(covering.map { "\(type(of: $0)) \($0.frame)" })")
 
         // With motion, a key's jump to another hover candidate animates the outline, its dim and the chrome on it with one 100 ms
-        // animation, while every frame reads its final value at once; the pointer's hover change and key repeat animate nothing.
+        // animation, while every frame reads its final value at once; the Up and Down outlines and their caps never move or morph: they
+        // hide and fade in over 80 ms once the outline lands. The pointer's hover change and key repeat animate nothing.
         overlay.dismiss()
         open()
         let jumpInner = Candidate(id: "jump-inner", label: "Card", bounds: CGRect(x: 1250, y: 420, width: 500, height: 300), score: AccessibilityBounds.baseScore, kind: .element)
@@ -1483,15 +1487,29 @@ extension DebugRun {
         mouse(.mouseMoved, jumpAim)
         let jumpLayers = [overlay.view.hoverLayer, overlay.view.dimLayer, overlay.view.levelHintLayer, chrome.strip.layer!, chrome.hover.layer!]
         func jumpAnimations() -> [[Double]] { jumpLayers.map { layer in (layer.animationKeys() ?? []).map { layer.animation(forKey: $0)!.duration } } }
-        func settleJump() { jumpLayers.forEach { $0.removeAllAnimations() } }
+        func settleJump() { (jumpLayers + [chrome.upHint.layer!, chrome.downHint.layer!]).forEach { $0.removeAllAnimations() } }
         let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let hoverBefore = overlay.view.overlays.hover
+        let hintsBefore = [overlay.view.overlays.upHint, overlay.view.overlays.downHint].compactMap { $0 }.count
         settleJump()
+        let jumpStart = overlay.view.levelHintLayer.convertTime(CACurrentMediaTime(), from: nil)
         overlay.isHeadless = false
         key(126, "")
         overlay.isHeadless = true
         let jumped = jumpAnimations(), hoverAfter = overlay.view.overlays.hover, stripAfter = chrome.strip.frame, chipAfter = chrome.hover.frame
         require(hoverAfter != hoverBefore && hoverAfter != nil, "Up moves the hover to another candidate: \(String(describing: hoverBefore)) to \(String(describing: hoverAfter))")
+        // The hint layer gets no path animation, only the delayed fade, even though the jump changes how many hints it holds; each
+        // shown cap gets the same fade and no frame animation.
+        let hintsAfter = [overlay.view.overlays.upHint, overlay.view.overlays.downHint].compactMap { $0 }.count
+        let hintCaps = [chrome.upHint, chrome.downHint].filter { !$0.isHidden }
+        func hintFaded(_ layer: CALayer) -> Bool {
+            guard layer.animationKeys() == ["opacity"], let fade = layer.animation(forKey: "opacity") as? CABasicAnimation else { return false }
+            return fade.fromValue as? Double == 0 && fade.toValue as? Double == 1 && fade.duration == 0.08 && fade.fillMode == .backwards
+                && abs(fade.beginTime - jumpStart - 0.1) < 0.05
+        }
+        require(reduced || !overlay.view.levelHintLayer.path!.isEmpty && hintsAfter != hintsBefore && !hintCaps.isEmpty
+                    && hintFaded(overlay.view.levelHintLayer) && hintCaps.allSatisfy { hintFaded($0.layer!) },
+                "with motion, an Up jump that changes the hints from \(hintsBefore) to \(hintsAfter) gives the hint layer and its caps only an 80 ms fade-in once the 100 ms glide lands: \(jumped[2]) \(hintCaps.map { $0.layer!.animationKeys() ?? [] })")
         let outlinePath = overlay.view.hoverLayer.animation(forKey: "path")
         require(reduced ? jumped.allSatisfy(\.isEmpty)
                     : outlinePath?.duration == 0.1 && jumped[0].allSatisfy { $0 == 0.1 } && jumped[3...].allSatisfy { !$0.isEmpty && $0.allSatisfy { $0 == 0.1 } },
@@ -1707,8 +1725,8 @@ extension DebugRun {
         }
         overlay.topInset = 0
 
-        // The cursor is the arrow over a button of the top bar and the strip and over a row of an open menu, and the capture cursor on the
-        // gaps between them and on the labels that pass the pointer through.
+        // The cursor is the crosshair over a button of the top bar and the strip, over a row of an open menu, on the gaps between them and
+        // on the labels that pass the pointer through, inside a selection too, where elsewhere it is the open hand.
         overlay.dismiss()
         open()
         await overlay.detectionTask?.value
@@ -1740,7 +1758,7 @@ extension DebugRun {
         let overButtons = [("Copy", chrome.copy), ("Edit", chrome.edit), ("Capture", chrome.modeButtons[.capture]!), ("Frame", chrome.styleToggles[1].1)]
         for (name, button) in overButtons {
             mouse(.mouseMoved, viewPixel(centerOf(button)))
-            require(overlay.view.cursor === NSCursor.arrow, "the cursor is the arrow over the \(name) button: \(overlay.view.cursor)")
+            require(overlay.view.cursor === NSCursor.crosshair, "the cursor is the crosshair over the \(name) button: \(overlay.view.cursor)")
         }
         let barGap = CGPoint(x: (top.groups[0].frame.maxX + top.groups[1].frame.minX) / 2 + top.frame.minX, y: top.frame.midY)
         mouse(.mouseMoved, viewPixel(barGap))
@@ -1754,10 +1772,22 @@ extension DebugRun {
         require(!chrome.ratioMenu.isHidden, "P opens the ratio menu")
         let menuRow = chrome.ratioMenu.panel.convert(CGPoint(x: chrome.ratioMenu.rows[0].frame.midX, y: chrome.ratioMenu.rows[0].frame.midY), to: overlay.view)
         mouse(.mouseMoved, viewPixel(menuRow))
-        require(overlay.view.cursor === NSCursor.arrow, "the cursor is the arrow over a menu row: \(overlay.view.cursor)")
-        mouse(.mouseMoved, CGPoint(x: 40, y: 40))
-        require(overlay.view.cursor !== NSCursor.arrow, "the cursor leaves the arrow off the menu's rows: \(overlay.view.cursor)")
+        require(overlay.view.cursor === NSCursor.crosshair, "the cursor is the crosshair over a menu row: \(overlay.view.cursor)")
         key(53, "\u{1B}")
+        overlay.topInset = 38
+        overlay.selection = AreaSelection(extent: extent, exact: extent)
+        overlay.refresh()
+        mouse(.mouseMoved, CGPoint(x: extent.midX, y: extent.midY))
+        require(overlay.view.cursor === NSCursor.openHand, "inside a full-screen selection the cursor is the open hand: \(overlay.view.cursor)")
+        mouse(.mouseMoved, viewPixel(centerOf(chrome.copy)))
+        require(overlay.view.viewRect(extent).contains(chrome.strip.frame) && overlay.view.cursor === NSCursor.crosshair,
+                "over the strip's Copy button inside a full-screen selection the cursor is the crosshair: \(overlay.view.cursor) strip \(chrome.strip.frame)")
+        key(35, "p")
+        let insideRow = chrome.ratioMenu.panel.convert(CGPoint(x: chrome.ratioMenu.rows[0].frame.midX, y: chrome.ratioMenu.rows[0].frame.midY), to: overlay.view)
+        mouse(.mouseMoved, viewPixel(insideRow))
+        require(!chrome.ratioMenu.isHidden && overlay.view.cursor === NSCursor.crosshair, "over a menu row inside a full-screen selection the cursor is the crosshair: \(overlay.view.cursor)")
+        key(53, "\u{1B}")
+        overlay.topInset = 0
         overlay.dismiss()
 
         // A lit Edit button draws exactly as a lit toggle (Loupe) does, and the current mode exactly as Copy, in the light and the dark look.
