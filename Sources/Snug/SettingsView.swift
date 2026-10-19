@@ -276,7 +276,7 @@ private struct AppearancePane: View {
                     .labelsHidden()
                     .fixedSize()
                 } label: {
-                    detailed("Keep the toast for", "With or without a preview. It stays while the pointer is over it.")
+                    detailed("Keep the toast for", "Held open while the pointer is over it.")
                 }
                 .padding(.vertical, 8)
                 VStack(alignment: .leading, spacing: 8) {
