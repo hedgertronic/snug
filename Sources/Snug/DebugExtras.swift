@@ -1661,7 +1661,7 @@ extension DebugRun {
         defaults.set(false, forKey: Pref.rulers)
 
         // Must-show: in a 60 x 40 pt selection in the middle of the screen the legend and its arrow caps show under every modifier
-        // state, as one group on the same side of the selection each time.
+        // state that binds the arrows, as one group on the same side of the selection each time.
         let tight = CGRect(x: extent.midX, y: extent.midY, width: 60 * overlay.scale, height: 40 * overlay.scale)
         overlay.selection = AreaSelection(extent: extent, exact: tight)
         overlay.refresh()
@@ -1677,7 +1677,7 @@ extension DebugRun {
         }
         var tightSides: [String: String] = [:]
         for (label, held) in [("no modifier", NSEvent.ModifierFlags([])), ("Shift", .shift), ("Option", .option), ("Option-Shift", [.option, .shift]),
-                              ("Command", .command), ("Option-Command", [.option, .command])] {
+                              ("Option-Command", [.option, .command]), ("Control-Option", [.control, .option]), ("Control-Option-Command", [.control, .option, .command])] {
             flags(held)
             require(!chrome.legend.isHidden && chrome.sideHints.allSatisfy { !$0.isHidden }, "the 60 x 40 pt selection shows the legend and arrow caps under \(label)")
             chromeClear("the 60 x 40 pt selection under \(label)")
@@ -1707,7 +1707,8 @@ extension DebugRun {
             overlay.refresh()
             mouse(.mouseMoved, CGPoint(x: 40, y: 700))
             mouse(.mouseMoved, CGPoint(x: small.midX, y: small.midY))
-            for (label, held) in [("no modifier", NSEvent.ModifierFlags([])), ("Option", .option), ("Command", .command), ("Option-Command", [.option, .command])] {
+            for (label, held) in [("no modifier", NSEvent.ModifierFlags([])), ("Option", .option), ("Option-Command", [.option, .command]),
+                                  ("Control-Option-Command", [.control, .option, .command])] {
                 flags(held)
                 require(!chrome.legend.isHidden && chrome.sideHints.allSatisfy { !$0.isHidden }, "a 60 x 40 pt selection at (\(Int(x)), \(Int(y))) shows the legend and arrow caps under \(label)")
                 chromeClear("a 60 x 40 pt selection at (\(Int(x)), \(Int(y))) under \(label)")
