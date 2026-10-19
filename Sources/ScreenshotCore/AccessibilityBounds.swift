@@ -113,8 +113,8 @@ public enum AccessibilityBounds {
         let area = frames[index]
         let band = CGRect(x: area.rect.minX, y: window.rect.minY, width: area.rect.width, height: area.rect.minY - window.rect.minY)
         var withPanel = frames
-        withPanel.insert(AXFrame(roleDescription: area.roleDescription, rect: band.union(area.rect), role: area.role, title: area.title, subrole: area.subrole,
-                                 identifier: area.identifier, elementDescription: area.elementDescription), at: index + 1)
+        // Named "sidebar" with no identifier: the app never reported this frame, so a manifest must not tie it to the scroll area's identity.
+        withPanel.insert(AXFrame(roleDescription: "sidebar", rect: band.union(area.rect), role: area.role), at: index + 1)
         return (withPanel, band)
     }
 
