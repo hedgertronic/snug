@@ -785,6 +785,8 @@ final class OverlayController {
         let step: CGFloat = shift ? 10 : 1
         let character = event.charactersIgnoringModifiers ?? ""
         let hovering = selection == nil
+        // Control only changes the arrows (edge in and out); any other key with Control does nothing.
+        if control && !(123...126).contains(event.keyCode) { return false }
         switch (event.keyCode, command, character) {
         case (53, _, _): dismiss()
         case (36, true, _) where !shift && !option, (76, true, _) where !shift && !option: copyForAgent()

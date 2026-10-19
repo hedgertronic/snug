@@ -229,7 +229,8 @@ extension OverlayController {
         /// and the tools.
         func captureStrip(_ area: CGRect) {
             let scrolls = (scrollFrames != nil || displayID != nil) && area != extent && windows.contains { $0.insetBy(dx: -2, dy: -2).contains(area) }
-            let held = heldGlyphs
+            // Control has no strip action, so with it held every relabel misses and Copy and Save dim.
+            let held = heldGlyphs.union(controlHeld ? ["\u{2303}"] : [])
             c.edit.lit = selection != nil
             let copy: (title: String, key: String)? = switch held {
             case []: ("Copy", "\u{21A9}")
@@ -245,7 +246,7 @@ extension OverlayController {
             // A modifier dims what it changes, and releasing it brings that back, in the strip's motion.
             animate(stripMoves, duration: duration) {
                 c.copy.isEnabled = copy != nil
-                c.save.isEnabled = !optionHeld
+                c.save.isEnabled = !optionHeld && !controlHeld
                 for button in [c.edit, c.scroll, c.record, c.cutout, c.colors] { button.isEnabled = held.isEmpty }
             }
             c.stripSlack = Chrome.widest.copy - c.copy.frame.width + Chrome.widest.save - c.save.frame.width
