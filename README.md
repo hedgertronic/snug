@@ -1,64 +1,85 @@
-# Smart Screenshot Lab
+# Snug
 
-Latest checkpoint and next steps: [October 6 handoff](notes/handoff-2026-10-06.md) (product direction, plan, and agent instructions). Lab detector history: [October 5 handoff](notes/handoff-2026-10-05.md).
+Snug is a macOS screenshot app. Press one shortcut, point at what you want, and Snug picks the element under the pointer (a window, a sidebar row, a button, a table) so one click or Return copies it. The same overlay copies text from images, records the screen, and hands a capture to an AI agent.
 
-Two local macOS screenshot-selection prototypes in one native app. Geometry finds visual boundaries and grid cells, supplemented by Apple OCR for text. Apple Vision finds document structures and uses geometry for grid cells and edge panels. Switch detectors while inspecting the same image, hover to preview a crop, and use the keyboard to correct the selection.
+Snug runs entirely on your Mac. Captures are not uploaded. Requires Apple Silicon and macOS 26 or later.
 
-Requires Apple Silicon and macOS 26 or later. The project uses Apple's frameworks and has no third-party Swift package dependencies or bundled language-model weights. The app bundle is ad-hoc signed for local development; it is not a notarized distribution build.
+## Install
 
-**Run the app**
+Snug is not distributed yet. Build it from source (see "For developers"), then open `build/Snug.app`. It lives in the menu bar and has no Dock icon. The app is signed for local development only; it is not notarized.
 
-Open `build/Smart Screenshot Lab.app`. A bundled synthetic table provides an immediate demo. Use **Open Image** to compare your own screenshots, or **Capture Screen** for live capture. macOS may require Screen Recording permission for live capture; saved-image analysis needs no such permission. Capture and analysis stay on the Mac.
+Open it once and the first-run screen walks through the permissions below. The default capture shortcut is Control-Shift-Space; change it in Settings > General.
 
-| Input | Action |
+## Permissions
+
+- **Screen Recording (required).** Snug freezes the display under the pointer so you can choose from it, and records the screen on request.
+- **Accessibility (recommended).** Lets Snug read the layout of other apps, so it can highlight buttons, sidebars and rows exactly instead of guessing from pixels. Without it Snug falls back to edge detection.
+
+## Using it
+
+The overlay opens in Capture mode. Press `?` in the overlay for the full key list.
+
+**Capture** (A): hover to highlight an element, then click or press Return to copy it. Drag to draw an area (edges snap to nearby boundaries; hold Option to keep the exact rectangle). Esc closes the overlay.
+
+**Text** (T): select text in the frozen image as you would on a web page (macOS Live Text), then Return to copy it.
+
+| Key | Action |
 | --- | --- |
-| Hover | Text under the pointer, cell interiors, or whole tables at grid lines/borders |
-| Tab / Shift–Tab | Walk out / in |
-| Up / Down | Expand / shrink |
-| Space | Lock / unlock |
-| F | Full image or display |
-| W | Containing window when using live capture |
-| Drag, then pause briefly | Preview a nearby boundary; release accepts the visible snap |
-| Option–drag | Keep the exact rectangle |
-| Arrow keys in manual mode | Move crop; Shift increases the step |
-| Return or click | Copy selected crop |
-| Command–S | Save PNG |
-| Escape | Cancel |
+| Return | Copy the selection, or the hovered element |
+| Cmd-Return | Copy for an agent (see below) |
+| Up / Down | Walk the hover out to the parent element, or back in |
+| Left / Right | Hover the neighboring element |
+| Tab | With a selection: focus a corner for its radius |
+| arrows | Move the selection (Shift: 10 px) |
+| Option-arrows | Grow or shrink a side |
+| F | Full screen |
+| W | The window under the pointer |
+| S | Snap on or off |
+| M | Frame on or off (window shadow or padded card) |
+| O | Rounded corners on or off |
+| G | Scrolling capture of the selection |
+| V | Record the selection (V or Return starts) |
+| K | Cut out the subject |
+| C / Shift-C | Copy the color under the pointer / change its format |
+| Cmd-S / Cmd-Shift-S | Save / Save As |
+| L / R / X | Loupe / rulers / crosshair |
 
-The lab retains a saved image after copying so you can compare detectors. A live capture closes its overlay after a successful copy or save. Changing detector starts another analysis. OCR runs once per analysis; pointer movement uses cached regions. Text selections represent visible lines or blocks, not editable-field metadata. An analysis result cannot replace a manually locked crop.
+The menu bar icon also offers Capture, Capture Text, Settings, About and Quit.
 
-Smart snap examines pixels near the dragged rectangle independently of the hover detector, so it can find boundaries absent from the original candidate list. Yellow shows your rough rectangle; a teal dashed outline previews the snap. If no supported boundary appears before release, the crop stays as drawn. This is local edge detection with no downloaded model; borderless or ambiguous objects can still require manual selection.
+## Agent handoff
 
-**Build and verify**
+Cmd-Return copies the capture for an agent: the pixels at full resolution plus a manifest of what was under the pointer (app, window, element). Paste it into your agent chat. The paste carries a short reference line with a capture id.
 
-Xcode with a macOS 26+ SDK and Swift 6.2+ is required. Run from this directory:
-
-```sh
-uv run --no-project scripts/build.py
-swift test --disable-sandbox
-uv run --no-project scripts/compare.py 3
-```
-
-The build script writes the app and CLI into `build`. The comparison script generates six synthetic fixtures, runs each detector in a separate process for each image, and saves raw JSON, outlined previews, and crops in `notes/results`. It writes a summary to `notes/measurements.md`.
-
-Apple Vision needs access to macOS image-buffer and ML services. A restrictive execution sandbox may fail with `Failed to create CVPixelBuffer`; run the benchmark normally from Terminal rather than interpreting that error as a detection result. The build script redirects compiler caches into `.build` and disables SwiftPM's nested manifest sandbox for compatibility with managed development environments.
-
-Analyze one existing image:
+To let an agent read it, add Snug's MCP server to Claude Code:
 
 ```sh
-build/ScreenshotBench analyze --image /absolute/path/image.png --output notes/custom --detector vision --repeat 3
+claude mcp add snug -- /path/to/Snug.app/Contents/MacOS/Snug --mcp
 ```
 
-Use `--detector geometry` to compare the geometry engine. Without a labeled fixture manifest, the CLI reports candidates and timing but no crop accuracy. Screenshots supplied for evaluation are written only to the explicit local output directory.
+Settings > Agent shows this command with the real path and a Copy button. The server is read-only and has two tools, `get_capture` and `zoom`. Snug never captures for an agent; it only serves what you copied. Only the last capture is kept. "Clear last capture" in Settings > Agent removes it. Captures are stored in `~/Library/Application Support/Snug/Agent/`.
 
-Inspect a smart-snap request using source-image pixel coordinates:
+## Settings
+
+- **General:** capture shortcut, After capture (Copy, or Copy and save), save folder, Open at login, permission status.
+- **Appearance:** overlay look (System, Light, Dark), highlight color, fill, fade and glow, and the toast's preview and position.
+- **Keys:** a reference of every overlay key. Rebinding is not available yet.
+- **Agent:** the MCP command and Clear last capture.
+
+Toggles you flip in the overlay (Loupe, Rulers, Frame, Rounded, Snap, and others) are remembered.
+
+## For developers
+
+Xcode with a macOS 26 SDK and Swift 6.2 or later. No third-party packages.
 
 ```sh
-build/ScreenshotBench snap --image notes/real-web/form-test.png --rect 350,458,580,64 --output notes/custom-snap
+uv run scripts/build.py         # builds build/Snug.app, the lab app and build/ScreenshotBench
+swift test --disable-sandbox    # unit tests
 ```
 
-The output contains suggestion bounds and a preview: green is the rough drag, pink is the first suggestion, and blue shows alternatives.
+`scripts/build.py` signs with a local development identity; edit the `codesign` line for your own. The repo also holds the original detector lab (`ScreenshotLab`) and `ScreenshotBench`, the detector benchmark:
 
-**Scope and evidence**
+```sh
+build/ScreenshotBench suite --manifest FILE --baseline FILE --output DIR
+```
 
-The [finalized spec](notes/v1-spec.md) defines the product goal. [Measurements](notes/measurements.md) cover the generated fixtures, and [prototype findings](notes/prototype-findings.md) distinguish verified behavior from follow-up work. Synthetic results are not evidence of reliable selection across arbitrary apps. Global shortcut customization, accessibility integration, drag handles, and broad cross-app validation remain outside this initial comparison build.
+Run `build/ScreenshotBench` with no arguments for every subcommand. Design and decisions are in `notes/snug-design.md`; the agent handoff is in `notes/snug-agent-handoff.md`.
