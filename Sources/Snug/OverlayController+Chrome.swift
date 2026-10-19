@@ -473,10 +473,12 @@ extension OverlayController {
         cornerChip.isHidden = true
         c.cornerKeys.isHidden = true
         if cornerShown, let corner = focusedCorner ?? hoveredCorner, let rect = selection?.rect {
-            // One group for a hovered dot and a focused corner: the chip names what [ and ] change, with its radius, and the same rows
-            // follow, esc only while a corner is focused.
+            // One group for a hovered dot and a focused corner: the chip names what [ and ] change, with its radius in points (all
+            // corners' as a range when they differ), and the same rows follow, esc only while a corner is focused.
             let names: [Handle: String] = [.topLeft: "Top left", .topRight: "Top right", .bottomRight: "Bottom right", .bottomLeft: "Bottom left"]
-            cornerChip.setTitle(focusedCorner.map { "\(names[$0]!)  r \(Int((cornerRadii(of: rect)[$0] / scale).rounded()))" } ?? "All corners  " + radiusText(rect))
+            let points = (focusedCorner.map { [$0] } ?? CornerRadii.corners).map { Int((cornerRadii(of: rect)[$0] / scale).rounded()) }
+            let range = points.min()! == points.max()! ? "\(points[0])" : "\(points.min()!)-\(points.max()!)"
+            cornerChip.setTitle((focusedCorner.map { names[$0]! } ?? "All corners") + "  r " + range)
             c.cornerKeys.show(focusedCorner == nil ? "all corners" : "one corner") {
                 [Pill.hint(["[", "]"], "radius"), Pill.hint(["tab"], focusedCorner == nil ? "one corner" : "next corner")]
                     + (focusedCorner == nil ? [] : [Pill.hint(["esc"], "all corners")])

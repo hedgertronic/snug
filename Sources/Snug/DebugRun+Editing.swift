@@ -126,8 +126,11 @@ extension DebugRun {
         let box = overlay.view.viewRect(a)
         mouse(.mouseMoved, dot(.topLeft))
         require(overlay.hoveredCorner == .topLeft && !overlay.cornerChip.isHidden, "hovering a corner dot shows its chip")
-        require(texts(in: overlay.cornerChip).first?.hasPrefix("All corners  r ") == true && overlay.cornerChip.frame.maxX <= box.minX,
-                "the top-left chip reads All corners with the radius, outside the selection's left edge: \(texts(in: overlay.cornerChip))")
+        // The 152 pt chip is wider than the 140 pt left of the selection, so it takes its next spot, inside the corner.
+        let shown = CornerRadii.corners.map { Int((radii()[$0] / scale).rounded()) }
+        require(texts(in: overlay.cornerChip) == ["All corners  r \(shown.min()!)-\(shown.max()!)", "="]
+                    && overlay.cornerChip.frame.maxY == box.maxY && overlay.cornerChip.frame.minX == box.minX + 14,
+                "the top-left chip reads All corners with the radius range, at the top-left corner: \(texts(in: overlay.cornerChip)) \(overlay.cornerChip.frame) \(box)")
         let topLeftRadius = radii().topLeft
         mouse(.mouseMoved, dot(.bottomRight))
         require(overlay.hoveredCorner == .bottomRight && overlay.cornerChip.frame.minX >= box.maxX, "the bottom-right chip sits outside the right edge")

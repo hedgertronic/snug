@@ -471,12 +471,12 @@ extension DebugRun {
                     && helpActions["K"] == "Subject preview" && helpActions["Subject: tab"] == "Next subject (Shift: back)" && helpActions["V"] == "Arm recording, hover or selection"
                     && helpActions["Armed: \u{21A9} / V"] == "Start recording" && helpActions["Armed: H"] == "Cursor on / off" && helpActions["Armed: I"] == "Count-in off, 3 s, 5 s"
                     && helpActions["hotkey"] == "Stop recording" && helpActions["G"] == "Scrolling capture, hover or selection" && helpActions["Subject: S"] == "Crop to subject"
-                    && helpActions["\u{2318} arrow"] == "Edge out, one side" && helpActions["\u{21E7} \u{2318} arrow"] == "Edge in, one side"
+                    && helpActions["\u{2303} \u{2325} arrow"] == "Edge out, one side" && helpActions["\u{2303} \u{2325} \u{2318} arrow"] == "Edge in, one side"
                     && helpActions["+ / -"] == "All sides 1 px (Option: 10)" && helpActions["\u{21E7} \u{21A9}"] == "Copy the text" && helpActions["\u{2318} \u{21A9}"] == "Copy for an agent"
                     && helpActions["\u{2325} \u{21A9}"] == "Translate" && helpActions["\u{21E7} \u{2318} S"] == "Save As"
                     && helpActions["tab"] == "Walk out (Shift: in)" && helpActions["[ ]"] == "Corner radius (Tab: one corner)"
                     && !helpRows.contains { $0.action.contains("Aspect ratio lock") },
-                "the sheet lists the ratio menu and lock, W, the subject keys, G and V on a hover, the recording keys, Cmd-arrow, + and -, Shift-Return on a hover, Tab without other fits, and no P cycle")
+                "the sheet lists the ratio menu and lock, W, the subject keys, G and V on a hover, the recording keys, Control-Option-arrow edges, + and -, Shift-Return on a hover, Tab without other fits, and no P cycle")
         require(sheet.contains("Esc or ? closes this.") || sheet.contains { $0.hasSuffix("Esc or ? closes this.") }, "the sheet says how to close it")
         let panel = help.panel.frame
         require(panel.width == 900 && help.bounds.insetBy(dx: 1, dy: 1).contains(panel), "the sheet panel is 900 pt wide and inside the screen \(panel)")

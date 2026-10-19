@@ -155,6 +155,16 @@ extension DebugRun {
             windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
         mouse(.mouseMoved, CGPoint(x: editRect.midX, y: editRect.midY))
         try snapshot("edit-chrome-pointer-inside")
+        // The legend with the pointer inside, under each modifier set: one action, or none while Command is held without Option.
+        for (name, modifiers) in [("shift", NSEvent.ModifierFlags.shift), ("option", .option), ("option-shift", [.option, .shift]), ("option-cmd", [.option, .command]),
+                                  ("option-shift-cmd", [.option, .shift, .command]), ("control-option", [.control, .option]),
+                                  ("control-option-cmd", [.control, .option, .command]), ("control", .control), ("cmd", .command)] {
+            overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
+            try snapshot("legend-\(name)")
+        }
+        overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
         overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: .shift, timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!)
         try snapshot("edit-chrome-pointer-inside-shift")
