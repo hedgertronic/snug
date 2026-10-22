@@ -2,12 +2,13 @@ import AppKit
 import ScreenCaptureKit
 import ScreenshotCore
 
-/// Marks the windows Snug's own captures leave out: the overlay and the toast. Settings, About and First Run are not marked,
+/// Marks the windows Snug's own captures leave out: the overlay, the toast and its preview. Settings, About and First Run are not marked,
 /// so they can be captured and hovered like any other window.
 protocol CaptureExcluded {}
 
 extension OverlayWindow: CaptureExcluded {}
 extension Toast: CaptureExcluded {}
+extension ToastPreview: CaptureExcluded {}
 
 /// Captures the display under the pointer at full pixel resolution. Display shots take an `SCScreenshotConfiguration`: with an
 /// `SCStreamConfiguration`, a display capture on macOS 27 leaves out every window's shadow (measured against `screencapture`), so a
