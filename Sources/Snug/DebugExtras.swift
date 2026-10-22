@@ -751,6 +751,16 @@ extension DebugRun {
                 "Save shows the saved state with Trash, the file name truncated in the middle with the full name as its tooltip: \(fresh.message.stringValue)")
         require(Array(frames(fresh).prefix(5)) == Array(unsaved.prefix(5)), "saving keeps the toast's size and place: \(frames(fresh)) \(unsaved)")
         fresh.dismissal?.cancel()
+        let warningDefaults = UserDefaults(suiteName: "snug-toast-\(UUID().uuidString)")!
+        Pref.register(in: warningDefaults)
+        warningDefaults.set(saveFolder.path, forKey: Pref.saveFolder)
+        let warned = Toast(png: capture, message: "Copied", detail: "Pinned or moving content: the header stayed fixed while the page scrolled, so 120 px at 4 seams may repeat.",
+                           file: nil, color: .systemOrange, defaults: warningDefaults)
+        let warning = frames(warned)
+        warned.saveButton.performClick(nil)
+        require(warned.file != nil && warned.detail.font == .monospacedSystemFont(ofSize: 12, weight: .regular) && warned.detail.textColor == .secondaryLabelColor
+                    && warned.detail.maximumNumberOfLines == 1 && Array(frames(warned).prefix(5)) == Array(warning.prefix(5)),
+                "Save on a warning shows the file name as a plain saved capture does, in the same size: \(warned.detail.font!) \(frames(warned))")
 
         // The capture is held only while the toast is visible: closing releases the PNG, the thumbnail, the preview, and the toast itself.
         weak var weakToast: Toast?

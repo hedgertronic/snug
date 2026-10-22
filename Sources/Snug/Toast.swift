@@ -417,8 +417,9 @@ final class Toast: NSPanel, NSDraggingSource {
         dismiss()
     }
 
-    /// Saves to the save location as Cmd-S does (under a numbered name when the usual one is taken), then shows the saved state in the
-    /// same size. A save that fails shows its reason in the toast, in red, and keeps the Save button.
+    /// Saves to the save location as Cmd-S does (under a numbered name when the usual one is taken), then shows the saved state (the file
+    /// name, as a plain capture's, even after a warning) in the same size. A save that fails shows its reason in the toast, in red, and
+    /// keeps the Save button.
     @objc private func saveClicked() {
         let url: URL
         do {
@@ -438,6 +439,9 @@ final class Toast: NSPanel, NSDraggingSource {
         reveals = true
         message.stringValue = "Saved to \(url.deletingLastPathComponent().lastPathComponent)"
         detail.stringValue = url.lastPathComponent
+        detail.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        detail.textColor = .secondaryLabelColor
+        detail.maximumNumberOfLines = 1
         detail.lineBreakMode = .byTruncatingMiddle
         detail.toolTip = url.lastPathComponent
         detail.isHidden = false
