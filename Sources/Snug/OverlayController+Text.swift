@@ -21,27 +21,38 @@ struct TextSession {
 /// With real pointer input Live Text's text view holds a press back until the pointer moves or lifts (text.log: `selectedRanges` at
 /// mouseDown is still the previous caret or selection), so the anchor comes from the first selection change after the press.
 extension OverlayWindow {
-    /// Text mode's mouse events: a press up to 16 pt right of text moves onto it and clears the selection, and after Live Text handles
-    /// each drag event and the release the selection grows to cover the pressed word (or the word or line a double or triple click
-    /// picked), which `OverlayController.textSelectionDidChange` takes from Live Text's first caret or range after the press.
+    /// Text mode's mouse events: a press up to 16 pt right of text moves onto it and clears the selection, a drag or release off text
+    /// moves sideways onto the nearest text on its row, and after Live Text handles each drag event and the release the selection grows
+    /// to cover the pressed word (or the word or line a double or triple click picked), which `OverlayController.textSelectionDidChange`
+    /// takes from Live Text's first caret or range after the press.
     func sendTextMouse(_ event: NSEvent) {
         let liveText = (contentView as! OverlayView).liveText
+        // `hasText(at:)` takes points from the top-left corner.
+        let local = liveText.convert(event.locationInWindow, from: nil)
+        let textPoint = CGPoint(x: local.x, y: liveText.bounds.height - local.y)
+        var onText = liveText.hasText(at: textPoint)
+        var dx: CGFloat?
+        if event.type == .leftMouseDown {
+            if !onText, contentView!.hitTest(event.locationInWindow)?.isDescendant(of: liveText) == true {
+                dx = stride(from: 2.0, through: 16, by: 2).first { liveText.hasText(at: CGPoint(x: textPoint.x - $0, y: textPoint.y)) }.map { -$0 }
+            }
+        } else if textPress != nil, !onText {
+            // Live Text ends a drag off text on the glyph nearest it anywhere, which right of a short row is a longer row above it, so
+            // the rows between would drop out of the selection. It ends a drag inside a word at that word's end, so 8 pt steps (each
+            // `hasText` costs 10-30 us) land on the row's last word unless that word is narrower.
+            dx = stride(from: 8.0, through: liveText.bounds.width, by: 8).lazy.flatMap { [$0, -$0] }
+                .first { (0...liveText.bounds.width).contains(textPoint.x + $0) && liveText.hasText(at: CGPoint(x: textPoint.x + $0, y: textPoint.y)) }
+        }
         var event = event
         var snapped = ""
-        var onText = false
+        if let dx {
+            event = NSEvent.mouseEvent(with: event.type, location: CGPoint(x: event.locationInWindow.x + dx, y: event.locationInWindow.y),
+                                       modifierFlags: event.modifierFlags, timestamp: event.timestamp, windowNumber: event.windowNumber,
+                                       context: nil, eventNumber: event.eventNumber, clickCount: event.clickCount, pressure: event.pressure)!
+            snapped = " moved \(dx) pt onto text"
+            onText = true
+        }
         if event.type == .leftMouseDown {
-            // `hasText(at:)` takes points from the top-left corner.
-            let local = liveText.convert(event.locationInWindow, from: nil)
-            let point = CGPoint(x: local.x, y: liveText.bounds.height - local.y)
-            onText = liveText.hasText(at: point)
-            if !onText, contentView!.hitTest(event.locationInWindow)?.isDescendant(of: liveText) == true,
-               let dx = stride(from: 2.0, through: 16, by: 2).first(where: { liveText.hasText(at: CGPoint(x: point.x - $0, y: point.y)) }) {
-                event = NSEvent.mouseEvent(with: .leftMouseDown, location: CGPoint(x: event.locationInWindow.x - dx, y: event.locationInWindow.y),
-                                           modifierFlags: event.modifierFlags, timestamp: event.timestamp, windowNumber: event.windowNumber,
-                                           context: nil, eventNumber: event.eventNumber, clickCount: event.clickCount, pressure: event.pressure)!
-                snapped = " moved \(-dx) pt onto text"
-                onText = true
-            }
             if onText { liveText.selectedRanges = [] }
             textPress = onText ? (event.locationInWindow, nil) : nil
         }

@@ -309,6 +309,14 @@ extension DebugRun {
                 require(selected.contains { $0.lowerBound <= inner.lowerBound && inner.upperBound <= $0.upperBound },
                         "a drag down the list selects the row with \"\(marker)\": selected \(selected.map { transcript[$0].debugDescription }), transcript \(transcript.debugDescription)")
             }
+            // A drag that ends past the end of the short wrapped row, near or far, selects through that row and not into the next item.
+            // (Live Text reads a stray line, "match your rea...", right of the short row and after it.)
+            for endX in [900.0, 1455] {
+                textDrag(from: CGPoint(x: 250, y: 101), to: CGPoint(x: endX, y: 183))
+                let text = liveText.selectedText
+                require(text.hasPrefix("1. Menu bar icon") && text.contains("which is almost never.") && !text.contains("3. A capture"),
+                        "a drag that ends at x \(Int(endX)), right of the short row, selects through it: \(text.debugDescription)")
+            }
             overlay.dismiss()
         }
         // The rest runs with presses reaching Live Text at once: a held press in the found-items fixture started a drag session that waits
