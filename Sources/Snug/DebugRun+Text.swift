@@ -331,6 +331,55 @@ extension DebugRun {
         key(escape)
         require(!overlay.window.isVisible, "Esc after a drag in the text closes")
 
+        // A drag that starts off text draws a box like Capture's drag, never a Live Text selection, and on release copies the text
+        // inside the box in reading order. Here the box starts left of the Address label and covers that block's four lines.
+        let boxStart = CGPoint(x: 300, y: 900), boxEnd = CGPoint(x: 1590, y: 1230)
+        try await open()
+        mouse(.mouseMoved, boxStart)
+        require(!liveText.hasText(at: topLeft(boxStart)) && overlay.view.cursor == .crosshair, "the box starts off text, under the crosshair")
+        let selectedBefore = liveText.selectedText
+        mouse(.leftMouseDown, boxStart)
+        var boxGhosts: [CGRect?] = [], boxSelected: [String] = []
+        for step in 1...10 {
+            let t = CGFloat(step) / 10
+            mouse(.leftMouseDragged, CGPoint(x: boxStart.x + (boxEnd.x - boxStart.x) * t, y: boxStart.y + (boxEnd.y - boxStart.y) * t))
+            boxGhosts.append(overlay.view.overlays.ghost)
+            if liveText.selectedText != selectedBefore || overlay.window.textPress != nil { boxSelected.append("\(liveText.selectedRanges.count) ranges \(liveText.selectedText.debugDescription), press \(String(describing: overlay.window.textPress))") }
+        }
+        require(boxGhosts.last == CGRect(x: boxStart.x, y: boxStart.y, width: boxEnd.x - boxStart.x, height: boxEnd.y - boxStart.y) && !boxGhosts.contains(nil),
+                "a drag from off text draws the box as Capture's drag does: \(boxGhosts)")
+        require(boxSelected.isEmpty && overlay.view.cursor == .crosshair, "a box drag leaves Live Text's selection as it was (\(selectedBefore.debugDescription)) and the cursor the crosshair: \(boxSelected)")
+        pasteboard.clearContents()
+        mouse(.leftMouseUp, boxEnd)
+        require(overlay.view.overlays.ghost == nil && !overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."],
+                "on release the box goes and a Reading text... pill shows while its text is read")
+        await overlay.textTask?.value
+        let boxed = await copied()
+        require(boxed == "Address\n1234 Main St\nAddress 2 (Optional)\nApartment or suite" && !overlay.window.isVisible,
+                "the release copies the box's lines in reading order and closes: \(boxed.debugDescription)")
+        // A drag that starts on text never draws a box.
+        try await open()
+        mouse(.leftMouseDown, CGPoint(x: productName.minX + 10, y: productName.midY))
+        var textGhost = false
+        for step in 1...10 {
+            mouse(.leftMouseDragged, CGPoint(x: productName.minX + 10 + 400 * CGFloat(step) / 10, y: productName.midY + 200 * CGFloat(step) / 10))
+            textGhost = textGhost || overlay.view.overlays.ghost != nil
+        }
+        mouse(.leftMouseUp, CGPoint(x: productName.minX + 410, y: productName.midY + 200))
+        require(!textGhost && liveText.selectedText.hasPrefix("Product name") && overlay.window.isVisible && overlay.text.reading == nil,
+                "a drag from text selects words as before and draws no box: \(liveText.selectedText.debugDescription)")
+        // A click off text, or a drag off text under Capture's 8 px click size, still reaches Live Text: it clears the selection.
+        for (name, end) in [("click", boxStart), ("7 px drag", CGPoint(x: boxStart.x + 7, y: boxStart.y + 7))] {
+            textDrag(from: CGPoint(x: billing.minX + 4, y: billing.midY), to: CGPoint(x: billing.maxX - 2, y: billing.midY))
+            pasteboard.clearContents()
+            mouse(.leftMouseDown, boxStart)
+            if end != boxStart { mouse(.leftMouseDragged, end) }
+            mouse(.leftMouseUp, end)
+            require(liveText.selectedText.isEmpty && overlay.view.overlays.ghost == nil && overlay.text.reading == nil && overlay.window.isVisible,
+                    "a \(name) off text clears the selection as before and reads nothing: \(liveText.selectedText.debugDescription)")
+        }
+        overlay.dismiss()
+
         // A drag down across lines selects them all, in order.
         try await open()
         textDrag(from: CGPoint(x: productName.minX + 10, y: productName.midY), to: CGPoint(x: 1900, y: 600))

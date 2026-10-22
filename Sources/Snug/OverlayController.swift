@@ -21,6 +21,8 @@ final class OverlayWindow: NSPanel {
 
     /// Text mode: where the current press landed and the word (or, after a double or triple click, the word or line) it anchors.
     var textPress: (point: CGPoint, anchor: Range<String.Index>?)?
+    /// Text mode: a press off text held back from Live Text, and the box a drag from it draws (image pixels).
+    var textBox: (press: NSEvent, drag: AreaDrag)?
 
     /// Text mode: a press is down that began on a chrome button, or one that began elsewhere (Live Text's).
     var buttonPress = false
@@ -356,6 +358,7 @@ final class OverlayController {
         window.backgroundColor = .black
         if !isHeadless { window.ignoresMouseEvents = false }
         view.liveText.analysis = nil
+        window.textBox = nil
         smallImage = nil
         window.orderOut(nil)
         escape?.unregister()
@@ -1047,6 +1050,7 @@ final class OverlayController {
         showWarmUpNotice()
         var overlays = OverlayView.Overlays()
         if case .drawing(let drag) = interaction, drag.rect.width > 0 || drag.rect.height > 0 { overlays.ghost = drag.rect }
+        if let drag = window.textBox?.drag, drag.rect.width > 0 || drag.rect.height > 0 { overlays.ghost = drag.rect }
         overlays.preview = snapPreview
         overlays.selection = selection?.rect
         overlays.snappedEdges = snappedEdges

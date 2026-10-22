@@ -46,6 +46,7 @@ extension OverlayController {
         selection = nil
         mode = new
         view.liveText.resetSelection()
+        window.textBox = nil
         // A click in Live Text leaves focus there; hiding it would hand focus to the window, out of reach of the overlay's keys.
         window.makeFirstResponder(view)
         if image != nil { if new == .capture { startHover() } else { startLiveText() } }
