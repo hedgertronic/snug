@@ -3,7 +3,8 @@ import ScreenshotCore
 import Translation
 
 /// A nonactivating panel: it becomes key, taking the keyboard, without making Snug the active app. Activating Snug on open could
-/// wait about 0.5 s on the app being left, and the overlay reached the screen only after it.
+/// wait about 0.5 s on the app being left, and the overlay reached the screen only after it, so `present` activates Snug once the
+/// overlay is drawn: until then the app being left keeps the cursor (Finder holds it at the arrow).
 @MainActor
 final class OverlayWindow: NSPanel {
     override var canBecomeKey: Bool { true }
@@ -323,6 +324,7 @@ final class OverlayController {
         lastOpenMilliseconds = start.duration(to: opened).milliseconds
         lastFirstDrawMilliseconds = opened.duration(to: .now).milliseconds
         if mode == .capture { startHover() } else { startLiveText() }
+        if !isHeadless { NSApp.activate() }
     }
 
     /// Supplies window rectangles (image pixels, front to back) once they are built.
