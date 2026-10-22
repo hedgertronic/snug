@@ -5,7 +5,9 @@ import ScreenshotCore
 /// thumbnail of the capture a gap away (above the pill, or below it at the top right). Each piece has its own shadow. It goes away after
 /// the lifetime setting (4 s unless changed) while the pointer is elsewhere, and stays while it is over the toast; leaving starts the
 /// full lifetime again. A lifetime of 0 shows only failure toasts (red), for 4 s; Forever keeps the toast until it is closed or replaced.
-/// Over it, a close button sits on the top-left corner and, when it holds a capture, icon buttons replace the pill's text: Share, Trash (a saved file), Save (an unsaved capture), and Open (Preview, or QuickTime Player for a recording). Drag it to drop the image; a saved toast reveals the file when clicked.
+/// Over it, a close button sits on the top-left corner and, when it holds a capture, icon buttons replace the pill's text: Share, Trash
+/// (a saved file), Save (an unsaved capture), and Open (Preview, or QuickTime Player for a recording). Drag it to drop the image; a click
+/// closes it, and a saved toast reveals the file first.
 /// The capture is held only while the toast is visible: `dismiss` releases it.
 @MainActor
 final class Toast: NSPanel, NSDraggingSource {
@@ -304,6 +306,7 @@ final class Toast: NSPanel, NSDraggingSource {
 
     override func mouseUp(with event: NSEvent) {
         if reveals, let file { NSWorkspace.shared.activateFileViewerSelecting([file]) }
+        dismiss()
     }
 
     override func mouseDragged(with event: NSEvent) {

@@ -735,6 +735,10 @@ extension DebugRun {
             let hotKeyCode = UserDefaults.standard.integer(forKey: Pref.hotKeyCode)
             field.keyDown(with: escape)
             precondition(!field.recording && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode, "Esc stops recording and keeps the shortcut")
+            descendants(of: field, NSButton.self).first!.performClick(nil)
+            precondition(field.recording && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode, "the clear button starts recording and writes nothing")
+            offscreen.makeFirstResponder(nil)
+            precondition(!field.recording && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode, "clearing then leaving the field keeps the shortcut")
         }
         precondition(tabs.tabViewItems.map(\.label) == ["General", "Appearance", "Keys", "Agent"], "Settings tabs: \(tabs.tabViewItems.map(\.label))")
         let window = SettingsTabs.makeWindow()

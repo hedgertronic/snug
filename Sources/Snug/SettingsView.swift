@@ -619,7 +619,7 @@ struct OverlayPreview: View {
 
 /// A field that records a shortcut: click, then press one with at least one of Control, Option, or Command (or a function key).
 /// It shows the shortcut as key caps with a clear button that starts recording, and while recording an accent ring around a "Type shortcut"
-/// placeholder. Recording that ends without a new shortcut (Esc, or a click anywhere else) keeps the one it had.
+/// placeholder. Recording that ends without a new shortcut (Esc, a click anywhere else, or the window losing key) keeps the one it had.
 struct ShortcutRecorder: NSViewRepresentable {
     let code: Int
     let modifiers: Int
@@ -636,6 +636,7 @@ struct ShortcutRecorder: NSViewRepresentable {
         private let placeholder = NSTextField("Type shortcut", size: 12, weight: .regular, color: .secondaryLabelColor)
         private let clear = NSButton(image: NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Clear shortcut")!, target: nil, action: nil)
         private var clickMonitor: Any?
+        private var resignKeyObserver: Any?
         override var acceptsFirstResponder: Bool { true }
 
         init() {
@@ -699,11 +700,16 @@ struct ShortcutRecorder: NSViewRepresentable {
                 }
                 return event
             }
+            resignKeyObserver = resignKeyObserver ?? NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: window, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { _ = self?.window?.makeFirstResponder(nil) }
+            }
         }
 
         override func resignFirstResponder() -> Bool {
             if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
             clickMonitor = nil
+            if let resignKeyObserver { NotificationCenter.default.removeObserver(resignKeyObserver) }
+            resignKeyObserver = nil
             show(code: code, modifiers: modifiers, recording: false)
             return super.resignFirstResponder()
         }
