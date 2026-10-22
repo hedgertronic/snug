@@ -214,30 +214,18 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         refresh()
     }
 
-    /// Puts text on the pasteboard, closes the overlay, and toasts, with a thumbnail of `rect` when there is one.
-    private func deliverText(_ copied: String, message: String, detail: String = "", rect: CGRect?) {
-        guard !copied.isEmpty, let image else { return beep() }
+    /// Puts text on the pasteboard, closes the overlay, and toasts with the text's first line.
+    private func deliverText(_ copied: String, message: String) {
+        guard !copied.isEmpty else { return beep() }
         pasteboard.clearContents()
         pasteboard.setString(copied, forType: .string)
-        guard let rect else {
-            dismiss()
-            return Toast.show(message: message, detail: detail)
-        }
-        let scale = scale
         dismiss()
-        commitTask = Task {
-            do {
-                let png = try await Output.encode(image, crop: rect, framed: false, scale: scale).png
-                Toast.show(png: png, message: message, detail: detail, file: nil)
-            } catch {
-                report(error)
-            }
-        }
+        Toast.show(message: message, text: copied)
     }
 
     /// Copies `string`, or with `translating` translates it into the target language and copies the translation.
-    func copyText(_ string: String, message: String, translating: Bool, rect: CGRect?) {
-        guard translating else { return deliverText(string, message: message, rect: rect) }
+    func copyText(_ string: String, message: String, translating: Bool) {
+        guard translating else { return deliverText(string, message: message) }
         guard let source = TextTranslation.language(of: string) else {
             text.notice = "Could not tell the language of this text."
             return refresh()
@@ -253,7 +241,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
                 case .translate:
                     let translated = try await translate(string, source, target)
                     try Task.checkCancellation()
-                    deliverText(translated, message: "Copied translation", detail: TextTranslation.name(target), rect: rect)
+                    deliverText(translated, message: "Copied \(TextTranslation.name(target)) translation")
                 }
             } catch {
                 report(error)
@@ -276,7 +264,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
                 let isTable = table.contains("\t") && !translating
                 let lines = "\(rows.count) \(rows.count == 1 ? "line" : "lines")"
                 copyText(isTable ? table : TextLayout.readingOrder(rows), message: isTable ? "Copied as table, \(rows.count) rows" : "Copied \(lines)",
-                         translating: translating, rect: rect)
+                         translating: translating)
                 refresh()
             } catch {
                 report(error)
@@ -312,7 +300,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
                 let rows = TextLayout.rows(TextLayout.lines(of: selected, in: try await Self.recognize(image, crop: extent)))
                 try Task.checkCancellation()
                 text.reading = nil
-                copyText(TextLayout.table(rows), message: "Copied \(rows.count) \(rows.count == 1 ? "row" : "rows")", translating: false, rect: nil)
+                copyText(TextLayout.table(rows), message: "Copied \(rows.count) \(rows.count == 1 ? "row" : "rows")", translating: false)
                 refresh()
             } catch {
                 report(error)
@@ -395,7 +383,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
                 dismiss()
                 openURL(url)
             default:
-                copyText(item.text, message: "Copied", translating: false, rect: item.bounds)
+                copyText(item.text, message: "Copied", translating: false)
             }
             return true
         }
@@ -412,7 +400,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
             let selected = liveText.selectedText
             guard !selected.isEmpty else { beep(); break }
             let lines = selected.split(whereSeparator: \.isNewline).count
-            copyText(selected, message: "Copied \(lines) \(lines == 1 ? "line" : "lines")", translating: flags.contains(.option), rect: nil)
+            copyText(selected, message: "Copied \(lines) \(lines == 1 ? "line" : "lines")", translating: flags.contains(.option))
         default:
             return false
         }

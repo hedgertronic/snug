@@ -580,61 +580,12 @@ extension DebugRun {
 
         try await renderMenuBarIcons(into: directory)
 
-        /// A toast's (or another transparent panel's) content on a mid-gray backdrop.
-        func renderToast(_ name: String, _ toast: NSPanel, hovered: Bool = false) throws {
-            if hovered, let toast = toast as? Toast {
-                toast.mouseEntered(with: NSEvent.enterExitEvent(with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: toast.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil)!)
-                toast.dismissal?.cancel()
-            }
-            let content = toast.contentView!
-            let rep = content.bitmapImageRepForCachingDisplay(in: content.bounds)!
-            content.cacheDisplay(in: content.bounds, to: rep)
-            let backed = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: rep.pixelsWide, pixelsHigh: rep.pixelsHigh, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
-                                          isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
-            NSGraphicsContext.saveGraphicsState()
-            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: backed)
-            let whole = NSRect(x: 0, y: 0, width: rep.pixelsWide, height: rep.pixelsHigh)
-            NSColor(white: 0.5, alpha: 1).setFill()
-            whole.fill()
-            rep.draw(in: whole)
-            NSGraphicsContext.restoreGraphicsState()
-            try backed.representation(using: .png, properties: [:])!.write(to: directory.appending(path: "\(name).png"))
-            print(directory.appending(path: "\(name).png").path)
-        }
-        try renderToast("toast", Toast(png: nil, message: "Copied", detail: "1824 x 768  frame", file: nil, color: nil, defaults: defaults))
-        // The checkmark takes the highlight color; a light one gets a black check.
-        let yellow = UserDefaults(suiteName: "snug-render-toast-\(UUID().uuidString)")!
-        Pref.register(in: yellow)
-        yellow.set("#FFC600", forKey: Pref.highlightColor)
-        let yellowToast = Toast(png: nil, message: "Copied", detail: "1824 x 768", file: nil, color: nil, defaults: yellow)
-        try renderToast("toast-highlight-yellow", yellowToast)
-        let yellowColor = Highlight.color(hex: "#FFC600")
-        require((yellowToast.mark as! NSImageView).symbolConfiguration == NSImage.SymbolConfiguration(pointSize: 17, weight: .semibold).applying(.init(paletteColors: [.black, yellowColor])),
-                "the toast's check is black on the yellow highlight color")
-        let roundedCapture = CGContext(data: nil, width: 960, height: 520, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
-                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        roundedCapture.addPath(CGPath(roundedRect: CGRect(x: 0, y: 0, width: 960, height: 520), cornerWidth: 40, cornerHeight: 40, transform: nil))
-        roundedCapture.clip()
-        roundedCapture.draw(image.cropping(to: CGRect(x: 300, y: 380, width: 960, height: 520))!, in: CGRect(x: 0, y: 0, width: 960, height: 520))
-        let roundedPNG = try await Output.png(roundedCapture.makeImage()!)
-        try renderToast("toast-preview", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: defaults))
-        try renderToast("toast-preview-hover", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: defaults), hovered: true)
-        let topRight = UserDefaults(suiteName: "snug-render-toast-\(UUID().uuidString)")!
-        Pref.register(in: topRight)
-        topRight.set("topRight", forKey: Pref.toastPosition)
-        try renderToast("toast-preview-top-right", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: topRight))
-        try renderToast("toast-preview-top-right-hover", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: topRight), hovered: true)
-        try renderToast("toast-failed", Toast(png: roundedPNG, message: "Copied, save failed", detail: "You don't have permission.", file: nil, color: .systemRed, defaults: defaults))
-        try renderToast("toast-saved-hover",Toast(png: roundedPNG, message: "Copied, saved to Desktop", detail: "Snug 2026-10-10 at 12.00.00.png", file: URL(fileURLWithPath: "/tmp/Snug.png"), color: nil, defaults: defaults), hovered: true)
+        try await renderToasts(into: directory, image: image)
         // The recording's stop reminder, in the dark look.
         defaults.set("dark", forKey: Pref.overlayAppearance)
-        try renderToast("recording-reminder", ScreenRecording.makeReminder(around: CGRect(x: 300, y: 300, width: 400, height: 200), on: CGMainDisplayID(), defaults: defaults))
+        try renderPanels([ScreenRecording.makeReminder(around: CGRect(x: 300, y: 300, width: 400, height: 200), on: CGMainDisplayID(), defaults: defaults)],
+                         on: NSColor(white: 0.5, alpha: 1), to: directory.appending(path: "recording-reminder.png"))
         defaults.removeObject(forKey: Pref.overlayAppearance)
-        let noPreview = UserDefaults(suiteName: "snug-render-toast-\(UUID().uuidString)")!
-        Pref.register(in: noPreview)
-        noPreview.set(false, forKey: Pref.toastPreview)
-        try renderToast("toast-no-preview", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: noPreview))
-        try renderToast("toast-no-preview-hover", Toast(png: roundedPNG, message: "Copied", detail: "960 x 520", file: nil, color: nil, defaults: noPreview), hovered: true)
 
         func render(_ name: String, _ content: some View) throws {
             let renderer = ImageRenderer(content: content.background(Color(nsColor: .windowBackgroundColor)))
@@ -747,6 +698,160 @@ extension DebugRun {
             tabController.selectedTabViewItemIndex = index
             precondition(window.title == "Settings", "the Settings window title stays Settings on the \(item.label) tab: \"\(window.title)\"")
         }
+    }
+
+    /// Transparent windows' contents drawn where they sit on screen relative to each other, on `backdrop`, at the backing scale.
+    /// Window shadows are the window server's, so they are not drawn.
+    static func renderPanels(_ windows: [NSWindow], on backdrop: NSColor, to file: URL) throws {
+        let area = windows.map(\.frame).reduce(windows[0].frame) { $0.union($1) }.insetBy(dx: -16, dy: -16)
+        let scale = windows[0].backingScaleFactor
+        let sheet = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(area.width * scale), pixelsHigh: Int(area.height * scale), bitsPerSample: 8, samplesPerPixel: 4,
+                                     hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        sheet.size = area.size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: sheet)
+        backdrop.setFill()
+        CGRect(origin: .zero, size: area.size).fill()
+        for window in windows {
+            let content = window.contentView!
+            let rep = content.bitmapImageRepForCachingDisplay(in: content.bounds)!
+            content.cacheDisplay(in: content.bounds, to: rep)
+            rep.draw(in: window.frame.offsetBy(dx: -area.minX, dy: -area.minY), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: false, hints: nil)
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        try sheet.representation(using: .png, properties: [:])!.write(to: file)
+        print(file.path)
+    }
+
+    /// `--render-toasts DIR`: the toast in each state, in the light and the dark look, as `toast-<state>-<look>.png` on a backdrop of
+    /// that look; the preview states draw the preview panel where it sits by the capsule. Checks the sizes the design fixes: one line
+    /// is 40 pt tall, a long warning two lines, the capsule at most 360 pt wide; the preview of a very tall and a very wide capture
+    /// at 72 pt on their short side, cropped at the top and in the middle; hovering and the preview moving or resizing nothing.
+    static func renderToasts(into directory: URL, image: CGImage) async throws {
+        Toast.isSuppressed = true
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        func require(_ condition: Bool, _ message: String) {
+            guard condition else {
+                FileHandle.standardError.write(Data("FAIL: \(message)\n".utf8))
+                exit(EXIT_FAILURE)
+            }
+        }
+        let defaults = UserDefaults(suiteName: "snug-render-toast-\(UUID().uuidString)")!
+        Pref.register(in: defaults)
+        let screenshot = try await Output.png(image.cropping(to: CGRect(x: 0, y: 0, width: 1280, height: 800))!)
+        // A very tall and a very wide capture: the screenshot tiled, the tall one with an orange band across its top 300 px.
+        func tiled(_ width: Int, _ height: Int, band: Bool) async throws -> Data {
+            let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            for x in stride(from: 0, to: width, by: 1280) {
+                for y in stride(from: 0, to: height, by: 800) { context.draw(image.cropping(to: CGRect(x: 0, y: 0, width: 1280, height: 800))!, in: CGRect(x: x, y: y, width: 1280, height: 800)) }
+            }
+            if band {
+                context.setFillColor(NSColor.systemOrange.cgColor)
+                context.fill(CGRect(x: 0, y: height - 300, width: width, height: 300))
+            }
+            return try await Output.png(context.makeImage()!)
+        }
+        let tall = try await tiled(1280, 9000, band: true), wide = try await tiled(7200, 800, band: false)
+        let movie = URL(fileURLWithPath: "/tmp/Snug 2026-10-22 at 14.03.11.mov")
+        let longMovie = URL(fileURLWithPath: "/tmp/Snug 2026-10-22 at 14.03.11 onboarding walkthrough for review 11.mov")
+        let swatch = NSColor(srgbRed: 0x3A / 255, green: 0x7B / 255, blue: 0xD5 / 255, alpha: 1)
+        let topRight = UserDefaults(suiteName: "snug-render-toast-\(UUID().uuidString)")!
+        Pref.register(in: topRight)
+        topRight.set("topRight", forKey: Pref.toastPosition)
+        let yellow = UserDefaults(suiteName: "snug-render-toast-\(UUID().uuidString)")!
+        Pref.register(in: yellow)
+        yellow.set("#FFC600", forKey: Pref.highlightColor)
+        let longWarning = "Pinned or moving content: the header and sidebar stayed fixed while the page scrolled, so 120 px at 4 seams may repeat. Check the stitch before sharing."
+        let states: [(name: String, hover: Bool, peek: Bool, toast: () -> Toast)] = [
+            ("image", false, false, { Toast(png: screenshot, message: "Copied", detail: "1280 x 800", file: nil, color: nil, defaults: defaults) }),
+            ("hover", true, false, { Toast(png: screenshot, message: "Copied", detail: "1280 x 800", file: nil, color: nil, defaults: defaults) }),
+            ("preview", true, true, { Toast(png: screenshot, message: "Copied", detail: "1280 x 800", file: nil, color: nil, defaults: defaults) }),
+            ("preview-top-right", true, true, { Toast(png: screenshot, message: "Copied", detail: "1280 x 800", file: nil, color: nil, defaults: topRight) }),
+            ("saved-hover", true, false, { Toast(png: screenshot, message: "Copied, saved to Desktop", detail: "Snug 2026-10-22 at 14.03.11.png",
+                                                 file: URL(fileURLWithPath: "/tmp/Snug 2026-10-22 at 14.03.11.png"), color: nil, defaults: defaults) }),
+            ("text", false, false, { Toast(png: nil, message: "Copied 3 lines", detail: "", file: nil, color: nil,
+                                           text: "\nShip v1.0 settings pane and move the toast lifetime picker under General\nFix toast on second display\nDraft the release notes", defaults: defaults) }),
+            ("text-hover", true, false, { Toast(png: nil, message: "Copied 3 lines", detail: "", file: nil, color: nil, text: "Ship v1.0 settings pane\nFix toast", defaults: defaults) }),
+            ("text-yellow-highlight", false, false, { Toast(png: nil, message: "Copied", detail: "", file: nil, color: nil, text: "Ship v1.0", defaults: yellow) }),
+            ("warning", false, false, { Toast(png: tall, message: "Copied", detail: "Pinned or moving content: 120 px may repeat", file: nil, color: .systemOrange, defaults: defaults) }),
+            ("warning-long", false, false, { Toast(png: tall, message: "Copied", detail: longWarning, file: nil, color: .systemOrange, defaults: defaults) }),
+            ("warning-long-hover", true, false, { Toast(png: tall, message: "Copied", detail: longWarning, file: nil, color: .systemOrange, defaults: defaults) }),
+            ("recording", false, false, { Toast(png: screenshot, message: "Copied, saved to Desktop", detail: movie.lastPathComponent, file: movie, color: nil, defaults: defaults) }),
+            ("recording-hover", true, false, { Toast(png: screenshot, message: "Copied, saved to Desktop", detail: movie.lastPathComponent, file: movie, color: nil, defaults: defaults) }),
+            ("color", false, false, { Toast(png: nil, message: "Copied", detail: "#3A7BD5", file: nil, color: swatch, text: "#3A7BD5", defaults: defaults) }),
+            ("color-hover", true, false, { Toast(png: nil, message: "Copied", detail: "#3A7BD5", file: nil, color: swatch, text: "#3A7BD5", defaults: defaults) }),
+            ("failure", false, false, { Toast(png: nil, message: "Capture failed", detail: "The display is not available.", file: nil, color: .systemRed, defaults: defaults) }),
+            ("failure-hover", true, false, { Toast(png: nil, message: "Capture failed", detail: "The display is not available.", file: nil, color: .systemRed, defaults: defaults) }),
+            ("failure-capture", false, false, { Toast(png: screenshot, message: "Copied, save failed", detail: "You do not have permission to save in Desktop.", file: nil,
+                                                      color: .systemRed, defaults: defaults) }),
+            ("long-filename", false, false, { Toast(png: screenshot, message: "Copied, saved to Desktop", detail: longMovie.lastPathComponent, file: longMovie, color: nil, defaults: defaults) }),
+            ("long-message", false, false, { Toast(png: screenshot, message: "Copied, saved to Design Review Screenshots 2026", detail: "Snug 2026-10-22 at 14.03.11.png",
+                                                   file: URL(fileURLWithPath: "/tmp/Snug 2026-10-22 at 14.03.11.png"), color: nil, defaults: defaults) }),
+            ("tall", true, true, { Toast(png: tall, message: "Copied", detail: "1280 x 9000", file: nil, color: nil, defaults: defaults) }),
+            ("wide", true, true, { Toast(png: wide, message: "Copied", detail: "7200 x 800", file: nil, color: nil, defaults: defaults) })
+        ]
+        for state in states {
+            for (look, backdrop) in [(NSAppearance.Name.aqua, NSColor(srgbRed: 0.84, green: 0.87, blue: 0.93, alpha: 1)), (.darkAqua, NSColor(srgbRed: 0.13, green: 0.15, blue: 0.22, alpha: 1))] {
+                // A toast takes the look the app is in when it opens.
+                NSApp.appearance = NSAppearance(named: look)
+                let toast = state.toast()
+                func frames() -> [CGRect] { [toast.frame, toast.card.frame, toast.lead.frame, toast.textBox.frame, toast.actions.frame, toast.message.frame, toast.detail.frame] }
+                let rest = frames()
+                require(toast.card.frame.width <= 360 && toast.card.frame.height == (toast.detail.maximumNumberOfLines == 2 ? toast.card.frame.height : 40),
+                        "\(state.name): one line is 40 pt tall (only a warning or failure wraps), and no capsule is wider than 360 pt: \(toast.card.frame.size)")
+                if state.hover {
+                    toast.setHovering(true)
+                    try await Task.sleep(for: .milliseconds(250))
+                }
+                if state.peek { toast.setPeeking(true) }
+                require(frames() == rest, "\(state.name): hovering and the preview move and resize nothing: \(frames()) \(rest)")
+                try renderPanels([toast] + (state.peek ? [toast.preview!] : []), on: backdrop,
+                                 to: directory.appending(path: "toast-\(state.name)-\(look == .aqua ? "light" : "dark").png"))
+                switch state.name {
+                case "warning-long":
+                    require(toast.card.frame.height > 40 && toast.card.frame.height <= 48 && toast.detail.frame.height > 20 && toast.card.frame.width == 360,
+                            "a long warning takes two lines at the full 360 pt: \(toast.card.frame.size) \(toast.detail.frame)")
+                case "text":
+                    require(toast.detail.stringValue == "\"Ship v1.0 settings pane and move the toast lifetime picker under General\"" && toast.detail.toolTip == nil
+                                && toast.detail.lineBreakMode == .byTruncatingTail && toast.lead is NSImageView,
+                            "copied text shows its first non-empty line in quotes, cut at the end, behind the text glyph: \(toast.detail.stringValue)")
+                case "text-yellow-highlight":
+                    require((toast.lead as! NSImageView).symbolConfiguration == NSImage.SymbolConfiguration(pointSize: 27, weight: .regular)
+                                .applying(.init(paletteColors: [.black, Highlight.color(hex: "#FFC600")])),
+                            "the text glyph is black on the yellow highlight color")
+                case "long-filename":
+                    require(toast.detail.lineBreakMode == .byTruncatingMiddle && toast.detail.toolTip == longMovie.lastPathComponent && toast.card.frame.width == 360,
+                            "a long file name is cut in the middle with the full name as its tooltip")
+                case "recording-hover":
+                    require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Move to Trash", "Open in QuickTime Player", "Share"],
+                            "a saved recording offers Copy, Trash, Open in QuickTime Player and Share")
+                case "color-hover":
+                    require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy"] && toast.lead is NSBox, "a color offers Copy, behind its swatch")
+                case "text-hover":
+                    require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Share"], "copied text offers Copy and Share")
+                case "tall", "wide":
+                    let size = toast.preview!.frame.size
+                    require(size == (state.name == "tall" ? CGSize(width: 72, height: 160) : CGSize(width: 240, height: 72)), "\(state.name): the preview is \(size)")
+                case "preview":
+                    require(toast.preview!.frame.minY == toast.frame.maxY && toast.preview!.frame.minY - (toast.frame.minY + toast.card.frame.maxY) == 10,
+                            "the preview is 10 pt above the capsule")
+                default: break
+                }
+                if state.name == "tall" {
+                    // The band across the tall capture's top is the top of both the thumbnail and the preview.
+                    for view in [toast.lead, toast.preview!.contentView!] {
+                        let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)!
+                        view.cacheDisplay(in: view.bounds, to: rep)
+                        let top = rep.colorAt(x: rep.pixelsWide / 2, y: 6)!.usingColorSpace(.sRGB)!, bottom = rep.colorAt(x: rep.pixelsWide / 2, y: rep.pixelsHigh - 6)!.usingColorSpace(.sRGB)!
+                        require(top.redComponent - top.blueComponent > 0.4 && bottom.redComponent - bottom.blueComponent < 0.2,
+                                "a tall capture is cropped to its top: top \(top), bottom \(bottom)")
+                    }
+                }
+                toast.dismiss()
+            }
+        }
+        NSApp.appearance = nil
     }
 
     /// `--render-menubar-icons DIR`: every menu bar icon variant drawn from `SnugApp.menuBarIcon` the way the status item draws it (an 18 pt

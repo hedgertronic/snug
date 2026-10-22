@@ -87,7 +87,7 @@ extension OverlayController {
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
         dismiss()
-        Toast.show(message: "Copied", detail: text, color: swatch(color))
+        Toast.show(message: "Copied", detail: text, color: swatch(color), text: text)
     }
 
     /// U on a selection, or on the hovered element (the rectangle Return would copy): the menu under the Colors button, with the area's
