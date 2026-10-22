@@ -653,7 +653,11 @@ extension DebugRun {
         require(withPreview.frame.height - without.frame.height >= thumbnail.height + 8, "the thumbnail card sits apart from the pill")
         let quick = toast { $0.set(2, forKey: Pref.toastLifetime) }, slow = toast { $0.set(10, forKey: Pref.toastLifetime); $0.set(false, forKey: Pref.toastPreview) }
         require(withPreview.lifetime == .seconds(4) && without.lifetime == .seconds(4) && quick.lifetime == .seconds(2) && slow.lifetime == .seconds(10),
-                "the toast lasts 4 s by default with or without a preview, and the lifetime setting sets it: \(quick.lifetime) \(slow.lifetime)")
+                "the toast lasts 4 s by default with or without a preview, and the lifetime setting sets it: \(quick.lifetime!) \(slow.lifetime!)")
+        let forever = toast { $0.set(-1, forKey: Pref.toastLifetime) }, off = toast { $0.set(0, forKey: Pref.toastLifetime) }
+        forever.scheduleDismissal()
+        require(forever.lifetime == nil && forever.dismissal == nil && off.lifetime == .seconds(4),
+                "Forever starts no dismissal timer, and with 0 a failure toast (the only kind 0 shows) lasts 4 s")
         let card = withPreview.card, thumbnailFrame = withPreview.preview!.frame
         require(card.frame.size == without.card.frame.size && thumbnailFrame.minY - card.frame.maxY == 8 && thumbnailFrame.width <= withPreview.contentView!.bounds.width,
                 "the thumbnail is its own card, a gap above the pill, and the pill is the same size without it: \(thumbnailFrame) \(card.frame)")

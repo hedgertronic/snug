@@ -36,6 +36,8 @@ enum Shortcut {
 @MainActor
 enum SettingsTabs {
     static let width: CGFloat = 400
+    /// The Appearance pane's height, which the Keys pane's scroll view matches so the two tabs are the same size.
+    static let tallHeight: CGFloat = 703
     static let panes: [(title: String, symbol: String, view: AnyView)] = [
         ("General", "gearshape", AnyView(GeneralPane())),
         ("Appearance", "paintpalette", AnyView(AppearancePane())),
@@ -130,7 +132,7 @@ private func caption(_ text: String) -> some View {
 }
 
 /// The app icon and name once, then shortcut, after capture, save folder, open at login, recording, and the permissions; a footer
-/// with a link to Snug's Ko-fi page.
+/// asking for support on Ko-fi, with the developer's credit linking to hedgertronic.com.
 private struct GeneralPane: View {
     @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
@@ -153,6 +155,11 @@ private struct GeneralPane: View {
                 Card {
                     LabeledContent("Shortcut") {
                         ShortcutRecorder(code: hotKeyCode, modifiers: hotKeyModifiers).fixedSize()
+                        // Removing both keys falls back to the registered default shortcut.
+                        Button("Reset") {
+                            UserDefaults.standard.removeObject(forKey: Pref.hotKeyCode)
+                            UserDefaults.standard.removeObject(forKey: Pref.hotKeyModifiers)
+                        }
                     }
                     LabeledContent("After capture") {
                         Picker("After capture", selection: $afterCapture) {
@@ -200,13 +207,21 @@ private struct GeneralPane: View {
                 }
             }
             Divider()
-            HStack {
-                Text("Everything else is in the overlay.").foregroundStyle(.secondary)
-                Spacer(minLength: 12)
-                Link("Support Snug on Ko-fi", destination: URL(string: "https://ko-fi.com/hedgertronic")!)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    Image(systemName: "cup.and.heat.waves.fill").font(.system(size: 24)).foregroundStyle(Color(red: 1, green: 0.37, blue: 0.36))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("If you like Snug, consider supporting the developer.").font(.system(size: 13, weight: .medium))
+                        Link("Support Snug on Ko-fi", destination: URL(string: "https://ko-fi.com/hedgertronic")!).font(.system(size: 13))
+                    }
+                }
+                HStack {
+                    Text("Everything else is in the overlay.").font(.system(size: 12)).foregroundStyle(.secondary)
+                    Spacer(minLength: 12)
+                    MakerChip()
+                }
             }
-                .font(.system(size: 12))
-                .padding(.init(top: 10, leading: 20, bottom: 14, trailing: 20))
+                .padding(.init(top: 14, leading: 20, bottom: 14, trailing: 20))
                 .frame(width: SettingsTabs.width, alignment: .leading)
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -223,6 +238,40 @@ private struct GeneralPane: View {
             detailed(name, detail)
         }
         .padding(.vertical, 4)
+    }
+}
+
+/// The developer's credit as hotstove.io shows it: a camera icon and HEDGERTRONIC in an outlined capsule, linking to hedgertronic.com.
+private struct MakerChip: View {
+    private static let card = Color(nsColor: .look(dark: NSColor(srgbRed: 0x22 / 255, green: 0x1F / 255, blue: 0x19 / 255, alpha: 1),
+                                                   light: NSColor(srgbRed: 0xFF / 255, green: 0xFD / 255, blue: 0xF6 / 255, alpha: 1)))
+    private static let ink = Color(nsColor: .look(dark: NSColor(srgbRed: 0xED / 255, green: 0xE8 / 255, blue: 0xDA / 255, alpha: 1),
+                                                  light: NSColor(srgbRed: 0x24 / 255, green: 0x22 / 255, blue: 0x1C / 255, alpha: 1)))
+    private static let line = Color(nsColor: .look(dark: NSColor(srgbRed: 0xAA / 255, green: 0xA4 / 255, blue: 0x96 / 255, alpha: 1),
+                                                   light: NSColor(srgbRed: 0x57 / 255, green: 0x53 / 255, blue: 0x4A / 255, alpha: 1)))
+
+    var body: some View {
+        Link(destination: URL(string: "https://hedgertronic.com/")!) {
+            HStack(spacing: 5) {
+                // The camera: a blue rounded square with a dark lens in its top-right corner.
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color(red: 0.42, green: 0.68, blue: 0.9))
+                    .overlay(alignment: .topTrailing) {
+                        Circle().fill(Color(white: 0.08)).frame(width: 8, height: 8)
+                            .overlay(Circle().fill(Color(white: 0.2)).frame(width: 5, height: 5))
+                            .offset(x: -0.5, y: 0.5)
+                    }
+                    .frame(width: 13, height: 13)
+                Text("HEDGERTRONIC").font(.system(size: 9, weight: .heavy, design: .rounded)).tracking(0.72)
+            }
+            .foregroundStyle(Self.ink)
+            .padding(.horizontal, 7)
+            .frame(height: 22)
+            .background(Capsule().fill(Self.card))
+            .overlay(Capsule().strokeBorder(Self.line, lineWidth: 2))
+        }
+        .buttonStyle(.plain)
+        .help("Visit hedgertronic.com")
     }
 }
 
@@ -257,7 +306,7 @@ private struct AppearancePane: View {
                 }
             }
             caption("Highlight")
-            OverlayPreview(color: Highlight.color(hex: highlightColor), fill: highlightFill, fade: highlightFade, glow: highlightGlow)
+            OverlayPreview(appearance: overlayAppearance, color: Highlight.color(hex: highlightColor), fill: highlightFill, fade: highlightFade, glow: highlightGlow)
             Card {
                 LabeledContent("Color") { ColorMenu(hex: $highlightColor).fixedSize() }
                 slider("Fill", value: $highlightFill, range: 0...0.3)
@@ -272,17 +321,14 @@ private struct AppearancePane: View {
                     detailed("Show a preview", "Thumbnail above the toast. Drag it out to drop the image.")
                 }
                 .padding(.vertical, 8)
-                LabeledContent {
-                    Picker("Keep the toast for", selection: $toastLifetime) {
-                        ForEach(Toast.lifetimes, id: \.self) { Text("\($0) s").tag($0) }
+                LabeledContent("Toast duration") {
+                    Picker("Toast duration", selection: $toastLifetime) {
+                        ForEach(Toast.lifetimes, id: \.self) { Text($0 < 0 ? "Forever" : "\($0) s").tag($0) }
                     }
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.menu)
                     .labelsHidden()
                     .fixedSize()
-                } label: {
-                    detailed("Keep the toast for", "Held open while the pointer is over it.")
                 }
-                .padding(.vertical, 8)
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Toast position")
                     HStack(spacing: 8) {
@@ -419,7 +465,7 @@ private struct KeysPane: View {
             }
             .padding(.init(top: 10, leading: 20, bottom: 20, trailing: 20))
         }
-        .frame(width: SettingsTabs.width, height: 520)
+        .frame(width: SettingsTabs.width, height: SettingsTabs.tallHeight)
     }
 
     /// The caps for a row's keys: alternatives split on " / ", modifier words as their symbols.
@@ -449,19 +495,42 @@ private struct KeyCapView: NSViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, nsView cap: KeyCap, context: Context) -> CGSize? { context.coordinator.size }
 }
 
-/// The overlay's chrome in its light and dark looks side by side: a frozen-screen mock with the dim, the highlight, a chip, and a top-bar
-/// pill with one lit toggle. The chrome is the overlay's own `Pill`, `BarButton`, and `KeyCap`, each sample forced to one appearance.
+/// The overlay's chrome in the look the appearance setting picks: a frozen-screen mock with the dim, the highlight, a chip, and a top-bar
+/// pill with one lit toggle. "system" shows the light look and the dark one on either side of a diagonal. The chrome is the overlay's own
+/// `Pill`, `BarButton`, and `KeyCap`, each sample forced to one appearance.
 struct OverlayPreview: View {
+    let appearance: String
     let color: NSColor
     let fill: Double
     let fade: Double
     let glow: Double
 
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach([false, true], id: \.self) { Sample(dark: $0, color: color, fill: fill, fade: fade, glow: glow) }
+        ZStack {
+            if appearance != "dark" { Sample(dark: false, color: color, fill: fill, fade: fade, glow: glow) }
+            if appearance == "dark" { Sample(dark: true, color: color, fill: fill, fade: fade, glow: glow) }
+            if appearance == "system" {
+                Sample(dark: true, color: color, fill: fill, fade: fade, glow: glow).mask(Diagonal())
+                Diagonal(edge: true).stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+            }
         }
         .frame(height: 140)
+    }
+
+    /// The lower-right half of a rectangle, cut on the diagonal from its bottom-left to its top-right corner; `edge` is the cut alone.
+    private struct Diagonal: Shape {
+        var edge = false
+
+        func path(in rect: CGRect) -> Path {
+            Path { path in
+                path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+                path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+                if !edge {
+                    path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+                    path.closeSubpath()
+                }
+            }
+        }
     }
 
     private struct Sample: NSViewRepresentable {
@@ -549,7 +618,8 @@ struct OverlayPreview: View {
 }
 
 /// A field that records a shortcut: click, then press one with at least one of Control, Option, or Command (or a function key).
-/// It shows the shortcut as key caps with a clear button, and while recording an accent ring around a "Type shortcut" placeholder.
+/// It shows the shortcut as key caps with a clear button that starts recording, and while recording an accent ring around a "Type shortcut"
+/// placeholder. Recording that ends without a new shortcut (Esc, or a click anywhere else) keeps the one it had.
 struct ShortcutRecorder: NSViewRepresentable {
     let code: Int
     let modifiers: Int
@@ -564,7 +634,8 @@ struct ShortcutRecorder: NSViewRepresentable {
         private var modifiers = 0
         private let caps = NSStackView()
         private let placeholder = NSTextField("Type shortcut", size: 12, weight: .regular, color: .secondaryLabelColor)
-        private let clear = NSButton(image: NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Remove shortcut")!, target: nil, action: nil)
+        private let clear = NSButton(image: NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Clear shortcut")!, target: nil, action: nil)
+        private var clickMonitor: Any?
         override var acceptsFirstResponder: Bool { true }
 
         init() {
@@ -577,9 +648,9 @@ struct ShortcutRecorder: NSViewRepresentable {
             caps.spacing = 3
             clear.isBordered = false
             clear.contentTintColor = .tertiaryLabelColor
-            clear.toolTip = "Remove shortcut"
+            clear.toolTip = "Clear shortcut"
             clear.target = self
-            clear.action = #selector(removeShortcut)
+            clear.action = #selector(beginRecording)
             let row = NSStackView(views: [caps, placeholder, clear])
             row.spacing = 6
             row.edgeInsets = NSEdgeInsets(top: 0, left: 6, bottom: 0, right: 6)
@@ -618,14 +689,21 @@ struct ShortcutRecorder: NSViewRepresentable {
 
         override func mouseDown(with event: NSEvent) { beginRecording() }
 
-        func beginRecording() {
+        @objc func beginRecording() {
             window?.makeFirstResponder(self)
             show(code: code, modifiers: modifiers, recording: true)
+            // Clicking empty space in the window does not take first responder, so a click outside the field ends recording here.
+            clickMonitor = clickMonitor ?? NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+                MainActor.assumeIsolated {
+                    if let self, event.window === self.window, !self.bounds.contains(self.convert(event.locationInWindow, from: nil)) { self.window?.makeFirstResponder(nil) }
+                }
+                return event
+            }
         }
 
-        @objc private func removeShortcut() { UserDefaults.standard.set(-1, forKey: Pref.hotKeyCode) }
-
         override func resignFirstResponder() -> Bool {
+            if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
+            clickMonitor = nil
             show(code: code, modifiers: modifiers, recording: false)
             return super.resignFirstResponder()
         }

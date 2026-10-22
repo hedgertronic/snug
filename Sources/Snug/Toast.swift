@@ -4,8 +4,8 @@ import ScreenshotCore
 /// A small non-activating confirmation: a pill with the message and size, and, when the preview is on, a separate rounded card with a
 /// thumbnail of the capture a gap away (above the pill, or below it at the top right). Each piece has its own shadow. It goes away after
 /// the lifetime setting (4 s unless changed) while the pointer is elsewhere, and stays while it is over the toast; leaving starts the
-/// full lifetime again. Over it, a close button sits on the top-left corner and, when it holds a capture, icon buttons replace the pill's
-/// text: Share, Trash (a saved file), Save (an unsaved capture), and Open (Preview, or QuickTime Player for a recording). Drag it to drop the image; a saved toast reveals the file when clicked.
+/// full lifetime again. A lifetime of 0 shows only failure toasts (red), for 4 s; Forever keeps the toast until it is closed or replaced.
+/// Over it, a close button sits on the top-left corner and, when it holds a capture, icon buttons replace the pill's text: Share, Trash (a saved file), Save (an unsaved capture), and Open (Preview, or QuickTime Player for a recording). Drag it to drop the image; a saved toast reveals the file when clicked.
 /// The capture is held only while the toast is visible: `dismiss` releases it.
 @MainActor
 final class Toast: NSPanel, NSDraggingSource {
@@ -16,15 +16,16 @@ final class Toast: NSPanel, NSDraggingSource {
     private static let margin: CGFloat = 10
     /// The space between the pill and the preview card.
     private static let gap: CGFloat = 8
-    /// The lifetime setting's choices, in seconds.
-    static let lifetimes = [2, 4, 6, 10]
+    /// The lifetime setting's choices, in seconds: 0 is no toast but failures, and -1 is Forever.
+    static let lifetimes = [0, 2, 4, 6, 10, -1]
     private(set) var png: Data?
     private(set) var file: URL?
     private var reveals: Bool
     private(set) var dismissal: Task<Void, any Error>?
     private var dragStart: NSPoint?
     private var sharing = false
-    let lifetime: Duration
+    /// How long the toast stays while the pointer is elsewhere; nil is until it is closed.
+    let lifetime: Duration?
     private(set) var preview: NSView?
     private let defaults: UserDefaults
     private let pasteboard: NSPasteboard
@@ -46,7 +47,7 @@ final class Toast: NSPanel, NSDraggingSource {
 
     /// A color toast passes `color` instead of a PNG and shows a swatch in place of the thumbnail. `pasteboard` is where Trash looks for the capture.
     static func show(png: Data? = nil, message: String, detail: String = "", file: URL? = nil, color: NSColor? = nil, defaults: UserDefaults = .standard, pasteboard: NSPasteboard = .general) {
-        guard !isSuppressed else { return }
+        guard !isSuppressed, defaults.integer(forKey: Pref.toastLifetime) != 0 || color == .systemRed else { return }
         current?.dismiss()
         let toast = Toast(png: png, message: message, detail: detail, file: file, color: color, defaults: defaults, pasteboard: pasteboard)
         current = toast
@@ -56,6 +57,7 @@ final class Toast: NSPanel, NSDraggingSource {
 
     func scheduleDismissal() {
         dismissal?.cancel()
+        guard let lifetime else { return }
         dismissal = Task {
             try await Task.sleep(for: lifetime)
             dismiss()
@@ -79,7 +81,8 @@ final class Toast: NSPanel, NSDraggingSource {
         self.pasteboard = pasteboard
         reveals = file != nil
         let thumbnail = png.flatMap { defaults.bool(forKey: Pref.toastPreview) ? NSImage(data: $0) : nil }
-        lifetime = .seconds(defaults.integer(forKey: Pref.toastLifetime))
+        let seconds = defaults.integer(forKey: Pref.toastLifetime)
+        lifetime = seconds < 0 ? nil : .seconds(seconds == 0 ? 4 : seconds)
         let fit = thumbnail.map { min(1, 240 / $0.size.width, 160 / $0.size.height) } ?? 1
         let previewSize = thumbnail.map { CGSize(width: ($0.size.width * fit).rounded(), height: ($0.size.height * fit).rounded()) } ?? .zero
         preview = thumbnail.map {
