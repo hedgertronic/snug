@@ -37,7 +37,7 @@ enum Shortcut {
 enum SettingsTabs {
     static let width: CGFloat = 400
     /// The Appearance pane's height, which the Keys pane's scroll view matches so the two tabs are the same size.
-    static let tallHeight: CGFloat = 703
+    static let tallHeight: CGFloat = 641
     static let panes: [(title: String, symbol: String, view: AnyView)] = [
         ("General", "gearshape", AnyView(GeneralPane())),
         ("Appearance", "paintpalette", AnyView(AppearancePane())),
@@ -282,7 +282,6 @@ private struct AppearancePane: View {
     @AppStorage(Pref.highlightFill) private var highlightFill = 0.0
     @AppStorage(Pref.highlightFade) private var highlightFade = 0.42
     @AppStorage(Pref.highlightGlow) private var highlightGlow = 0.5
-    @AppStorage(Pref.toastPreview) private var toastPreview = true
     @AppStorage(Pref.toastPosition) private var toastPosition = "bottomCenter"
     @AppStorage(Pref.toastLifetime) private var toastLifetime = 4
 
@@ -315,12 +314,6 @@ private struct AppearancePane: View {
             }
             caption("After capture")
             Card {
-                LabeledContent {
-                    Toggle("Show a preview", isOn: $toastPreview).labelsHidden().toggleStyle(.switch)
-                } label: {
-                    detailed("Show a preview", "Thumbnail above the toast. Drag it out to drop the image.")
-                }
-                .padding(.vertical, 8)
                 LabeledContent("Toast duration") {
                     Picker("Toast duration", selection: $toastLifetime) {
                         ForEach(Toast.lifetimes, id: \.self) { Text($0 < 0 ? "Forever" : "\($0) s").tag($0) }
