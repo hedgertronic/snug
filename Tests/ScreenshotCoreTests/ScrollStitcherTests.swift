@@ -194,31 +194,6 @@ struct ScrollStitcherTests {
         #expect(await stitcher.unmatchedRows > 0)
     }
 
-    /// Only the expected shifts are tried: a range without the true move adds nothing, and one around it finds the move.
-    @Test func anExpectedRangeLimitsTheShiftsTried() async {
-        let stitcher = ScrollStitcher(first: frame(0))
-        #expect(await !stitcher.add(frame(50), expected: 60...100))
-        #expect(await stitcher.add(frame(50), expected: 30...70))
-        #expect(await stitcher.height == header + 50 + view + footer)
-    }
-
-    /// Scroll deltas in points, at times in seconds: each frame shows the running sum somewhere in the lag before its capture, so the
-    /// range is the difference of the two, a quarter and 24 pt wider, in pixels; line deltas give only the direction.
-    @Test func expectedShiftsFollowTheScrollDeltas() {
-        func shifts(_ deltas: [(TimeInterval, CGFloat, Bool)]) -> ClosedRange<Int>? {
-            ScrollStitcher.expectedShifts(deltas.map { ($0.0, $0.1, $0.2) }, matched: 1, now: 2, lag: 0.25, scale: 2)
-        }
-        // After the matched frame: the new frame shows the first 10 pt and perhaps the next 30.
-        #expect(shifts([(1.5, -10, true), (1.9, -30, true)]) == -23...148)
-        // Within the lag before the matched frame, which may already show its 40 pt; the new frame shows all 60.
-        #expect(shifts([(0.9, -40, true), (1.5, -20, true)]) == 2...198)
-        // Before the lag, so both frames show it; then 30 pt the other way.
-        #expect(shifts([(0.5, -100, true), (1.5, 30, true)]) == -123...(-27))
-        #expect(shifts([]) == -48...48)
-        #expect(shifts([(1.5, -1, false), (1.6, -2, false)]) == 1...ScrollStitcher.maximumHeight)
-        #expect(shifts([(1.5, -1, false), (1.6, 1, false)]) == nil)
-    }
-
     /// A frosted header: its rows change with every move and never match, as a blur of the content passing under it. Offsets come
     /// from the content below it, and the stitched image ends with the page whole below the header.
     @Test func aFrostedHeaderThatNeverMatchesKeepsTheOffsets() async {

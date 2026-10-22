@@ -68,7 +68,7 @@ extension OverlayController {
                     }
                     return (frame, time)
                 }
-                var (first, matched) = try await source(area)
+                let (first, _) = try await source(area)
                 let stitcher = ScrollStitcher(first: first)
                 try Task.checkCancellation()
                 self.stitcher = stitcher
@@ -77,17 +77,10 @@ extension OverlayController {
                     try await Task.sleep(for: .milliseconds(70))
                     let (frame, time) = try await source(area)
                     // Live, once the monitor has seen an event: a frame with no scrolling or dragging in the last half second only
-                    // animated in place, and the shifts tried are those the scroll events explain, with the app's scrolling up to a
-                    // quarter second behind them. A drag (a scroll bar) tries every shift.
-                    var expected: ClosedRange<Int>?
-                    if scrollFrames == nil, !scrollInput.isEmpty {
-                        guard scrollInput.contains(where: { $0.timestamp > time - 0.5 }) else { continue }
-                        expected = scrollInput.contains { $0.type != .scrollWheel && $0.timestamp > matched - 0.25 } ? nil
-                            : ScrollStitcher.expectedShifts(scrollInput.map { ($0.timestamp, $0.scrollingDeltaY, $0.hasPreciseScrollingDeltas) },
-                                                            matched: matched, now: time, lag: 0.25, scale: scale)
-                    }
-                    if await stitcher.add(frame, expected: expected) {
-                        matched = time
+                    // animated in place. The events' sizes are not used: apps scroll by their own amount per delta (Google Sheets by
+                    // whole rows) and bounce back against them at the end of a page.
+                    if scrollFrames == nil, !scrollInput.isEmpty, !scrollInput.contains(where: { $0.timestamp > time - 0.5 }) { continue }
+                    if await stitcher.add(frame) {
                         shown.cancel()
                         shown = showStitched(stitcher, area: area)
                     }
