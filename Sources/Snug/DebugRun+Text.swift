@@ -112,6 +112,22 @@ extension DebugRun {
         overlay.dismiss()
         require(liveText.analysis == nil, "closing drops the analysis")
 
+        // With the loupe on, Text mode shows no loupe or readout; Capture shows them again.
+        overlay.defaults.set(true, forKey: Pref.loupe)
+        let guides = overlay.view.guides
+        func loupeHidden() -> Bool { (guides.loupe.isHidden || guides.loupe.opacity == 0) && guides.readout.isHidden }
+        try await open()
+        mouse(.mouseMoved, CGPoint(x: productName.midX, y: productName.midY))
+        require(loupeHidden(), "Text mode hides the loupe and its readout with the loupe on")
+        key(aKey, "a")
+        mouse(.mouseMoved, blank)
+        require(!guides.loupe.isHidden && guides.loupe.opacity == 1 && !guides.readout.isHidden, "A back to Capture shows the loupe again")
+        key(tKey, "t")
+        mouse(.mouseMoved, CGPoint(x: productName.midX, y: productName.midY))
+        require(loupeHidden(), "T hides the loupe again")
+        overlay.defaults.set(false, forKey: Pref.loupe)
+        overlay.dismiss()
+
         // While Vision's warm-up child runs (a 2 s sleep stands in for it), Text mode says text recognition is getting ready, and
         // Shift-Return and Tab say they will run when it is, then run.
         func warmUpChild() throws {
