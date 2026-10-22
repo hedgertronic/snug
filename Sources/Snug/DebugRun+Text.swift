@@ -112,6 +112,22 @@ extension DebugRun {
         overlay.dismiss()
         require(liveText.analysis == nil, "closing drops the analysis")
 
+        // With the loupe on, Text mode shows no loupe or readout; Capture shows them again.
+        overlay.defaults.set(true, forKey: Pref.loupe)
+        let guides = overlay.view.guides
+        func loupeHidden() -> Bool { (guides.loupe.isHidden || guides.loupe.opacity == 0) && guides.readout.isHidden }
+        try await open()
+        mouse(.mouseMoved, CGPoint(x: productName.midX, y: productName.midY))
+        require(loupeHidden(), "Text mode hides the loupe and its readout with the loupe on")
+        key(aKey, "a")
+        mouse(.mouseMoved, blank)
+        require(!guides.loupe.isHidden && guides.loupe.opacity == 1 && !guides.readout.isHidden, "A back to Capture shows the loupe again")
+        key(tKey, "t")
+        mouse(.mouseMoved, CGPoint(x: productName.midX, y: productName.midY))
+        require(loupeHidden(), "T hides the loupe again")
+        overlay.defaults.set(false, forKey: Pref.loupe)
+        overlay.dismiss()
+
         // While Vision's warm-up child runs (a 2 s sleep stands in for it), Text mode says text recognition is getting ready, and
         // Shift-Return and Tab say they will run when it is, then run.
         func warmUpChild() throws {
@@ -292,6 +308,14 @@ extension DebugRun {
                 let inner = transcript.range(of: words, range: line)!
                 require(selected.contains { $0.lowerBound <= inner.lowerBound && inner.upperBound <= $0.upperBound },
                         "a drag down the list selects the row with \"\(marker)\": selected \(selected.map { transcript[$0].debugDescription }), transcript \(transcript.debugDescription)")
+            }
+            // A drag that ends past the end of the short wrapped row, near or far, selects through that row and not into the next item.
+            // (Live Text reads a stray line, "match your rea...", right of the short row and after it.)
+            for endX in [900.0, 1455] {
+                textDrag(from: CGPoint(x: 250, y: 101), to: CGPoint(x: endX, y: 183))
+                let text = liveText.selectedText
+                require(text.hasPrefix("1. Menu bar icon") && text.contains("which is almost never.") && !text.contains("3. A capture"),
+                        "a drag that ends at x \(Int(endX)), right of the short row, selects through it: \(text.debugDescription)")
             }
             overlay.dismiss()
         }

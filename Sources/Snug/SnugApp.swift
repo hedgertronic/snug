@@ -99,6 +99,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             }
             return
         }
+        // One Snug per user: a second copy (another build, or a second launch) quits, so a shortcut press never reaches two overlays.
+        // The --mcp bridge never registers as an app, so it is not counted; an unbundled debug binary has no identifier to check.
+        if let id = Bundle.main.bundleIdentifier, NSRunningApplication.runningApplications(withBundleIdentifier: id).contains(where: { $0 != .current }) {
+            return NSApp.terminate(nil)
+        }
         installStatusItem()
         ScreenRecording.requested = { [unowned self] in startRecording(displayID: $0, area: $1, showsCursor: $2, capturesAudio: $3) }
         hotKey = HotKey(id: 1) { [unowned self] in capture() }

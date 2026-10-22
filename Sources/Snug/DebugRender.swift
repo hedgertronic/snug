@@ -709,6 +709,8 @@ extension DebugRun {
             offscreen.contentView = host
             host.layoutSubtreeIfNeeded()
             precondition(host.fittingSize.width == SettingsTabs.width, "the \(item.label) tab is \(SettingsTabs.width) pt wide: \(host.fittingSize.width)")
+            precondition(!["Appearance", "Keys"].contains(item.label) || host.fittingSize.height == SettingsTabs.tallHeight,
+                         "the \(item.label) tab is \(SettingsTabs.tallHeight) pt tall: \(host.fittingSize.height)")
             let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
             host.cacheDisplay(in: host.bounds, to: rep)
             let file = directory.appending(path: "settings-\(item.label.lowercased()).png")
@@ -717,9 +719,10 @@ extension DebugRun {
             guard item.label == "General" else { continue }
             func descendants<T: NSView>(of view: NSView, _ type: T.Type) -> [T] { view.subviews.flatMap { (($0 as? T).map { [$0] } ?? []) + descendants(of: $0, type) } }
             let field = descendants(of: host, ShortcutRecorder.Field.self).first!
-            let controls = descendants(of: host, NSView.self).filter { "\(type(of: $0))".contains("FocusRingView") }
+            // The Reset button, the After capture pop-up and the Save to button, then an Allow button for each missing permission; the last
+            // focus ring is the hedgertronic link, which is not a button.
+            let controls = descendants(of: host, NSView.self).filter { "\(type(of: $0))".contains("FocusRingView") }.dropLast()
             print("shortcut field", host.convert(field.frame, from: field.superview), "pop-up and button frames", controls.map { host.convert($0.frame, from: $0.superview) })
-            // The After capture pop-up and the Save to button, then an Allow button for each missing permission.
             precondition(controls.count >= 2 && controls.allSatisfy { $0.frame.height == field.frame.height }, "the shortcut field is as tall as the pop-ups and buttons: \(controls.map(\.frame)) \(field.frame)")
             field.beginRecording()
             precondition(field.recording, "a click starts recording")
@@ -732,6 +735,10 @@ extension DebugRun {
             let hotKeyCode = UserDefaults.standard.integer(forKey: Pref.hotKeyCode)
             field.keyDown(with: escape)
             precondition(!field.recording && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode, "Esc stops recording and keeps the shortcut")
+            descendants(of: field, NSButton.self).first!.performClick(nil)
+            precondition(field.recording && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode, "the clear button starts recording and writes nothing")
+            offscreen.makeFirstResponder(nil)
+            precondition(!field.recording && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode, "clearing then leaving the field keeps the shortcut")
         }
         precondition(tabs.tabViewItems.map(\.label) == ["General", "Appearance", "Keys", "Agent"], "Settings tabs: \(tabs.tabViewItems.map(\.label))")
         let window = SettingsTabs.makeWindow()
