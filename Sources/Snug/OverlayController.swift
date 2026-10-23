@@ -849,9 +849,14 @@ final class OverlayController {
         case (_, false, "s"): toggleSnap()
         case (_, false, "g"): startScroll()
         case (_, false, "v"): armRecording()
-        case (_, false, "f"):
+        // F with nothing selected takes the display at once, as W takes the window; on a selection F grows it to the display and W to
+        // the frontmost window holding the selection's center.
+        case (_, false, "f") where hovering: finish(crop: extent, copy: true, save: afterCaptureSaves)
+        case (_, false, "f"), (_, false, "w"):
+            let target = character == "f" ? extent : windows.first { $0.contains(CGPoint(x: selection!.rect.midX, y: selection!.rect.midY)) }
+            guard let target else { return false }
             cancelWork()
-            selection = AreaSelection(extent: extent, exact: extent)
+            selection = AreaSelection(extent: extent, exact: target)
             lockedRatio = nil
             ratioBase = nil
             ratioPortrait = nil

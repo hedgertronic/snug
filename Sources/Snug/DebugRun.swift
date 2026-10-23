@@ -307,6 +307,22 @@ enum DebugRun {
         key(13, "w")
         require(try await copiedSize() == windowRect.size && !overlay.window.isVisible, "W copies the window under the pointer, not the hovered element")
 
+        // F with nothing selected copies the whole display at once, as W takes the window.
+        open()
+        let display = overlay.extent
+        pasteboard.clearContents()
+        key(3, "f")
+        require(try await copiedSize() == display.size && !overlay.window.isVisible, "F with nothing selected copies the full screen")
+
+        // On a selection, W grows it to the window holding its center and copies nothing.
+        open()
+        overlay.setWindows([windowRect], pointer: CGPoint(x: frame.minX + 10, y: frame.maxY - 10))
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: CGRect(x: windowRect.midX - 20, y: windowRect.midY - 20, width: 40, height: 40))
+        pasteboard.clearContents()
+        key(13, "w")
+        require(overlay.selection?.rect == windowRect && overlay.window.isVisible && pasteboard.data(forType: .png) == nil, "W on a selection grows it to the window")
+        overlay.dismiss()
+
         // A tight crop that reaches the window's bottom edge is transparent outside the window's rounded bottom corners; the top stays square.
         open()
         overlay.setWindows([windowRect], pointer: CGPoint(x: frame.minX + 10, y: frame.maxY - 10))

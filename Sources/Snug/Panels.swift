@@ -121,7 +121,7 @@ final class HelpSheet: NSView {
     /// Each row's keys are space-separated: a cap per key, with "/" and a context ending in ":" ("Text:") as plain words.
     static let columns: [(title: String, rows: [(keys: String, action: String)])] = [
         ("Capture", [("drag", "Select a region"), ("click", "Element or window"), ("\u{2325} click", "Flip Frame for this capture"), ("\u{2325} drag", "Exact, no snap"),
-                     ("F", "Full screen, or all text"), ("W", "Capture the window"), ("\u{2190} \u{2192}", "Next / previous peer (hover)"), ("\u{21A9}", "Copy"),
+                     ("F", "Full screen, or all text"), ("W", "Window"), ("\u{2190} \u{2192}", "Next / previous peer (hover)"), ("\u{21A9}", "Copy"),
                      ("\u{21E7} \u{21A9}", "Copy the text"), ("\u{2318} \u{21A9}", "Copy for an agent"), ("\u{2325} \u{21A9}", "Translate"), ("\u{2318} S", "Save"),
                      ("\u{21E7} \u{2318} S", "Save As"), ("E / \u{21E7} click", "Edit; E again: back"),
                      ("G", "Scrolling capture, hover or selection"), ("K", "Subject preview"), ("Subject: tab", "Next subject (Shift: back)"), ("Subject: S", "Crop to subject"),
