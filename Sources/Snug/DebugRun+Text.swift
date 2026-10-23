@@ -91,6 +91,12 @@ extension DebugRun {
         try await waitFor("the Live Text analysis attaches") { liveText.analysis != nil }
         print("Live Text analysis: \(String(format: "%.1f", overlay.lastLiveTextMilliseconds)) ms (first in this process)")
         require(overlay.chrome.reading.isHidden, "the Reading text... pill goes away when the analysis attaches")
+        // Once the analysis attaches, Live Text highlights all the text it found, and turns that off by itself about 1 s later.
+        let highlightStart = ContinuousClock.now
+        require(liveText.selectableItemsHighlighted && liveText.preferredInteractionTypes == .textSelection, "entering Text mode highlights all the text Live Text found")
+        try await waitFor("the found-text highlight goes off") { !liveText.selectableItemsHighlighted }
+        let highlightTime = highlightStart.duration(to: .now).milliseconds
+        require(highlightTime > 850 && highlightTime < 1500, "the found-text highlight goes off by itself after about 1 s: \(Int(highlightTime)) ms")
         require(liveText.frame == overlay.view.bounds && liveText.superview === overlay.view, "Live Text covers the frozen image exactly")
         require(liveText.isSupplementaryInterfaceHidden, "no Live Text button sits in the corner")
         require(liveText.text.contains("Product name") && liveText.text.contains("Billing address"), "the analysis reads the screen's text")
@@ -126,6 +132,19 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: productName.midX, y: productName.midY))
         require(loupeHidden(), "T hides the loupe again")
         overlay.defaults.set(false, forKey: Pref.loupe)
+        overlay.dismiss()
+
+        // A key or a press turns the found-text highlight off at once, and A then T back into Text mode lights it again.
+        try await open()
+        require(liveText.selectableItemsHighlighted, "the found text is highlighted on entering Text mode")
+        key(fKey, "f")
+        require(!liveText.selectableItemsHighlighted, "a key turns the found-text highlight off at once")
+        key(aKey, "a")
+        key(tKey, "t")
+        require(liveText.analysis != nil && liveText.selectableItemsHighlighted, "A then T, reusing the analysis, highlights the found text again")
+        mouse(.leftMouseDown, CGPoint(x: productName.minX + 40, y: productName.midY))
+        require(!liveText.selectableItemsHighlighted, "a press turns the found-text highlight off before its release")
+        mouse(.leftMouseUp, CGPoint(x: productName.minX + 40, y: productName.midY))
         overlay.dismiss()
 
         // While Vision's warm-up child runs (a 2 s sleep stands in for it), Text mode says text recognition is getting ready, and
@@ -330,6 +349,55 @@ extension DebugRun {
         require(overlay.window.firstResponder !== overlay.view, "focus is in Live Text before Esc")
         key(escape)
         require(!overlay.window.isVisible, "Esc after a drag in the text closes")
+
+        // A drag that starts off text draws a box like Capture's drag, never a Live Text selection, and on release copies the text
+        // inside the box in reading order. Here the box starts left of the Address label and covers that block's four lines.
+        let boxStart = CGPoint(x: 300, y: 900), boxEnd = CGPoint(x: 1590, y: 1230)
+        try await open()
+        mouse(.mouseMoved, boxStart)
+        require(!liveText.hasText(at: topLeft(boxStart)) && overlay.view.cursor == .crosshair, "the box starts off text, under the crosshair")
+        let selectedBefore = liveText.selectedText
+        mouse(.leftMouseDown, boxStart)
+        var boxGhosts: [CGRect?] = [], boxSelected: [String] = []
+        for step in 1...10 {
+            let t = CGFloat(step) / 10
+            mouse(.leftMouseDragged, CGPoint(x: boxStart.x + (boxEnd.x - boxStart.x) * t, y: boxStart.y + (boxEnd.y - boxStart.y) * t))
+            boxGhosts.append(overlay.view.overlays.ghost)
+            if liveText.selectedText != selectedBefore || overlay.window.textPress != nil { boxSelected.append("\(liveText.selectedRanges.count) ranges \(liveText.selectedText.debugDescription), press \(String(describing: overlay.window.textPress))") }
+        }
+        require(boxGhosts.last == CGRect(x: boxStart.x, y: boxStart.y, width: boxEnd.x - boxStart.x, height: boxEnd.y - boxStart.y) && !boxGhosts.contains(nil),
+                "a drag from off text draws the box as Capture's drag does: \(boxGhosts)")
+        require(boxSelected.isEmpty && overlay.view.cursor == .crosshair, "a box drag leaves Live Text's selection as it was (\(selectedBefore.debugDescription)) and the cursor the crosshair: \(boxSelected)")
+        pasteboard.clearContents()
+        mouse(.leftMouseUp, boxEnd)
+        require(overlay.view.overlays.ghost == nil && !overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."],
+                "on release the box goes and a Reading text... pill shows while its text is read")
+        await overlay.textTask?.value
+        let boxed = await copied()
+        require(boxed == "Address\n1234 Main St\nAddress 2 (Optional)\nApartment or suite" && !overlay.window.isVisible,
+                "the release copies the box's lines in reading order and closes: \(boxed.debugDescription)")
+        // A drag that starts on text never draws a box.
+        try await open()
+        mouse(.leftMouseDown, CGPoint(x: productName.minX + 10, y: productName.midY))
+        var textGhost = false
+        for step in 1...10 {
+            mouse(.leftMouseDragged, CGPoint(x: productName.minX + 10 + 400 * CGFloat(step) / 10, y: productName.midY + 200 * CGFloat(step) / 10))
+            textGhost = textGhost || overlay.view.overlays.ghost != nil
+        }
+        mouse(.leftMouseUp, CGPoint(x: productName.minX + 410, y: productName.midY + 200))
+        require(!textGhost && liveText.selectedText.hasPrefix("Product name") && overlay.window.isVisible && overlay.text.reading == nil,
+                "a drag from text selects words as before and draws no box: \(liveText.selectedText.debugDescription)")
+        // A click off text, or a drag off text under Capture's 8 px click size, still reaches Live Text: it clears the selection.
+        for (name, end) in [("click", boxStart), ("7 px drag", CGPoint(x: boxStart.x + 7, y: boxStart.y + 7))] {
+            textDrag(from: CGPoint(x: billing.minX + 4, y: billing.midY), to: CGPoint(x: billing.maxX - 2, y: billing.midY))
+            pasteboard.clearContents()
+            mouse(.leftMouseDown, boxStart)
+            if end != boxStart { mouse(.leftMouseDragged, end) }
+            mouse(.leftMouseUp, end)
+            require(liveText.selectedText.isEmpty && overlay.view.overlays.ghost == nil && overlay.text.reading == nil && overlay.window.isVisible,
+                    "a \(name) off text clears the selection as before and reads nothing: \(liveText.selectedText.debugDescription)")
+        }
+        overlay.dismiss()
 
         // A drag down across lines selects them all, in order.
         try await open()
@@ -564,12 +632,18 @@ extension DebugRun {
         try await waitFor("Tab finds the items") { overlay.text.picked != nil }
         key(returnKey, "\r", .command)
         try await openFixture()
-        require(liveText.preferredInteractionTypes == .textSelection && !liveText.selectableItemsHighlighted, "the next Text mode starts with text selection")
+        try await waitFor("the found-text highlight goes off") { !liveText.selectableItemsHighlighted }
+        require(liveText.preferredInteractionTypes == .textSelection, "the next Text mode starts with text selection, and its found-text highlight goes off")
         overlay.dismiss()
         require(opened == [URL(string: "https://example.com/snug")!] && !overlay.window.isVisible, "Cmd-Return closes and opens the picked item: \(opened)")
         try await openFixture()
+        let tabStart = ContinuousClock.now
         key(48, "\t")
         try await waitFor("Tab finds the items") { overlay.text.picked != nil }
+        let tabTime = tabStart.duration(to: .now).milliseconds
+        try await Task.sleep(for: .milliseconds(1200))
+        require(liveText.selectableItemsHighlighted && liveText.preferredInteractionTypes == .dataDetectors,
+                "a Tab right after entering Text mode keeps its item highlight past the found-text highlight's 1 s (picked after \(Int(tabTime)) ms)")
         key(escape)
         require(overlay.window.isVisible && overlay.text.picked == nil && overlay.view.overlays.hover == nil && !liveText.selectableItemsHighlighted
                 && liveText.preferredInteractionTypes == .textSelection, "Esc with an item picked unpicks it and keeps the overlay")

@@ -364,6 +364,9 @@ extension DebugRun {
             try snapshot("text-reading")
             let liveText = overlay.view.liveText
             try await waitFor("Live Text") { liveText.analysis != nil }
+            // Entering Text mode highlights all the text Live Text found for 1 s.
+            try snapshot("text-found-highlight")
+            try await waitFor("the found-text highlight to go off") { !liveText.selectableItemsHighlighted }
             let all = liveText.text
             liveText.selectedRanges = [all.range(of: "Product name")!.lowerBound..<all.range(of: "Second product")!.upperBound]
             overlay.refresh()
@@ -380,6 +383,19 @@ extension DebugRun {
             key(36, "\r", .option)
             try await waitFor("the not-installed pill") { overlay.text.notice != nil }
             try snapshot("text-translate-missing")
+            overlay.dismiss()
+
+            // A box drawn from off text, mid-drag and while its text is read after the release.
+            open()
+            key(17, "t")
+            try await waitFor("Live Text") { liveText.analysis != nil }
+            mouse(.leftMouseDown, CGPoint(x: 300, y: 900))
+            mouse(.leftMouseDragged, CGPoint(x: 900, y: 1050))
+            mouse(.leftMouseDragged, CGPoint(x: 1590, y: 1230))
+            try snapshot("text-box-drag")
+            mouse(.leftMouseUp, CGPoint(x: 1590, y: 1230))
+            try snapshot("text-box-reading")
+            await overlay.textTask?.value
             overlay.dismiss()
 
             open()

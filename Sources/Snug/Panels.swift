@@ -132,7 +132,7 @@ final class HelpSheet: NSView {
                              ("\u{2191} / \u{2193}", "Bigger / smaller element"), ("\u{21E7} click", "Add an element"),
                              ("[ ]", "Corner radius (Tab: one corner)"), ("\u{21E7} [ ]", "Corner radius by 4 pt"), ("=", "Same radius on all corners"), ("\u{2325} drag", "One corner's radius, on a dot"),
                              ("\u{21E7} drag", "Keep the ratio, on a handle"), ("\u{21E7} drag", "Lock to one axis, moving"),
-                             ("Text: drag", "Select text"), ("Text: \u{21A9}", "Copy selected text"), ("Text: \u{21E7} \u{21A9}", "Copy as rows"),
+                             ("Text: drag", "Select text, or box off text"), ("Text: \u{21A9}", "Copy selected text"), ("Text: \u{21E7} \u{21A9}", "Copy as rows"),
                              ("Text: tab", "Next link, email, phone, code"), ("Text: \u{2318} \u{21A9}", "Open the picked item"), ("Text: \u{2325} \u{21A9}", "Translate text")]),
         ("Modes, view, recording", [("A", "Capture"), ("T", "Text"), ("S", "Snap on / off"), ("L", "Loupe"), ("R", "Rulers"),
                                     ("X", "Crosshair"), ("O", "Rounded corners"), ("M", "Frame: shadow on / off"), ("P", "Ratio menu"),

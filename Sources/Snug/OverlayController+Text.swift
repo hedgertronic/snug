@@ -25,8 +25,14 @@ extension OverlayWindow {
     /// moves sideways onto the nearest text on its row, and after Live Text handles each drag event and the release the selection grows
     /// to cover the pressed word (or the word or line a double or triple click picked), which `OverlayController.textSelectionDidChange`
     /// takes from Live Text's first caret or range after the press.
+    ///
+    /// A press off text past that 16 pt, once the analysis is attached and nothing is being read, never reaches Live Text while it
+    /// may draw a box: a drag from it draws the box as Capture's drag does, and its release copies the text inside. A release within
+    /// Capture's click size sends the press and the release on to Live Text, as a click.
     func sendTextMouse(_ event: NSEvent) {
-        let liveText = (contentView as! OverlayView).liveText
+        let view = contentView as! OverlayView
+        let controller = view.controller!
+        let liveText = view.liveText
         // `hasText(at:)` takes points from the top-left corner.
         let local = liveText.convert(event.locationInWindow, from: nil)
         let textPoint = CGPoint(x: local.x, y: liveText.bounds.height - local.y)
@@ -35,7 +41,25 @@ extension OverlayWindow {
         if event.type == .leftMouseDown {
             if !onText, contentView!.hitTest(event.locationInWindow)?.isDescendant(of: liveText) == true {
                 dx = stride(from: 2.0, through: 16, by: 2).first { liveText.hasText(at: CGPoint(x: textPoint.x - $0, y: textPoint.y)) }.map { -$0 }
+                if dx == nil, liveText.analysis != nil, controller.text.reading == nil {
+                    textPress = nil
+                    textBox = (event, AreaDrag(extent: controller.extent, origin: view.pixelPoint(event)))
+                    return
+                }
             }
+        } else if var box = textBox {
+            box.drag.update(to: view.pixelPoint(event), moving: false)
+            textBox = event.type == .leftMouseUp ? nil : box
+            let rect = box.drag.rect
+            if event.type == .leftMouseDragged {
+                controller.refresh()
+            } else if rect.width < AreaSelection.minimumSize || rect.height < AreaSelection.minimumSize {
+                super.sendEvent(box.press)
+                super.sendEvent(event)
+            } else {
+                controller.copySelectionText(translating: false, box: rect)
+            }
+            return
         } else if textPress != nil, !onText {
             // Live Text ends a drag off text on the glyph nearest it anywhere, which right of a short row is a longer row above it, so
             // the rows between would drop out of the selection. It ends a drag inside a word at that word's end, so 8 pt steps (each
@@ -90,10 +114,12 @@ extension OverlayWindow {
 
 /// Text mode is Live Text: the frozen image's text analysis is laid over it, and the user selects text as on a web page.
 extension OverlayController: ImageAnalysisOverlayViewDelegate {
-    /// Analyzes the frozen image for text once per capture and attaches the result; the pill covers the screen until then.
+    /// Analyzes the frozen image for text once per capture and attaches the result; the pill covers the screen until then. Once the
+    /// analysis is attached, or at once when it already is, highlights all the text it found (see `highlightFoundText`).
     func startLiveText() {
         view.liveText.preferredInteractionTypes = .textSelection
         view.liveText.selectableItemsHighlighted = false
+        if view.liveText.analysis != nil { highlightFoundText() }
         if let warmUp = Self.visionWarmUp {
             Task {
                 await warmUp.value
@@ -110,12 +136,32 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
                 try Task.checkCancellation()
                 lastLiveTextMilliseconds = start.duration(to: .now).milliseconds
                 view.liveText.analysis = analysis
+                highlightFoundText()
                 text.reading = nil
                 refresh()
             } catch {
                 report(error)
             }
         }
+    }
+
+    /// Entering Text mode: Live Text highlights all the text it found, the way its Live Text button does, for 1 s.
+    func highlightFoundText() {
+        view.liveText.selectableItemsHighlighted = true
+        foundTextHighlight?.cancel()
+        foundTextHighlight = Task {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            endFoundTextHighlight()
+        }
+    }
+
+    /// Turns the found-text highlight off while it is on; the first press or key does this at once, so it never covers a selection.
+    func endFoundTextHighlight() {
+        guard let foundTextHighlight else { return }
+        foundTextHighlight.cancel()
+        self.foundTextHighlight = nil
+        view.liveText.selectableItemsHighlighted = false
     }
 
     /// Once per newly built binary, runs this binary with `--warm-vision` as a child process at utility priority, so Vision compiles the
@@ -249,11 +295,12 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         }
     }
 
-    /// Capture, Shift-Return / Option-Return on a released selection (Shift-Return also on the hovered element): reads its text, then
-    /// copies it (tab-separated when it has columns) or its translation.
-    func copySelectionText(translating: Bool) {
-        guard let rect = selection?.rect ?? hoverRect, let image else { return beep() }
-        guard !waitsForWarmUp(translating ? "Option-Return" : "Shift-Return", { self.copySelectionText(translating: translating) }) else { return }
+    /// Capture, Shift-Return / Option-Return on a released selection (Shift-Return also on the hovered element), and the release of a
+    /// Text mode box: reads the text of the selection, element or `box`, then copies it (tab-separated when it has columns) or its translation.
+    func copySelectionText(translating: Bool, box: CGRect? = nil) {
+        guard let rect = box ?? selection?.rect ?? hoverRect, let image else { return beep() }
+        let key = translating ? "Option-Return" : box == nil ? "Shift-Return" : "Copying the box"
+        guard !waitsForWarmUp(key, { self.copySelectionText(translating: translating, box: box) }) else { return }
         text.reading = rect
         textTask = Task {
             do {
