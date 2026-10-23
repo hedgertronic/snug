@@ -2104,6 +2104,7 @@ extension DebugRun {
         let limit = overlay.view.bounds.height - 38
         require(guides2.bands.path!.boundingBox.maxY <= limit + 0.5 && guides2.bands.path!.boundingBox.maxY > limit - 1, "the top ruler sits just below the 38 pt inset")
         require(guides2.loupe.frame.maxY <= limit, "the loupe stays below the inset near the top edge")
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: CGRect(x: 100, y: 100, width: 200, height: 200))
         key(3, "f")
         for item in chrome.all where !item.isHidden && item !== chrome.help {
             require(item.frame.maxY <= limit + 0.5 && item.frame.minY >= 0 && item.frame.minX >= 0 && item.frame.maxX <= width, "\(type(of: item)) \(item.frame) lies inside the safe area")
