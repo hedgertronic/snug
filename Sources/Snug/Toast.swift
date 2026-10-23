@@ -9,8 +9,8 @@ import ScreenshotCore
 /// capture (or the recording's file, or the text) on the pasteboard again; Save (an unsaved capture) or Trash (a saved file), Open
 /// (Preview, or QuickTime Player for a recording) and Share act on the capture. The toast takes no keys.
 /// Pointing at the thumbnail grows the capture out of it in its own panel, a margin above the capsule (below it at the top right); the
-/// pointer can cross to it without either closing. Drag the thumbnail or the preview to drop the image; a click closes the toast, and a
-/// saved toast reveals the file first. It goes away after the lifetime setting (4 s unless changed) while the pointer is elsewhere, and
+/// pointer can cross to it without either closing. Drag the thumbnail or the preview to drop the image, or click either to open it as
+/// Open does; a click elsewhere closes the toast, and a saved toast reveals the file first. It goes away after the lifetime setting (4 s unless changed) while the pointer is elsewhere, and
 /// stays while it is over the toast or its preview; leaving starts the full lifetime again. A lifetime of 0 shows only failure toasts
 /// (red), for 4 s; Forever keeps the toast until it is closed or replaced.
 /// The capture is held only while the toast is visible: `dismiss` releases it.
@@ -490,6 +490,7 @@ final class Toast: NSPanel, NSDraggingSource {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if dragStart != nil { return openClicked() }
         if reveals, let file { NSWorkspace.shared.activateFileViewerSelecting([file]) }
         dismiss()
     }

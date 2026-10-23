@@ -2236,6 +2236,26 @@ extension DebugRun {
         }
         let imageBoard = copying { Toast(png: capture, message: "Copied", detail: "1200 x 400", file: nil, color: nil, defaults: trashDefaults, pasteboard: $0) }
         require(imageBoard.data(forType: .png) == capture && imageBoard.string(forType: .string) == nil, "Copy puts the capture on the pasteboard again")
+
+        // A click on the thumbnail opens the capture as Open does (suppressed here, so nothing opens and the toast stays up); a click
+        // elsewhere on the capsule closes it.
+        Toast.isSuppressed = true
+        let clicked = Toast(png: capture, message: "Copied", detail: "1200 x 400", file: nil, color: nil, defaults: trashDefaults,
+                            pasteboard: NSPasteboard(name: NSPasteboard.Name("snug-toast-click-\(UUID().uuidString)")))
+        clicked.contentView!.layoutSubtreeIfNeeded()
+        require(clicked.lead.bounds.width > 0, "the toast's thumbnail is laid out: \(clicked.lead.frame)")
+        func click(_ point: NSPoint) {
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: 0, windowNumber: clicked.windowNumber,
+                                               context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+                if type == .leftMouseDown { clicked.mouseDown(with: event) } else { clicked.mouseUp(with: event) }
+            }
+        }
+        click(clicked.lead.convert(NSPoint(x: clicked.lead.bounds.midX, y: clicked.lead.bounds.midY), to: nil))
+        require(clicked.png != nil, "a click on the thumbnail does not close the toast")
+        click(NSPoint(x: clicked.lead.convert(clicked.lead.bounds, to: nil).maxX + 30, y: clicked.lead.convert(clicked.lead.bounds, to: nil).midY))
+        require(clicked.png == nil, "a click beside the thumbnail closes the toast")
+        Toast.isSuppressed = false
         let movie = saveFolder.appending(path: "snug-copy-recording.mov")
         try capture.write(to: movie)
         let movieCopy = copying { Toast(png: capture, message: "Copied, saved to F", detail: movie.lastPathComponent, file: movie, color: nil, defaults: trashDefaults, pasteboard: $0) }
