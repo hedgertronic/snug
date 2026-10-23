@@ -836,7 +836,7 @@ extension DebugRun {
         overlay.defaults.set(false, forKey: Pref.snap)
         let group = subjectsFixture([icon, spikeFixture("dock-tile-composite.png"), spikeFixture("badge-real.png")])
         overlay.present(image: group, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(group.width) / 2, height: CGFloat(group.height) / 2), displayID: nil)
-        key(fKey, "f")
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: overlay.extent)
         _ = await previewCutout()
         let count = (overlay.cutout?.subjects.count ?? 1) - 1
         print("Subjects fixture: \(count) instances")
@@ -875,7 +875,7 @@ extension DebugRun {
                 "C in the preview copies the color under the pointer \(pointColor): \(pasteboard.string(forType: .string) ?? "nothing")")
 
         overlay.present(image: image, frame: frame, displayID: nil)
-        key(fKey, "f")
+        overlay.selection = AreaSelection(extent: overlay.extent, exact: overlay.extent)
         pasteboard.clearContents()
         _ = await previewCutout()
         require(overlay.window.isVisible && overlay.cutout == nil && pasteboard.data(forType: .png) == nil && overlay.selection != nil,
