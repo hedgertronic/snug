@@ -114,10 +114,12 @@ extension OverlayWindow {
 
 /// Text mode is Live Text: the frozen image's text analysis is laid over it, and the user selects text as on a web page.
 extension OverlayController: ImageAnalysisOverlayViewDelegate {
-    /// Analyzes the frozen image for text once per capture and attaches the result; the pill covers the screen until then.
+    /// Analyzes the frozen image for text once per capture and attaches the result; the pill covers the screen until then. Once the
+    /// analysis is attached, or at once when it already is, highlights all the text it found (see `highlightFoundText`).
     func startLiveText() {
         view.liveText.preferredInteractionTypes = .textSelection
         view.liveText.selectableItemsHighlighted = false
+        if view.liveText.analysis != nil { highlightFoundText() }
         if let warmUp = Self.visionWarmUp {
             Task {
                 await warmUp.value
@@ -134,12 +136,32 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
                 try Task.checkCancellation()
                 lastLiveTextMilliseconds = start.duration(to: .now).milliseconds
                 view.liveText.analysis = analysis
+                highlightFoundText()
                 text.reading = nil
                 refresh()
             } catch {
                 report(error)
             }
         }
+    }
+
+    /// Entering Text mode: Live Text highlights all the text it found, the way its Live Text button does, for 1 s.
+    func highlightFoundText() {
+        view.liveText.selectableItemsHighlighted = true
+        foundTextHighlight?.cancel()
+        foundTextHighlight = Task {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            endFoundTextHighlight()
+        }
+    }
+
+    /// Turns the found-text highlight off while it is on; the first press or key does this at once, so it never covers a selection.
+    func endFoundTextHighlight() {
+        guard let foundTextHighlight else { return }
+        foundTextHighlight.cancel()
+        self.foundTextHighlight = nil
+        view.liveText.selectableItemsHighlighted = false
     }
 
     /// Once per newly built binary, runs this binary with `--warm-vision` as a child process at utility priority, so Vision compiles the

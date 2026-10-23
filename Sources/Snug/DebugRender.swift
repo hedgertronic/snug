@@ -364,6 +364,9 @@ extension DebugRun {
             try snapshot("text-reading")
             let liveText = overlay.view.liveText
             try await waitFor("Live Text") { liveText.analysis != nil }
+            // Entering Text mode highlights all the text Live Text found for 1 s.
+            try snapshot("text-found-highlight")
+            try await waitFor("the found-text highlight to go off") { !liveText.selectableItemsHighlighted }
             let all = liveText.text
             liveText.selectedRanges = [all.range(of: "Product name")!.lowerBound..<all.range(of: "Second product")!.upperBound]
             overlay.refresh()

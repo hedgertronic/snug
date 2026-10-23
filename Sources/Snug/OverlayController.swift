@@ -32,7 +32,10 @@ final class OverlayWindow: NSPanel {
         let view = contentView as! OverlayView
         guard !view.liveText.isHidden, [.leftMouseDown, .leftMouseDragged, .leftMouseUp].contains(event.type) else { return super.sendEvent(event) }
         // A press that begins on a chrome button goes to the button, so it never clears or changes the text selection it acts on.
-        if event.type == .leftMouseDown { buttonPress = view.hitTest(event.locationInWindow) is BarButton }
+        if event.type == .leftMouseDown {
+            view.controller!.endFoundTextHighlight()
+            buttonPress = view.hitTest(event.locationInWindow) is BarButton
+        }
         guard !buttonPress else { return super.sendEvent(event) }
         // While Live Text's press is down the Text strip stays hidden, so it never lands under the pointer mid-drag.
         textDragging = event.type != .leftMouseUp
@@ -92,6 +95,8 @@ final class OverlayController {
     /// The reading pill and notice, and the running text analysis, OCR, or translation.
     var text = TextSession()
     var textTask: Task<Void, Never>?
+    /// Turns off the highlight of all found text that entering Text mode shows; nil once it is off.
+    var foundTextHighlight: Task<Void, Never>?
     /// Milliseconds the last Live Text analysis took, from the start of the analysis to the result.
     var lastLiveTextMilliseconds = 0.0
     /// Option-Return: the language to translate into, the installed-pair check, and the translation; debug runs replace them.
@@ -396,6 +401,8 @@ final class OverlayController {
     func cancelWork() {
         textTask?.cancel()
         textTask = nil
+        foundTextHighlight?.cancel()
+        foundTextHighlight = nil
         text = TextSession()
         closeCutout()
         snapTask?.cancel()
@@ -736,6 +743,7 @@ final class OverlayController {
     /// The single key dispatch point; each mode routes its own keys.
     func handleKey(_ event: NSEvent) -> Bool {
         flash(event)
+        endFoundTextHighlight()
         text.notice = nil
         keyJump = !event.isARepeat
         defer { keyJump = false }

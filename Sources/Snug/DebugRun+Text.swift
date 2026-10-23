@@ -91,6 +91,12 @@ extension DebugRun {
         try await waitFor("the Live Text analysis attaches") { liveText.analysis != nil }
         print("Live Text analysis: \(String(format: "%.1f", overlay.lastLiveTextMilliseconds)) ms (first in this process)")
         require(overlay.chrome.reading.isHidden, "the Reading text... pill goes away when the analysis attaches")
+        // Once the analysis attaches, Live Text highlights all the text it found, and turns that off by itself about 1 s later.
+        let highlightStart = ContinuousClock.now
+        require(liveText.selectableItemsHighlighted && liveText.preferredInteractionTypes == .textSelection, "entering Text mode highlights all the text Live Text found")
+        try await waitFor("the found-text highlight goes off") { !liveText.selectableItemsHighlighted }
+        let highlightTime = highlightStart.duration(to: .now).milliseconds
+        require(highlightTime > 850 && highlightTime < 1500, "the found-text highlight goes off by itself after about 1 s: \(Int(highlightTime)) ms")
         require(liveText.frame == overlay.view.bounds && liveText.superview === overlay.view, "Live Text covers the frozen image exactly")
         require(liveText.isSupplementaryInterfaceHidden, "no Live Text button sits in the corner")
         require(liveText.text.contains("Product name") && liveText.text.contains("Billing address"), "the analysis reads the screen's text")
@@ -126,6 +132,19 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: productName.midX, y: productName.midY))
         require(loupeHidden(), "T hides the loupe again")
         overlay.defaults.set(false, forKey: Pref.loupe)
+        overlay.dismiss()
+
+        // A key or a press turns the found-text highlight off at once, and A then T back into Text mode lights it again.
+        try await open()
+        require(liveText.selectableItemsHighlighted, "the found text is highlighted on entering Text mode")
+        key(fKey, "f")
+        require(!liveText.selectableItemsHighlighted, "a key turns the found-text highlight off at once")
+        key(aKey, "a")
+        key(tKey, "t")
+        require(liveText.analysis != nil && liveText.selectableItemsHighlighted, "A then T, reusing the analysis, highlights the found text again")
+        mouse(.leftMouseDown, CGPoint(x: productName.minX + 40, y: productName.midY))
+        require(!liveText.selectableItemsHighlighted, "a press turns the found-text highlight off before its release")
+        mouse(.leftMouseUp, CGPoint(x: productName.minX + 40, y: productName.midY))
         overlay.dismiss()
 
         // While Vision's warm-up child runs (a 2 s sleep stands in for it), Text mode says text recognition is getting ready, and
@@ -613,12 +632,18 @@ extension DebugRun {
         try await waitFor("Tab finds the items") { overlay.text.picked != nil }
         key(returnKey, "\r", .command)
         try await openFixture()
-        require(liveText.preferredInteractionTypes == .textSelection && !liveText.selectableItemsHighlighted, "the next Text mode starts with text selection")
+        try await waitFor("the found-text highlight goes off") { !liveText.selectableItemsHighlighted }
+        require(liveText.preferredInteractionTypes == .textSelection, "the next Text mode starts with text selection, and its found-text highlight goes off")
         overlay.dismiss()
         require(opened == [URL(string: "https://example.com/snug")!] && !overlay.window.isVisible, "Cmd-Return closes and opens the picked item: \(opened)")
         try await openFixture()
+        let tabStart = ContinuousClock.now
         key(48, "\t")
         try await waitFor("Tab finds the items") { overlay.text.picked != nil }
+        let tabTime = tabStart.duration(to: .now).milliseconds
+        try await Task.sleep(for: .milliseconds(1200))
+        require(liveText.selectableItemsHighlighted && liveText.preferredInteractionTypes == .dataDetectors,
+                "a Tab right after entering Text mode keeps its item highlight past the found-text highlight's 1 s (picked after \(Int(tabTime)) ms)")
         key(escape)
         require(overlay.window.isVisible && overlay.text.picked == nil && overlay.view.overlays.hover == nil && !liveText.selectableItemsHighlighted
                 && liveText.preferredInteractionTypes == .textSelection, "Esc with an item picked unpicks it and keeps the overlay")
