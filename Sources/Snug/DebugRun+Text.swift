@@ -454,7 +454,9 @@ extension DebugRun {
         mouse(.leftMouseDragged, CGPoint(x: inside.x, y: inside.y + 80))
         mouse(.leftMouseUp, CGPoint(x: inside.x, y: inside.y + 80))
         let moved = addressBox.offsetBy(dx: 0, dy: 80)
-        require(overlay.selection?.rect == moved && liveText.selectedText.isEmpty && !overlay.chrome.reading.isHidden, "a drag inside the box off text moves it and reads it again: \(String(describing: overlay.selection?.rect))")
+        require(overlay.selection?.rect == moved && liveText.selectedText.isEmpty && overlay.text.box?.rect == moved
+                    && (!overlay.chrome.reading.isHidden || overlay.text.box?.lines != nil),
+                "a drag inside the box off text moves it and reads it again (already read when the pause in the drag outlasted 150 ms): \(String(describing: overlay.selection?.rect)), read \(String(describing: overlay.text.box?.rect)) \(overlay.text.box?.lines?.count ?? -1) lines, reading pill \(!overlay.chrome.reading.isHidden), selected \(liveText.selectedText.debugDescription)")
         await overlay.textTask?.value
         requireBoxRead(moved, "the moved box shows its own lines")
         mouse(.leftMouseDown, CGPoint(x: moved.midX, y: moved.maxY))
