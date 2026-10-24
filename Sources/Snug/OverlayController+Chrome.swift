@@ -270,7 +270,17 @@ extension OverlayController {
         }
 
         if mode == .text {
-            if !window.textDragging, let box = textSelectionBox {
+            if let rect = selection?.rect {
+                // The box: the Text strip, and once its lines are read the count of them in the size chip.
+                textStrip()
+                var left: [NSView] = []
+                if text.box?.rect == rect, let lines = text.box?.lines {
+                    let count = "\(lines.count) \(lines.count == 1 ? "line" : "lines")"
+                    c.size.show(count) { [NSTextField(count, size: 12, mono: true, color: .chromeText)] }
+                    left = [c.size]
+                }
+                attachment = (view.viewRect(rect), true, left, [])
+            } else if !window.textDragging, let box = textSelectionBox {
                 textStrip()
                 attachment = (box, true, [], [])
             }

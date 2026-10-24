@@ -44,6 +44,11 @@ final class OverlayView: NSView {
         /// Sides a resize snapped to, as zero-width or zero-height rectangles.
         var snappedEdges: [CGRect] = []
         var showsHandles = false
+        /// The corner-radius dots on the handles; Text mode's box has none.
+        var showsCornerDots = true
+        /// Text mode: the lines read in the box, and the lines found on entering it (the flash), as pills in the highlight color.
+        var textPills: [CGRect] = []
+        var flashPills: [CGRect] = []
         /// The corner Tab focused: its radius dot is drawn lit.
         var focusedCorner: Handle?
         /// Capture with nothing targeted: the whole screen dims, since none of it is the target.
@@ -103,11 +108,22 @@ final class OverlayView: NSView {
     private let cornerDotsLayer = CAShapeLayer()
     /// The focused corner's dot, larger and filled white.
     private let focusedDotLayer = CAShapeLayer()
+    /// Text mode's pills under Live Text: the box's lines, and the flash of the lines found on entering it, which sweeps in under
+    /// `flashMask` and fades out.
+    private let pillsLayer = CAShapeLayer()
+    private let flashLayer = CAShapeLayer()
+    private let flashMask = CALayer()
 
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
         layer!.addSublayer(imageLayer)
+        layer!.addSublayer(pillsLayer)
+        layer!.addSublayer(flashLayer)
+        flashLayer.opacity = 0
+        flashMask.backgroundColor = NSColor.black.cgColor
+        flashMask.anchorPoint = CGPoint(x: 0, y: 1)
+        flashLayer.mask = flashMask
         for shape in [dimLayer, levelHintLayer, hoverRingLayer, glowLayer, hoverLayer, styleLayer, ghostLayer, outlineLayer, previewLayer, snappedLayer, handlesLayer] {
             shape.fillColor = nil
             layer!.addSublayer(shape)
@@ -209,6 +225,8 @@ final class OverlayView: NSView {
             handlesLayer.strokeColor = accent.cgColor
             cornerDotsLayer.fillColor = accent.cgColor
             focusedDotLayer.strokeColor = accent.cgColor
+            pillsLayer.fillColor = accent.withAlphaComponent(0.3).cgColor
+            flashLayer.fillColor = accent.withAlphaComponent(0.3).cgColor
         }
     }
 
@@ -326,10 +344,51 @@ final class OverlayView: NSView {
                 dots.addEllipse(in: CGRect(x: point.x / scale - 3, y: bounds.height - point.y / scale - 3, width: 6, height: 6))
             }
         }
-        cornerDotsLayer.path = dots
-        focusedDotLayer.path = o.showsHandles && o.selection != nil ? o.focusedCorner.map {
+        cornerDotsLayer.path = o.showsCornerDots ? dots : nil
+        focusedDotLayer.path = o.showsHandles && o.showsCornerDots && o.selection != nil ? o.focusedCorner.map {
             let point = o.radii.dot(of: $0, in: o.selection!, minimumInset: 8 * scale)
             return CGPath(ellipseIn: CGRect(x: point.x / scale - 5, y: bounds.height - point.y / scale - 5, width: 10, height: 10), transform: nil)
         } : nil
+        /// Rounded pills a little larger than each line.
+        func pills(_ lines: [CGRect]) -> CGPath {
+            let path = CGMutablePath()
+            for line in lines {
+                let box = viewRect(line).insetBy(dx: -3, dy: -1.5)
+                let radius = min(box.height / 2, 6)
+                path.addRoundedRect(in: box, cornerWidth: radius, cornerHeight: radius)
+            }
+            return path
+        }
+        pillsLayer.frame = bounds
+        pillsLayer.path = pills(o.textPills)
+        flashLayer.frame = bounds
+        flashMask.frame = bounds
+        // The flash sweeps in from the top over 250 ms (fades in with Reduce Motion) and fades out over 200 ms; debug runs show and
+        // hide it at once. It keeps its pills while it fades.
+        let animated = controller?.animates == true
+        if !o.flashPills.isEmpty, flashLayer.opacity == 0 {
+            flashLayer.path = pills(o.flashPills)
+            flashLayer.opacity = 1
+            if animated, NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                let fade = CABasicAnimation(keyPath: "opacity")
+                fade.fromValue = 0
+                fade.duration = 0.2
+                flashLayer.add(fade, forKey: "opacity")
+            } else if animated {
+                let sweep = CABasicAnimation(keyPath: "bounds.size.height")
+                sweep.fromValue = 0
+                sweep.duration = 0.25
+                sweep.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                flashMask.add(sweep, forKey: "sweep")
+            }
+        } else if o.flashPills.isEmpty, flashLayer.opacity == 1 {
+            flashLayer.opacity = 0
+            if animated {
+                let fade = CABasicAnimation(keyPath: "opacity")
+                fade.fromValue = 1
+                fade.duration = 0.2
+                flashLayer.add(fade, forKey: "opacity")
+            }
+        }
     }
 }
