@@ -784,7 +784,7 @@ extension DebugRun {
             ("hover", true, false, { Toast(png: screenshot, message: "Copied", detail: "1280 x 800", file: nil, color: nil, defaults: defaults) }),
             ("preview", true, true, { Toast(png: screenshot, message: "Copied", detail: "1280 x 800", file: nil, color: nil, defaults: defaults) }),
             ("preview-top-right", true, true, { Toast(png: screenshot, message: "Copied", detail: "1280 x 800", file: nil, color: nil, defaults: topRight) }),
-            ("saved-hover", true, false, { Toast(png: screenshot, message: "Copied, saved to Desktop", detail: "Snug 2026-10-22 at 14.03.11.png",
+            ("saved-hover", true, false, { Toast(png: screenshot, message: "Copied, saved to Desktop", detail: "1280 x 800",
                                                  file: URL(fileURLWithPath: "/tmp/Snug 2026-10-22 at 14.03.11.png"), color: nil, defaults: defaults) }),
             ("text", false, false, { Toast(png: nil, message: "Copied 3 lines", detail: "", file: nil, color: nil,
                                            text: "\nShip v1.0 settings pane and move the toast lifetime picker under General\nFix toast on second display\nDraft the release notes", defaults: defaults) }),
@@ -802,7 +802,7 @@ extension DebugRun {
             ("failure-capture", false, false, { Toast(png: screenshot, message: "Copied, save failed", detail: "You do not have permission to save in Desktop.", file: nil,
                                                       color: .systemRed, defaults: defaults) }),
             ("long-filename", false, false, { Toast(png: screenshot, message: "Copied, saved to Desktop", detail: longMovie.lastPathComponent, file: longMovie, color: nil, defaults: defaults) }),
-            ("long-message", false, false, { Toast(png: screenshot, message: "Copied, saved to Design Review Screenshots 2026", detail: "Snug 2026-10-22 at 14.03.11.png",
+            ("long-message", false, false, { Toast(png: screenshot, message: "Copied, saved to Design Review Screenshots 2026", detail: "1280 x 800",
                                                    file: URL(fileURLWithPath: "/tmp/Snug 2026-10-22 at 14.03.11.png"), color: nil, defaults: defaults) }),
             ("tall", true, true, { Toast(png: tall, message: "Copied", detail: "1280 x 9000", file: nil, color: nil, defaults: defaults) }),
             ("wide", true, true, { Toast(png: wide, message: "Copied", detail: "7200 x 800", file: nil, color: nil, defaults: defaults) })

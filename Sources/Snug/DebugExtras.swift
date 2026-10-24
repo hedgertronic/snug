@@ -749,8 +749,8 @@ extension DebugRun {
         let savedData = try Data(contentsOf: saveFolder.appending(path: saved[0]))
         require(saved.count == 1 && savedData == capture, "Save writes the capture to the save location: \(saved)")
         require(fresh.message.stringValue == "Saved to \(saveFolder.lastPathComponent)" && fresh.saveButton.isHidden && !fresh.trashButton.isHidden && fresh.file?.lastPathComponent == saved[0]
-                    && fresh.detail.lineBreakMode == .byTruncatingMiddle && fresh.detail.toolTip == saved[0],
-                "Save shows the saved state with Trash, the file name truncated in the middle with the full name as its tooltip: \(fresh.message.stringValue)")
+                    && fresh.detail.stringValue == "1200 x 400",
+                "Save shows the saved state with Trash and keeps the pixel size as the detail: \(fresh.message.stringValue) \(fresh.detail.stringValue)")
         require(Array(frames(fresh).prefix(5)) == Array(unsaved.prefix(5)), "saving keeps the toast's size and place: \(frames(fresh)) \(unsaved)")
         fresh.dismissal?.cancel()
         let warningDefaults = UserDefaults(suiteName: "snug-toast-\(UUID().uuidString)")!
@@ -760,9 +760,9 @@ extension DebugRun {
                            file: nil, color: .systemOrange, defaults: warningDefaults)
         let warning = frames(warned)
         warned.saveButton.performClick(nil)
-        require(warned.file != nil && warned.detail.font == .monospacedSystemFont(ofSize: 12, weight: .regular) && warned.detail.textColor == .secondaryLabelColor
+        require(warned.file != nil && warned.detail.stringValue == "1200 x 400" && warned.detail.font == .monospacedSystemFont(ofSize: 12, weight: .regular) && warned.detail.textColor == .secondaryLabelColor
                     && warned.detail.maximumNumberOfLines == 1 && Array(frames(warned).prefix(5)) == Array(warning.prefix(5)),
-                "Save on a warning shows the file name as a plain saved capture does, in the same size: \(warned.detail.font!) \(frames(warned))")
+                "Save on a warning shows the pixel size as a plain saved capture does, in the same size: \(warned.detail.font!) \(frames(warned))")
 
         // The capture is held only while the toast is visible: closing releases the PNG, the thumbnail, the preview, and the toast itself.
         weak var weakToast: Toast?

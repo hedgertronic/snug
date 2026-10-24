@@ -605,6 +605,8 @@ extension DebugRun {
         let contents = try Set(saved.map { try String(contentsOf: outputFolder.appending(path: $0), encoding: .utf8) })
         require(saved.count == 4 && contents == ["taken", "first", "second", "third"], "saves in one second keep every capture: \(saved)")
         require(saved.contains { $0.hasSuffix(" 2.png") }, "a taken default name gets \" 2\" before the extension: \(saved)")
+        let savedToast = Output.publish(png: Data("fourth".utf8), detail: "1 x 1", copy: true, save: true, pasteboard: pasteboard, defaults: defaults)
+        require(savedToast.detail == "1 x 1", "a saved capture's toast keeps the pixel size as its detail, not the file name: \(savedToast)")
 
         let blocked = folder.appending(path: "blocked")
         try FileManager.default.createDirectory(at: blocked, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o500])
