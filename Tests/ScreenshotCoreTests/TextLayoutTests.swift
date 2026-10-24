@@ -63,8 +63,8 @@ struct TextLayoutTests {
     @Test func aBulletsWrappedContinuationJoinsItsLine() {
         #expect(paragraphs([term("\u{2022} Return copies the selection with", 25, 100), term("soft wraps joined", 37, 119)])
             == "\u{2022} Return copies the selection with soft wraps joined")
-        #expect(paragraphs([term("- Return copies the selection with", 25, 100), term("soft wraps", 37, 119), term("joined", 37, 138)])
-            == "- Return copies the selection with soft wraps joined")
+        #expect(paragraphs([term("- Return copies the selection with", 25, 100), term("soft wraps across a second row of", 37, 119), term("joined", 37, 138)])
+            == "- Return copies the selection with soft wraps across a second row of joined")
     }
 
     @Test func aBulletSplitIntoItsOwnPieceHangsAtTheTextAfterIt() {
@@ -98,9 +98,9 @@ struct TextLayoutTests {
 
     @Test func columnsComeOneAfterAnotherNotInterleaved() {
         let page = [TextLine(text: "Page title", bounds: CGRect(x: 25, y: 60, width: 700, height: 17)),
-                    term("First paragraph wraps here", 25, 100), term("onto a second row and", 25, 119), term("a third row.", 25, 138),
+                    term("First paragraph wraps here", 25, 100), term("onto a second row and then", 25, 119), term("a third row.", 25, 138),
                     term("Second paragraph.", 25, 175), term("Settings", 600, 100), term("Keys", 600, 130), term("About", 600, 160)]
-        #expect(paragraphs(page) == "Page title\n\nFirst paragraph wraps here onto a second row and a third row.\n\nSecond paragraph.\n\nSettings\nKeys\nAbout")
+        #expect(paragraphs(page) == "Page title\n\nFirst paragraph wraps here onto a second row and then a third row.\n\nSecond paragraph.\n\nSettings\nKeys\nAbout")
     }
 
     @Test func aCartWithOneLabelOverItsValueKeepsPricesInTheirRows() {
@@ -143,6 +143,21 @@ struct TextLayoutTests {
 
     @Test func oneRowWithAWideGapStaysOneLine() {
         #expect(paragraphs([term("Total", 25, 100), term("$20", 300, 100)]) == "Total $20")
+    }
+
+    @Test func aShortHeaderOverItsMessageStaysItsOwnLine() {
+        // A chat's bold name and time over the message, left-aligned 0.3 h apart; the header is 0.55 of the message's width.
+        let header = TextLine(text: "Jamie Rivers 10:59 PM", bounds: CGRect(x: 25, y: 100, width: 96, height: 17))
+        #expect(paragraphs([header, term("Ok can you send me the photos", 25, 122)]) == "Jamie Rivers 10:59 PM\nOk can you send me the photos")
+    }
+
+    @Test func aWrappedParagraphWithAShortLastLineJoins() {
+        #expect(paragraphs([term("The quick brown fox jumps over", 25, 100), term("the lazy dog and keeps running", 25, 119), term("home.", 25, 138)])
+            == "The quick brown fox jumps over the lazy dog and keeps running home.")
+    }
+
+    @Test func aShortLineBeforeALongerOneNeverJoins() {
+        #expect(paragraphs([term("Short line", 25, 100), term("a much longer line follows here", 25, 119)]) == "Short line\na much longer line follows here")
     }
 
     @Test func anIndentedRowStartsANewLine() {
