@@ -132,7 +132,7 @@ private func caption(_ text: String) -> some View {
 }
 
 /// The app icon and name once, then shortcut, after capture, save folder, open at login, recording, and the permissions; a footer
-/// asking for support on Ko-fi, with the developer's credit linking to hedgertronic.com.
+/// with the developer's headshot, a short bio, a Ko-fi link, and the developer's credit linking to hedgertronic.com.
 private struct GeneralPane: View {
     @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
@@ -207,18 +207,18 @@ private struct GeneralPane: View {
                 }
             }
             Divider()
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    Image(systemName: "cup.and.heat.waves.fill").font(.system(size: 24)).foregroundStyle(Color(red: 1, green: 0.37, blue: 0.36))
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("If you like Snug, consider supporting the developer.").font(.system(size: 13, weight: .medium))
-                        Link("Support Snug on Ko-fi", destination: URL(string: "https://ko-fi.com/hedgertronic")!).font(.system(size: 13))
+            // The 200 px headshot drawn at 44 pt stays sharp at 2x.
+            HStack(alignment: .top, spacing: 12) {
+                Image(nsImage: NSImage(data: headshotJPEG)!).resizable().interpolation(.high).frame(width: 44, height: 44).clipShape(Circle())
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Hi, I'm Josh. I'm a professional pitcher and an R&D analyst at Driveline Baseball. Snug is one of my side projects.")
+                        .font(.system(size: 13))
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        Link("Buy me a bag of sunflower seeds", destination: URL(string: "https://ko-fi.com/hedgertronic")!).font(.system(size: 13))
+                        Spacer(minLength: 12)
+                        MakerChip()
                     }
-                }
-                HStack {
-                    Text("Everything else is in the overlay.").font(.system(size: 12)).foregroundStyle(.secondary)
-                    Spacer(minLength: 12)
-                    MakerChip()
                 }
             }
                 .padding(.init(top: 14, leading: 20, bottom: 14, trailing: 20))

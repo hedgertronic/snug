@@ -86,7 +86,7 @@ Run `build/ScreenshotBench` with no arguments for every subcommand.
 
 ## Support
 
-Snug is free. If it saves you time, you can support it at [ko-fi.com/hedgertronic](https://ko-fi.com/hedgertronic).
+Snug is free. If it saves you time, [buy me a bag of sunflower seeds](https://ko-fi.com/hedgertronic).
 
 ## License
 
