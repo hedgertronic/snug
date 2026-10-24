@@ -72,7 +72,7 @@ public struct HandoffManifest: Codable, Sendable, Equatable {
 
     /// The app and window under the target. A window id names a window only while it is open. The document, page URL and page title are
     /// read through Accessibility from the window holding the crop's center: its `AXDocument` (the open file's URL) and its innermost web
-    /// area's `AXURL` and `AXTitle`.
+    /// area's `AXURL` and `AXTitle`. The window title and page title are cut to `maxString` characters, the document and URL to `maxURL`.
     public struct Source: Codable, Sendable, Equatable {
         public var app: String?
         public var bundleId: String?
@@ -90,9 +90,9 @@ public struct HandoffManifest: Codable, Sendable, Equatable {
 
         public init(app: String?, bundleId: String?, bundlePath: String? = nil, appVersion: String? = nil, pid: Int32?, windowId: UInt32?,
                     windowTitle: String?, windowFrame: CGRect?, document: String? = nil, url: String? = nil, pageTitle: String? = nil) {
-            (self.app, self.bundleId, self.bundlePath, self.appVersion, self.pid, self.windowId, self.windowTitle) = (app, bundleId, bundlePath, appVersion, pid, windowId, windowTitle)
-            self.windowFrame = windowFrame.map(Rect.init)
-            (self.document, self.url, self.pageTitle) = (document, url, pageTitle)
+            (self.app, self.bundleId, self.bundlePath, self.appVersion, self.pid, self.windowId) = (app, bundleId, bundlePath, appVersion, pid, windowId)
+            (self.windowTitle, self.windowFrame) = (cut(windowTitle, maxString), windowFrame.map(Rect.init))
+            (self.document, self.url, self.pageTitle) = (cut(document, maxURL), cut(url, maxURL), cut(pageTitle, maxString))
         }
     }
 
@@ -110,11 +110,17 @@ public struct HandoffManifest: Codable, Sendable, Equatable {
     /// Seconds between the frozen pixels and an Accessibility read past which the read is marked stale.
     public static let staleAfter: TimeInterval = 5
 
-    /// The most children and siblings a target lists, the most classes an element lists, and the most steps its selector takes.
-    public static let maxNeighbors = 20, maxClasses = 12, maxSelectorSteps = 10
-    /// The longest value kept for a text element (`AXStaticText`, `AXTextField`, `AXTextArea`, `AXComboBox`) and for any other, and the
-    /// longest other string read from the screen (help, placeholder, label, a neighbor's name); longer ones are cut, ending in "...".
-    public static let maxTextValue = 4096, maxValue = 200, maxString = 500
+    /// `text` cut to `limit` characters, ending in "..."; nil when it is empty.
+    static func cut(_ text: String?, _ limit: Int) -> String? {
+        text.flatMap { $0.isEmpty ? nil : $0.count > limit ? $0.prefix(limit - 3) + "..." : $0 }
+    }
+
+    /// The most children, and siblings, a target lists; the most classes an element lists; the most steps its selector takes.
+    public static let maxNeighbors = 10, maxClasses = 4, maxSelectorSteps = 8
+    /// The longest value kept for a text element (`AXStaticText`, `AXTextField`, `AXTextArea`, `AXComboBox`) and for any other; the
+    /// longest other string of the target (title, help, placeholder, label...); the longest string of an ancestor or neighbor, and class.
+    /// Longer ones are cut, ending in "...". With every list full and every string at its limit the JSON stays under 32 KB in ASCII.
+    public static let maxTextValue = 3072, maxValue = 200, maxString = 120, maxName = 40, maxClass = 32, maxURL = 512
 
     /// What a Copy for Agent read adds to an element's frame, as read (the manifest cuts it): for the target, its value (none for a secure
     /// text field), help, placeholder, the title of its label element (`AXTitleUIElement`), its link (`AXURL`), its state, and its first
@@ -176,7 +182,7 @@ public struct HandoffManifest: Codable, Sendable, Equatable {
         public var domId: String?
         public var domClasses: [String]?
         /// Inside a web area, a CSS-like path from below the innermost web area down to the element, each step its role description
-        /// (spaces as "-"), `#id` and up to 3 `.class`es, at most `maxSelectorSteps` steps (the outer ones dropped for "... > "). Class
+        /// (spaces as "-"), `#id` and `.class`es, at most `maxSelectorSteps` steps (the outer ones dropped for "... > "). Class
         /// names are as the page wrote them, unescaped, for searching the source.
         public var selector: String?
         /// The element's frame in global points.
@@ -215,9 +221,8 @@ public struct HandoffManifest: Codable, Sendable, Equatable {
             guard let (index, isCrop) = Self.match(frames, crop: crop, display: display, tolerance: tolerance) else { return }
             let element = frames[index]
             let details = element.details ?? Details()
-            let cut = { (text: String?, limit: Int) in text.flatMap { $0.isEmpty ? nil : $0.count > limit ? $0.prefix(limit - 3) + "..." : $0 } }
-            let classes = { (frame: AXFrame) in frame.details?.domClasses.flatMap { $0.isEmpty ? nil : Array($0.prefix(maxClasses)) } }
-            let neighbors = { (list: [Neighbor]?) in list.flatMap { $0.isEmpty ? nil : $0.prefix(maxNeighbors).map { Neighbor(role: cut($0.role, maxString), name: cut($0.name, maxString)) } } }
+            let classes = { (frame: AXFrame) in frame.details?.domClasses.flatMap { $0.isEmpty ? nil : $0.prefix(maxClasses).compactMap { cut($0, maxClass) } } }
+            let neighbors = { (list: [Neighbor]?) in list.flatMap { $0.isEmpty ? nil : $0.prefix(maxNeighbors).map { Neighbor(role: cut($0.role, maxName), name: cut($0.name, maxName)) } } }
             role = cut(element.role, maxString)
             subrole = cut(element.subrole, maxString)
             roleDescription = cut(element.roleDescription, maxString)
@@ -232,16 +237,16 @@ public struct HandoffManifest: Codable, Sendable, Equatable {
             (children, siblings) = (neighbors(details.children), neighbors(details.siblings))
             if let web = frames[index...].firstIndex(where: { $0.role == "AXWebArea" }), web > index {
                 let steps = frames[index..<web].reversed().map { frame in
-                    (frame.roleDescription.isEmpty ? String(frame.role.dropFirst(2)) : frame.roleDescription).lowercased().replacingOccurrences(of: " ", with: "-")
-                        + (cut(frame.details?.domId, maxString).map { "#" + $0 } ?? "") + (classes(frame) ?? []).prefix(3).map { "." + $0 }.joined()
+                    (cut(frame.roleDescription, maxName) ?? cut(String(frame.role.dropFirst(2)), maxName) ?? "").lowercased().replacingOccurrences(of: " ", with: "-")
+                        + (cut(frame.details?.domId, maxName).map { "#" + $0 } ?? "") + (classes(frame) ?? []).map { "." + $0 }.joined()
                 }
                 selector = (steps.count > maxSelectorSteps ? "... > " : "") + steps.suffix(maxSelectorSteps).joined(separator: " > ")
             }
             frame = Rect(element.rect)
             ancestors = frames[(index + 1)...].map {
-                Ancestor(role: cut($0.role, maxString), subrole: cut($0.subrole, maxString), roleDescription: cut($0.roleDescription, maxString),
-                         title: cut($0.title, maxString), identifier: cut($0.identifier, maxString), description: cut($0.elementDescription, maxString),
-                         domId: cut($0.details?.domId, maxString), domClasses: classes($0), frame: Rect($0.rect))
+                Ancestor(role: cut($0.role, maxName), subrole: cut($0.subrole, maxName), roleDescription: cut($0.roleDescription, maxName),
+                         title: cut($0.title, maxName), identifier: cut($0.identifier, maxName), description: cut($0.elementDescription, maxName),
+                         domId: cut($0.details?.domId, maxName), domClasses: classes($0), frame: Rect($0.rect))
             }
             if isCrop { self.provenance = .accessibility }
             self.observedAt = observedAt

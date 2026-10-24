@@ -32,7 +32,8 @@ enum Accessibility {
     /// `frames(at:pid:)` for Copy for Agent, with `details`: the element `HandoffManifest.Target.match` picks for `crop` gets its
     /// `HandoffManifest.Details`, its first children and nearest siblings read for at most `peerBudget`, and every element inside a web
     /// area its DOM id and classes. Also the window's `AXDocument` and the innermost web area's `AXURL` and `AXTitle`. Only the
-    /// elements at `point` and the target's children and siblings are read, in `pid`'s app.
+    /// elements at `point`, the target's label element, children and siblings are read, in `pid`'s app; a window's siblings, the app's
+    /// other windows, are not, nor a secure text field's value.
     @concurrent
     static func handoff(at point: CGPoint, pid: pid_t, crop: CGRect, display: CGRect, tolerance: CGFloat) async
         -> (frames: [AXFrame], document: String?, url: String?, pageTitle: String?) {
@@ -41,6 +42,7 @@ enum Accessibility {
         // The sidebar panel `sidebarFrames` adds has no element.
         let elements = frames.map { frame in chain.first { $0.frame == frame }?.element }
         func read(_ attribute: String, of element: AXUIElement) -> CFTypeRef? {
+            AXUIElementSetMessagingTimeout(element, messagingTimeout)
             var value: CFTypeRef?
             return AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success ? value : nil
         }
@@ -55,20 +57,25 @@ enum Accessibility {
         }
         if let index = HandoffManifest.Target.match(frames, crop: crop, display: display, tolerance: tolerance)?.index, let element = elements[index] {
             let began = ContinuousClock.now
-            let neighbors = { (list: ArraySlice<AXUIElement>) in
-                list.prefix { _ in began.duration(to: .now) < peerBudget }.map { neighbor in
-                    AXUIElementSetMessagingTimeout(neighbor, messagingTimeout)
-                    return HandoffManifest.Neighbor(role: text(kAXRoleAttribute, of: neighbor),
-                                                    name: [kAXTitleAttribute, kAXDescriptionAttribute, kAXValueAttribute].lazy.compactMap { text($0, of: neighbor) }.first { !$0.isEmpty })
+            func neighbors(_ list: ArraySlice<AXUIElement>) -> [HandoffManifest.Neighbor] {
+                var named: [HandoffManifest.Neighbor] = []
+                for neighbor in list {
+                    guard began.duration(to: .now) < peerBudget else { break }
+                    let secure = text(kAXSubroleAttribute, of: neighbor) == kAXSecureTextFieldSubrole
+                    named.append(.init(role: text(kAXRoleAttribute, of: neighbor), name: ([kAXTitleAttribute, kAXDescriptionAttribute] + (secure ? [] : [kAXValueAttribute]))
+                        .lazy.compactMap { text($0, of: neighbor) }.first { !$0.isEmpty }))
                 }
+                return named
             }
-            let siblings = read(kAXParentAttribute, of: element).flatMap { children(of: $0 as! AXUIElement, kAXChildrenAttribute) } ?? []
+            let parent = read(kAXParentAttribute, of: element).map { $0 as! AXUIElement }
+            let siblings = frames[index].role == kAXWindowRole || parent.flatMap { text(kAXRoleAttribute, of: $0) } == kAXApplicationRole ? []
+                : parent.flatMap { children(of: $0, kAXChildrenAttribute) } ?? []
             let at = siblings.firstIndex { CFEqual($0, element) } ?? 0
             let around = siblings[max(0, at - HandoffManifest.maxNeighbors / 2)..<min(siblings.count, at + HandoffManifest.maxNeighbors / 2 + 1)].filter { !CFEqual($0, element) }
             frames[index].details = .init(
                 value: frames[index].subrole == kAXSecureTextFieldSubrole ? nil : text(kAXValueAttribute, of: element), help: text(kAXHelpAttribute, of: element),
                 placeholder: text(kAXPlaceholderValueAttribute, of: element),
-                labeledBy: read(kAXTitleUIElementAttribute, of: element).flatMap { label in text(kAXTitleAttribute, of: label as! AXUIElement) ?? text(kAXValueAttribute, of: label as! AXUIElement) },
+                labeledBy: read(kAXTitleUIElementAttribute, of: element).map { $0 as! AXUIElement }.flatMap { text(kAXTitleAttribute, of: $0) ?? text(kAXValueAttribute, of: $0) },
                 url: text(kAXURLAttribute, of: element), domId: frames[index].details?.domId, domClasses: frames[index].details?.domClasses,
                 enabled: read(kAXEnabledAttribute, of: element) as? Bool, focused: read(kAXFocusedAttribute, of: element) as? Bool,
                 selected: read(kAXSelectedAttribute, of: element) as? Bool,

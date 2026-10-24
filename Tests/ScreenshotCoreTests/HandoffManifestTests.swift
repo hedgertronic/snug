@@ -132,8 +132,8 @@ struct HandoffManifestTests {
         // A button's value is cut short; the same text in a text area would keep 4096 characters.
         #expect(target.value?.count == HandoffManifest.maxValue && target.value!.hasSuffix("..."))
         #expect(target.children == [.init(role: "AXStaticText", name: "Save")] && target.siblings?.count == HandoffManifest.maxNeighbors
-                    && target.siblings![0].name!.count == HandoffManifest.maxString)
-        #expect(target.selector == "banner#hdr > group.toolbar.flex.gap-2 > button#save.c0.c1.c2")
+                    && target.siblings![0].name!.count == HandoffManifest.maxName)
+        #expect(target.selector == "banner#hdr > group.toolbar.flex.gap-2.px-4 > button#save.c0.c1.c2.c3")
         #expect(target.ancestors?.map(\.domId) == [nil, "hdr", nil, nil] && target.ancestors?[0].domClasses?.count == 4
                     && target.ancestors?[1].domClasses == nil && target.ancestors?[1].subrole == "AXLandmarkBanner")
         var area = frames
@@ -148,6 +148,29 @@ struct HandoffManifestTests {
         let object = try JSONSerialization.jsonObject(with: json) as! [String: Any]
         let encoded = object["target"] as! [String: Any]
         #expect(encoded["dom_id"] as? String == "save" && encoded["labeled_by"] as? String == "Draft" && encoded["selector"] as? String == target.selector)
+    }
+
+    /// Every list full and every string past its limit: a text area 25 deep in a web page (the deepest chain plus a sidebar panel).
+    @Test func theLargestManifestStaysUnder32KB() throws {
+        let long = String(repeating: "x", count: 10_000)
+        let display = CGRect(x: 0, y: 0, width: 1512, height: 982)
+        let details = HandoffManifest.Details(value: long, help: long, placeholder: long, labeledBy: long, url: long, domId: long,
+                                              domClasses: Array(repeating: long, count: 50), enabled: true, focused: true, selected: true,
+                                              children: Array(repeating: .init(role: long, name: long), count: 50), siblings: Array(repeating: .init(role: long, name: long), count: 50))
+        let frames = (0..<25).map { (level: Int) -> AXFrame in
+            let inset = CGFloat(24 - level) * 10
+            let role = level == 23 ? "AXWebArea" : level == 0 ? "AXTextArea" : long
+            return AXFrame(roleDescription: long, rect: display.insetBy(dx: inset, dy: inset), role: role, title: long, subrole: long, identifier: long,
+                           elementDescription: long, details: details)
+        }
+        var manifest = handoffManifest()
+        manifest.source = .init(app: "Safari", bundleId: "com.apple.Safari", bundlePath: "/Applications/Safari.app", appVersion: "26.0", pid: 1, windowId: 1,
+                                windowTitle: long, windowFrame: display, document: long, url: long, pageTitle: long)
+        manifest.target = .init(kind: .element, label: "Text", provenance: .geometry, frames: frames, observedAt: manifest.capturedAt, crop: frames[0].rect, display: display)
+        let json = try manifest.json()
+        #expect(manifest.target.ancestors?.count == 24 && manifest.target.siblings?.count == HandoffManifest.maxNeighbors && manifest.target.selector != nil)
+        #expect(json.count < 32_768, "\(json.count) bytes")
+        print("largest manifest: \(json.count) bytes")
     }
 
     @Test func theReferenceIsOneASCIILineWithNoScreenTextBrackets() {

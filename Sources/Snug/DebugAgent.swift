@@ -177,6 +177,24 @@ extension DebugRun {
         require(try store.current() == selected && FileManager.default.contentsOfDirectory(atPath: store.root.path) == [selected.captureId],
                 "the last copy replaced the others: the store holds only bundle \(selected.captureId), not \(row.captureId)")
         print("replaced captures: \(element.captureId), \(row.captureId)")
+
+        // One live read through Copy for Agent's reader, at the Dock's first icon (a 1 pt crop the icon holds): it answers within a
+        // second, and the icon is the target with the other icons as its siblings. Without Accessibility permission it reads nothing.
+        let dock = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first!.processIdentifier
+        if AXIsProcessTrusted() {
+            let strip = await Accessibility.listFrames(pid: dock).first!
+            let point = strip.width > strip.height ? CGPoint(x: strip.minX + 30, y: strip.midY) : CGPoint(x: strip.midX, y: strip.minY + 30)
+            let spot = CGRect(origin: point, size: CGSize(width: 1, height: 1))
+            let began = ContinuousClock.now
+            let read = await Accessibility.handoff(at: point, pid: dock, crop: spot, display: .infinite, tolerance: 4)
+            let took = began.duration(to: .now)
+            let icon = HandoffManifest.Target(kind: .area, label: "Area", provenance: .userArea, frames: read.frames, observedAt: .now, crop: spot, display: .infinite)
+            require(took < .seconds(1) && icon.role != nil && icon.provenance == .userArea && !(icon.siblings ?? []).isEmpty,
+                    "a live read of the Dock's first icon takes \(took), its role \(icon.role ?? "none") \"\(icon.title ?? "")\", siblings \(icon.siblings?.compactMap(\.name).prefix(3) ?? [])")
+        } else {
+            require(await Accessibility.handoff(at: .zero, pid: dock, crop: .zero, display: .infinite, tolerance: 4).frames.isEmpty,
+                    "without Accessibility permission the live read is empty")
+        }
         defaults.set(false, forKey: Pref.frame)
     }
 }

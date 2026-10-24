@@ -40,7 +40,7 @@ public struct HandoffServer: Sendable {
             "resolution, and its manifest: the app (name, bundle id, bundle path, version), the window (title, frame, and its open ",
             "document's file URL as source.document), a web page's URL and title (source.url, source.page_title), the display, and the target: ",
             "its accessibility role, subrole, role description, title, identifier (AXIdentifier, often set in code), description, value ",
-            "(cut short; a few KB for text), help, placeholder, labeled_by, url, enabled/focused/selected, frame, up to 20 children and ",
+            "(cut short; a few KB for text), help, placeholder, labeled_by, url, enabled/focused/selected, frame, up to 10 children and 10 ",
             "siblings (role and name), and ancestors innermost first; inside a web page also dom_id, dom_classes (on ancestors too) and a ",
             "CSS-like selector to search the source for. target.provenance \"accessibility\" means the element's frame is the capture; ",
             "otherwise the accessibility fields describe the element holding the capture or under its center, at target.frame. Pass ",
