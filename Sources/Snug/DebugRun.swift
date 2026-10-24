@@ -12,6 +12,7 @@ enum DebugRun {
         overlay.chooseSaveURL = { _ in preconditionFailure("a debug run shows no Save As panel") }
         overlay.openURL = { preconditionFailure("a debug run opens nothing: \($0)") }
         Toast.isSuppressed = true
+        Toast.chooseSaveURL = { _ in preconditionFailure("a debug run shows no Save As panel") }
         // A debug run never takes the keyboard or activation from the app in front: either ends it at once.
         for name in [NSWindow.didBecomeKeyNotification, NSApplication.didBecomeActiveNotification] {
             NotificationCenter.default.addObserver(forName: name, object: nil, queue: nil) { note in

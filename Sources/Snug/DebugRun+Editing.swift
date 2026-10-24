@@ -637,8 +637,11 @@ extension DebugRun {
         require(messages == ["Copied, saved to F", "Copied, save failed", "Saved to F, copy failed", "Copy and save failed",
                              "Copied", "Copy failed", "Saved to F", "Save failed"], "the toast names what worked and what failed: \(messages)")
         let toast = Toast(png: Data("kept".utf8), message: "Copied, save failed", detail: "reason", file: nil, color: .systemRed, defaults: defaults)
+        Toast.chooseSaveURL = { _ in blocked.appending(path: "Chosen.png") }
         toast.saveButton.performClick(nil)
-        require(toast.message.stringValue == "Save failed" && toast.file == nil, "the toast's Save on an unwritable folder reports instead of crashing")
+        Toast.chooseSaveURL = { _ in preconditionFailure("a debug run shows no Save As panel") }
+        require(toast.message.stringValue == "Save failed" && toast.file == nil && toast.png != nil && !toast.saveButton.isHidden,
+                "the toast's Save As into an unwritable folder reports in the toast and keeps the button")
         toast.dismiss()
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: blocked.path)
         defaults.set(folder.path, forKey: Pref.saveFolder)

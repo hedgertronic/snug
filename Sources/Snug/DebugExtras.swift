@@ -700,8 +700,8 @@ extension DebugRun {
         require(!plain.closeButton.isHidden && !plain.actions.isHidden && plain.dismissal?.isCancelled != false, "hovering starts the fade in at once and holds the toast")
         try await Task.sleep(for: .milliseconds(300))
         let shown = plain.actions.arrangedSubviews.filter { !$0.isHidden } as! [NSButton]
-        require(plain.textBox.isHidden && plain.actions.alphaValue == 1 && plain.closeButton.alphaValue == 1 && shown.map(\.toolTip!) == ["Copy", "Save", "Open in \(Toast.appName(toOpen: .png))", "Share"],
-                "hovering an unsaved capture shows the close button and Copy, Save, Open and Share in place of the text: \(shown.map(\.toolTip!))")
+        require(plain.textBox.isHidden && plain.actions.alphaValue == 1 && plain.closeButton.alphaValue == 1 && shown.map(\.toolTip!) == ["Copy", "Save As...", "Open in \(Toast.appName(toOpen: .png))", "Share"],
+                "hovering an unsaved capture shows the close button and Copy, Save As, Open and Share in place of the text: \(shown.map(\.toolTip!))")
         require(frames(plain) == rest, "hovering moves and resizes nothing: \(frames(plain)) \(rest)")
         require(abs(plain.actions.frame.midX - plain.textBox.frame.midX) <= 0.5 && plain.actions.frame.width <= plain.textBox.frame.width && plain.actions.superview === card
                     && abs(plain.message.frame.minX - (plain.textBox.bounds.width - plain.detail.frame.maxX)) <= 1,
@@ -734,8 +734,9 @@ extension DebugRun {
         plain.mouseDown(with: pressText)
         require(plain.dragStart == nil, "a press on the text arms no drag; only the thumbnail and the preview drag")
 
-        // Open writes a temporary PNG when the capture was not saved and opens it in the default app (the debug run suppresses the launch); Save writes to the save
-        // folder and shows the saved state in the same size.
+        // Open writes a temporary PNG when the capture was not saved and opens it in the default app (the debug run suppresses the launch).
+        // Save As asks for a file starting with the usual name in the save folder, holding the toast while it asks; a chosen file gets the
+        // capture and closes the toast, and a cancel keeps the toast and restarts its timer.
         let saveFolder = FileManager.default.temporaryDirectory.appending(path: "snug-toast-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: saveFolder, withIntermediateDirectories: true)
         let saving = toast { $0.set(saveFolder.path, forKey: Pref.saveFolder) }
@@ -746,30 +747,30 @@ extension DebugRun {
                 "Open writes the capture to a temporary PNG and opens it in the default app for PNGs: \(Toast.opened!)")
         saving.shareButton.performClick(nil)
         require(saving.file != nil, "Share has a file to share")
-        let fresh = toast { $0.set(saveFolder.path, forKey: Pref.saveFolder) }
-        let unsaved = frames(fresh)
-        fresh.saveButton.performClick(nil)
-        let saved = try FileManager.default.contentsOfDirectory(atPath: saveFolder.path)
-        let savedData = try Data(contentsOf: saveFolder.appending(path: saved[0]))
-        require(saved.count == 1 && savedData == capture, "Save writes the capture to the save location: \(saved)")
-        require(fresh.message.stringValue == "Saved to \(saveFolder.lastPathComponent)" && fresh.saveButton.isHidden && !fresh.trashButton.isHidden && fresh.file?.lastPathComponent == saved[0]
-                    && fresh.detail.stringValue == "1200 x 400",
-                "Save shows the saved state with Trash and keeps the pixel size as the detail: \(fresh.message.stringValue) \(fresh.detail.stringValue)")
-        require(Array(frames(fresh).prefix(4)) == Array(unsaved.prefix(4)), "saving keeps the toast's size and place: \(frames(fresh)) \(unsaved)")
-        require(fresh.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Move to Trash", "Open in \(Toast.appName(toOpen: .png))", "Show in Finder", "Share"]
-                    && fresh.actions.frame.width <= fresh.textBox.frame.width && abs(fresh.actions.frame.midX - fresh.textBox.frame.midX) <= 0.5,
-                "Save swaps Save for Trash and Show in Finder, centered in the room the text box kept for them: \(fresh.actions.frame) \(fresh.textBox.frame)")
-        fresh.dismissal?.cancel()
-        let warningDefaults = UserDefaults(suiteName: "snug-toast-\(UUID().uuidString)")!
-        Pref.register(in: warningDefaults)
-        warningDefaults.set(saveFolder.path, forKey: Pref.saveFolder)
-        let warned = Toast(png: capture, message: "Copied", detail: "Pinned or moving content: the header stayed fixed while the page scrolled, so 120 px at 4 seams may repeat.",
-                           file: nil, color: .systemOrange, defaults: warningDefaults)
-        let warning = frames(warned)
-        warned.saveButton.performClick(nil)
-        require(warned.file != nil && warned.detail.stringValue == "1200 x 400" && warned.detail.font == .monospacedSystemFont(ofSize: 12, weight: .regular) && warned.detail.textColor == .secondaryLabelColor
-                    && warned.detail.maximumNumberOfLines == 1 && Array(frames(warned).prefix(4)) == Array(warning.prefix(4)),
-                "Save on a warning shows the pixel size as a plain saved capture does, in the same size: \(warned.detail.font!) \(frames(warned))")
+        let chosen = saveFolder.appending(path: "Chosen.png")
+        for answer in [nil, chosen] {
+            let asking = toast { $0.set(saveFolder.path, forKey: Pref.saveFolder) }
+            asking.scheduleDismissal()
+            let pending = asking.dismissal!
+            var suggested: URL?
+            Toast.chooseSaveURL = { url in
+                suggested = url
+                return answer
+            }
+            asking.saveButton.performClick(nil)
+            require(suggested?.deletingLastPathComponent().path == saveFolder.path && suggested!.lastPathComponent.hasPrefix("Snug ") && suggested!.pathExtension == "png"
+                        && pending.isCancelled, "Save As asks with the usual name in the save folder and holds the toast while it asks: \(suggested?.path ?? "none")")
+            if answer == nil {
+                try await Task.sleep(for: .milliseconds(300))
+                require(asking.png != nil && asking.dismissal != pending && !asking.dismissal!.isCancelled && asking.message.stringValue == "Copied"
+                            && !FileManager.default.fileExists(atPath: chosen.path),
+                        "canceling Save As keeps the toast as it was, writes nothing, and restarts its timer")
+                asking.dismiss()
+            } else {
+                require((try? Data(contentsOf: chosen)) == capture && asking.png == nil, "Save As writes the capture to the chosen file and closes the toast")
+            }
+        }
+        Toast.chooseSaveURL = { _ in preconditionFailure("a debug run shows no Save As panel") }
 
         // The capture is held only while the toast is visible: closing releases the PNG, the thumbnail, the preview, and the toast itself.
         weak var weakToast: Toast?

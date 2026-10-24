@@ -7,7 +7,8 @@ import UniformTypeIdentifiers
 /// with no capture). The capsule is 40 pt tall (taller for a two-line warning or failure) and up to 360 pt wide, and it keeps that size
 /// and place for its whole life: its text box is as wide as the wider of the resting text and the actions, and on hover the text
 /// cross-fades to the actions in the same box, both centered in it. The close button fades in on the top-left corner. Copy puts the
-/// capture (or the recording's file, or the text) on the pasteboard again; Save (an unsaved capture) or Trash (a saved file), Open
+/// capture (or the recording's file, or the text) on the pasteboard again; Save As (an unsaved capture: a save panel, and the toast closes
+/// once it is saved) or Trash (a saved file), Open
 /// (in the default app for the file, named in its tooltip), Show in Finder (a saved file) and Share act on the capture; copied text has
 /// Open (in the default app for plain text, from a temporary file) and Share. The toast takes no keys.
 /// Pointing at the thumbnail grows the capture out of it in its own panel, a margin above the capsule (below it at the top right); the
@@ -29,6 +30,15 @@ final class Toast: NSPanel, NSDraggingSource {
     static var isSuppressed = false
     /// The file and the bundle id of the app the last suppressed Open or Show in Finder would have opened.
     private(set) static var opened: (file: URL, app: String)?
+    /// Save As: the file to write, given the usual name in the save folder; nil cancels. Debug runs answer without a panel.
+    static var chooseSaveURL: (URL) -> URL? = { suggested in
+        NSApp.activate()
+        let panel = NSSavePanel()
+        panel.directoryURL = suggested.deletingLastPathComponent()
+        panel.nameFieldStringValue = suggested.lastPathComponent
+        panel.allowedContentTypes = [.png]
+        return panel.runModal() == .OK ? panel.url : nil
+    }
     /// Transparent margin around the capsule, so the close button can hang off a corner; it is also the gap to the preview.
     private static let margin: CGFloat = 10
     /// The lifetime setting's choices, in seconds: 0 is no toast but failures, and -1 is Forever.
@@ -42,7 +52,8 @@ final class Toast: NSPanel, NSDraggingSource {
     private let text: String?
     private(set) var dismissal: Task<Void, any Error>?
     private(set) var dragStart: NSPoint?
-    private var sharing = false
+    /// The share menu or the Save As panel is open, so the toast stays.
+    private var holding = false
     /// How long the toast stays while the pointer is elsewhere; nil is until it is closed.
     let lifetime: Duration?
     private let defaults: UserDefaults
@@ -220,7 +231,7 @@ final class Toast: NSPanel, NSDraggingSource {
             return button
         }
         copyButton = button("doc.on.doc", "Copy")
-        saveButton = button("square.and.arrow.down", "Save")
+        saveButton = button("square.and.arrow.down", "Save As...")
         trashButton = button("trash", "Move to Trash")
         openButton = button(copiedText != nil ? "doc.text" : "arrow.up.forward.app", openTip)
         revealButton = button("folder", "Show in Finder")
@@ -229,8 +240,7 @@ final class Toast: NSPanel, NSDraggingSource {
         saveButton.isHidden = png == nil || file != nil
         trashButton.isHidden = file == nil
         openButton.isHidden = png == nil && copiedText == nil
-        // Show in Finder is measured in for any capture, since Save adds it; it shows once there is a file.
-        revealButton.isHidden = png == nil
+        revealButton.isHidden = file == nil
         shareButton.isHidden = png == nil && copiedText == nil
         actions = NSStackView(views: [copyButton, saveButton, trashButton, openButton, revealButton, shareButton])
         actions.spacing = 4
@@ -250,14 +260,13 @@ final class Toast: NSPanel, NSDraggingSource {
             button.action = action
         }
 
-        // The size, fixed here: the text box is the wider of the resting text (the message up to 200 pt) and the actions (with Show in
-        // Finder, for a capture), within 360 pt for the whole capsule. A warning or failure too long for one line wraps to two and makes the capsule taller.
+        // The size, fixed here: the text box is the wider of the resting text (the message up to 200 pt) and the actions, within 360 pt
+        // for the whole capsule. A warning or failure too long for one line wraps to two and makes the capsule taller.
         let margin = Toast.margin
         let messageWidth = min(message.frame.width, 200)
         let resting = messageWidth + (detail.isHidden ? 0 : 8 + detail.frame.width)
         let widest = 360 - 6 - lead.frame.width - 10 - 12
         let boxWidth = min(max(resting, actions.arrangedSubviews.contains { !$0.isHidden } ? actions.fittingSize.width : 0), widest).rounded(.up)
-        revealButton.isHidden = file == nil
         if tone != nil && resting > widest {
             detail.lineBreakMode = .byWordWrapping
             detail.maximumNumberOfLines = 2
@@ -479,7 +488,7 @@ final class Toast: NSPanel, NSDraggingSource {
     @objc private func shareClicked() {
         let item: Any = png == nil ? text! : fileOnDisk()
         guard !Toast.isSuppressed else { return }
-        sharing = true
+        holding = true
         dismissal?.cancel()
         let picker = NSSharingServicePicker(items: [item])
         picker.delegate = self
@@ -494,13 +503,16 @@ final class Toast: NSPanel, NSDraggingSource {
         dismiss()
     }
 
-    /// Saves to the save location as Cmd-S does (under a numbered name when the usual one is taken), then shows the saved state (the pixel
-    /// size, as a plain capture's, even after a warning) in the same size. A save that fails shows its reason in the toast, in red, and
-    /// keeps the Save button.
+    /// Asks where to save with the Save As panel (the toast holds while it is open), writes the capture there and closes the toast.
+    /// Canceling keeps the toast and restarts its timer; a write that fails shows its reason in the toast, in red, and keeps the button.
     @objc private func saveClicked() {
-        let url: URL
+        dismissal?.cancel()
+        holding = true
+        let chosen = Toast.chooseSaveURL(Output.defaultFile(defaults: defaults))
+        holding = false
+        guard let chosen else { return scheduleDismissal() }
         do {
-            url = try UniqueFile.write(png!, to: Output.defaultFile(defaults: defaults))
+            try png!.write(to: chosen, options: .atomic)
         } catch {
             message.stringValue = "Save failed"
             detail.stringValue = (error as NSError).localizedFailureReason ?? error.localizedDescription
@@ -510,25 +522,10 @@ final class Toast: NSPanel, NSDraggingSource {
             detail.toolTip = detail.stringValue
             detail.isHidden = false
             layoutText()
+            scheduleDismissal()
             return
         }
-        file = url
-        message.stringValue = "Saved to \(url.deletingLastPathComponent().lastPathComponent)"
-        let pixels = NSBitmapImageRep(data: png!)!
-        detail.stringValue = "\(pixels.pixelsWide) x \(pixels.pixelsHigh)"
-        detail.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
-        detail.textColor = .secondaryLabelColor
-        detail.maximumNumberOfLines = 1
-        detail.lineBreakMode = .byTruncatingTail
-        detail.toolTip = detail.stringValue
-        detail.isHidden = false
-        saveButton.isHidden = true
-        trashButton.isHidden = false
-        revealButton.isHidden = false
-        layoutText()
-        // Trash and Show in Finder take Save's place, in the room measured for them, centered again.
-        actions.frame.size = actions.fittingSize
-        actions.frame.origin.x = textBox.frame.minX + ((textBox.frame.width - actions.frame.width) / 2).rounded()
+        dismiss()
     }
 
     override func mouseEntered(with event: NSEvent) { track(event, inside: true) }
@@ -555,7 +552,7 @@ final class Toast: NSPanel, NSDraggingSource {
         settle = Task {
             try await Task.sleep(for: .milliseconds(150))
             if !overThumbnail && !overPreview { setPeeking(false) }
-            guard !overCapsule && !overPreview && !sharing else { return }
+            guard !overCapsule && !overPreview && !holding else { return }
             setHovering(false)
             scheduleDismissal()
         }
@@ -599,7 +596,7 @@ extension Toast: NSSharingServicePickerDelegate {
     nonisolated func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker, didChoose service: NSSharingService?) {
         let chosen = service != nil
         MainActor.assumeIsolated {
-            sharing = false
+            holding = false
             if chosen { dismiss() } else { scheduleDismissal() }
         }
     }
