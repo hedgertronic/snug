@@ -753,11 +753,16 @@ extension DebugRun {
             asking.scheduleDismissal()
             let pending = asking.dismissal!
             var suggested: URL?
+            var levels: [NSWindow.Level] = []
             Toast.chooseSaveURL = { url in
                 suggested = url
+                levels = [asking.level, asking.preview!.level]
                 return answer
             }
+            let level = asking.level
             asking.saveButton.performClick(nil)
+            require(levels == [.floating, .floating] && level.rawValue > NSWindow.Level.floating.rawValue && (answer != nil || asking.level == level && asking.preview!.level == level),
+                    "while Save As asks, the toast and its preview drop to floating, under the panel, and come back after: \(levels) \(level)")
             require(suggested?.deletingLastPathComponent().path == saveFolder.path && suggested!.lastPathComponent.hasPrefix("Snug ") && suggested!.pathExtension == "png"
                         && pending.isCancelled, "Save As asks with the usual name in the save folder and holds the toast while it asks: \(suggested?.path ?? "none")")
             if answer == nil {

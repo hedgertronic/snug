@@ -503,12 +503,18 @@ final class Toast: NSPanel, NSDraggingSource {
         dismiss()
     }
 
-    /// Asks where to save with the Save As panel (the toast holds while it is open), writes the capture there and closes the toast.
+    /// Asks where to save with the Save As panel (the toast holds while it is open, dropped with its preview from the screen saver level to
+    /// floating, under the modal panel), writes the capture there and closes the toast.
     /// Canceling keeps the toast and restarts its timer; a write that fails shows its reason in the toast, in red, and keeps the button.
     @objc private func saveClicked() {
         dismissal?.cancel()
         holding = true
+        let level = self.level
+        self.level = .floating
+        preview?.level = .floating
         let chosen = Toast.chooseSaveURL(Output.defaultFile(defaults: defaults))
+        self.level = level
+        preview?.level = level
         holding = false
         guard let chosen else { return scheduleDismissal() }
         do {

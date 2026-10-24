@@ -306,7 +306,7 @@ private struct AppearancePane: View {
                 slider("Background fade", value: $highlightFade, range: 0...0.6)
                 slider("Glow", value: $highlightGlow, range: 0...1)
             }
-            caption("After capture")
+            caption("Toast")
             Card {
                 LabeledContent("Toast duration") {
                     Picker("Toast duration", selection: $toastLifetime) {
