@@ -541,19 +541,34 @@ extension DebugRun {
         require(!overlay.ratioLocked && overlay.undoStack.count == 1, "Cmd-Z undoes the lock click")
         overlay.dismiss()
 
-        // With Frame on, the size chip adds what the delivered image adds around the selection.
-        open()
-        overlay.selection = AreaSelection(extent: overlay.extent, exact: a)
+        // With Frame on, at each Frame padding, the preview card and the size chip add what the delivered image adds around the
+        // selection. The Small and Large copies are written next to the save folder for a look at their shadows.
         defaults.set(true, forKey: Pref.frame)
-        overlay.refresh()
-        let framedChip = texts(in: overlay.chrome.size)
-        pasteboard.clearContents()
-        key(returnKey, "\r")
-        await overlay.commitTask?.value
-        let framedOutput = pngSize(pasteboard.data(forType: .png))!
+        for padding in [16, 24, 40] {
+            defaults.set(padding, forKey: Pref.framePadding)
+            open()
+            overlay.selection = AreaSelection(extent: overlay.extent, exact: a)
+            overlay.refresh()
+            let pad = Int(CGFloat(padding) * overlay.scale)
+            require(overlay.view.overlays.styleFrame == a.insetBy(dx: CGFloat(-pad), dy: CGFloat(-pad)),
+                    "the Frame preview grows the selection by \(padding) pt: \(String(describing: overlay.view.overlays.styleFrame))")
+            let framedChip = texts(in: overlay.chrome.size)
+            pasteboard.clearContents()
+            key(returnKey, "\r")
+            await overlay.commitTask?.value
+            let png = pasteboard.data(forType: .png)!
+            let framedOutput = pngSize(png)!
+            require(framedOutput == CGSize(width: 400 + 2 * pad, height: 200 + 2 * pad), "the copy at \(padding) pt padding is \(framedOutput)")
+            require(framedChip == ["400 x 200  + frame \(2 * pad) x \(2 * pad)"],
+                    "the size chip adds the frame the copy gets at \(padding) pt: \(framedChip), copied \(framedOutput)")
+            if padding != 24 {
+                let file = folder.deletingLastPathComponent().appending(path: "framed-\(padding)pt.png")
+                try png.write(to: file)
+                print("Framed copy at \(padding) pt: \(file.path)")
+            }
+        }
         defaults.set(false, forKey: Pref.frame)
-        require(framedChip == ["400 x 200  + frame \(Int(framedOutput.width) - 400) x \(Int(framedOutput.height) - 200)"],
-                "the size chip adds the frame the copy gets: \(framedChip), copied \(framedOutput)")
+        defaults.removeObject(forKey: Pref.framePadding)
 
         // Cmd-Shift-S: Save As writes where the panel (here the seam) says, with the usual name offered, and closes the overlay.
         var offered: URL?

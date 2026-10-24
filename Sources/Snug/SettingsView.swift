@@ -37,7 +37,7 @@ enum Shortcut {
 enum SettingsTabs {
     static let width: CGFloat = 400
     /// The Appearance pane's height, which the Keys pane's scroll view matches so the two tabs are the same size.
-    static let tallHeight: CGFloat = 641
+    static let tallHeight: CGFloat = 721
     static let panes: [(title: String, symbol: String, view: AnyView)] = [
         ("General", "gearshape", AnyView(GeneralPane())),
         ("Appearance", "paintpalette", AnyView(AppearancePane())),
@@ -269,7 +269,7 @@ private struct MakerButton: View {
     }
 }
 
-/// The overlay's appearance, the highlight (live preview, color menu, fill, fade, glow) and the toast.
+/// The overlay's appearance, the highlight (live preview, color menu, fill, fade, glow), the toast, and the frame's padding.
 private struct AppearancePane: View {
     @AppStorage(Pref.overlayAppearance) private var overlayAppearance = "system"
     @AppStorage(Pref.highlightColor) private var highlightColor = ""
@@ -278,6 +278,7 @@ private struct AppearancePane: View {
     @AppStorage(Pref.highlightGlow) private var highlightGlow = 0.2
     @AppStorage(Pref.toastPosition) private var toastPosition = "bottomCenter"
     @AppStorage(Pref.toastLifetime) private var toastLifetime = 4
+    @AppStorage(Pref.framePadding) private var framePadding = 24
 
     private static let positions: [(tag: String, title: String, alignment: Alignment)] = [
         ("bottomCenter", "Bottom center", .bottom), ("bottomRight", "Bottom right", .bottomTrailing), ("topRight", "Top right", .topTrailing)
@@ -339,6 +340,19 @@ private struct AppearancePane: View {
                     }
                 }
                 .padding(.vertical, 8)
+            }
+            caption("Frame")
+            Card {
+                LabeledContent("Frame padding") {
+                    Picker("Frame padding", selection: $framePadding) {
+                        Text("Small").tag(16)
+                        Text("Medium").tag(24)
+                        Text("Large").tag(40)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                }
             }
         }
         .fixedSize(horizontal: false, vertical: true)

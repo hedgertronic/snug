@@ -14,6 +14,8 @@ enum Pref {
     /// Whether output gets its shadow (Frame): a live window its real macOS shadow, a subject the synthetic window shadow, an area or
     /// element a padded card with a shadow. Replaces the "SnugStyle" string and the "SnugShadow" bool, which `register` removes.
     static let frame = "SnugFrame"
+    /// The transparent padding around a framed area or element, in points: 16, 24, or 40 (Settings > Appearance > Frame padding).
+    static let framePadding = "SnugFramePadding"
     private static let legacyStyle = "SnugStyle"
     private static let legacyShadow = "SnugShadow"
     static let saveFolder = "SnugSaveFolder"
@@ -77,6 +79,7 @@ enum Pref {
         defaults.register(defaults: [
             snap: true,
             frame: false,
+            framePadding: 24,
             saveFolder: NSHomeDirectory() + "/Desktop",
             hotKeyCode: 49,
             hotKeyModifiers: Int(NSEvent.ModifierFlags([.control, .shift]).rawValue),
@@ -110,10 +113,10 @@ enum Output {
         return data as Data
     }
 
-    /// Renders the frame (or not) and encodes a PNG off the main thread.
+    /// Renders the frame on `padding` points (or none when nil) and encodes a PNG off the main thread.
     @concurrent
-    static func encode(_ image: CGImage, crop: CGRect, framed: Bool, scale: CGFloat, cornerRadii: CornerRadii = .zero) async throws -> (png: Data, width: Int, height: Int) {
-        let rendered = try OutputFrame.render(image, crop: crop, scale: scale, framed: framed, cornerRadii: cornerRadii)
+    static func encode(_ image: CGImage, crop: CGRect, padding: CGFloat?, scale: CGFloat, cornerRadii: CornerRadii = .zero) async throws -> (png: Data, width: Int, height: Int) {
+        let rendered = try OutputFrame.render(image, crop: crop, scale: scale, padding: padding, cornerRadii: cornerRadii)
         return (try await png(rendered), rendered.width, rendered.height)
     }
 
@@ -127,10 +130,10 @@ enum Output {
 
     /// Encodes a crop, then copies it to the pasteboard or saves it, and shows a toast (see `publish`).
     @MainActor
-    static func deliver(_ image: CGImage, crop: CGRect, framed: Bool, scale: CGFloat, cornerRadii: CornerRadii = .zero,
+    static func deliver(_ image: CGImage, crop: CGRect, padding: CGFloat?, scale: CGFloat, cornerRadii: CornerRadii = .zero,
                         copy: Bool, save: Bool, destination: URL? = nil, warning: String? = nil, pasteboard: NSPasteboard, defaults: UserDefaults) async throws {
         let id = signposter.beginInterval("encode")
-        let output = try await encode(image, crop: crop, framed: framed, scale: scale, cornerRadii: cornerRadii)
+        let output = try await encode(image, crop: crop, padding: padding, scale: scale, cornerRadii: cornerRadii)
         signposter.endInterval("encode", id)
         publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save, destination: destination,
                 warning: warning, pasteboard: pasteboard, defaults: defaults)

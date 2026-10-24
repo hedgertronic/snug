@@ -142,7 +142,7 @@ extension OverlayController {
             return "  + frame \(2 * padding.sides) x \(padding.top + padding.bottom)"
         }
         if capturesLiveWindow(rect) { return "  + frame" }
-        let crop = rect.integral, output = OutputFrame.rect(around: crop, scale: scale, framed: true).integral
+        let crop = rect.integral, output = OutputFrame.rect(around: crop, scale: scale, padding: framePadding).integral
         return "  + frame \(Int(output.width - crop.width)) x \(Int(output.height - crop.height))"
     }
 

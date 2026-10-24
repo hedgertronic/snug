@@ -57,7 +57,7 @@ struct CutoutOutputTests {
         #expect(a(0, 0) <= 2 && a(output.width - 1, output.height - 1) <= 2 && a(centerX, output.height - 1) <= 2)
     }
 
-    /// Frame off adds nothing; on, a subject gets the window shadow's canvas and an area or element the card's 24 pt padding.
+    /// Frame off adds nothing; on, a subject gets the window shadow's canvas and an area or element the card's padding (24 pt here).
     @Test func outputSizesByTargetAndFrame() throws {
         let full = subject(CGRect(x: 0, y: 0, width: 200, height: 200), oval: false)
         let crop = CGRect(x: 0, y: 0, width: 200, height: 200)
@@ -67,9 +67,9 @@ struct CutoutOutputTests {
             let on = try OutputFrame.renderCutout(full, bounds: nil, cornerRadii: .zero, framed: true, scale: scale)
             #expect((off.width, off.height) == (200, 200))
             #expect((on.width, on.height) == (200 + 2 * padding.sides, 200 + padding.top + padding.bottom))
-            let pad = Int(OutputFrame.points * scale)
-            #expect(try OutputFrame.render(full, crop: crop, scale: scale, framed: false).width == 200)
-            let area = try OutputFrame.render(full, crop: crop, scale: scale, framed: true)
+            let pad = Int(24 * scale)
+            #expect(try OutputFrame.render(full, crop: crop, scale: scale, padding: nil).width == 200)
+            let area = try OutputFrame.render(full, crop: crop, scale: scale, padding: 24)
             #expect((area.width, area.height) == (200 + 2 * pad, 200 + 2 * pad))
         }
         #expect(OutputFrame.shadowPadding(scale: 2) == (104, 70, 140))
