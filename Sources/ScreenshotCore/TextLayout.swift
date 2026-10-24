@@ -5,10 +5,13 @@ import Foundation
 public struct TextLine: Equatable, Sendable {
     public var text: String
     public var bounds: CGRect
+    /// How OCR's line is set (`TextStyle.measure`); nil for text read without pixels.
+    public var style: TextStyle?
 
-    public init(text: String, bounds: CGRect) {
+    public init(text: String, bounds: CGRect, style: TextStyle? = nil) {
         self.text = text
         self.bounds = bounds
+        self.style = style
     }
 }
 
@@ -94,13 +97,14 @@ public enum TextLayout {
                     let line = unused.remove(at: index)
                     let letters = line.text.indices.filter { !line.text[$0].isWhitespace }
                     let start = key(line.text).distance(from: key(line.text).startIndex, to: key(line.text).range(of: piece)!.lowerBound)
-                    placed.append(TextLine(text: String(line.text[letters[start]...letters[start + piece.count - 1]]), bounds: line.bounds))
+                    placed.append(TextLine(text: String(line.text[letters[start]...letters[start + piece.count - 1]]), bounds: line.bounds, style: line.style))
                 }
             } else if let last = placed.last, ocr.contains(where: { $0.bounds == last.bounds && key($0.text).contains(key(last.text + text)) }) {
                 placed[placed.count - 1].text += " " + text
             } else if let index = unused.firstIndex(where: { key($0.text).contains(key(text)) && $0.bounds.minY >= (placed.last?.bounds.minY ?? 0) })
                         ?? unused.firstIndex(where: { key($0.text).contains(key(text)) }) {
-                placed.append(TextLine(text: text, bounds: unused.remove(at: index).bounds))
+                let line = unused.remove(at: index)
+                placed.append(TextLine(text: text, bounds: line.bounds, style: line.style))
             } else {
                 let previous = placed.last?.bounds ?? .zero
                 placed.append(TextLine(text: text, bounds: CGRect(x: previous.minX, y: previous.maxY + 1, width: previous.width, height: previous.height)))
@@ -175,7 +179,8 @@ public enum TextLayout {
     /// after the previous row's marker starts (a hanging indent), and the previous row was full: its first word and a space (its share
     /// of the row's width by characters) would not have fit after the previous row, within 0.5 h of the rows' right edge. On a
     /// terminal a soft wrap leaves a gap of about 0.1 h; a bullet's hanging indent is about 0.7 h, so an outdent back to the bullet is
-    /// no soft wrap; a short header over its message (a chat's name and time) was not full.
+    /// no soft wrap; a short header over its message (a chat's name and time) was not full. Rows whose first lines are set in clearly
+    /// different styles (`TextStyle.differs`: a bold title over its subtitle) never join.
     static func wraps(_ rows: [[TextLine]]) -> [Bool] {
         guard !rows.isEmpty else { return [] }
         // A bullet (Claude Code's message dot and tool-result corner too), or a hyphen, dash, star, plus or number with a period or
@@ -197,7 +202,8 @@ public enum TextLayout {
             let first = rows[index][0]
             let word = first.bounds.width * CGFloat(first.text.prefix { !$0.isWhitespace }.count + 1) / CGFloat(first.text.count)
             let full = boxes[index - 1].maxX + word > right - 0.5 * height
-            return box.minY - boxes[index - 1].maxY < 0.6 * height && aligned && full && first.text.prefixMatch(of: marker) == nil
+            let restyled = previous.style.flatMap { style in first.style.map(style.differs) } ?? false
+            return box.minY - boxes[index - 1].maxY < 0.6 * height && aligned && full && !restyled && first.text.prefixMatch(of: marker) == nil
         }
     }
 

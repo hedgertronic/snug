@@ -419,7 +419,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     }
 
     /// Runs accurate OCR on the crop only, in 432 px bands read at once when it is taller than 648 px (`TextLayout.bands`); boxes come
-    /// back in full-image pixels.
+    /// back in full-image pixels, each line with its style measured from the image (`TextStyle`).
     @concurrent
     static func recognize(_ image: CGImage, crop: CGRect) async throws -> [TextLine] {
         let region = crop.integral
@@ -440,7 +440,9 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
             }
             return try await group.reduce(into: []) { $0.append($1) }
         }
-        return TextLayout.merge(reads, in: region)
+        return TextLayout.merge(reads, in: region).map { line in
+            TextLine(text: line.text, bounds: line.bounds, style: TextStyle.measure(in: image, box: line.bounds))
+        }
     }
 
     /// Shift-Return: copies the selected text as rows, one visual row per line with columns tab-separated, from accurate OCR boxes
