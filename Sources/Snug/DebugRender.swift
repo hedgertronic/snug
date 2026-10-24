@@ -688,6 +688,7 @@ extension DebugRun {
     static func renderSettings(into directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let tabs = SettingsTabs.makeController()
+        func descendants<T: NSView>(of view: NSView, _ type: T.Type) -> [T] { view.subviews.flatMap { (($0 as? T).map { [$0] } ?? []) + descendants(of: $0, type) } }
         for item in tabs.tabViewItems {
             let host = NSHostingView(rootView: (item.viewController as! NSHostingController<AnyView>).rootView.background(Color(nsColor: .windowBackgroundColor)))
             let offscreen = NSWindow(contentRect: CGRect(origin: .zero, size: host.fittingSize), styleMask: [.borderless], backing: .buffered, defer: true)
@@ -701,8 +702,17 @@ extension DebugRun {
             let file = directory.appending(path: "settings-\(item.label.lowercased()).png")
             try rep.representation(using: .png, properties: [:])!.write(to: file)
             print(file.path, host.fittingSize)
+            if item.label == "Appearance" {
+                // The pane scrolled to its end, where the Frame section sits.
+                let scroll = descendants(of: host, NSScrollView.self).first!
+                scroll.documentView!.scroll(CGPoint(x: 0, y: scroll.documentView!.isFlipped ? scroll.documentView!.bounds.maxY : 0))
+                host.layoutSubtreeIfNeeded()
+                host.cacheDisplay(in: host.bounds, to: rep)
+                let scrolled = directory.appending(path: "settings-appearance-scrolled.png")
+                try rep.representation(using: .png, properties: [:])!.write(to: scrolled)
+                print(scrolled.path)
+            }
             guard item.label == "General" else { continue }
-            func descendants<T: NSView>(of view: NSView, _ type: T.Type) -> [T] { view.subviews.flatMap { (($0 as? T).map { [$0] } ?? []) + descendants(of: $0, type) } }
             let field = descendants(of: host, ShortcutRecorder.Field.self).first!
             // The Reset button and the Save to button, then an Allow button for each missing permission; the last
             // two focus rings are the hedgertronic and Ko-fi links, which are not buttons.

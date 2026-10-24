@@ -36,8 +36,8 @@ enum Shortcut {
 @MainActor
 enum SettingsTabs {
     static let width: CGFloat = 400
-    /// The Appearance pane's height, which the Keys pane's scroll view matches so the two tabs are the same size.
-    static let tallHeight: CGFloat = 721
+    /// The Appearance and Keys panes' height; both scroll what is taller, so the two tabs are the same size.
+    static let tallHeight: CGFloat = 641
     static let panes: [(title: String, symbol: String, view: AnyView)] = [
         ("General", "gearshape", AnyView(GeneralPane())),
         ("Appearance", "paintpalette", AnyView(AppearancePane())),
@@ -285,77 +285,79 @@ private struct AppearancePane: View {
     ]
 
     var body: some View {
-        Pane {
-            caption("Overlay")
-            Card {
-                LabeledContent("Appearance") {
-                    Picker("Appearance", selection: $overlayAppearance) {
-                        Text("System").tag("system")
-                        Text("Light").tag("light")
-                        Text("Dark").tag("dark")
+        ScrollView {
+            Pane {
+                caption("Overlay")
+                Card {
+                    LabeledContent("Appearance") {
+                        Picker("Appearance", selection: $overlayAppearance) {
+                            Text("System").tag("system")
+                            Text("Light").tag("light")
+                            Text("Dark").tag("dark")
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .fixedSize()
                 }
-            }
-            caption("Highlight")
-            OverlayPreview(appearance: overlayAppearance, color: Highlight.color(hex: highlightColor), fill: highlightFill, fade: highlightFade, glow: highlightGlow)
-            Card {
-                LabeledContent("Color") { ColorMenu(hex: $highlightColor).fixedSize() }
-                slider("Fill", value: $highlightFill, range: 0...0.3)
-                slider("Background fade", value: $highlightFade, range: 0...0.6)
-                slider("Glow", value: $highlightGlow, range: 0...1)
-            }
-            caption("Toast")
-            Card {
-                LabeledContent("Toast duration") {
-                    Picker("Toast duration", selection: $toastLifetime) {
-                        ForEach(Toast.lifetimes, id: \.self) { Text($0 < 0 ? "Forever" : "\($0) s").tag($0) }
+                caption("Highlight")
+                OverlayPreview(appearance: overlayAppearance, color: Highlight.color(hex: highlightColor), fill: highlightFill, fade: highlightFade, glow: highlightGlow)
+                Card {
+                    LabeledContent("Color") { ColorMenu(hex: $highlightColor).fixedSize() }
+                    slider("Fill", value: $highlightFill, range: 0...0.3)
+                    slider("Background fade", value: $highlightFade, range: 0...0.6)
+                    slider("Glow", value: $highlightGlow, range: 0...1)
+                }
+                caption("Toast")
+                Card {
+                    LabeledContent("Toast duration") {
+                        Picker("Toast duration", selection: $toastLifetime) {
+                            ForEach(Toast.lifetimes, id: \.self) { Text($0 < 0 ? "Forever" : "\($0) s").tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .fixedSize()
                     }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .fixedSize()
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Toast position")
-                    HStack(spacing: 8) {
-                        ForEach(Self.positions, id: \.tag) { position in
-                            let selected = toastPosition == position.tag
-                            Button { toastPosition = position.tag } label: {
-                                VStack(spacing: 5) {
-                                    ZStack(alignment: position.alignment) {
-                                        RoundedRectangle(cornerRadius: 6).fill(LinearGradient(colors: [Color(red: 0.72, green: 0.77, blue: 0.82), Color(red: 0.87, green: 0.89, blue: 0.92)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                        RoundedRectangle(cornerRadius: 3).fill(selected ? Color.accentColor : Color(white: 0.16, opacity: 0.85)).frame(width: 22, height: 9).padding(5)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Toast position")
+                        HStack(spacing: 8) {
+                            ForEach(Self.positions, id: \.tag) { position in
+                                let selected = toastPosition == position.tag
+                                Button { toastPosition = position.tag } label: {
+                                    VStack(spacing: 5) {
+                                        ZStack(alignment: position.alignment) {
+                                            RoundedRectangle(cornerRadius: 6).fill(LinearGradient(colors: [Color(red: 0.72, green: 0.77, blue: 0.82), Color(red: 0.87, green: 0.89, blue: 0.92)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                            RoundedRectangle(cornerRadius: 3).fill(selected ? Color.accentColor : Color(white: 0.16, opacity: 0.85)).frame(width: 22, height: 9).padding(5)
+                                        }
+                                        .frame(height: 46)
+                                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.accentColor, lineWidth: 2).opacity(selected ? 1 : 0))
+                                        Text(position.title).font(.system(size: 11, weight: selected ? .semibold : .regular)).foregroundStyle(selected ? Color.accentColor : .secondary)
                                     }
-                                    .frame(height: 46)
-                                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.accentColor, lineWidth: 2).opacity(selected ? 1 : 0))
-                                    Text(position.title).font(.system(size: 11, weight: selected ? .semibold : .regular)).foregroundStyle(selected ? Color.accentColor : .secondary)
+                                    .frame(maxWidth: .infinity)
+                                    .contentShape(Rectangle())
                                 }
-                                .frame(maxWidth: .infinity)
-                                .contentShape(Rectangle())
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
+                    .padding(.vertical, 8)
                 }
-                .padding(.vertical, 8)
-            }
-            caption("Frame")
-            Card {
-                LabeledContent("Frame padding") {
-                    Picker("Frame padding", selection: $framePadding) {
-                        Text("Small").tag(16)
-                        Text("Medium").tag(24)
-                        Text("Large").tag(40)
+                caption("Frame")
+                Card {
+                    LabeledContent("Frame padding") {
+                        Picker("Frame padding", selection: $framePadding) {
+                            Text("Small").tag(16)
+                            Text("Medium").tag(24)
+                            Text("Large").tag(40)
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .fixedSize()
                 }
             }
         }
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(width: SettingsTabs.width, height: SettingsTabs.tallHeight)
     }
 
     /// A slider with its value as a percentage.
