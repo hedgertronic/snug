@@ -14,7 +14,7 @@ enum Pref {
     /// Whether output gets its shadow (Frame): a live window its real macOS shadow, a subject the synthetic window shadow, an area or
     /// element a padded card with a shadow. Replaces the "SnugStyle" string and the "SnugShadow" bool, which `register` removes.
     static let frame = "SnugFrame"
-    /// The transparent padding around a framed area or element, in points: 16, 24, or 40 (Settings > Appearance > Frame padding).
+    /// The transparent padding around a framed area or element, in whole points from 0 to 64 (Settings > Appearance > Frame).
     static let framePadding = "SnugFramePadding"
     private static let legacyStyle = "SnugStyle"
     private static let legacyShadow = "SnugShadow"

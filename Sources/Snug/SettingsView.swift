@@ -269,7 +269,7 @@ private struct MakerButton: View {
     }
 }
 
-/// The overlay's appearance, the highlight (live preview, color menu, fill, fade, glow), the toast, and the frame's padding.
+/// The overlay's appearance, the highlight (live preview, color menu, fill, fade, glow), the toast, and the frame (live preview, padding).
 private struct AppearancePane: View {
     @AppStorage(Pref.overlayAppearance) private var overlayAppearance = "system"
     @AppStorage(Pref.highlightColor) private var highlightColor = ""
@@ -342,18 +342,21 @@ private struct AppearancePane: View {
                     }
                     .padding(.vertical, 8)
                 }
-                caption("Frame")
+                    caption("Frame")
+                FramePreview(padding: CGFloat(framePadding))
                 Card {
-                    LabeledContent("Frame padding") {
-                        Picker("Frame padding", selection: $framePadding) {
-                            Text("Small").tag(16)
-                            Text("Medium").tag(24)
-                            Text("Large").tag(40)
+                    VStack(spacing: 4) {
+                        LabeledContent("Padding") {
+                            Text("\(framePadding) pt").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
                         }
-                        .pickerStyle(.segmented)
+                        Slider(value: Binding { Double(framePadding) } set: { framePadding = Int($0.rounded()) }, in: 0...64, step: 1) {
+                            Text("Padding")
+                        } tick: { value in
+                            [16: "Small", 24: "Medium", 40: "Large"][Int(value)].map { SliderTick($0, value) }
+                        }
                         .labelsHidden()
-                        .fixedSize()
                     }
+                    .padding(.vertical, 8)
                 }
             }
         }
@@ -368,6 +371,48 @@ private struct AppearancePane: View {
                 Text("\(Int((value.wrappedValue * 100).rounded()))%").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
             }
         }
+    }
+}
+
+/// A sample window card framed exactly as output is: `OutputFrame.render` at 2x on `padding` points, the output's transparent canvas
+/// as a checkerboard on a gray backdrop, shown at its size or scaled down to fit.
+struct FramePreview: View {
+    let padding: CGFloat
+
+    /// A 100 x 60 pt window at 2x: a white body under a gray title bar with the three window buttons.
+    private static let card: CGImage = {
+        let context = CGContext(data: nil, width: 200, height: 120, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(CGColor(gray: 1, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 200, height: 120))
+        context.setFillColor(CGColor(gray: 0.9, alpha: 1))
+        context.fill(CGRect(x: 0, y: 92, width: 200, height: 28))
+        for (index, color) in [CGColor(srgbRed: 1, green: 0.37, blue: 0.34, alpha: 1), CGColor(srgbRed: 1, green: 0.74, blue: 0.18, alpha: 1),
+                               CGColor(srgbRed: 0.16, green: 0.79, blue: 0.25, alpha: 1)].enumerated() {
+            context.setFillColor(color)
+            context.fillEllipse(in: CGRect(x: 14 + index * 20, y: 100, width: 12, height: 12))
+        }
+        return context.makeImage()!
+    }()
+
+    var body: some View {
+        let output = try! OutputFrame.render(Self.card, crop: CGRect(x: 0, y: 0, width: Self.card.width, height: Self.card.height), scale: 2, padding: padding)
+        Image(decorative: output, scale: 2).resizable().scaledToFit()
+            .background(Canvas { context, size in
+                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(white: 0.97)))
+                for row in 0..<Int(size.height / 6) + 1 {
+                    for column in 0..<Int(size.width / 6) + 1 where (row + column) % 2 == 0 {
+                        context.fill(Path(CGRect(x: column * 6, y: row * 6, width: 6, height: 6)), with: .color(Color(white: 0.88)))
+                    }
+                }
+            })
+            .frame(maxWidth: CGFloat(output.width) / 2, maxHeight: CGFloat(output.height) / 2)
+            .padding(10)
+            .frame(maxWidth: .infinity)
+            .frame(height: 180)
+            .background(Color(white: 0.8))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.quaternary, lineWidth: 0.5))
     }
 }
 
