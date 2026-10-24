@@ -382,15 +382,7 @@ private struct AppearancePane: View {
                         pointSlider("Size", value: $shadowBlur, range: 0...100, unit: " pt")
                         pointSlider("Distance", value: $shadowDistance, range: 0...64, unit: " pt")
                         pointSlider("Angle", detail: "90\u{00B0} up, 270\u{00B0} down", value: $shadowAngle, range: 0...360, unit: "\u{00B0}")
-                        LabeledContent("Color") {
-                            ColorPicker("Color", selection: Binding {
-                                Color(nsColor: Highlight.color(hex: shadowColor))
-                            } set: {
-                                let picked = NSColor($0).usingColorSpace(.sRGB)!
-                                shadowColor = ColorFormat.hex.string(for: SRGBColor(red: picked.redComponent, green: picked.greenComponent, blue: picked.blueComponent))
-                            }, supportsOpacity: false)
-                            .labelsHidden()
-                        }
+                        LabeledContent("Color") { ColorSwatch(hex: $shadowColor).fixedSize() }
                     }
                 }
             }
@@ -506,12 +498,7 @@ private struct ColorMenu: NSViewRepresentable {
         }
     }
 
-    @MainActor
-    final class Coordinator: NSObject {
-        var hex: Binding<String>
-
-        init(hex: Binding<String>) { self.hex = hex }
-
+    final class Coordinator: ColorPanelTarget {
         @objc func pick(_ popUp: NSPopUpButton) {
             if let preset = popUp.selectedItem!.representedObject as? String {
                 hex.wrappedValue = preset
@@ -520,17 +507,68 @@ private struct ColorMenu: NSViewRepresentable {
             // Until a color is picked, the menu keeps showing the current choice.
             let current = popUp.indexOfItem(withRepresentedObject: hex.wrappedValue)
             if current >= 0 { popUp.selectItem(at: current) }
-            let panel = NSColorPanel.shared
-            panel.showsAlpha = false
-            panel.color = Highlight.color(hex: hex.wrappedValue)
-            panel.setTarget(self)
-            panel.setAction(#selector(colorChanged))
-            panel.orderFront(nil)
+            take()
+            NSColorPanel.shared.orderFront(nil)
         }
+    }
+}
 
-        @objc func colorChanged(_ panel: NSColorPanel) {
-            let picked = panel.color.usingColorSpace(.sRGB)!
-            hex.wrappedValue = ColorFormat.hex.string(for: SRGBColor(red: picked.redComponent, green: picked.greenComponent, blue: picked.blueComponent))
+/// The shared color panel's client: `take` makes this the panel's target and its only writer, so a color picked in the panel changes
+/// the setting of whichever control opened it last (the highlight menu or the shadow swatch) and never the other's.
+@MainActor
+class ColorPanelTarget: NSObject {
+    private static weak var owner: ColorPanelTarget?
+    var hex: Binding<String>
+
+    init(hex: Binding<String>) { self.hex = hex }
+
+    /// Becomes the panel's owner before setting its color, so a change the previous target hears is ignored.
+    func take() {
+        Self.owner = self
+        let panel = NSColorPanel.shared
+        panel.showsAlpha = false
+        panel.color = Highlight.color(hex: hex.wrappedValue)
+        panel.setTarget(self)
+        panel.setAction(#selector(colorChanged))
+    }
+
+    @objc func colorChanged(_ panel: NSColorPanel) {
+        guard Self.owner === self else { return }
+        let picked = panel.color.usingColorSpace(.sRGB)!
+        hex.wrappedValue = ColorFormat.hex.string(for: SRGBColor(red: picked.redComponent, green: picked.greenComponent, blue: picked.blueComponent))
+    }
+}
+
+/// A color swatch button that opens the shared color panel for `hex`.
+struct ColorSwatch: NSViewRepresentable {
+    @Binding var hex: String
+
+    func makeCoordinator() -> Coordinator { Coordinator(hex: $hex) }
+
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(title: "", target: context.coordinator, action: #selector(Coordinator.open))
+        button.isBordered = false
+        button.setAccessibilityLabel("Color")
+        return button
+    }
+
+    func updateNSView(_ button: NSButton, context: Context) {
+        context.coordinator.hex = $hex
+        let color = Highlight.color(hex: hex)
+        button.image = NSImage(size: NSSize(width: 40, height: 20), flipped: false) { rect in
+            let swatch = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 5, yRadius: 5)
+            color.setFill()
+            swatch.fill()
+            NSColor.separatorColor.setStroke()
+            swatch.stroke()
+            return true
+        }
+    }
+
+    final class Coordinator: ColorPanelTarget {
+        @objc func open() {
+            take()
+            NSColorPanel.shared.orderFront(nil)
         }
     }
 }

@@ -716,7 +716,26 @@ extension DebugRun {
                     try rep.representation(using: .png, properties: [:])!.write(to: scrolled)
                     print(scrolled.path)
                 }
-                UserDefaults.standard.removeObject(forKey: Pref.frameShadow)
+                // The highlight menu and the shadow swatch share the color panel: whichever took it last alone writes a picked color,
+                // even when the other still hears the change. The panel is never ordered in.
+                let defaults = UserDefaults.standard, panel = NSColorPanel.shared
+                let menu = descendants(of: host, NSPopUpButton.self).compactMap { $0.target as? ColorPanelTarget }.first!
+                let swatch = descendants(of: host, NSButton.self).compactMap { $0.target as? ColorSwatch.Coordinator }.first!
+                for (first, second, firstKey, secondKey) in [(menu, swatch as ColorPanelTarget, Pref.highlightColor, Pref.frameShadowColor),
+                                                             (swatch, menu, Pref.frameShadowColor, Pref.highlightColor)] {
+                    defaults.set("#112233", forKey: firstKey)
+                    defaults.set("#445566", forKey: secondKey)
+                    first.take()
+                    second.take()
+                    panel.color = NSColor(srgbRed: 0.2, green: 0.6, blue: 1, alpha: 1)
+                    first.colorChanged(panel)
+                    second.colorChanged(panel)
+                    precondition(defaults.string(forKey: secondKey) == "#3399FF" && defaults.string(forKey: firstKey) == "#112233" && !panel.isVisible,
+                                 "a color picked after \(secondKey)'s control took the panel from \(firstKey)'s changes only \(secondKey): "
+                                 + "\(String(describing: defaults.string(forKey: firstKey))) \(String(describing: defaults.string(forKey: secondKey)))")
+                    print("color panel: \(secondKey) took it from \(firstKey), only \(secondKey) changed")
+                }
+                for key in [Pref.frameShadow, Pref.highlightColor, Pref.frameShadowColor] { defaults.removeObject(forKey: key) }
             }
             guard item.label == "General" else { continue }
             let field = descendants(of: host, ShortcutRecorder.Field.self).first!
