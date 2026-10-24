@@ -4,13 +4,18 @@ import ScreenshotCore
 extension DebugRun {
     /// `--probe-screen-text`: reads every on-screen app's accessibility text as a capture does (`ScreenTextReader.read`) and prints, per
     /// app, the read time and each area's frame, its non-empty lines with their boxes (global points), and what copying all of it would
-    /// paste. Opens no window.
+    /// paste. The Chromium apps with a window on screen are read as if Text mode had turned them on, which this does not do. Each
+    /// app is then read once more alone for its time. Opens no window.
     static func probeScreenText() async {
         let began = ContinuousClock.now
-        let read = await ScreenTextReader.read()
+        let chromium = Set(await ChromiumAccessibility.owners(on: .infinite))
+        let read = await ScreenTextReader.read(chromium: chromium)
         print("read \(read.count) apps in \(String(format: "%.1f", began.duration(to: .now).milliseconds)) ms")
         for (pid, texts) in read {
-            print("\(NSRunningApplication(processIdentifier: pid)?.bundleIdentifier ?? "\(pid)"): \(texts.count) areas")
+            let bundle = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier ?? ""
+            let alone = ContinuousClock.now
+            _ = await ScreenTextReader.texts(pid: pid, bundle: bundle, chromium: chromium.contains(pid))
+            print("\(bundle.isEmpty ? "\(pid)" : bundle): \(texts.count) areas, \(String(format: "%.1f", alone.duration(to: .now).milliseconds)) ms alone\(chromium.contains(pid) ? ", Chromium" : "")")
             for text in texts {
                 print("  area \(text.frame), \(text.lines.count) lines\(text.claimsFrame ? ", takes its whole frame" : "")")
                 for line in text.lines where !line.text.isEmpty { print("    \(line.bounds) \(line.text.prefix(100).debugDescription)") }
@@ -167,6 +172,26 @@ extension DebugRun {
         drag(from: CGPoint(x: 1692, y: 432), to: CGPoint(x: 1898, y: 432))
         require(overlay.text.screenSelection == nil && !liveText.selectedText.isEmpty,
                 "a press in a page's frame away from its lines (an image in the page) selects in Live Text: \(liveText.selectedText.debugDescription)")
+
+        // Text mode over a Chromium app's window asks for its accessibility once; with the setting off it asks for nothing and the
+        // capture reads no Chromium app. The owners and the enabler are fakes, so no real app is touched.
+        var requested: [pid_t] = []
+        overlay.chromiumOwners = { _ in [4242] }
+        overlay.enableChromium = { requested.append($0) }
+        overlay.present(image: image, frame: frame, displayID: nil)
+        key(17, "t")
+        try await waitFor("entering Text mode over a Chromium app's window asks to turn its accessibility on") { requested == [4242] }
+        require(overlay.chromiumReadable == [4242], "the capture reads that app: \(overlay.chromiumReadable)")
+        overlay.present(image: image, frame: frame, displayID: nil)
+        key(17, "t")
+        try await Task.sleep(for: .milliseconds(200))
+        require(requested == [4242], "entering Text mode again does not ask again: \(requested)")
+        overlay.defaults.set(false, forKey: Pref.chromiumText)
+        overlay.chromiumOwners = { _ in [5151] }
+        overlay.present(image: image, frame: frame, displayID: nil)
+        key(17, "t")
+        try await Task.sleep(for: .milliseconds(200))
+        require(requested == [4242] && overlay.chromiumReadable.isEmpty, "with the setting off Text mode asks for no app and the capture reads none: \(requested) \(overlay.chromiumReadable)")
         exit(EXIT_SUCCESS)
     }
 }
