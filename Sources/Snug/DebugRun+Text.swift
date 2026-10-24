@@ -365,9 +365,9 @@ extension DebugRun {
         suffix = ""
 
         // A terminal's list over a busy blurred wallpaper, 2560 x 1600: accurate OCR of the whole screen in one pass drops some items'
-        // "- " markers; read in bands it keeps every one. Return on a box over the whole screen copies each item and sub-item on its own line
-        // with its marker. F then Return copies what the Live Text selection spans, with a partly matched line's text taken from Live
-        // Text, which loses markers too; that only prints.
+        // "- " markers; read in bands it keeps every one. Return on a box over the whole screen, and F then Return (whose rows between
+        // the selection's ends take OCR's text, not Live Text's, which drops a marker too), copy each item and sub-item on its own line
+        // with its marker.
         let terminal = fixtureImage("Tests/Fixtures/terminal-list-blurred.png")
         let listItems = ["shadow opacity", "shadow size (blur)", "corner radius of the card", "padding around the content", "Default: medium padding",
                          "Small keeps the card", "Large leaves room", "Custom: the four values", "does the shadow follow", "should the padding scale", "is a color picker"]
@@ -392,12 +392,9 @@ extension DebugRun {
             pasteboard.clearContents()
             key(returnKey, "\r")
             let copiedTerminal = await copied()
-            if boxed {
-                require(unmarked(copiedTerminal).isEmpty && !overlay.window.isVisible,
-                        "Return on a box over the whole terminal screen copies every list item on its own line with its \"- \" marker: missing \(unmarked(copiedTerminal)) in \(copiedTerminal.debugDescription)")
-            } else {
-                print("Terminal fixture: F then Return misses the marker of \(unmarked(copiedTerminal))")
-            }
+            require(unmarked(copiedTerminal).isEmpty && !overlay.window.isVisible,
+                    "\(boxed ? "Return on a box over the whole terminal screen" : "F then Return on the terminal screen") copies every list item on its own line with its \"- \" marker: "
+                    + "missing \(unmarked(copiedTerminal)) in \(copiedTerminal.debugDescription)")
         }
 
         // Esc with focus in Live Text closes.

@@ -56,6 +56,13 @@ struct TextLayoutTests {
         #expect(TextLayout.selection("Brief\ndescription", in: ocr).map(\.text) == ["Brief description"])
     }
 
+    @Test func aSelectionTakesOCRTextForRowsBetweenItsEnds() {
+        let ocr = [line("Plan", 10, 100), line("- shadow opacity;", 10, 140), line("- corner radius;", 10, 180), line("Next steps", 10, 220)]
+        // Live Text drops the middle item's marker and the selection starts inside the first line: the middle row keeps OCR's marker,
+        // the first row Live Text's partial text.
+        #expect(TextLayout.selection("lan\n- shadow opacity;\ncorner radius;\nNext steps", in: ocr).map(\.text) == ["lan", "- shadow opacity;", "- corner radius;", "Next steps"])
+    }
+
     @Test func aSelectionDropsABoxReadAcrossTwoRows() {
         let ocr = [line("first row", 10, 100), line("second row", 10, 119), TextLine(text: "first second", bounds: CGRect(x: 60, y: 100, width: 60, height: 39))]
         #expect(TextLayout.selection("first row\nsecond row", in: ocr).map(\.text) == ["first row", "second row"])

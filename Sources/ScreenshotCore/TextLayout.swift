@@ -97,7 +97,8 @@ public enum TextLayout {
 
     /// The OCR lines a Live Text selection covers. Live Text's transcript can drop or split lines, so `selected` only marks a span:
     /// placed on `ocr` in reading order (`lines(of:in:)`), it gives every OCR line from the first matched one to the last within the
-    /// matched lines' columns, with the partly selected text of the lines the selection starts and ends inside. Selected lines that
+    /// matched lines' columns, with Live Text's partly selected text only in the first and last rows (where the selection starts and
+    /// ends inside a line); rows between take OCR's text, which keeps what Live Text dropped (a list item's "- "). Selected lines that
     /// match no OCR line drop out, unless none match. A box that covers most of the height of two other lines is OCR reading across
     /// two rows and drops out first.
     public static func selection(_ selected: String, in ocr: [TextLine]) -> [TextLine] {
@@ -112,7 +113,7 @@ public enum TextLayout {
         let start = rows[first].first(where: matched.contains)!.bounds.minX, end = rows[last].last(where: matched.contains)!.bounds.maxX
         return (first...last).flatMap { index in
             rows[index].compactMap { line in
-                if let partial = placed.first(where: { $0.bounds == line.bounds }) { return partial }
+                if let partial = placed.first(where: { $0.bounds == line.bounds }) { return index == first || index == last ? partial : line }
                 let inside = line.bounds.minX < column.maxX && line.bounds.maxX > column.minX
                 return inside && (index > first || line.bounds.minX > start) && (index < last || line.bounds.maxX < end) ? line : nil
             }
