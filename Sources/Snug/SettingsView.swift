@@ -36,8 +36,8 @@ enum Shortcut {
 @MainActor
 enum SettingsTabs {
     static let width: CGFloat = 400
-    /// The Appearance pane's height, which the Keys pane's scroll view matches so the two tabs are the same size.
-    static let tallHeight: CGFloat = 721
+    /// The Appearance and Keys panes' height; both scroll what is taller, so the two tabs are the same size.
+    static let tallHeight: CGFloat = 641
     static let panes: [(title: String, symbol: String, view: AnyView)] = [
         ("General", "gearshape", AnyView(GeneralPane())),
         ("Appearance", "paintpalette", AnyView(AppearancePane())),
@@ -269,7 +269,7 @@ private struct MakerButton: View {
     }
 }
 
-/// The overlay's appearance, the highlight (live preview, color menu, fill, fade, glow), the toast, and the frame's padding.
+/// The overlay's appearance, the highlight (live preview, color menu, fill, fade, glow), the toast, and the frame (live preview, padding, shadow).
 private struct AppearancePane: View {
     @AppStorage(Pref.overlayAppearance) private var overlayAppearance = "system"
     @AppStorage(Pref.highlightColor) private var highlightColor = ""
@@ -279,83 +279,128 @@ private struct AppearancePane: View {
     @AppStorage(Pref.toastPosition) private var toastPosition = "bottomCenter"
     @AppStorage(Pref.toastLifetime) private var toastLifetime = 4
     @AppStorage(Pref.framePadding) private var framePadding = 24
+    @AppStorage(Pref.frameShadow) private var frameShadow = "default"
+    @AppStorage(Pref.frameShadowOpacity) private var shadowOpacity = OutputFrame.windowShadow.opacity
+    @AppStorage(Pref.frameShadowBlur) private var shadowBlur = OutputFrame.windowShadow.blur
+    @AppStorage(Pref.frameShadowDistance) private var shadowDistance = OutputFrame.windowShadow.offset
+    @AppStorage(Pref.frameShadowAngle) private var shadowAngle = 270.0
+    @AppStorage(Pref.frameShadowColor) private var shadowColor = "#000000"
 
     private static let positions: [(tag: String, title: String, alignment: Alignment)] = [
         ("bottomCenter", "Bottom center", .bottom), ("bottomRight", "Bottom right", .bottomTrailing), ("topRight", "Top right", .topTrailing)
     ]
 
     var body: some View {
-        Pane {
-            caption("Overlay")
-            Card {
-                LabeledContent("Appearance") {
-                    Picker("Appearance", selection: $overlayAppearance) {
-                        Text("System").tag("system")
-                        Text("Light").tag("light")
-                        Text("Dark").tag("dark")
+        ScrollView {
+            Pane {
+                caption("Overlay")
+                Card {
+                    LabeledContent("Appearance") {
+                        Picker("Appearance", selection: $overlayAppearance) {
+                            Text("System").tag("system")
+                            Text("Light").tag("light")
+                            Text("Dark").tag("dark")
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .fixedSize()
                 }
-            }
-            caption("Highlight")
-            OverlayPreview(appearance: overlayAppearance, color: Highlight.color(hex: highlightColor), fill: highlightFill, fade: highlightFade, glow: highlightGlow)
-            Card {
-                LabeledContent("Color") { ColorMenu(hex: $highlightColor).fixedSize() }
-                slider("Fill", value: $highlightFill, range: 0...0.3)
-                slider("Background fade", value: $highlightFade, range: 0...0.6)
-                slider("Glow", value: $highlightGlow, range: 0...1)
-            }
-            caption("Toast")
-            Card {
-                LabeledContent("Toast duration") {
-                    Picker("Toast duration", selection: $toastLifetime) {
-                        ForEach(Toast.lifetimes, id: \.self) { Text($0 < 0 ? "Forever" : "\($0) s").tag($0) }
+                caption("Highlight")
+                OverlayPreview(appearance: overlayAppearance, color: Highlight.color(hex: highlightColor), fill: highlightFill, fade: highlightFade, glow: highlightGlow)
+                Card {
+                    LabeledContent("Color") { ColorMenu(hex: $highlightColor).fixedSize() }
+                    slider("Fill", value: $highlightFill, range: 0...0.3)
+                    slider("Background fade", value: $highlightFade, range: 0...0.6)
+                    slider("Glow", value: $highlightGlow, range: 0...1)
+                }
+                caption("Toast")
+                Card {
+                    LabeledContent("Toast duration") {
+                        Picker("Toast duration", selection: $toastLifetime) {
+                            ForEach(Toast.lifetimes, id: \.self) { Text($0 < 0 ? "Forever" : "\($0) s").tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .fixedSize()
                     }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .fixedSize()
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Toast position")
-                    HStack(spacing: 8) {
-                        ForEach(Self.positions, id: \.tag) { position in
-                            let selected = toastPosition == position.tag
-                            Button { toastPosition = position.tag } label: {
-                                VStack(spacing: 5) {
-                                    ZStack(alignment: position.alignment) {
-                                        RoundedRectangle(cornerRadius: 6).fill(LinearGradient(colors: [Color(red: 0.72, green: 0.77, blue: 0.82), Color(red: 0.87, green: 0.89, blue: 0.92)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                        RoundedRectangle(cornerRadius: 3).fill(selected ? Color.accentColor : Color(white: 0.16, opacity: 0.85)).frame(width: 22, height: 9).padding(5)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Toast position")
+                        HStack(spacing: 8) {
+                            ForEach(Self.positions, id: \.tag) { position in
+                                let selected = toastPosition == position.tag
+                                Button { toastPosition = position.tag } label: {
+                                    VStack(spacing: 5) {
+                                        ZStack(alignment: position.alignment) {
+                                            RoundedRectangle(cornerRadius: 6).fill(LinearGradient(colors: [Color(red: 0.72, green: 0.77, blue: 0.82), Color(red: 0.87, green: 0.89, blue: 0.92)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                            RoundedRectangle(cornerRadius: 3).fill(selected ? Color.accentColor : Color(white: 0.16, opacity: 0.85)).frame(width: 22, height: 9).padding(5)
+                                        }
+                                        .frame(height: 46)
+                                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.accentColor, lineWidth: 2).opacity(selected ? 1 : 0))
+                                        Text(position.title).font(.system(size: 11, weight: selected ? .semibold : .regular)).foregroundStyle(selected ? Color.accentColor : .secondary)
                                     }
-                                    .frame(height: 46)
-                                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.accentColor, lineWidth: 2).opacity(selected ? 1 : 0))
-                                    Text(position.title).font(.system(size: 11, weight: selected ? .semibold : .regular)).foregroundStyle(selected ? Color.accentColor : .secondary)
+                                    .frame(maxWidth: .infinity)
+                                    .contentShape(Rectangle())
                                 }
-                                .frame(maxWidth: .infinity)
-                                .contentShape(Rectangle())
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
+                    .padding(.vertical, 8)
                 }
-                .padding(.vertical, 8)
-            }
-            caption("Frame")
-            Card {
-                LabeledContent("Frame padding") {
-                    Picker("Frame padding", selection: $framePadding) {
-                        Text("Small").tag(16)
-                        Text("Medium").tag(24)
-                        Text("Large").tag(40)
+                    caption("Frame")
+                FramePreview(padding: CGFloat(framePadding), shadow: Pref.customShadow(in: .standard))
+                Card {
+                    VStack(spacing: 4) {
+                        LabeledContent("Padding") {
+                            Text(([16: "Small  ", 24: "Medium  ", 40: "Large  "][framePadding] ?? "") + "\(framePadding) pt")
+                                .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+                        }
+                        Slider(value: Binding { Double(framePadding) } set: { framePadding = Int($0.rounded()) }, in: 0...64) {
+                            Text("Padding")
+                        } ticks: {
+                            SliderTick(16)
+                            SliderTick(24)
+                            SliderTick(40)
+                        }
+                        .labelsHidden()
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .fixedSize()
+                    .padding(.vertical, 8)
+                    LabeledContent {
+                        Picker("Shadow", selection: $frameShadow) {
+                            Text("Default").tag("default")
+                            Text("Custom").tag("custom")
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
+                    } label: {
+                        detailed("Shadow", frameShadow == "custom" ? "Every capture, windows too" : "Windows: the macOS shadow")
+                    }
+                    .padding(.vertical, 6)
+                    if frameShadow == "custom" {
+                        pointSlider("Opacity", value: Binding { shadowOpacity * 100 } set: { shadowOpacity = $0 / 100 }, range: 0...100, unit: "%")
+                        pointSlider("Size", value: $shadowBlur, range: 0...100, unit: " pt")
+                        pointSlider("Distance", value: $shadowDistance, range: 0...64, unit: " pt")
+                        pointSlider("Angle", detail: "90\u{00B0} up, 270\u{00B0} down", value: $shadowAngle, range: 0...360, unit: "\u{00B0}")
+                        LabeledContent("Color") { ColorSwatch(hex: $shadowColor).fixedSize() }
+                    }
                 }
             }
         }
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(width: SettingsTabs.width, height: SettingsTabs.tallHeight)
+    }
+
+    /// A slider that keeps whole values, with its value and `unit`, and an optional detail line under its title.
+    private func pointSlider(_ title: String, detail: String? = nil, value: Binding<Double>, range: ClosedRange<Double>, unit: String) -> some View {
+        LabeledContent {
+            HStack(spacing: 10) {
+                Slider(value: Binding { value.wrappedValue } set: { value.wrappedValue = $0.rounded() }, in: range).frame(width: 130)
+                Text("\(value.wrappedValue.formatted())\(unit)").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).frame(width: 54, alignment: .trailing)
+            }
+        } label: {
+            if let detail { detailed(title, detail) } else { Text(title) }
+        }
     }
 
     /// A slider with its value as a percentage.
@@ -366,6 +411,49 @@ private struct AppearancePane: View {
                 Text("\(Int((value.wrappedValue * 100).rounded()))%").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
             }
         }
+    }
+}
+
+/// A sample window card framed exactly as an area is: `OutputFrame.render` at 2x on `padding` points with the card shadow or `shadow`,
+/// the output's transparent canvas as a checkerboard on a gray backdrop, shown at its size or scaled down to fit.
+struct FramePreview: View {
+    let padding: CGFloat
+    let shadow: OutputFrame.Shadow?
+
+    /// A 100 x 60 pt window at 2x: a white body under a gray title bar with the three window buttons.
+    private static let card: CGImage = {
+        let context = CGContext(data: nil, width: 200, height: 120, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(CGColor(gray: 1, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 200, height: 120))
+        context.setFillColor(CGColor(gray: 0.9, alpha: 1))
+        context.fill(CGRect(x: 0, y: 92, width: 200, height: 28))
+        for (index, color) in [CGColor(srgbRed: 1, green: 0.37, blue: 0.34, alpha: 1), CGColor(srgbRed: 1, green: 0.74, blue: 0.18, alpha: 1),
+                               CGColor(srgbRed: 0.16, green: 0.79, blue: 0.25, alpha: 1)].enumerated() {
+            context.setFillColor(color)
+            context.fillEllipse(in: CGRect(x: 14 + index * 20, y: 100, width: 12, height: 12))
+        }
+        return context.makeImage()!
+    }()
+
+    var body: some View {
+        let output = try! OutputFrame.render(Self.card, crop: CGRect(x: 0, y: 0, width: Self.card.width, height: Self.card.height), scale: 2, padding: padding, shadow: shadow)
+        Image(decorative: output, scale: 2).resizable().scaledToFit()
+            .background(Canvas { context, size in
+                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(white: 0.97)))
+                for row in 0..<Int(size.height / 6) + 1 {
+                    for column in 0..<Int(size.width / 6) + 1 where (row + column) % 2 == 0 {
+                        context.fill(Path(CGRect(x: column * 6, y: row * 6, width: 6, height: 6)), with: .color(Color(white: 0.88)))
+                    }
+                }
+            })
+            .frame(maxWidth: CGFloat(output.width) / 2, maxHeight: CGFloat(output.height) / 2)
+            .padding(10)
+            .frame(maxWidth: .infinity)
+            .frame(height: 180)
+            .background(Color(white: 0.8))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.quaternary, lineWidth: 0.5))
     }
 }
 
@@ -411,12 +499,7 @@ private struct ColorMenu: NSViewRepresentable {
         }
     }
 
-    @MainActor
-    final class Coordinator: NSObject {
-        var hex: Binding<String>
-
-        init(hex: Binding<String>) { self.hex = hex }
-
+    final class Coordinator: ColorPanelTarget {
         @objc func pick(_ popUp: NSPopUpButton) {
             if let preset = popUp.selectedItem!.representedObject as? String {
                 hex.wrappedValue = preset
@@ -425,17 +508,68 @@ private struct ColorMenu: NSViewRepresentable {
             // Until a color is picked, the menu keeps showing the current choice.
             let current = popUp.indexOfItem(withRepresentedObject: hex.wrappedValue)
             if current >= 0 { popUp.selectItem(at: current) }
-            let panel = NSColorPanel.shared
-            panel.showsAlpha = false
-            panel.color = Highlight.color(hex: hex.wrappedValue)
-            panel.setTarget(self)
-            panel.setAction(#selector(colorChanged))
-            panel.orderFront(nil)
+            take()
+            NSColorPanel.shared.orderFront(nil)
         }
+    }
+}
 
-        @objc func colorChanged(_ panel: NSColorPanel) {
-            let picked = panel.color.usingColorSpace(.sRGB)!
-            hex.wrappedValue = ColorFormat.hex.string(for: SRGBColor(red: picked.redComponent, green: picked.greenComponent, blue: picked.blueComponent))
+/// The shared color panel's client: `take` makes this the panel's target and its only writer, so a color picked in the panel changes
+/// the setting of whichever control opened it last (the highlight menu or the shadow swatch) and never the other's.
+@MainActor
+class ColorPanelTarget: NSObject {
+    private static weak var owner: ColorPanelTarget?
+    var hex: Binding<String>
+
+    init(hex: Binding<String>) { self.hex = hex }
+
+    /// Becomes the panel's owner before setting its color, so a change the previous target hears is ignored.
+    func take() {
+        Self.owner = self
+        let panel = NSColorPanel.shared
+        panel.showsAlpha = false
+        panel.color = Highlight.color(hex: hex.wrappedValue)
+        panel.setTarget(self)
+        panel.setAction(#selector(colorChanged))
+    }
+
+    @objc func colorChanged(_ panel: NSColorPanel) {
+        guard Self.owner === self else { return }
+        let picked = panel.color.usingColorSpace(.sRGB)!
+        hex.wrappedValue = ColorFormat.hex.string(for: SRGBColor(red: picked.redComponent, green: picked.greenComponent, blue: picked.blueComponent))
+    }
+}
+
+/// A color swatch button that opens the shared color panel for `hex`.
+struct ColorSwatch: NSViewRepresentable {
+    @Binding var hex: String
+
+    func makeCoordinator() -> Coordinator { Coordinator(hex: $hex) }
+
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(title: "", target: context.coordinator, action: #selector(Coordinator.open))
+        button.isBordered = false
+        button.setAccessibilityLabel("Color")
+        return button
+    }
+
+    func updateNSView(_ button: NSButton, context: Context) {
+        context.coordinator.hex = $hex
+        let color = Highlight.color(hex: hex)
+        button.image = NSImage(size: NSSize(width: 40, height: 20), flipped: false) { rect in
+            let swatch = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 5, yRadius: 5)
+            color.setFill()
+            swatch.fill()
+            NSColor.separatorColor.setStroke()
+            swatch.stroke()
+            return true
+        }
+    }
+
+    final class Coordinator: ColorPanelTarget {
+        @objc func open() {
+            take()
+            NSColorPanel.shared.orderFront(nil)
         }
     }
 }

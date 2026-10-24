@@ -688,6 +688,7 @@ extension DebugRun {
     static func renderSettings(into directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let tabs = SettingsTabs.makeController()
+        func descendants<T: NSView>(of view: NSView, _ type: T.Type) -> [T] { view.subviews.flatMap { (($0 as? T).map { [$0] } ?? []) + descendants(of: $0, type) } }
         for item in tabs.tabViewItems {
             let host = NSHostingView(rootView: (item.viewController as! NSHostingController<AnyView>).rootView.background(Color(nsColor: .windowBackgroundColor)))
             let offscreen = NSWindow(contentRect: CGRect(origin: .zero, size: host.fittingSize), styleMask: [.borderless], backing: .buffered, defer: true)
@@ -701,8 +702,42 @@ extension DebugRun {
             let file = directory.appending(path: "settings-\(item.label.lowercased()).png")
             try rep.representation(using: .png, properties: [:])!.write(to: file)
             print(file.path, host.fittingSize)
+            if item.label == "Appearance" {
+                // The pane scrolled to its end, where the Frame section sits, with the default shadow and then a custom one.
+                for (suffix, shadow) in [("", "default"), ("-custom", "custom")] {
+                    UserDefaults.standard.set(shadow, forKey: Pref.frameShadow)
+                    RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+                    host.layoutSubtreeIfNeeded()
+                    let scroll = descendants(of: host, NSScrollView.self).first!
+                    scroll.documentView!.scroll(CGPoint(x: 0, y: scroll.documentView!.isFlipped ? scroll.documentView!.bounds.maxY : 0))
+                    host.layoutSubtreeIfNeeded()
+                    host.cacheDisplay(in: host.bounds, to: rep)
+                    let scrolled = directory.appending(path: "settings-appearance\(suffix)-scrolled.png")
+                    try rep.representation(using: .png, properties: [:])!.write(to: scrolled)
+                    print(scrolled.path)
+                }
+                // The highlight menu and the shadow swatch share the color panel: whichever took it last alone writes a picked color,
+                // even when the other still hears the change. The panel is never ordered in.
+                let defaults = UserDefaults.standard, panel = NSColorPanel.shared
+                let menu = descendants(of: host, NSPopUpButton.self).compactMap { $0.target as? ColorPanelTarget }.first!
+                let swatch = descendants(of: host, NSButton.self).compactMap { $0.target as? ColorSwatch.Coordinator }.first!
+                for (first, second, firstKey, secondKey) in [(menu, swatch as ColorPanelTarget, Pref.highlightColor, Pref.frameShadowColor),
+                                                             (swatch, menu, Pref.frameShadowColor, Pref.highlightColor)] {
+                    defaults.set("#112233", forKey: firstKey)
+                    defaults.set("#445566", forKey: secondKey)
+                    first.take()
+                    second.take()
+                    panel.color = NSColor(srgbRed: 0.2, green: 0.6, blue: 1, alpha: 1)
+                    first.colorChanged(panel)
+                    second.colorChanged(panel)
+                    precondition(defaults.string(forKey: secondKey) == "#3399FF" && defaults.string(forKey: firstKey) == "#112233" && !panel.isVisible,
+                                 "a color picked after \(secondKey)'s control took the panel from \(firstKey)'s changes only \(secondKey): "
+                                 + "\(String(describing: defaults.string(forKey: firstKey))) \(String(describing: defaults.string(forKey: secondKey)))")
+                    print("color panel: \(secondKey) took it from \(firstKey), only \(secondKey) changed")
+                }
+                for key in [Pref.frameShadow, Pref.highlightColor, Pref.frameShadowColor] { defaults.removeObject(forKey: key) }
+            }
             guard item.label == "General" else { continue }
-            func descendants<T: NSView>(of view: NSView, _ type: T.Type) -> [T] { view.subviews.flatMap { (($0 as? T).map { [$0] } ?? []) + descendants(of: $0, type) } }
             let field = descendants(of: host, ShortcutRecorder.Field.self).first!
             // The Reset button and the Save to button, then an Allow button for each missing permission; the last
             // two focus rings are the hedgertronic and Ko-fi links, which are not buttons.

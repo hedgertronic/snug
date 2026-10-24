@@ -141,17 +141,18 @@ extension OverlayController {
     }
 
     /// Closes the overlay and delivers the shown subject through the usual copy or save path with the toast: cropped to its box or at
-    /// the area's size with its corner radii, then with the window shadow when Frame is on.
+    /// the area's size with its corner radii, then with the window shadow (or the custom one) when Frame is on.
     private func deliverCutout(copy: Bool, save: Bool) {
         let preview = cutout!
         let subject = preview.subjects[preview.shown]
         let (bounds, radii) = (preview.cropped ? subject.bounds : nil, preview.radii)
-        let (framed, scale) = (framed, scale)
+        let (framed, scale, shadow, padding) = (framed, scale, frameShadow, framePadding)
         let (pasteboard, defaults) = (pasteboard, defaults)
         dismiss()
         commitTask = Task {
             do {
-                let output = try await Output.encodeCutout(subject.image, bounds: bounds, cornerRadii: radii, framed: framed, scale: scale)
+                let output = try await Output.encodeCutout(subject.image, bounds: bounds, cornerRadii: radii, framed: framed, scale: scale,
+                                                             shadow: shadow, padding: padding)
                 Output.publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save,
                                pasteboard: pasteboard, defaults: defaults)
             } catch {
