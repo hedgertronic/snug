@@ -147,16 +147,23 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         }
     }
 
-    /// Entering Text mode: the lines text detection finds (the cheapest Vision request that boxes text, 10-60 ms) flash as pills in
-    /// the highlight color, sweeping in from the top, for 1.25 s.
+    /// Entering Text mode: the lines fast text recognition reads flash as pills in the highlight color, sweeping in from the top, for
+    /// 1.25 s. Text rectangle detection was faster but also boxed icons, avatars and emoji, and the new API's fast recognition reads
+    /// nothing on macOS 27, so this is the old API's.
     func highlightFoundText() {
         guard let image else { return }
         foundTextHighlight?.cancel()
         let start = ContinuousClock.now
         foundTextHighlight = Task {
             do {
-                let size = CGSize(width: image.width, height: image.height)
-                let lines = try await ImageRequestHandler(image).perform(DetectTextRectanglesRequest()).map { $0.boundingBox.toImageCoordinates(size, origin: .upperLeft) }
+                let lines = try await Task.detached {
+                    let request = VNRecognizeTextRequest()
+                    request.recognitionLevel = .fast
+                    try VNImageRequestHandler(cgImage: image).perform([request])
+                    let (width, height) = (CGFloat(image.width), CGFloat(image.height))
+                    return request.results!.map { CGRect(x: $0.boundingBox.minX * width, y: (1 - $0.boundingBox.maxY) * height,
+                                                         width: $0.boundingBox.width * width, height: $0.boundingBox.height * height) }
+                }.value
                 try Task.checkCancellation()
                 lastFlashMilliseconds = start.duration(to: .now).milliseconds
                 text.flash = lines

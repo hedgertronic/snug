@@ -94,12 +94,12 @@ extension DebugRun {
         try await waitFor("the Live Text analysis attaches") { liveText.analysis != nil }
         print("Live Text analysis: \(String(format: "%.1f", overlay.lastLiveTextMilliseconds)) ms (first in this process)")
         require(overlay.chrome.reading.isHidden, "the Reading text... pill goes away when the analysis attaches")
-        // Entering Text mode flashes the lines text detection found as pills, and turns them off by itself about 1.25 s later.
+        // Entering Text mode flashes the lines fast recognition read as pills, and turns them off by itself about 1.25 s later.
         try await waitFor("the found-text flash shows") { !overlay.view.overlays.flashPills.isEmpty }
         let flashed = overlay.view.overlays.flashPills
-        print("Found-text flash: \(String(format: "%.1f", overlay.lastFlashMilliseconds)) ms to \(flashed.count) line boxes (first in this process)")
+        print("Found-text flash: \(String(format: "%.1f", overlay.lastFlashMilliseconds)) ms to \(flashed.count) recognized lines (first in this process)")
         require(flashed.count > 20 && flashed.allSatisfy { overlay.extent.contains($0) } && !liveText.selectableItemsHighlighted && liveText.preferredInteractionTypes == .textSelection,
-                "entering Text mode flashes pills on the lines found, not Live Text's own highlight: \(flashed.count)")
+                "entering Text mode flashes pills on the recognized lines, not Live Text's own highlight: \(flashed.count)")
         try await waitFor("the found-text flash goes off") { overlay.view.overlays.flashPills.isEmpty }
         let flashTime = entered.duration(to: .now).milliseconds
         require(flashTime > 1150 && flashTime < 2000 && overlay.foundTextHighlight == nil, "the found-text flash goes off by itself about 1.25 s after entering: \(Int(flashTime)) ms")
@@ -324,6 +324,12 @@ extension DebugRun {
             let rowsImage = fixtureImage("Tests/Fixtures/text-select-row-skipped.png")
             overlay.present(image: rowsImage, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(rowsImage.width) / 2, height: CGFloat(rowsImage.height) / 2), displayID: nil)
             key(tKey, "t")
+            // The flash marks recognized lines only: not the toolbar's icons top right (text rectangle detection boxed them), and the
+            // short wrapped row too (it missed that).
+            try await waitFor("the rows fixture's found-text flash shows") { !overlay.view.overlays.flashPills.isEmpty }
+            let rowsFlash = overlay.view.overlays.flashPills
+            require(!rowsFlash.contains { $0.intersects(CGRect(x: 1700, y: 0, width: 190, height: 34)) } && rowsFlash.contains { abs($0.minY - 176) < 6 && abs($0.minX - 276) < 6 },
+                    "the flash marks recognized lines, not the toolbar's icons, and includes the short wrapped row: \(rowsFlash)")
             try await waitFor("the rows fixture's Live Text analysis attaches") { liveText.analysis != nil }
             if let selectionView = textView(in: liveText), !selectionView.gestureRecognizers.contains(hold) { selectionView.addGestureRecognizer(hold) }
             textDrag(from: CGPoint(x: 250, y: 81), to: CGPoint(x: 1455, y: 224))

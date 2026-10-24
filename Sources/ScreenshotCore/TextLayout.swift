@@ -120,14 +120,17 @@ public enum TextLayout {
 
     /// For each row, whether it continues the previous one as a soft wrap, in units of the rows' median height h: the gap between
     /// them is under 0.6 h, it starts no list marker, and its left edge is within 0.4 h of the previous row's or of where the text
-    /// after the previous row's marker starts (a hanging indent). On a terminal a soft wrap leaves a gap of about 0.1 h; a bullet's
-    /// hanging indent is about 0.7 h, so an outdent back to the bullet is no soft wrap.
+    /// after the previous row's marker starts (a hanging indent), and the previous row was full: its first word and a space (its share
+    /// of the row's width by characters) would not have fit after the previous row, within 0.5 h of the rows' right edge. On a
+    /// terminal a soft wrap leaves a gap of about 0.1 h; a bullet's hanging indent is about 0.7 h, so an outdent back to the bullet is
+    /// no soft wrap; a short header over its message (a chat's name and time) was not full.
     static func wraps(_ rows: [[TextLine]]) -> [Bool] {
         guard !rows.isEmpty else { return [] }
         // A bullet, or a hyphen, dash, star, plus or number with a period or parenthesis before a space, and the spaces after it.
         let marker = /(?:[\u{2022}\u{25E6}\u{25AA}\u{2023}\u{2043}]|(?:[-*+\u{2013}\u{2014}]|\d{1,3}[.)])(?=\s|$))\s*/
         let boxes = rows.map { $0.dropFirst().reduce($0[0].bounds) { $0.union($1.bounds) } }
         let height = boxes.map(\.height).sorted()[boxes.count / 2]
+        let right = boxes.map(\.maxX).max()!
         return rows.indices.map { index in
             guard index > 0 else { return false }
             let previous = rows[index - 1][0], box = boxes[index]
@@ -138,7 +141,10 @@ public enum TextLayout {
                     : previous.bounds.minX + previous.bounds.width * CGFloat(count) / CGFloat(previous.text.count)
             }
             let aligned = [boxes[index - 1].minX, hang].contains { abs(box.minX - $0) <= 0.4 * height }
-            return box.minY - boxes[index - 1].maxY < 0.6 * height && aligned && rows[index][0].text.prefixMatch(of: marker) == nil
+            let first = rows[index][0]
+            let word = first.bounds.width * CGFloat(first.text.prefix { !$0.isWhitespace }.count + 1) / CGFloat(first.text.count)
+            let full = boxes[index - 1].maxX + word > right - 0.5 * height
+            return box.minY - boxes[index - 1].maxY < 0.6 * height && aligned && full && first.text.prefixMatch(of: marker) == nil
         }
     }
 
