@@ -858,8 +858,11 @@ extension DebugRun {
                     require(toast.detail.lineBreakMode == .byTruncatingMiddle && toast.detail.toolTip == longMovie.lastPathComponent && toast.card.frame.width == 360,
                             "a long file name is cut in the middle with the full name as its tooltip")
                 case "recording-hover":
-                    require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Move to Trash", "Open in QuickTime Player", "Share"],
-                            "a saved recording offers Copy, Trash, Open in QuickTime Player and Share")
+                    require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Move to Trash", "Open in QuickTime Player", "Show in Finder", "Share"],
+                            "a saved recording offers Copy, Trash, Open in QuickTime Player, Show in Finder and Share")
+                case "saved-hover":
+                    require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Move to Trash", "Open in Preview", "Show in Finder", "Share"],
+                            "a saved capture offers Copy, Trash, Open in Preview, Show in Finder and Share")
                 case "color-hover":
                     require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy"] && toast.lead is NSBox, "a color offers Copy, behind its swatch")
                 case "text-hover":

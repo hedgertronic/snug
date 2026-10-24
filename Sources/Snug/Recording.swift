@@ -318,7 +318,7 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     }
 
     /// Delivers a finished recording that is already in the save folder: copies its file URL (both after-capture settings copy),
-    /// then shows the toast with the first frame; clicking the toast reveals the file. A copy the pasteboard refuses shows a red toast,
+    /// then shows the toast with the first frame, whose Show in Finder reveals the file. A copy the pasteboard refuses shows a red toast,
     /// "Saved to ..., copy failed", never "Copied".
     static func deliver(_ file: URL, pasteboard: NSPasteboard, defaults: UserDefaults) async throws -> CGImage {
         recordingLog.notice("deliver started")

@@ -753,7 +753,10 @@ extension DebugRun {
         require(fresh.message.stringValue == "Saved to \(saveFolder.lastPathComponent)" && fresh.saveButton.isHidden && !fresh.trashButton.isHidden && fresh.file?.lastPathComponent == saved[0]
                     && fresh.detail.stringValue == "1200 x 400",
                 "Save shows the saved state with Trash and keeps the pixel size as the detail: \(fresh.message.stringValue) \(fresh.detail.stringValue)")
-        require(Array(frames(fresh).prefix(5)) == Array(unsaved.prefix(5)), "saving keeps the toast's size and place: \(frames(fresh)) \(unsaved)")
+        require(Array(frames(fresh).prefix(4)) == Array(unsaved.prefix(4)), "saving keeps the toast's size and place: \(frames(fresh)) \(unsaved)")
+        require(fresh.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Move to Trash", "Open in Preview", "Show in Finder", "Share"]
+                    && fresh.actions.frame.width <= fresh.textBox.frame.width && abs(fresh.actions.frame.midX - fresh.textBox.frame.midX) <= 0.5,
+                "Save swaps Save for Trash and Show in Finder, centered in the room the text box kept for them: \(fresh.actions.frame) \(fresh.textBox.frame)")
         fresh.dismissal?.cancel()
         let warningDefaults = UserDefaults(suiteName: "snug-toast-\(UUID().uuidString)")!
         Pref.register(in: warningDefaults)
@@ -763,7 +766,7 @@ extension DebugRun {
         let warning = frames(warned)
         warned.saveButton.performClick(nil)
         require(warned.file != nil && warned.detail.stringValue == "1200 x 400" && warned.detail.font == .monospacedSystemFont(ofSize: 12, weight: .regular) && warned.detail.textColor == .secondaryLabelColor
-                    && warned.detail.maximumNumberOfLines == 1 && Array(frames(warned).prefix(5)) == Array(warning.prefix(5)),
+                    && warned.detail.maximumNumberOfLines == 1 && Array(frames(warned).prefix(4)) == Array(warning.prefix(4)),
                 "Save on a warning shows the pixel size as a plain saved capture does, in the same size: \(warned.detail.font!) \(frames(warned))")
 
         // The capture is held only while the toast is visible: closing releases the PNG, the thumbnail, the preview, and the toast itself.
@@ -2241,7 +2244,7 @@ extension DebugRun {
             let trashBoard = NSPasteboard(name: NSPasteboard.Name("snug-toast-trash-\(UUID().uuidString)"))
             holding(trashBoard, file)
             let trashing = Toast(png: capture, message: "Copied, saved", detail: name, file: file, color: nil, defaults: trashDefaults, pasteboard: trashBoard)
-            require(trashing.saveButton.isHidden && !trashing.trashButton.isHidden, "a saved toast shows Trash and not Save")
+            require(trashing.saveButton.isHidden && !trashing.trashButton.isHidden && !trashing.revealButton.isHidden, "a saved toast shows Trash and Show in Finder, and not Save")
             trashing.trashButton.performClick(nil)
             require(!FileManager.default.fileExists(atPath: file.path) && trashing.png == nil, "Trash removes the saved file and closes the toast: \(name)")
             return (trashing, trashBoard)
@@ -2285,6 +2288,25 @@ extension DebugRun {
         require(clicked.png != nil, "a click on the thumbnail does not close the toast")
         click(NSPoint(x: clicked.lead.convert(clicked.lead.bounds, to: nil).maxX + 30, y: clicked.lead.convert(clicked.lead.bounds, to: nil).midY))
         require(clicked.png == nil, "a click beside the thumbnail closes the toast")
+        // Show in Finder selects a saved file (suppressed here, so it records what it would open); a click elsewhere on a saved toast
+        // closes it as on any other.
+        let revealed = saveFolder.appending(path: "snug-reveal.png")
+        try capture.write(to: revealed)
+        let revealing = Toast(png: capture, message: "Copied, saved to F", detail: "1200 x 400", file: revealed, color: nil, defaults: trashDefaults,
+                              pasteboard: NSPasteboard(name: NSPasteboard.Name("snug-toast-reveal-\(UUID().uuidString)")))
+        require(revealing.revealButton.toolTip == "Show in Finder" && revealing.actions.arrangedSubviews.firstIndex(of: revealing.revealButton)
+                    == revealing.actions.arrangedSubviews.firstIndex(of: revealing.openButton)! + 1, "Show in Finder comes after Open")
+        revealing.revealButton.performClick(nil)
+        require(Toast.opened! == (revealed, "com.apple.finder"), "Show in Finder would select the saved file in Finder: \(Toast.opened!)")
+        let beside = Toast(png: capture, message: "Copied, saved to F", detail: "1200 x 400", file: revealed, color: nil, defaults: trashDefaults,
+                           pasteboard: NSPasteboard(name: NSPasteboard.Name("snug-toast-beside-\(UUID().uuidString)")))
+        let besideThumbnail = beside.lead.convert(beside.lead.bounds, to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = NSEvent.mouseEvent(with: type, location: NSPoint(x: besideThumbnail.maxX + 30, y: besideThumbnail.midY), modifierFlags: [], timestamp: 0,
+                                           windowNumber: beside.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+            if type == .leftMouseDown { beside.mouseDown(with: event) } else { beside.mouseUp(with: event) }
+        }
+        require(beside.png == nil, "a click beside the thumbnail of a saved toast closes it")
         Toast.isSuppressed = false
         let movie = saveFolder.appending(path: "snug-copy-recording.mov")
         try capture.write(to: movie)

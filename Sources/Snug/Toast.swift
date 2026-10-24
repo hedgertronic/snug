@@ -7,10 +7,10 @@ import ScreenshotCore
 /// and place for its whole life: its text box is as wide as the wider of the resting text and the actions, and on hover the text
 /// cross-fades to the actions in the same box, both centered in it. The close button fades in on the top-left corner. Copy puts the
 /// capture (or the recording's file, or the text) on the pasteboard again; Save (an unsaved capture) or Trash (a saved file), Open
-/// (Preview, or QuickTime Player for a recording) and Share act on the capture. The toast takes no keys.
+/// (Preview, or QuickTime Player for a recording), Show in Finder (a saved file) and Share act on the capture. The toast takes no keys.
 /// Pointing at the thumbnail grows the capture out of it in its own panel, a margin above the capsule (below it at the top right); the
 /// pointer can cross to it without either closing. Drag the thumbnail or the preview to drop the image, or click either to open it as
-/// Open does; a click elsewhere closes the toast, and a saved toast reveals the file first. It goes away after the lifetime setting (4 s unless changed) while the pointer is elsewhere, and
+/// Open does; a click elsewhere closes the toast. It goes away after the lifetime setting (4 s unless changed) while the pointer is elsewhere, and
 /// stays while it is over the toast or its preview; leaving starts the full lifetime again. A lifetime of 0 shows only failure toasts
 /// (red), for 4 s; Forever keeps the toast until it is closed or drops off the stack.
 /// Toasts stack, each on its own timer: the newest at the anchor and the older ones a gap further from it (up from a bottom anchor, down
@@ -23,8 +23,10 @@ final class Toast: NSPanel, NSDraggingSource {
     private(set) static var shown: [Toast] = []
     /// The space between stacked capsules.
     static let gap: CGFloat = 8
-    /// Debug runs set this so scripted copies never put a toast on screen or open Preview.
+    /// Debug runs set this so scripted copies never put a toast on screen or open an app; an action that would open one records it in `opened`.
     static var isSuppressed = false
+    /// The file and the bundle id of the app the last suppressed Open or Show in Finder would have opened.
+    private(set) static var opened: (file: URL, app: String)?
     /// Transparent margin around the capsule, so the close button can hang off a corner; it is also the gap to the preview.
     private static let margin: CGFloat = 10
     /// The lifetime setting's choices, in seconds: 0 is no toast but failures, and -1 is Forever.
@@ -36,7 +38,6 @@ final class Toast: NSPanel, NSDraggingSource {
     private(set) var file: URL?
     /// What Copy puts on the pasteboard for a toast without a capture: the copied text or color value.
     private let text: String?
-    private var reveals: Bool
     private(set) var dismissal: Task<Void, any Error>?
     private(set) var dragStart: NSPoint?
     private var sharing = false
@@ -58,6 +59,7 @@ final class Toast: NSPanel, NSDraggingSource {
     let saveButton: NSButton
     let trashButton: NSButton
     let openButton: NSButton
+    let revealButton: NSButton
     let shareButton: NSButton
     /// The capture at up to 240 x 160 pt, in a panel of its own so showing it never moves the capsule.
     private(set) var preview: ToastPreview?
@@ -151,7 +153,6 @@ final class Toast: NSPanel, NSDraggingSource {
         self.text = text
         self.defaults = defaults
         self.pasteboard = pasteboard
-        reveals = file != nil
         let seconds = defaults.integer(forKey: Pref.toastLifetime)
         lifetime = seconds < 0 ? nil : .seconds(seconds == 0 ? 4 : seconds)
         let image = png.flatMap(NSImage.init(data:))
@@ -219,13 +220,16 @@ final class Toast: NSPanel, NSDraggingSource {
         saveButton = button("square.and.arrow.down", "Save")
         trashButton = button("trash", "Move to Trash")
         openButton = button("arrow.up.forward.app", openTip)
+        revealButton = button("folder", "Show in Finder")
         shareButton = button("square.and.arrow.up", "Share")
         copyButton.isHidden = png == nil && text == nil
         saveButton.isHidden = png == nil || file != nil
         trashButton.isHidden = file == nil
         openButton.isHidden = png == nil
+        // Show in Finder is measured in for any capture, since Save adds it; it shows once there is a file.
+        revealButton.isHidden = png == nil
         shareButton.isHidden = png == nil && copiedText == nil
-        actions = NSStackView(views: [copyButton, saveButton, trashButton, openButton, shareButton])
+        actions = NSStackView(views: [copyButton, saveButton, trashButton, openButton, revealButton, shareButton])
         actions.spacing = 4
         actions.isHidden = true
 
@@ -237,18 +241,20 @@ final class Toast: NSPanel, NSDraggingSource {
         isReleasedWhenClosed = false
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         for (button, action) in [(closeButton, #selector(closeClicked)), (copyButton, #selector(copyClicked)), (saveButton, #selector(saveClicked)),
-                                 (trashButton, #selector(trashClicked)), (openButton, #selector(openClicked)), (shareButton, #selector(shareClicked))] {
+                                 (trashButton, #selector(trashClicked)), (openButton, #selector(openClicked)), (revealButton, #selector(revealClicked)),
+                                 (shareButton, #selector(shareClicked))] {
             button.target = self
             button.action = action
         }
 
-        // The size, fixed here: the text box is the wider of the resting text (the message up to 200 pt) and the actions, within 360 pt
-        // for the whole capsule. A warning or failure too long for one line wraps to two and makes the capsule taller.
+        // The size, fixed here: the text box is the wider of the resting text (the message up to 200 pt) and the actions (with Show in
+        // Finder, for a capture), within 360 pt for the whole capsule. A warning or failure too long for one line wraps to two and makes the capsule taller.
         let margin = Toast.margin
         let messageWidth = min(message.frame.width, 200)
         let resting = messageWidth + (detail.isHidden ? 0 : 8 + detail.frame.width)
         let widest = 360 - 6 - lead.frame.width - 10 - 12
         let boxWidth = min(max(resting, actions.arrangedSubviews.contains { !$0.isHidden } ? actions.fittingSize.width : 0), widest).rounded(.up)
+        revealButton.isHidden = file == nil
         if tone != nil && resting > widest {
             detail.lineBreakMode = .byWordWrapping
             detail.maximumNumberOfLines = 2
@@ -441,6 +447,16 @@ final class Toast: NSPanel, NSDraggingSource {
         dismiss()
     }
 
+    /// Selects the saved file in a Finder window and closes the toast.
+    @objc private func revealClicked() {
+        guard !Toast.isSuppressed else {
+            Toast.opened = (file!, "com.apple.finder")
+            return
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([file!])
+        dismiss()
+    }
+
     /// Shows the share menu from the button for the capture's file or the copied text. The toast stays up while it is open, and closes once
     /// a service is chosen.
     @objc private func shareClicked() {
@@ -480,7 +496,6 @@ final class Toast: NSPanel, NSDraggingSource {
             return
         }
         file = url
-        reveals = true
         message.stringValue = "Saved to \(url.deletingLastPathComponent().lastPathComponent)"
         let pixels = NSBitmapImageRep(data: png!)!
         detail.stringValue = "\(pixels.pixelsWide) x \(pixels.pixelsHigh)"
@@ -492,7 +507,11 @@ final class Toast: NSPanel, NSDraggingSource {
         detail.isHidden = false
         saveButton.isHidden = true
         trashButton.isHidden = false
+        revealButton.isHidden = false
         layoutText()
+        // Trash and Show in Finder take Save's place, in the room measured for them, centered again.
+        actions.frame.size = actions.fittingSize
+        actions.frame.origin.x = textBox.frame.minX + ((textBox.frame.width - actions.frame.width) / 2).rounded()
     }
 
     override func mouseEntered(with event: NSEvent) { track(event, inside: true) }
@@ -536,14 +555,12 @@ final class Toast: NSPanel, NSDraggingSource {
 
     override func mouseUp(with event: NSEvent) {
         if dragStart != nil { return openClicked() }
-        if reveals, let file { NSWorkspace.shared.activateFileViewerSelecting([file]) }
         dismiss()
     }
 
     override func mouseDragged(with event: NSEvent) {
         guard let png, let start = dragStart, hypot(event.locationInWindow.x - start.x, event.locationInWindow.y - start.y) > 4 else { return }
         dragStart = nil
-        reveals = false
         dismissal?.cancel()
         let view = event.window!.contentView!
         let item = NSDraggingItem(pasteboardWriter: fileOnDisk() as NSURL)
