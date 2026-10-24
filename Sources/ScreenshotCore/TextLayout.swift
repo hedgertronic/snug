@@ -85,13 +85,41 @@ public enum TextLayout {
         }
     }
 
-    /// Rows as text with soft wraps joined, in units of the rows' median height h. Lines of a row join with a space. A row joins the
-    /// previous one with a space when the gap between them is under 0.6 h, it starts no list marker, and its left edge is within 0.4 h
-    /// of the previous row's or of where the text after the previous row's marker starts (a hanging indent). Otherwise it starts a new
-    /// line, after a blank line when the gap is 0.6 h or more. On a terminal a soft wrap leaves a gap of about 0.1 h and an empty row
-    /// about 1.2 h; a bullet's hanging indent is about 0.7 h, so an outdent back to the bullet starts a new line.
+    /// Splits rows into blocks in reading order: where two or more rows of an unbroken run have a cell (the table rule's wide gap)
+    /// starting at the same x, within half a line height, and no line of the run crosses that x, the run is two columns and its left
+    /// part comes before its right part. The rows above and below the run, and each part, split again the same way. A single row with
+    /// a wide gap ("label   value") stays one block.
+    static func columns(_ rows: [[TextLine]]) -> [[[TextLine]]] {
+        guard !rows.isEmpty else { return [] }
+        let heights = rows.joined().map(\.bounds.height).sorted()
+        let tolerance = heights[heights.count / 2] / 2
+        let edges = rows.flatMap { row in zip(row, row.dropFirst()).filter { $1.bounds.minX - $0.bounds.maxX > $0.bounds.height }.map(\.1.bounds.minX) }
+        for x in Set(edges).sorted() {
+            func crosses(_ line: TextLine) -> Bool { line.bounds.minX < x - tolerance && line.bounds.maxX > x }
+            var start = 0
+            while start < rows.count, let first = rows[start...].firstIndex(where: { !$0.contains(where: crosses) }) {
+                let end = rows[first...].firstIndex { $0.contains(where: crosses) } ?? rows.count
+                let run = rows[first..<end]
+                if run.filter({ $0.contains { abs($0.bounds.minX - x) <= tolerance } }).count >= 2 {
+                    let left = run.map { $0.filter { $0.bounds.minX < x - tolerance } }.filter { !$0.isEmpty }
+                    let right = run.map { $0.filter { $0.bounds.minX >= x - tolerance } }.filter { !$0.isEmpty }
+                    return columns(Array(rows[..<first])) + columns(left) + columns(right) + columns(Array(rows[end...]))
+                }
+                start = end
+            }
+        }
+        return [rows]
+    }
+
+    /// Rows as text with soft wraps joined, column blocks (`columns`) one after another with a blank line between, each in units of
+    /// its median row height h. Lines of a row join with a space. A row joins the previous one with a space when the gap between them
+    /// is under 0.6 h, it starts no list marker, and its left edge is within 0.4 h of the previous row's or of where the text after the
+    /// previous row's marker starts (a hanging indent). Otherwise it starts a new line, after a blank line when the gap is 0.6 h or
+    /// more. On a terminal a soft wrap leaves a gap of about 0.1 h and an empty row about 1.2 h; a bullet's hanging indent is about
+    /// 0.7 h, so an outdent back to the bullet starts a new line.
     public static func paragraphs(_ rows: [[TextLine]]) -> String {
-        guard !rows.isEmpty else { return "" }
+        let blocks = columns(rows)
+        guard blocks.count == 1 else { return blocks.map(paragraphs).joined(separator: "\n\n") }
         // A bullet, or a hyphen, dash, star, plus or number with a period or parenthesis before a space, and the spaces after it.
         let marker = /(?:[\u{2022}\u{25E6}\u{25AA}\u{2023}\u{2043}]|(?:[-*+\u{2013}\u{2014}]|\d{1,3}[.)])(?=\s|$))\s*/
         let boxes = rows.map { $0.dropFirst().reduce($0[0].bounds) { $0.union($1.bounds) } }
