@@ -103,6 +103,11 @@ final class OverlayController {
     /// The text that apps expose through accessibility, read as the image was captured (`setScreenTexts`).
     var screenTexts: [ScreenText] = []
     var textTask: Task<Void, Never>?
+    /// The pids of the Chromium apps with a window on a display (global points) and the call that turns one's accessibility on; debug
+    /// runs replace both so they reach no app. `chromiumRequested` is the pids Text mode asked for, for the rest of the run.
+    var chromiumOwners: (CGRect) async -> [pid_t] = { await ChromiumAccessibility.owners(on: $0) }
+    var enableChromium: (pid_t) async -> Void = { await ChromiumAccessibility.enable(pid: $0) }
+    var chromiumRequested: Set<pid_t> = []
     /// Turns off the found-text flash that entering Text mode shows; nil once it is off.
     var foundTextHighlight: Task<Void, Never>?
     /// Milliseconds the last Live Text analysis took, from the start of the analysis to the result, and the last found-text flash

@@ -138,6 +138,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     /// Analyzes the frozen image for text once per capture and attaches the result; the pill covers the screen until then. Meanwhile
     /// the found-text flash shows where the text is (see `highlightFoundText`).
     func startLiveText() {
+        enableChromiumText()
         view.liveText.preferredInteractionTypes = .textSelection
         view.liveText.selectableItemsHighlighted = false
         highlightFoundText()

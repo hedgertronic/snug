@@ -24,6 +24,20 @@ extension OverlayController {
         }
     }
 
+    /// Entering Text mode with "Read text from Chromium apps" on: turns on the accessibility of each Chromium app with a window on this
+    /// display that Text mode has not asked yet, off main. This capture's text was read before, so it keeps OCR; the next capture reads
+    /// the apps (`ScreenTextReader.read`).
+    func enableChromiumText() {
+        guard defaults.bool(forKey: Pref.chromiumText) else { return }
+        let display = CGRect(x: window.frame.minX, y: NSScreen.screens[0].frame.height - window.frame.maxY, width: window.frame.width, height: window.frame.height)
+        Task {
+            for pid in await chromiumOwners(display) where chromiumRequested.insert(pid).inserted { await enableChromium(pid) }
+        }
+    }
+
+    /// The pids whose text the capture reads through the Chromium reader: the apps Text mode turned on, none with the setting off.
+    var chromiumReadable: Set<pid_t> { defaults.bool(forKey: Pref.chromiumText) ? chromiumRequested : [] }
+
     /// The text that takes a press at `pixel` (`ScreenText.takes`) where its window is the frontmost one there.
     func screenText(at pixel: CGPoint) -> Int? {
         screenTexts.firstIndex { $0.takes(pixel) && windows.firstIndex { $0.contains(pixel) } == $0.window }

@@ -38,6 +38,9 @@ enum Pref {
     static let colorFormat = "SnugColorFormat"
     static let candidates = "SnugCandidateList"
     static let accessibilityAsked = "SnugAccessibilityAsked"
+    /// Whether Text mode turns on a Chromium app's accessibility (until the app quits) when it opens over one of its windows, so the next
+    /// capture reads that app's text exactly instead of by OCR (Settings > General > Text mode). Off, Snug never sets the attribute.
+    static let chromiumText = "SnugChromiumText"
     /// Whether crops take the corner radius measured on screen (and their window's at shared corners); off, they are square unless
     /// edited with [ and ].
     static let roundCorners = "SnugRoundCorners"
@@ -118,6 +121,7 @@ enum Pref {
             toastPosition: "bottomCenter",
             toastLifetime: 4,
             roundCorners: true,
+            chromiumText: true,
             menuBarIcon: "a",
             cutoutCrop: false,
             recordCountIn: 3,

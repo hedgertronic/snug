@@ -313,7 +313,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             do {
                 let capturing = signposter.beginInterval("capture")
                 // Accessibility text is read as the pixels are grabbed, so it matches the frozen image (`OverlayController.setScreenTexts`).
-                async let screenText = ScreenTextReader.read()
+                async let screenText = ScreenTextReader.read(chromium: overlay.chromiumReadable)
                 let image = try await DisplayCapture.image(of: id)
                 signposter.endInterval("capture", capturing)
                 let captured = clock.now

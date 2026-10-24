@@ -6,7 +6,8 @@ extension ScreenTextReader {
     /// Apps whose `AXWebArea`s are WebKit's and answer the text-marker attributes (measured on Safari; Mail's message view is the same
     /// engine). Chromium's web areas fail those calls.
     static let webKitApps: Set<String> = ["com.apple.Safari", "com.apple.SafariTechnologyPreview", "com.apple.mail"]
-    /// One app's budget: its lines take at most `webLineBudget` from the start, then word boxes are added until `webWordBudget`.
+    /// One app's budget once its web areas are found: its lines take at most `webLineBudget`, then word boxes are added until
+    /// `webWordBudget`. Finding the areas is not counted, so a slow window walk (every app is read at once) still leaves time for lines.
     private static let webLineBudget = Duration.milliseconds(90)
     private static let webWordBudget = Duration.milliseconds(140)
     /// The most lines one web area walks, and the most off-screen lines in a row it walks past (DOM order is not visual order, so a
@@ -21,7 +22,6 @@ extension ScreenTextReader {
     @concurrent
     static func webKitTexts(pid: pid_t) async -> [ScreenText] {
         guard pid != getpid(), AXIsProcessTrusted() else { return [] }
-        let began = ContinuousClock.now
         let application = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(application, Accessibility.messagingTimeout)
         func frame(of element: AXUIElement) -> CGRect? {
@@ -52,11 +52,12 @@ extension ScreenTextReader {
             AXUIElementSetMessagingTimeout(window, Accessibility.messagingTimeout)
             if let frame = frame(of: window) { walk(window, depth: 0, window: frame, scroll: nil) }
         }
-        let lines = areas.map { webLines(of: $0.element, in: $0.visible, until: began + webLineBudget) }
+        let found = ContinuousClock.now
+        let lines = areas.map { webLines(of: $0.element, in: $0.visible, until: found + webLineBudget) }
         return zip(areas, lines).compactMap { area, lines in
             let (dx, dy) = (area.offset.width, area.offset.height)
             let sources = lines.compactMap { line -> ScreenText.Source? in
-                let pieces = ContinuousClock.now < began + webWordBudget ? webWords(of: area.element, from: line.start, length: WebText.significantLength(of: line.text)) : nil
+                let pieces = ContinuousClock.now < found + webWordBudget ? webWords(of: area.element, from: line.start, length: WebText.significantLength(of: line.text)) : nil
                 return WebText.source(line: line.text, box: line.box.offsetBy(dx: dx, dy: dy), pieces: pieces?.map { ($0.text, $0.box.offsetBy(dx: dx, dy: dy)) })
             }
             return sources.isEmpty ? nil : ScreenText(lines: sources, frame: area.visible.offsetBy(dx: dx, dy: dy), window: 0)
