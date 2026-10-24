@@ -195,7 +195,7 @@ struct TextLayoutTests {
                                             line("Ragged top", 10, 325)])]
         // The overlap's line keeps its longer copy; the line the top band's edge cuts keeps the bottom band's whole copy; a line at the
         // bottom band's top edge (cut) drops, though no other copy holds it.
-        #expect(TextLayout.merge(reads, in: crop).map(\.text).sorted() == ["Cut by the edge", "First", "In the overlap.", "Last"])
+        #expect(TextLayout.merge(reads, in: crop).map(\.text) == ["First", "In the overlap.", "Cut by the edge", "Last"])
         // Lines of one band never merge with each other.
         #expect(TextLayout.merge([(band: crop, lines: [line("a", 10, 100), line("a b", 10, 102)])], in: crop).count == 2)
     }

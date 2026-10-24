@@ -44,7 +44,8 @@ public enum TextLayout {
 
     /// The lines read in each band, as one read: a line within 3 px of a band edge inside `crop` is cut by it and drops (the overlap
     /// holds it whole in the next band), and of lines from different bands that overlap by more than half the smaller box, the one
-    /// with the longer text stays.
+    /// with the longer text stays. They come back top to bottom, then left to right, so `lines(of:in:)` takes the topmost
+    /// of repeated lines (a cart's three "Brief description" lines) whatever order the bands finish in.
     public static func merge(_ reads: [(band: CGRect, lines: [TextLine])], in crop: CGRect) -> [TextLine] {
         let whole = reads.indices.flatMap { index in
             let band = reads[index].band
@@ -61,7 +62,7 @@ public enum TextLayout {
             }
             if !overlaps { kept.append((index, line)) }
         }
-        return kept.map(\.1)
+        return kept.map(\.1).sorted { ($0.bounds.minY, $0.bounds.minX) < ($1.bounds.minY, $1.bounds.minX) }
     }
 
     /// Places each line of `selected` (Live Text, which has no boxes) on the OCR line it came from, in order. A selected line holding
