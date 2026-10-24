@@ -56,6 +56,19 @@ struct TextLayoutTests {
         #expect(TextLayout.selection("Brief\ndescription", in: ocr).map(\.text) == ["Brief description"])
     }
 
+    @Test func aSelectionKeepsAWrappedLinesStartThatLiveTextPairsWithItsWrap() {
+        // A terminal reply as OCR boxes it: a bulleted line whose last word wraps, then the next paragraph. Live Text's transcript pairs
+        // the line's first word with the wrap ("Nice, team.") and gives the rest on its own line.
+        let ocr = [line("\u{2022} Nice, I've saved it to memory. Your apps sign under that account instead of your team's", 20, 721, width: 1900),
+                   line("team.", 49, 752, width: 60), line("This Mac doesn't have a certificate yet.", 49, 798, width: 600),
+                   line("Snug (Mac app, given out outside the App Store):", 49, 900, width: 600)]
+        let selected = "Nice, team.\nI've saved it to memory. Your apps sign under that account instead of your team's\nThis Mac doesn't have a certificate yet."
+        #expect(TextLayout.selection(selected, in: ocr).map(\.text)
+                == ["Nice, I've saved it to memory. Your apps sign under that account instead of your team's", "team.", "This Mac doesn't have a certificate yet."])
+        // A short selected line ("Snug", Live Text splitting a row) takes the line below the previous one, not the bullet line above.
+        #expect(TextLayout.lines(of: "This Mac doesn't have a certificate yet.\nSnug", in: ocr).map(\.bounds.minY) == [798, 900])
+    }
+
     @Test func aSelectionTakesOCRTextForRowsBetweenItsEnds() {
         let ocr = [line("Plan", 10, 100), line("- shadow opacity;", 10, 140), line("- corner radius;", 10, 180), line("Next steps", 10, 220)]
         // Live Text drops the middle item's marker and the selection starts inside the first line: the middle row keeps OCR's marker,
