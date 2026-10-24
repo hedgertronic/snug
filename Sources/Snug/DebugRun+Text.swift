@@ -487,8 +487,9 @@ extension DebugRun {
             require(boxed == block && !overlay.window.isVisible,
                     "\(name) with a box copies its lines (Shift-Return as a table, one row per line here) and closes: \(boxed.debugDescription)")
         }
-        // On the cart's two columns Shift-Return copies a table and Return the rows with soft wraps joined.
-        for (flags, expected) in [(NSEvent.ModifierFlags.shift, "Product name\t$12\n"), ([], "Product name $12 Brief description")] {
+        // On the cart's two columns Shift-Return copies a table and Return the rows, each title (larger) on its own line over its
+        // smaller description, which is no soft wrap of it.
+        for (flags, expected) in [(NSEvent.ModifierFlags.shift, "Product name\t$12\n"), ([], "Product name $12\nBrief description")] {
             try await open()
             mouse(.leftMouseDown, CGPoint(x: cart.minX, y: cart.minY))
             mouse(.leftMouseDragged, CGPoint(x: cart.maxX, y: cart.maxY))
@@ -498,7 +499,7 @@ extension DebugRun {
             key(returnKey, "\r", flags)
             let copiedCart = await copied() ?? ""
             require(copiedCart.hasPrefix(expected) && copiedCart.contains("\t") == flags.contains(.shift),
-                    "\(flags.contains(.shift) ? "Shift-Return" : "Return") on a box over the cart copies \(flags.contains(.shift) ? "a table" : "joined rows"): \(copiedCart.debugDescription)")
+                    "\(flags.contains(.shift) ? "Shift-Return" : "Return") on a box over the cart copies \(flags.contains(.shift) ? "a table" : "rows, titles apart from their descriptions"): \(copiedCart.debugDescription)")
         }
         try await openBox()
         overlay.targetLanguage = Locale.Language(identifier: "de")
@@ -560,7 +561,7 @@ extension DebugRun {
         pasteboard.clearContents()
         key(cKey, "c", .command)
         let joined = await copied()
-        require(!overlay.window.isVisible && joined == "Product name $12 Brief description\n\nSecond product $8 Brief description",
+        require(!overlay.window.isVisible && joined == "Product name $12\nBrief description\n\nSecond product $8\nBrief description",
                 "Cmd-C copies the cart rows the selection spans, prices in their rows and the other column left out, and closes: \(joined.debugDescription) (Live Text: \(lines.debugDescription))")
 
         // Double click selects a word, triple click the line.
@@ -747,7 +748,7 @@ extension DebugRun {
         pasteboard.clearContents()
         key(returnKey, "\r")
         let returned = await copied()
-        require(returned == "Product name $12 Brief description\n\nSecond product",
+        require(returned == "Product name $12\nBrief description\n\nSecond product",
                 "Return copies the rows the selection spans in reading order, not Live Text's: \(returned.debugDescription) (Live Text: \(liveOrder.debugDescription))")
 
         // Found items on a generated page: a link, an email address, a phone number, and a QR code.
