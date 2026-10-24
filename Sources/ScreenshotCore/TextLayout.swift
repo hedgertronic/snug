@@ -86,23 +86,28 @@ public enum TextLayout {
     }
 
     /// Splits rows into blocks in reading order: where two or more rows of an unbroken run have a cell (the table rule's wide gap)
-    /// starting at the same x, within half a line height, and no line of the run crosses that x, the run is two columns and its left
-    /// part comes before its right part. The rows above and below the run, and each part, split again the same way. A single row with
-    /// a wide gap ("label   value") stays one block.
+    /// starting at the same x, within half a line height, and no line of the run crosses that x, the run may be two columns. It is
+    /// when it is prose side by side: one part has a soft wrap (`wraps`) between rows of one size (a title over a smaller subtitle is
+    /// not one). Then its left part comes before its right part, and the rows above and below the run, and each part, split again
+    /// the same way. Rows that each stand alone (label and value, item and price) and a single row with a wide gap stay whole.
     static func columns(_ rows: [[TextLine]]) -> [[[TextLine]]] {
         guard !rows.isEmpty else { return [] }
         let heights = rows.joined().map(\.bounds.height).sorted()
         let tolerance = heights[heights.count / 2] / 2
         let edges = rows.flatMap { row in zip(row, row.dropFirst()).filter { $1.bounds.minX - $0.bounds.maxX > $0.bounds.height }.map(\.1.bounds.minX) }
+        func prose(_ part: [[TextLine]]) -> Bool {
+            let sizes = part.map { $0.dropFirst().reduce($0[0].bounds) { $0.union($1.bounds) }.height }
+            return zip(wraps(part), sizes.indices).contains { $0 && min(sizes[$1], sizes[$1 - 1]) >= 0.75 * max(sizes[$1], sizes[$1 - 1]) }
+        }
         for x in Set(edges).sorted() {
             func crosses(_ line: TextLine) -> Bool { line.bounds.minX < x - tolerance && line.bounds.maxX > x }
             var start = 0
             while start < rows.count, let first = rows[start...].firstIndex(where: { !$0.contains(where: crosses) }) {
                 let end = rows[first...].firstIndex { $0.contains(where: crosses) } ?? rows.count
                 let run = rows[first..<end]
-                if run.filter({ $0.contains { abs($0.bounds.minX - x) <= tolerance } }).count >= 2 {
-                    let left = run.map { $0.filter { $0.bounds.minX < x - tolerance } }.filter { !$0.isEmpty }
-                    let right = run.map { $0.filter { $0.bounds.minX >= x - tolerance } }.filter { !$0.isEmpty }
+                let left = run.map { $0.filter { $0.bounds.minX < x - tolerance } }.filter { !$0.isEmpty }
+                let right = run.map { $0.filter { $0.bounds.minX >= x - tolerance } }.filter { !$0.isEmpty }
+                if run.filter({ $0.contains { abs($0.bounds.minX - x) <= tolerance } }).count >= 2 && (prose(left) || prose(right)) {
                     return columns(Array(rows[..<first])) + columns(left) + columns(right) + columns(Array(rows[end...]))
                 }
                 start = end
@@ -111,38 +116,50 @@ public enum TextLayout {
         return [rows]
     }
 
-    /// Rows as text with soft wraps joined, column blocks (`columns`) one after another with a blank line between, each in units of
-    /// its median row height h. Lines of a row join with a space. A row joins the previous one with a space when the gap between them
-    /// is under 0.6 h, it starts no list marker, and its left edge is within 0.4 h of the previous row's or of where the text after the
-    /// previous row's marker starts (a hanging indent). Otherwise it starts a new line, after a blank line when the gap is 0.6 h or
-    /// more and at least twice the block's median gap (the lower one of an even count). On a terminal a soft wrap leaves a gap of
-    /// about 0.1 h and an empty row about 1.2 h, so empty rows give blank lines; a form's labels and fields sit about 1.3 h apart
-    /// throughout, so they give none. A bullet's hanging indent is about 0.7 h, so an outdent back to the bullet starts a new line.
-    public static func paragraphs(_ rows: [[TextLine]]) -> String {
-        let blocks = columns(rows)
-        guard blocks.count == 1 else { return blocks.map(paragraphs).joined(separator: "\n\n") }
+    /// For each row, whether it continues the previous one as a soft wrap, in units of the rows' median height h: the gap between
+    /// them is under 0.6 h, it starts no list marker, and its left edge is within 0.4 h of the previous row's or of where the text
+    /// after the previous row's marker starts (a hanging indent). On a terminal a soft wrap leaves a gap of about 0.1 h; a bullet's
+    /// hanging indent is about 0.7 h, so an outdent back to the bullet is no soft wrap.
+    static func wraps(_ rows: [[TextLine]]) -> [Bool] {
+        guard !rows.isEmpty else { return [] }
         // A bullet, or a hyphen, dash, star, plus or number with a period or parenthesis before a space, and the spaces after it.
         let marker = /(?:[\u{2022}\u{25E6}\u{25AA}\u{2023}\u{2043}]|(?:[-*+\u{2013}\u{2014}]|\d{1,3}[.)])(?=\s|$))\s*/
         let boxes = rows.map { $0.dropFirst().reduce($0[0].bounds) { $0.union($1.bounds) } }
         let height = boxes.map(\.height).sorted()[boxes.count / 2]
+        return rows.indices.map { index in
+            guard index > 0 else { return false }
+            let previous = rows[index - 1][0], box = boxes[index]
+            var hang = boxes[index - 1].minX
+            if let match = previous.text.prefixMatch(of: marker) {
+                let count = previous.text.distance(from: match.range.lowerBound, to: match.range.upperBound)
+                hang = count == previous.text.count && rows[index - 1].count > 1 ? rows[index - 1][1].bounds.minX
+                    : previous.bounds.minX + previous.bounds.width * CGFloat(count) / CGFloat(previous.text.count)
+            }
+            let aligned = [boxes[index - 1].minX, hang].contains { abs(box.minX - $0) <= 0.4 * height }
+            return box.minY - boxes[index - 1].maxY < 0.6 * height && aligned && rows[index][0].text.prefixMatch(of: marker) == nil
+        }
+    }
+
+    /// Rows as text, column blocks (`columns`) one after another with a blank line between. Lines of a row join with a space, and a
+    /// row that is a soft wrap (`wraps`) joins the previous one with a space. Any other row starts a new line, after a blank line when
+    /// the gap is 0.6 row heights or more and at least twice the block's median gap (the lower one of an even count). On a terminal a
+    /// soft wrap leaves a gap of about 0.1 h and an empty row about 1.2 h, so empty rows give blank lines; a form's labels and fields
+    /// sit about 1.3 h apart throughout, so they give none.
+    public static func paragraphs(_ rows: [[TextLine]]) -> String {
+        let blocks = columns(rows)
+        guard blocks.count == 1 else { return blocks.map(paragraphs).joined(separator: "\n\n") }
+        let boxes = rows.map { $0.dropFirst().reduce($0[0].bounds) { $0.union($1.bounds) } }
+        let height = boxes.map(\.height).sorted()[boxes.count / 2]
         let gaps = zip(boxes, boxes.dropFirst()).map { $1.minY - $0.maxY }.sorted()
         let spacing = gaps.isEmpty ? 0 : gaps[(gaps.count - 1) / 2]
+        let wrapped = wraps(rows)
         var text = ""
         for (index, row) in rows.enumerated() {
-            let line = row.map(\.text).joined(separator: " ")
             if index > 0 {
-                let previous = rows[index - 1][0], box = boxes[index]
-                var hang = boxes[index - 1].minX
-                if let match = previous.text.prefixMatch(of: marker) {
-                    let count = previous.text.distance(from: match.range.lowerBound, to: match.range.upperBound)
-                    hang = count == previous.text.count && rows[index - 1].count > 1 ? rows[index - 1][1].bounds.minX
-                        : previous.bounds.minX + previous.bounds.width * CGFloat(count) / CGFloat(previous.text.count)
-                }
-                let gap = box.minY - boxes[index - 1].maxY
-                let aligned = [boxes[index - 1].minX, hang].contains { abs(box.minX - $0) <= 0.4 * height }
-                text += gap >= 0.6 * height ? (gap >= 2 * spacing ? "\n\n" : "\n") : aligned && line.prefixMatch(of: marker) == nil ? " " : "\n"
+                let gap = boxes[index].minY - boxes[index - 1].maxY
+                text += wrapped[index] ? " " : gap >= 0.6 * height && gap >= 2 * spacing ? "\n\n" : "\n"
             }
-            text += line
+            text += row.map(\.text).joined(separator: " ")
         }
         return text
     }

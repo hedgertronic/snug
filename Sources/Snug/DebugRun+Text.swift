@@ -418,8 +418,8 @@ extension DebugRun {
         pasteboard.clearContents()
         key(cKey, "c", .command)
         let joined = await copied()
-        require(!overlay.window.isVisible && joined == "Product name Brief description\n\nSecond product Brief description\n\n$12\n$8",
-                "Cmd-C copies the cart rows the selection spans, the price column after the names and the other column left out, and closes: \(joined.debugDescription) (Live Text: \(lines.debugDescription))")
+        require(!overlay.window.isVisible && joined == "Product name $12 Brief description\n\nSecond product $8 Brief description",
+                "Cmd-C copies the cart rows the selection spans, prices in their rows and the other column left out, and closes: \(joined.debugDescription) (Live Text: \(lines.debugDescription))")
 
         // Double click selects a word, triple click the line.
         try await open()

@@ -115,6 +115,18 @@ struct TextLayoutTests {
         #expect(paragraphs(lines) == "First paragraph runs on to its end.\n\nSecond paragraph runs on to its end too.\n\nThird.")
     }
 
+    @Test func anItemAndPriceListKeepsItsRowsWhole() {
+        #expect(paragraphs([term("Coffee", 25, 100), term("$4", 300, 100), term("Bagel", 25, 130), term("$3", 300, 130),
+                            term("Orange juice", 25, 160), term("$5", 300, 160)]) == "Coffee $4\nBagel $3\nOrange juice $5")
+        // A cart: each item's smaller subtitle joins it, but a title over a subtitle is no prose, so the prices stay in their rows.
+        func cart(_ text: String, _ x: CGFloat, _ y: CGFloat, _ height: CGFloat) -> TextLine {
+            TextLine(text: text, bounds: CGRect(x: x, y: y, width: CGFloat(text.count) * 8, height: height))
+        }
+        #expect(paragraphs([cart("Product name", 25, 100, 22), cart("$12", 300, 100, 22), cart("Brief description", 25, 124, 15),
+                            cart("Second product", 25, 160, 22), cart("$8", 300, 160, 22), cart("Brief description", 25, 184, 15)])
+            == "Product name $12 Brief description\n\nSecond product $8 Brief description")
+    }
+
     @Test func oneRowWithAWideGapStaysOneLine() {
         #expect(paragraphs([term("Total", 25, 100), term("$20", 300, 100)]) == "Total $20")
     }
