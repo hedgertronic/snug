@@ -381,7 +381,7 @@ private struct AppearancePane: View {
                         pointSlider("Opacity", value: Binding { shadowOpacity * 100 } set: { shadowOpacity = $0 / 100 }, range: 0...100, unit: "%")
                         pointSlider("Size", value: $shadowBlur, range: 0...100, unit: " pt")
                         pointSlider("Distance", value: $shadowDistance, range: 0...64, unit: " pt")
-                        pointSlider("Angle", detail: "270\u{00B0} falls down", value: $shadowAngle, range: 0...360, unit: "\u{00B0}")
+                        pointSlider("Angle", detail: "90\u{00B0} up, 270\u{00B0} down", value: $shadowAngle, range: 0...360, unit: "\u{00B0}")
                         LabeledContent("Color") {
                             ColorPicker("Color", selection: Binding {
                                 Color(nsColor: Highlight.color(hex: shadowColor))
@@ -402,7 +402,7 @@ private struct AppearancePane: View {
     private func pointSlider(_ title: String, detail: String? = nil, value: Binding<Double>, range: ClosedRange<Double>, unit: String) -> some View {
         LabeledContent {
             HStack(spacing: 10) {
-                Slider(value: Binding { value.wrappedValue } set: { value.wrappedValue = $0.rounded() }, in: range).frame(width: 150)
+                Slider(value: Binding { value.wrappedValue } set: { value.wrappedValue = $0.rounded() }, in: range).frame(width: 130)
                 Text("\(value.wrappedValue.formatted())\(unit)").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).frame(width: 54, alignment: .trailing)
             }
         } label: {

@@ -970,10 +970,14 @@ final class OverlayController {
         dismiss()
         commitTask = Task { [pasteboard, defaults] in
             do {
-                var image = roundingWindowCorners(try await captureWindow(id, framed && shadow == nil, interior), radius: radius)
-                if let shadow { image = try OutputFrame.shadowed(image, shadow: shadow, padding: padding, scale: scale) }
-                let png = try await Output.png(image)
-                Output.publish(png: png, detail: "\(image.width) x \(image.height)", copy: copy, save: save, destination: destination,
+                let image = roundingWindowCorners(try await captureWindow(id, framed && shadow == nil, interior), radius: radius)
+                // The custom shadow follows the window's alpha off the main thread, as a framed subject's does.
+                let output = if let shadow {
+                    try await Output.encodeCutout(image, bounds: nil, cornerRadii: .zero, framed: true, scale: scale, shadow: shadow, padding: padding)
+                } else {
+                    (png: try await Output.png(image), width: image.width, height: image.height)
+                }
+                Output.publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save, destination: destination,
                                pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
