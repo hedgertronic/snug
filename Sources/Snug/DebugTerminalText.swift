@@ -10,13 +10,6 @@ extension DebugRun {
             let began = ContinuousClock.now
             let areas = await Accessibility.terminalRows(pid: app.processIdentifier)
             print("\(app.bundleIdentifier!): \(areas.count) text areas in \(String(format: "%.1f", began.duration(to: .now).milliseconds)) ms")
-            // Text mode keeps an area only when a second read 250 ms later matches; say which rows changed.
-            try? await Task.sleep(for: .milliseconds(250))
-            let again = await Accessibility.terminalRows(pid: app.processIdentifier)
-            for (area, second) in zip(areas, again) {
-                let changed = area.rows.indices.filter { $0 >= second.rows.count || area.rows[$0].text != second.rows[$0].text }
-                print("  second read 250 ms later: \(changed.isEmpty ? "same" : "rows \(changed) changed: " + changed.prefix(3).map { area.rows[$0].text.prefix(60).debugDescription }.joined(separator: ", "))")
-            }
             for area in areas {
                 let text = TerminalText(rows: area.rows, frame: area.frame, window: 0)
                 print("  area \(area.frame), \(area.rows.count) rows")

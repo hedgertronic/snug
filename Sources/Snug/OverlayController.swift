@@ -100,9 +100,8 @@ final class OverlayController {
     var commitTask: Task<Void, Never>?
     /// The reading pill and notice, and the running text analysis, OCR, or translation.
     var text = TextSession()
-    /// The terminal windows' text areas, read through accessibility once the windows are known (`readTerminals`), and the read.
+    /// The terminal windows' text areas, read through accessibility as the image was captured (`setTerminals`).
     var terminals: [TerminalText] = []
-    var terminalTask: Task<Void, Never>?
     var textTask: Task<Void, Never>?
     /// Turns off the found-text flash that entering Text mode shows; nil once it is off.
     var foundTextHighlight: Task<Void, Never>?
@@ -297,7 +296,6 @@ final class OverlayController {
         dockTiles = []
         accessibilityTask?.cancel()
         accessibilityObservations = [:]
-        terminalTask?.cancel()
         terminals = []
         frozenAt = .now
         let start = ContinuousClock.now
@@ -361,7 +359,6 @@ final class OverlayController {
         windowIDs = ids
         windowFrozen = frozen
         if mode == .capture { buildSession() }
-        readTerminals()
         // The dim waits for the windows: a hover before them would find nothing, dim everything, then fade to the window under the pointer.
         dimResolved = true
         updateHover(pixel: CGPoint(x: (pointer.x - window.frame.minX) * scale, y: (window.frame.maxY - pointer.y) * scale))

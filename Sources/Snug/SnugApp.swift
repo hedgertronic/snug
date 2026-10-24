@@ -312,6 +312,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         captureTask = Task {
             do {
                 let capturing = signposter.beginInterval("capture")
+                // Terminal text is read as the pixels are grabbed, so it matches the frozen image (`OverlayController.setTerminals`).
+                async let terminalText = OverlayController.readTerminalText()
                 let image = try await DisplayCapture.image(of: id)
                 signposter.endInterval("capture", capturing)
                 let captured = clock.now
@@ -354,6 +356,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 signposter.endInterval("windows", listing)
                 openLog.notice("open: capture \(ms(pressed, captured)) ms, present \(ms(captured, presented)) ms, list \(ms(presented, listed)) ms, main \(ms(listed, resumed)) ms, dock \(dock, privacy: .public), windows \(ms(presented, clock.now)) ms")
                 if overlay.image === image { overlay.setWindows(windows.map(\.rect), names: windows.map(\.name), ids: windows.map(\.id), frozen: windows.map(\.frozen), pointer: NSEvent.mouseLocation) }
+                let read = await terminalText
+                if overlay.image === image { overlay.setTerminals(read) }
             } catch is CancellationError {
             } catch {
                 Toast.show(message: "Capture failed", detail: error.localizedDescription, color: .systemRed)
