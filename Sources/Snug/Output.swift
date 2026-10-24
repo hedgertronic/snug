@@ -16,7 +16,6 @@ enum Pref {
     static let frame = "SnugFrame"
     private static let legacyStyle = "SnugStyle"
     private static let legacyShadow = "SnugShadow"
-    static let afterCapture = "SnugAfterCapture"
     static let saveFolder = "SnugSaveFolder"
     static let hotKeyCode = "SnugHotKeyCode"
     static let hotKeyModifiers = "SnugHotKeyModifiers"
@@ -78,7 +77,6 @@ enum Pref {
         defaults.register(defaults: [
             snap: true,
             frame: false,
-            afterCapture: "copy",
             saveFolder: NSHomeDirectory() + "/Desktop",
             hotKeyCode: 49,
             hotKeyModifiers: Int(NSEvent.ModifierFlags([.control, .shift]).rawValue),
@@ -127,7 +125,7 @@ enum Output {
         return (try await png(rendered), rendered.width, rendered.height)
     }
 
-    /// Encodes a crop, then copies it to the pasteboard and/or saves it, and shows a toast (see `publish`).
+    /// Encodes a crop, then copies it to the pasteboard or saves it, and shows a toast (see `publish`).
     @MainActor
     static func deliver(_ image: CGImage, crop: CGRect, framed: Bool, scale: CGFloat, cornerRadii: CornerRadii = .zero,
                         copy: Bool, save: Bool, destination: URL? = nil, warning: String? = nil, pasteboard: NSPasteboard, defaults: UserDefaults) async throws {
@@ -145,11 +143,11 @@ enum Output {
         return URL(fileURLWithPath: defaults.string(forKey: Pref.saveFolder)!).appending(path: "Snug \(format.string(from: .now)).png")
     }
 
-    /// Copies a PNG to the pasteboard and/or saves it, and shows a toast; returns the toast's message and detail. `detail` is the toast's
+    /// Copies a PNG to the pasteboard or saves it, and shows a toast; returns the toast's message and detail. `detail` is the toast's
     /// pixel size line, saved or not. A save goes to `destination` (Save As, which the panel already confirmed) or the usual file, which takes a
     /// numbered name when its own is taken. A write that fails (the pasteboard refusing the image, an unwritable folder) shows a red toast
-    /// with its reason, keeps the capture in it, and names what worked: "Copied, save failed". Otherwise a `warning` (a capture that may be
-    /// wrong) takes the detail line and an orange mark.
+    /// with its reason and keeps the capture in it: "Copy failed" or "Save failed". Otherwise a `warning` (a capture that may be wrong)
+    /// takes the detail line and an orange mark.
     @MainActor
     @discardableResult
     static func publish(png: Data, detail: String, copy: Bool, save: Bool, destination: URL? = nil, warning: String? = nil, pasteboard: NSPasteboard,
@@ -185,13 +183,12 @@ enum Output {
         return (message, detail)
     }
 
-    /// The toast's message for what was asked (`copy`, `save`) and what worked (`copied`, `saved`).
+    /// The toast's message for what was asked (`copy`, `save`) and what worked (`copied`, `saved`). Only a recording, already saved, is
+    /// both copied and saved.
     static func message(copy: Bool, save: Bool, copied: Bool, saved: Bool, folder: String) -> String {
         switch (copy, save, copied, saved) {
-        case (true, true, true, true): "Copied, saved to \(folder)"
-        case (true, true, true, false): "Copied, save failed"
-        case (true, true, false, true): "Saved to \(folder), copy failed"
-        case (true, true, false, false): "Copy and save failed"
+        case (true, true, true, _): "Copied, saved to \(folder)"
+        case (true, true, false, _): "Saved to \(folder), copy failed"
         case (true, false, true, _): "Copied"
         case (true, false, false, _): "Copy failed"
         case (false, _, _, true): "Saved to \(folder)"

@@ -60,7 +60,7 @@ Settings > Agent shows this command with the real path and a Copy button. The se
 
 ## Settings
 
-- **General:** capture shortcut, After capture (Copy, or Copy and save), save folder, Open at login, permission status.
+- **General:** capture shortcut, save folder (where Cmd-S saves and Save As starts), Open at login, permission status.
 - **Appearance:** overlay look (System, Light, Dark), highlight color, fill, fade and glow, and the toast's preview, position and lifetime.
 - **Keys:** a reference of every overlay key. Rebinding is not available yet.
 - **Agent:** the MCP command and Clear last capture.

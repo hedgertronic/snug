@@ -617,26 +617,23 @@ extension DebugRun {
         let contents = try Set(saved.map { try String(contentsOf: outputFolder.appending(path: $0), encoding: .utf8) })
         require(saved.count == 4 && contents == ["taken", "first", "second", "third"], "saves in one second keep every capture: \(saved)")
         require(saved.contains { $0.hasSuffix(" 2.png") }, "a taken default name gets \" 2\" before the extension: \(saved)")
-        let savedToast = Output.publish(png: Data("fourth".utf8), detail: "1 x 1", copy: true, save: true, pasteboard: pasteboard, defaults: defaults)
+        let savedToast = Output.publish(png: Data("fourth".utf8), detail: "1 x 1", copy: false, save: true, pasteboard: pasteboard, defaults: defaults)
         require(savedToast.detail == "1 x 1", "a saved capture's toast keeps the pixel size as its detail, not the file name: \(savedToast)")
 
         let blocked = folder.appending(path: "blocked")
         try FileManager.default.createDirectory(at: blocked, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o500])
         defaults.set(blocked.path, forKey: Pref.saveFolder)
         pasteboard.clearContents()
-        let partial = Output.publish(png: Data("kept".utf8), detail: "1 x 1", copy: true, save: true, pasteboard: pasteboard, defaults: defaults)
-        require(partial.message == "Copied, save failed" && !partial.detail.isEmpty && pasteboard.data(forType: .png) == Data("kept".utf8),
-                "Copy and Save on an unwritable folder copies and reports \"Copied, save failed\" with a reason: \(partial)")
         let saveOnly = Output.publish(png: Data("kept".utf8), detail: "1 x 1", copy: false, save: true, pasteboard: pasteboard, defaults: defaults)
-        require(saveOnly.message == "Save failed" && saveOnly.detail == partial.detail, "Save alone on an unwritable folder reports \"Save failed\": \(saveOnly)")
+        require(saveOnly.message == "Save failed" && !saveOnly.detail.isEmpty && pasteboard.data(forType: .png) == nil,
+                "Save on an unwritable folder copies nothing and reports \"Save failed\" with a reason: \(saveOnly)")
         let copyOnly = Output.publish(png: Data("kept".utf8), detail: "1 x 1", copy: true, save: false, pasteboard: pasteboard, defaults: defaults)
         require(copyOnly.message == "Copied" && copyOnly.detail == "1 x 1", "a plain copy still says Copied: \(copyOnly)")
-        let messages = [(true, true, true, true), (true, true, true, false), (true, true, false, true), (true, true, false, false),
-                        (true, false, true, true), (true, false, false, true), (false, true, true, true), (false, true, true, false)]
+        let messages = [(true, true, true, true), (true, true, false, true), (true, false, true, true), (true, false, false, true), (false, true, true, true), (false, true, true, false)]
             .map { Output.message(copy: $0.0, save: $0.1, copied: $0.2, saved: $0.3, folder: "F") }
-        require(messages == ["Copied, saved to F", "Copied, save failed", "Saved to F, copy failed", "Copy and save failed",
-                             "Copied", "Copy failed", "Saved to F", "Save failed"], "the toast names what worked and what failed: \(messages)")
-        let toast = Toast(png: Data("kept".utf8), message: "Copied, save failed", detail: "reason", file: nil, color: .systemRed, defaults: defaults)
+        require(messages == ["Copied, saved to F", "Saved to F, copy failed", "Copied", "Copy failed", "Saved to F", "Save failed"],
+                "the toast names what worked and what failed (copied and saved is a recording): \(messages)")
+        let toast = Toast(png: Data("kept".utf8), message: "Save failed", detail: "reason", file: nil, color: .systemRed, defaults: defaults)
         Toast.chooseSaveURL = { _ in blocked.appending(path: "Chosen.png") }
         toast.saveButton.performClick(nil)
         Toast.chooseSaveURL = { _ in preconditionFailure("a debug run shows no Save As panel") }

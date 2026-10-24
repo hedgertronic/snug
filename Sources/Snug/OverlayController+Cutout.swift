@@ -130,7 +130,7 @@ extension OverlayController {
             cutout!.cropped.toggle()
             defaults.set(cutout!.cropped, forKey: Pref.cutoutCrop)
             showCutoutSubject(preview.shown)
-        case (36, _, _), (76, _, _): deliverCutout(copy: true, save: afterCaptureSaves)
+        case (36, _, _), (76, _, _): deliverCutout(copy: true, save: false)
         case (_, true, "s"): deliverCutout(copy: false, save: true)
         case (_, false, "c"): copyColor()
         case (_, false, "C"): cycleColorFormat()

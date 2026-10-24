@@ -131,12 +131,11 @@ private func caption(_ text: String) -> some View {
     Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 4)
 }
 
-/// The app icon and name once, then shortcut, after capture, save folder, open at login, recording, and the permissions; then About the
+/// The app icon and name once, then shortcut, save folder, open at login, recording, and the permissions; then About the
 /// developer: the headshot, name, a link to hedgertronic.com, a short bio, and the Ko-fi button.
 private struct GeneralPane: View {
     @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
-    @AppStorage(Pref.afterCapture) private var afterCapture = "copy"
     @AppStorage(Pref.saveFolder) private var saveFolder = ""
     @State private var opensAtLogin = SMAppService.mainApp.status == .enabled
 
@@ -160,15 +159,6 @@ private struct GeneralPane: View {
                             UserDefaults.standard.removeObject(forKey: Pref.hotKeyCode)
                             UserDefaults.standard.removeObject(forKey: Pref.hotKeyModifiers)
                         }
-                    }
-                    LabeledContent("After capture") {
-                        Picker("After capture", selection: $afterCapture) {
-                            Text("Copy").tag("copy")
-                            Text("Copy and save").tag("copyAndSave")
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .fixedSize()
                     }
                     LabeledContent("Save to") {
                         Button(URL(fileURLWithPath: saveFolder).lastPathComponent) {

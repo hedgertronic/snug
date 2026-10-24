@@ -317,7 +317,7 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         return [below, above].first { visible.contains($0) } ?? CGRect(x: x, y: visible.maxY - fullScreenInset - size.height, width: size.width, height: size.height)
     }
 
-    /// Delivers a finished recording that is already in the save folder: copies its file URL (both after-capture settings copy),
+    /// Delivers a finished recording that is already in the save folder: copies its file URL,
     /// then shows the toast with the first frame, whose Show in Finder reveals the file. A copy the pasteboard refuses shows a red toast,
     /// "Saved to ..., copy failed", never "Copied".
     static func deliver(_ file: URL, pasteboard: NSPasteboard, defaults: UserDefaults) async throws -> CGImage {

@@ -667,7 +667,7 @@ final class OverlayController {
             if rect.width < AreaSelection.minimumSize || rect.height < AreaSelection.minimumSize {
                 if mode == .capture {
                     cancelWork()
-                    if !hadSelection { clickHover(framed: framed != event.modifierFlags.contains(.option), copy: true, save: afterCaptureSaves) }
+                    if !hadSelection { clickHover(framed: framed != event.modifierFlags.contains(.option), copy: true, save: false) }
                 }
             } else {
                 release(rect)
@@ -835,14 +835,14 @@ final class OverlayController {
         switch (event.keyCode, command, character) {
         case (53, _, _): dismiss()
         case (36, true, _) where !shift && !option, (76, true, _) where !shift && !option: copyForAgent()
-        case (36, _, _) where hovering && !shift && !option, (76, _, _) where hovering && !shift && !option: clickHover(framed: framed, copy: true, save: afterCaptureSaves, takeDisplay: true)
+        case (36, _, _) where hovering && !shift && !option, (76, _, _) where hovering && !shift && !option: clickHover(framed: framed, copy: true, save: false, takeDisplay: true)
         case (_, true, _) where shift && character.lowercased() == "s":
             if hovering { clickHover(framed: framed, copy: false, save: true, takeDisplay: true, saveAs: true) } else { save(saveAs: true) }
         case (_, false, "e") where hovering && hoverRect != nil: openAsSelection(hoverRect!)
         case (_, false, "w") where hovering:
             // The frontmost window under the pointer, whatever element inside it is hovered, taken as Return takes a hovered window.
             guard let index = windows.firstIndex(where: { $0.contains(pointer) }) else { return false }
-            clickWindow(index, crop: windows[index], framed: framed, copy: true, save: afterCaptureSaves)
+            clickWindow(index, crop: windows[index], framed: framed, copy: true, save: false)
         case (_, false, "k"): cutOut()
         case (_, false, "u"): showColorsMenu()
         case (_, false, "o"): defaults.set(!defaults.bool(forKey: Pref.roundCorners), forKey: Pref.roundCorners)
@@ -888,7 +888,7 @@ final class OverlayController {
         case (_, false, "v"): armRecording()
         // F with nothing selected takes the display at once, as W takes the window; on a selection F grows it to the display and W to
         // the frontmost window holding the selection's center.
-        case (_, false, "f") where hovering: finish(crop: extent, copy: true, save: afterCaptureSaves)
+        case (_, false, "f") where hovering: finish(crop: extent, copy: true, save: false)
         case (_, false, "f"), (_, false, "w"):
             let target = character == "f" ? extent : windows.first { $0.contains(CGPoint(x: selection!.rect.midX, y: selection!.rect.midY)) }
             guard let target else { return false }
@@ -909,14 +909,12 @@ final class OverlayController {
         refresh()
     }
 
-    var afterCaptureSaves: Bool { defaults.string(forKey: Pref.afterCapture) == "copyAndSave" }
-
     func copy() {
         guard let rect = selection?.rect else { return }
         if let index = window(matching: rect) {
-            return clickWindow(index, crop: rect, framed: framed, copy: true, save: afterCaptureSaves)
+            return clickWindow(index, crop: rect, framed: framed, copy: true, save: false)
         }
-        finish(crop: rect, copy: true, save: afterCaptureSaves)
+        finish(crop: rect, copy: true, save: false)
     }
 
     /// The window whose frame `rect` matches within 3 pt on every side: copying it captures the real window shape, not a crop.

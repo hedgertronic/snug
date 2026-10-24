@@ -118,13 +118,13 @@ extension OverlayController {
     /// joined after two frames disagreed on them, the toast says the image may be wrong there.
     private func finishScroll() {
         guard let stitcher, let scrollArea else { return }
-        let (scale, framed, radii, copy, save) = (scale, framed, cornerRadii(of: scrollArea), true, afterCaptureSaves)
+        let (scale, framed, radii) = (scale, framed, cornerRadii(of: scrollArea))
         dismiss()
         commitTask = Task { [pasteboard, defaults] in
             do {
                 let (image, unmatched) = (await stitcher.image(), await stitcher.unmatchedRows)
                 try await Output.deliver(image, crop: CGRect(x: 0, y: 0, width: image.width, height: image.height), framed: framed, scale: scale,
-                                         cornerRadii: radii, copy: copy, save: save,
+                                         cornerRadii: radii, copy: true, save: false,
                                          warning: unmatched > 0 ? "Pinned or moving content: \(unmatched) px may repeat" : nil,
                                          pasteboard: pasteboard, defaults: defaults)
             } catch {

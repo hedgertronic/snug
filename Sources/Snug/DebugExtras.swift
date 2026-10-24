@@ -2246,7 +2246,7 @@ extension DebugRun {
             try capture.write(to: file)
             let trashBoard = NSPasteboard(name: NSPasteboard.Name("snug-toast-trash-\(UUID().uuidString)"))
             holding(trashBoard, file)
-            let trashing = Toast(png: capture, message: "Copied, saved", detail: name, file: file, color: nil, defaults: trashDefaults, pasteboard: trashBoard)
+            let trashing = Toast(png: capture, message: "Saved to F", detail: name, file: file, color: nil, defaults: trashDefaults, pasteboard: trashBoard)
             require(trashing.saveButton.isHidden && !trashing.trashButton.isHidden && !trashing.revealButton.isHidden, "a saved toast shows Trash and Show in Finder, and not Save")
             trashing.trashButton.performClick(nil)
             require(!FileManager.default.fileExists(atPath: file.path) && trashing.png == nil, "Trash removes the saved file and closes the toast: \(name)")
@@ -2297,13 +2297,13 @@ extension DebugRun {
         // closes it as on any other.
         let revealed = saveFolder.appending(path: "snug-reveal.png")
         try capture.write(to: revealed)
-        let revealing = Toast(png: capture, message: "Copied, saved to F", detail: "1200 x 400", file: revealed, color: nil, defaults: trashDefaults,
+        let revealing = Toast(png: capture, message: "Saved to F", detail: "1200 x 400", file: revealed, color: nil, defaults: trashDefaults,
                               pasteboard: NSPasteboard(name: NSPasteboard.Name("snug-toast-reveal-\(UUID().uuidString)")))
         require(revealing.revealButton.toolTip == "Show in Finder" && revealing.actions.arrangedSubviews.firstIndex(of: revealing.revealButton)
                     == revealing.actions.arrangedSubviews.firstIndex(of: revealing.openButton)! + 1, "Show in Finder comes after Open")
         revealing.revealButton.performClick(nil)
         require(Toast.opened! == (revealed, "com.apple.finder"), "Show in Finder would select the saved file in Finder: \(Toast.opened!)")
-        let beside = Toast(png: capture, message: "Copied, saved to F", detail: "1200 x 400", file: revealed, color: nil, defaults: trashDefaults,
+        let beside = Toast(png: capture, message: "Saved to F", detail: "1200 x 400", file: revealed, color: nil, defaults: trashDefaults,
                            pasteboard: NSPasteboard(name: NSPasteboard.Name("snug-toast-beside-\(UUID().uuidString)")))
         let besideThumbnail = beside.lead.convert(beside.lead.bounds, to: nil)
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
