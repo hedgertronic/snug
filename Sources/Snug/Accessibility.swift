@@ -239,6 +239,47 @@ enum Accessibility {
         }
     }
 
+    /// Apps whose text areas are terminal grids, one cell per UTF-16 unit, that answer `AXRangeForLine` and `AXBoundsForRange` with a
+    /// box per visual row (measured on iTerm2 3.6: the visible rows only, 8 pt cells, each row padded to the grid's width).
+    static let terminalApps: Set<String> = ["com.googlecode.iterm2"]
+
+    /// The text areas in `pid`'s windows, each one's frame and its visible rows' text and boxes, in global points. Empty without
+    /// permission, on a timeout, or for an area that does not answer for its rows.
+    @concurrent
+    static func terminalRows(pid: pid_t) async -> [(frame: CGRect, rows: [(text: String, box: CGRect)])] {
+        guard pid != getpid(), AXIsProcessTrusted() else { return [] }
+        let application = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(application, messagingTimeout)
+        func parameter(_ attribute: String, _ element: AXUIElement, _ argument: CFTypeRef) -> CFTypeRef? {
+            var result: CFTypeRef?
+            return AXUIElementCopyParameterizedAttributeValue(element, attribute as CFString, argument, &result) == .success ? result : nil
+        }
+        var areas: [AXUIElement] = []
+        func walk(_ element: AXUIElement, depth: Int) {
+            guard let frame = frame(of: element) else { return }
+            if frame.role == kAXTextAreaRole { return areas.append(element) }
+            guard depth < maxDepth else { return }
+            for child in children(of: element, kAXChildrenAttribute) ?? [] { walk(child, depth: depth + 1) }
+        }
+        for window in children(of: application, kAXWindowsAttribute) ?? [] { walk(window, depth: 0) }
+        return areas.compactMap { area in
+            var raw: CFTypeRef?
+            guard let frame = frame(of: area)?.rect, AXUIElementCopyAttributeValue(area, kAXValueAttribute as CFString, &raw) == .success,
+                  let value = raw as? String as NSString?, value.length > 0,
+                  let last = parameter("AXLineForIndex", area, value.length - 1 as CFNumber) as? Int else { return nil }
+            var rows: [(text: String, box: CGRect)] = []
+            for line in 0...last {
+                var range = CFRange()
+                var box = CGRect.zero
+                guard let lineRange = parameter("AXRangeForLine", area, line as CFNumber), AXValueGetValue(lineRange as! AXValue, .cfRange, &range),
+                      range.location + range.length <= value.length,
+                      let bounds = parameter("AXBoundsForRange", area, lineRange), AXValueGetValue(bounds as! AXValue, .cgRect, &box) else { return nil }
+                rows.append((value.substring(with: NSRange(location: range.location, length: range.length)), box))
+            }
+            return (frame, rows)
+        }
+    }
+
     private static func value<T>(_ attribute: String, of element: AXUIElement, type: AXValueType, as seed: T) -> T? {
         var raw: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &raw) == .success, let raw else { return nil }

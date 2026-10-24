@@ -51,6 +51,13 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             }
             return
         }
+        if arguments.contains("--probe-terminal-text") {
+            Task {
+                await DebugRun.probeTerminalText()
+                exit(EXIT_SUCCESS)
+            }
+            return
+        }
         if arguments.contains("--warm-vision") {
             Task { try! await DebugRun.warmVisionAndExit() }
             return

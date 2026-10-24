@@ -58,6 +58,17 @@ struct TerminalTextTests {
         #expect(TextLayout.paragraphs(TextLayout.rows(lines)) == "copy keeps the whole sentence.\n\n- next")
     }
 
+    @Test func blankCellsReadAsNULsAreSpacesAndIndentsStartTheLayoutBox() {
+        // iTerm2 reads a diff's blank gutter cells as NULs; a row's text keeps them as spaces, so columns stay on the grid.
+        let text = terminal(["\0\0 12 +  }", "    indented"])
+        #expect(text.rows.map(\.text) == ["   12 +  }", "    indented"])
+        #expect(text.position(at: CGPoint(x: 129, y: 205)) == .init(row: 0, column: 4))
+        // The copied lines drop the indent, and their boxes start at the first non-space cell, as OCR boxes would.
+        let lines = text.lines(from: .init(row: 0, column: 0), to: .init(row: 1, column: 12))
+        #expect(lines.map(\.text) == ["12 +  }", "indented"])
+        #expect(lines.map(\.bounds.minX) == [124, 132])
+    }
+
     @Test func anEmptySelectionHasNoLines() {
         let text = terminal(["hello"])
         #expect(text.lines(from: .init(row: 0, column: 2), to: .init(row: 0, column: 2)).isEmpty)

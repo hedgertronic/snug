@@ -2,7 +2,7 @@ import CoreGraphics
 
 /// A terminal's visible text as accessibility reads it (iTerm2, Terminal): one row per visual row of a fixed-width grid, with exact
 /// text, so Text mode selects and copies it without OCR. A row's accessibility box spans its whole range, padding and newline
-/// included, one cell per UTF-16 unit (an emoji's two units are its two cells).
+/// included, one cell per UTF-16 unit (an emoji's two units are its two cells); a blank cell can read as a NUL anywhere in a row.
 public struct TerminalText: Sendable, Equatable {
     /// A caret between characters: `column` characters into `row`'s text.
     public struct Position: Sendable, Comparable {
@@ -15,7 +15,8 @@ public struct TerminalText: Sendable, Equatable {
         public static func < (a: Position, b: Position) -> Bool { (a.row, a.column) < (b.row, b.column) }
     }
 
-    /// Each row's text without its trailing spaces, NULs and newline, and its box in image pixels from its first cell to its text's end.
+    /// Each row's text, NULs as spaces and without its trailing spaces and newline, and its box in image pixels from its first cell to
+    /// its text's end.
     public private(set) var rows: [TextLine]
     /// The rows as accessibility gave them; two reads that differ here mean the terminal changed.
     public let raw: [String]
@@ -35,7 +36,8 @@ public struct TerminalText: Sendable, Equatable {
         var cells: [CGFloat] = []
         for row in rows {
             let cell = row.text.utf16.isEmpty ? 0 : row.box.width / CGFloat(row.text.utf16.count)
-            let text = String(row.text.reversed().drop { [" ", "\0", "\n", "\r"].contains($0) }.reversed())
+            let blanked = row.text.replacingOccurrences(of: "\0", with: " ")
+            let text = String(blanked.reversed().drop { [" ", "\n", "\r"].contains($0) }.reversed())
             var start = 0
             starts.append(text.map { character in
                 defer { start += character.utf16.count }
@@ -69,10 +71,17 @@ public struct TerminalText: Sendable, Equatable {
         return (Position(row: position.row, column: start), Position(row: position.row, column: end))
     }
 
-    /// The selected text between two carets in either order, a line per row that has any, each with its row's whole box so
-    /// `TextLayout` joins soft wraps and spaces paragraphs as it does OCR lines.
+    /// The selected text between two carets in either order, a line per row that has any, as OCR would box it so `TextLayout` joins
+    /// soft wraps and spaces paragraphs as it does OCR lines: without leading spaces, with the box of its row's text from its first
+    /// non-space cell (a partly selected row keeps its whole row's box, as Live Text's partial text does). Rows of only spaces drop.
     public func lines(from a: Position, to b: Position) -> [TextLine] {
-        spans(from: a, to: b).map { TextLine(text: $0.text, bounds: rows[$0.row].bounds) }
+        spans(from: a, to: b).compactMap { span in
+            let text = String(span.text.drop { $0.isWhitespace })
+            guard !text.isEmpty else { return nil }
+            let box = rows[span.row].bounds
+            let x = box.minX + cells[span.row] * CGFloat(starts[span.row][rows[span.row].text.prefix { $0.isWhitespace }.count])
+            return TextLine(text: text, bounds: CGRect(x: x, y: box.minY, width: box.maxX - x, height: box.height))
+        }
     }
 
     /// The selection's highlight between two carets in either order: on each row, the box of its selected characters.
