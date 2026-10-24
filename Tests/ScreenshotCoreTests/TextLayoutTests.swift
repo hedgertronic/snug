@@ -100,7 +100,19 @@ struct TextLayoutTests {
         let page = [TextLine(text: "Page title", bounds: CGRect(x: 25, y: 60, width: 700, height: 17)),
                     term("First paragraph wraps", 25, 100), term("onto a second row.", 25, 119), term("Second paragraph.", 25, 156),
                     term("Settings", 600, 100), term("Keys", 600, 130), term("About", 600, 160)]
-        #expect(paragraphs(page) == "Page title\n\nFirst paragraph wraps onto a second row.\n\nSecond paragraph.\n\nSettings\n\nKeys\n\nAbout")
+        #expect(paragraphs(page) == "Page title\n\nFirst paragraph wraps onto a second row.\n\nSecond paragraph.\n\nSettings\nKeys\nAbout")
+    }
+
+    @Test func evenlySpacedFormRowsGetNoBlankLines() {
+        // Labels and fields 1.26 h apart throughout, fields indented.
+        #expect(paragraphs([term("Address", 25, 100), term("1234 Main St", 39, 138), term("Address 2 (Optional)", 25, 176), term("Apartment or suite", 39, 214)])
+            == "Address\n1234 Main St\nAddress 2 (Optional)\nApartment or suite")
+    }
+
+    @Test func emptyRowsBetweenWrappedParagraphsGiveBlankLines() {
+        let lines = [term("First paragraph runs on", 25, 100), term("to its end.", 25, 119), term("Second paragraph runs on", 25, 156),
+                     term("to its end too.", 25, 175), term("Third.", 25, 212)]
+        #expect(paragraphs(lines) == "First paragraph runs on to its end.\n\nSecond paragraph runs on to its end too.\n\nThird.")
     }
 
     @Test func oneRowWithAWideGapStaysOneLine() {

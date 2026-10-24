@@ -115,8 +115,9 @@ public enum TextLayout {
     /// its median row height h. Lines of a row join with a space. A row joins the previous one with a space when the gap between them
     /// is under 0.6 h, it starts no list marker, and its left edge is within 0.4 h of the previous row's or of where the text after the
     /// previous row's marker starts (a hanging indent). Otherwise it starts a new line, after a blank line when the gap is 0.6 h or
-    /// more. On a terminal a soft wrap leaves a gap of about 0.1 h and an empty row about 1.2 h; a bullet's hanging indent is about
-    /// 0.7 h, so an outdent back to the bullet starts a new line.
+    /// more and at least twice the block's median gap (the lower one of an even count). On a terminal a soft wrap leaves a gap of
+    /// about 0.1 h and an empty row about 1.2 h, so empty rows give blank lines; a form's labels and fields sit about 1.3 h apart
+    /// throughout, so they give none. A bullet's hanging indent is about 0.7 h, so an outdent back to the bullet starts a new line.
     public static func paragraphs(_ rows: [[TextLine]]) -> String {
         let blocks = columns(rows)
         guard blocks.count == 1 else { return blocks.map(paragraphs).joined(separator: "\n\n") }
@@ -124,6 +125,8 @@ public enum TextLayout {
         let marker = /(?:[\u{2022}\u{25E6}\u{25AA}\u{2023}\u{2043}]|(?:[-*+\u{2013}\u{2014}]|\d{1,3}[.)])(?=\s|$))\s*/
         let boxes = rows.map { $0.dropFirst().reduce($0[0].bounds) { $0.union($1.bounds) } }
         let height = boxes.map(\.height).sorted()[boxes.count / 2]
+        let gaps = zip(boxes, boxes.dropFirst()).map { $1.minY - $0.maxY }.sorted()
+        let spacing = gaps.isEmpty ? 0 : gaps[(gaps.count - 1) / 2]
         var text = ""
         for (index, row) in rows.enumerated() {
             let line = row.map(\.text).joined(separator: " ")
@@ -137,7 +140,7 @@ public enum TextLayout {
                 }
                 let gap = box.minY - boxes[index - 1].maxY
                 let aligned = [boxes[index - 1].minX, hang].contains { abs(box.minX - $0) <= 0.4 * height }
-                text += gap >= 0.6 * height ? "\n\n" : aligned && line.prefixMatch(of: marker) == nil ? " " : "\n"
+                text += gap >= 0.6 * height ? (gap >= 2 * spacing ? "\n\n" : "\n") : aligned && line.prefixMatch(of: marker) == nil ? " " : "\n"
             }
             text += line
         }

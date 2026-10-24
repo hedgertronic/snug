@@ -384,8 +384,8 @@ extension DebugRun {
                 "on release the box goes and a Reading text... pill shows while its text is read")
         await overlay.textTask?.value
         let boxed = await copied()
-        require(boxed == "Address\n\n1234 Main St\n\nAddress 2 (Optional)\n\nApartment or suite" && !overlay.window.isVisible,
-                "the release copies the box's lines, a blank line at each paragraph-sized gap, and closes: \(boxed.debugDescription)")
+        require(boxed == "Address\n1234 Main St\nAddress 2 (Optional)\nApartment or suite" && !overlay.window.isVisible,
+                "the release copies the box's lines, evenly spaced so without blank lines, and closes: \(boxed.debugDescription)")
         // A drag that starts on text never draws a box.
         try await open()
         mouse(.leftMouseDown, CGPoint(x: productName.minX + 10, y: productName.midY))
@@ -418,7 +418,7 @@ extension DebugRun {
         pasteboard.clearContents()
         key(cKey, "c", .command)
         let joined = await copied()
-        require(!overlay.window.isVisible && joined == "Product name Brief description\n\nSecond product Brief description\n\n$12\n\n$8",
+        require(!overlay.window.isVisible && joined == "Product name Brief description\n\nSecond product Brief description\n\n$12\n$8",
                 "Cmd-C copies the cart rows the selection spans, the price column after the names and the other column left out, and closes: \(joined.debugDescription) (Live Text: \(lines.debugDescription))")
 
         // Double click selects a word, triple click the line.
