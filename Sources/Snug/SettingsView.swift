@@ -279,9 +279,9 @@ private struct MakerChip: View {
 private struct AppearancePane: View {
     @AppStorage(Pref.overlayAppearance) private var overlayAppearance = "system"
     @AppStorage(Pref.highlightColor) private var highlightColor = ""
-    @AppStorage(Pref.highlightFill) private var highlightFill = 0.0
-    @AppStorage(Pref.highlightFade) private var highlightFade = 0.42
-    @AppStorage(Pref.highlightGlow) private var highlightGlow = 0.5
+    @AppStorage(Pref.highlightFill) private var highlightFill = 0.1
+    @AppStorage(Pref.highlightFade) private var highlightFade = 0.5
+    @AppStorage(Pref.highlightGlow) private var highlightGlow = 0.2
     @AppStorage(Pref.toastPosition) private var toastPosition = "bottomCenter"
     @AppStorage(Pref.toastLifetime) private var toastLifetime = 4
 

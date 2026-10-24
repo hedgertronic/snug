@@ -194,11 +194,12 @@ final class OverlayView: NSView {
             hoverLayer.strokeColor = accent.cgColor
             hoverLayer.lineWidth = 1.5
             glowLayer.shadowColor = accent.cgColor
-            let glow = highlight?.glow ?? 0.5
+            let glow = highlight?.glow ?? 0.2
             glowLayer.shadowOpacity = Float(min(1, glow * 1.6))
             glowLayer.shadowRadius = 4 + 14 * glow
-            hoverLayer.fillColor = (highlight?.fill ?? 0) > 0 ? accent.withAlphaComponent(highlight!.fill).cgColor : nil
-            dimLayer.fillColor = NSColor.black.withAlphaComponent(highlight?.fade ?? 0.42).cgColor
+            let fill = highlight?.fill ?? 0.1
+            hoverLayer.fillColor = fill > 0 ? accent.withAlphaComponent(fill).cgColor : nil
+            dimLayer.fillColor = NSColor.black.withAlphaComponent(highlight?.fade ?? 0.5).cgColor
             hoverRingLayer.strokeColor = accent.withAlphaComponent(0.28).cgColor
             previewLayer.strokeColor = accent.cgColor
             previewLayer.lineWidth = 1.5

@@ -599,8 +599,10 @@ extension DebugRun {
         overlay.dismiss()
         for key in [Pref.highlightColor, Pref.highlightFill, Pref.highlightFade, Pref.highlightGlow] { defaults.removeObject(forKey: key) }
         open()
-        require(abs(overlay.view.dimLayer.fillColor.flatMap(NSColor.init(cgColor:))!.alphaComponent - 0.42) < 0.001 && overlay.view.hoverLayer.fillColor == nil && overlay.view.glowLayer.shadowOpacity > 0,
-                "the defaults are a 42% fade, no fill, and a glow")
+        let defaultFill = overlay.view.hoverLayer.fillColor.flatMap(NSColor.init(cgColor:))
+        require(abs(overlay.view.dimLayer.fillColor.flatMap(NSColor.init(cgColor:))!.alphaComponent - 0.5) < 0.001 && defaultFill.map { abs($0.alphaComponent - 0.1) < 0.001 } == true
+                    && abs(overlay.view.glowLayer.shadowOpacity - Float(0.2 * 1.6)) < 0.001,
+                "the defaults are a 50% fade, a 10% fill, and a 0.2 glow")
         overlay.dismiss()
 
         // The glow, sampled on rendered pixels 3, 6 and 10 pt outside the hover's right edge, against the same frame with no glow.
@@ -610,7 +612,7 @@ extension DebugRun {
             let flatPage = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
             flatPage.setFillColor(gray: gray, alpha: 1)
             flatPage.fill(CGRect(x: 0, y: 0, width: image.width, height: image.height))
-            for fade in [0.0, 0.42] {
+            for fade in [0.0, 0.5] {
                 defaults.set(fade, forKey: Pref.highlightFade)
                 var samples: [Double: [[Int]]] = [:]
                 for glow in [0.0, 0.5, 1.0] {
