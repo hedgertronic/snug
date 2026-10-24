@@ -18,11 +18,13 @@ enum ScreenTextReader {
         }
     }
 
-    /// One app's text areas, by the reader for its kind.
+    /// One app's text areas, by the readers for its kind: a terminal's grid, or its native text and, in a WebKit app, its web content.
     static func texts(pid: pid_t, bundle: String) async -> [ScreenText] {
         if Accessibility.terminalApps.contains(bundle) {
             return await Accessibility.terminalRows(pid: pid).map { ScreenText.grid(rows: $0.rows, frame: $0.frame, window: 0) }
         }
-        return await native(pid: pid)
+        // A window's native text and its web content are read at once; the native reader skips web areas.
+        async let web = webKitApps.contains(bundle) ? webKitTexts(pid: pid) : []
+        return await native(pid: pid) + web
     }
 }
