@@ -24,8 +24,8 @@ final class OverlayWindow: NSPanel {
     var textPress: (point: CGPoint, anchor: Range<String.Index>?)?
     /// Text mode: a press held back from Live Text that draws, moves or resizes the box (the controller's selection) instead.
     var textBox: NSEvent?
-    /// Text mode: a press inside a terminal's text area, which Snug selects in instead of Live Text.
-    var terminalPress = false
+    /// Text mode: a press in text that accessibility exposes, which Snug selects in instead of Live Text.
+    var screenTextPress = false
 
     /// Text mode: a press is down that began on a chrome button, or one that began elsewhere (Live Text's).
     var buttonPress = false
@@ -100,8 +100,8 @@ final class OverlayController {
     var commitTask: Task<Void, Never>?
     /// The reading pill and notice, and the running text analysis, OCR, or translation.
     var text = TextSession()
-    /// The terminal windows' text areas, read through accessibility as the image was captured (`setTerminals`).
-    var terminals: [TerminalText] = []
+    /// The text that apps expose through accessibility, read as the image was captured (`setScreenTexts`).
+    var screenTexts: [ScreenText] = []
     var textTask: Task<Void, Never>?
     /// Turns off the found-text flash that entering Text mode shows; nil once it is off.
     var foundTextHighlight: Task<Void, Never>?
@@ -296,7 +296,7 @@ final class OverlayController {
         dockTiles = []
         accessibilityTask?.cancel()
         accessibilityObservations = [:]
-        terminals = []
+        screenTexts = []
         frozenAt = .now
         let start = ContinuousClock.now
         let shown = signposter.beginInterval("overlay shown")
@@ -1115,8 +1115,8 @@ final class OverlayController {
         overlays.showsHandles = selection != nil && armedRecording == nil
         overlays.showsCornerDots = mode == .capture
         if mode == .text, let rect = selection?.rect, text.box?.rect == rect { overlays.textPills = text.box?.lines?.map(\.bounds) ?? [] }
-        if mode == .text, let selected = text.terminalSelection {
-            overlays.textPills = terminals[selected.terminal].highlight(from: selected.anchor, to: selected.focus)
+        if mode == .text, let selected = text.screenSelection {
+            overlays.textPills = screenTexts[selected.text].highlight(from: selected.anchor, to: selected.focus)
         }
         overlays.flashPills = text.flash ?? []
         overlays.showsOutline = armedRecording == nil

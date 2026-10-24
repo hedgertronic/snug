@@ -51,9 +51,9 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             }
             return
         }
-        if arguments.contains("--probe-terminal-text") {
+        if arguments.contains("--probe-screen-text") {
             Task {
-                await DebugRun.probeTerminalText()
+                await DebugRun.probeScreenText()
                 exit(EXIT_SUCCESS)
             }
             return
@@ -75,7 +75,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             return CGImageSourceCreateImageAtIndex(source, 0, nil)!
         }
         let imageRuns = ["--verify-area-ui", "--verify-extras-ui", "--verify-toast-trash", "--verify-text-ui", "--measure", "--render-states",
-                         "--loupe-frames", "--memory-steps", "--verify-agent-ui", "--render-toasts", "--verify-terminal-text-ui"]
+                         "--loupe-frames", "--memory-steps", "--verify-agent-ui", "--render-toasts", "--verify-screen-text-ui"]
         if let image, imageRuns.contains(where: arguments.contains) {
             let frame = imageFrame(for: image)
             Task {
@@ -93,8 +93,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                         try await DebugRun.verifyAgent(into: URL(fileURLWithPath: arguments[index + 1]), image: image, frame: frame, overlay: overlay)
                     } else if arguments.contains("--measure") {
                         try await DebugRun.measure(image: image, frame: frame, overlay: overlay)
-                    } else if arguments.contains("--verify-terminal-text-ui") {
-                        try await DebugRun.verifyTerminalText(image: image, frame: frame, overlay: overlay)
+                    } else if arguments.contains("--verify-screen-text-ui") {
+                        try await DebugRun.verifyScreenText(image: image, frame: frame, overlay: overlay)
                     } else if arguments.contains("--verify-text-ui") {
                         try await DebugRun.verifyText(image: image, frame: frame, overlay: overlay)
                     } else if arguments.contains("--verify-toast-trash") {
@@ -312,8 +312,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         captureTask = Task {
             do {
                 let capturing = signposter.beginInterval("capture")
-                // Terminal text is read as the pixels are grabbed, so it matches the frozen image (`OverlayController.setTerminals`).
-                async let terminalText = OverlayController.readTerminalText()
+                // Accessibility text is read as the pixels are grabbed, so it matches the frozen image (`OverlayController.setScreenTexts`).
+                async let screenText = ScreenTextReader.read()
                 let image = try await DisplayCapture.image(of: id)
                 signposter.endInterval("capture", capturing)
                 let captured = clock.now
@@ -356,8 +356,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 signposter.endInterval("windows", listing)
                 openLog.notice("open: capture \(ms(pressed, captured)) ms, present \(ms(captured, presented)) ms, list \(ms(presented, listed)) ms, main \(ms(listed, resumed)) ms, dock \(dock, privacy: .public), windows \(ms(presented, clock.now)) ms")
                 if overlay.image === image { overlay.setWindows(windows.map(\.rect), names: windows.map(\.name), ids: windows.map(\.id), frozen: windows.map(\.frozen), pointer: NSEvent.mouseLocation) }
-                let read = await terminalText
-                if overlay.image === image { overlay.setTerminals(read) }
+                let read = await screenText
+                if overlay.image === image { overlay.setScreenTexts(read) }
             } catch is CancellationError {
             } catch {
                 Toast.show(message: "Capture failed", detail: error.localizedDescription, color: .systemRed)
