@@ -69,6 +69,22 @@ struct TerminalTextTests {
         #expect(lines.map(\.bounds.minX) == [124, 132])
     }
 
+    @Test func aClaudeCodeMessageWrappedUnderItsDotJoins() {
+        // Claude Code starts a message with a dot and wraps it under the text after the dot.
+        let text = terminal(["\u{23FA} The paste is ok", "  and the highlight."])
+        let lines = text.lines(from: .init(row: 0, column: 0), to: .init(row: 1, column: 20))
+        #expect(TextLayout.paragraphs(TextLayout.rows(lines)) == "\u{23FA} The paste is ok and the highlight.")
+    }
+
+    @Test func aRowThatFillsTheGridKeepsTheGridsCellsThoughItsBoxRunsOn() {
+        // iTerm2 boxes a full row with no newline from its start to the next row's start: no width, two rows tall.
+        let text = TerminalText(rows: [("abc\n", CGRect(x: 100, y: 200, width: 32, height: 16)), ("defg", CGRect(x: 100, y: 216, width: 0, height: 32)),
+                                       ("hi", CGRect(x: 100, y: 232, width: 16, height: 16))], frame: .zero, window: 0)
+        #expect(text.rows.map(\.bounds) == [CGRect(x: 100, y: 200, width: 24, height: 16), CGRect(x: 100, y: 216, width: 32, height: 16),
+                                             CGRect(x: 100, y: 232, width: 16, height: 16)])
+        #expect(text.position(at: CGPoint(x: 117, y: 220)) == .init(row: 1, column: 2))
+    }
+
     @Test func anEmptySelectionHasNoLines() {
         let text = terminal(["hello"])
         #expect(text.lines(from: .init(row: 0, column: 2), to: .init(row: 0, column: 2)).isEmpty)

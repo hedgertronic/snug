@@ -2,7 +2,9 @@ import CoreGraphics
 
 /// A terminal's visible text as accessibility reads it (iTerm2, Terminal): one row per visual row of a fixed-width grid, with exact
 /// text, so Text mode selects and copies it without OCR. A row's accessibility box spans its whole range, padding and newline
-/// included, one cell per UTF-16 unit (an emoji's two units are its two cells); a blank cell can read as a NUL anywhere in a row.
+/// included, one cell per UTF-16 unit (an emoji's two units are its two cells); a blank cell can read as a NUL anywhere in a row. A
+/// row that fills the grid with no newline gets a box that runs into the next row (iTerm2: no width, two rows tall), so the cell
+/// width and row height are the grid's, from the rows of the most common height, and a row's own box gives only its top-left corner.
 public struct TerminalText: Sendable, Equatable {
     /// A caret between characters: `column` characters into `row`'s text.
     public struct Position: Sendable, Comparable {
@@ -24,18 +26,20 @@ public struct TerminalText: Sendable, Equatable {
     public let frame: CGRect
     public let window: Int
     private let starts: [[Int]]
-    private let cells: [CGFloat]
+    private let cell: CGFloat
 
     /// `rows` are each row's text and accessibility box, already in image pixels.
     public init(rows: [(text: String, box: CGRect)], frame: CGRect, window: Int) {
         raw = rows.map(\.text)
         self.frame = frame
         self.window = window
+        let heights = rows.map(\.box.height).filter { $0 > 0 }
+        let height = heights.max { a, b in heights.count { $0 == a } < heights.count { $0 == b } } ?? 0
+        let widths = rows.filter { $0.box.height == height && $0.box.width > 0 && !$0.text.utf16.isEmpty }.map { $0.box.width / CGFloat($0.text.utf16.count) }.sorted()
+        let cell = widths.isEmpty ? 0 : widths[widths.count / 2]
         var lines: [TextLine] = []
         var starts: [[Int]] = []
-        var cells: [CGFloat] = []
         for row in rows {
-            let cell = row.text.utf16.isEmpty ? 0 : row.box.width / CGFloat(row.text.utf16.count)
             let blanked = row.text.replacingOccurrences(of: "\0", with: " ")
             let text = String(blanked.reversed().drop { [" ", "\n", "\r"].contains($0) }.reversed())
             var start = 0
@@ -43,19 +47,18 @@ public struct TerminalText: Sendable, Equatable {
                 defer { start += character.utf16.count }
                 return start
             } + [text.utf16.count])
-            cells.append(cell)
-            lines.append(TextLine(text: text, bounds: CGRect(x: row.box.minX, y: row.box.minY, width: cell * CGFloat(text.utf16.count), height: row.box.height)))
+            lines.append(TextLine(text: text, bounds: CGRect(x: row.box.minX, y: row.box.minY, width: cell * CGFloat(text.utf16.count), height: height)))
         }
         self.rows = lines
         self.starts = starts
-        self.cells = cells
+        self.cell = cell
     }
 
     /// The caret nearest `point` (image pixels): on the row whose box spans its y (the first row above them all, the last below), before
     /// the first character whose middle is right of it; past a row's text, at its end.
     public func position(at point: CGPoint) -> Position {
         guard let row = rows.firstIndex(where: { point.y < $0.bounds.maxY }) else { return Position(row: rows.count - 1, column: rows.last!.text.count) }
-        let box = rows[row].bounds, starts = starts[row], cell = cells[row]
+        let box = rows[row].bounds, starts = starts[row]
         let column = zip(starts, starts.dropFirst()).prefix { box.minX + cell * CGFloat($0 + $1) / 2 < point.x }.count
         return Position(row: row, column: column)
     }
@@ -79,7 +82,7 @@ public struct TerminalText: Sendable, Equatable {
             let text = String(span.text.drop { $0.isWhitespace })
             guard !text.isEmpty else { return nil }
             let box = rows[span.row].bounds
-            let x = box.minX + cells[span.row] * CGFloat(starts[span.row][rows[span.row].text.prefix { $0.isWhitespace }.count])
+            let x = box.minX + cell * CGFloat(starts[span.row][rows[span.row].text.prefix { $0.isWhitespace }.count])
             return TextLine(text: text, bounds: CGRect(x: x, y: box.minY, width: box.maxX - x, height: box.height))
         }
     }
@@ -87,7 +90,7 @@ public struct TerminalText: Sendable, Equatable {
     /// The selection's highlight between two carets in either order: on each row, the box of its selected characters.
     public func highlight(from a: Position, to b: Position) -> [CGRect] {
         spans(from: a, to: b).map { span in
-            let box = rows[span.row].bounds, starts = starts[span.row], cell = cells[span.row]
+            let box = rows[span.row].bounds, starts = starts[span.row]
             return CGRect(x: box.minX + cell * CGFloat(starts[span.columns.lowerBound]), y: box.minY,
                           width: cell * CGFloat(starts[span.columns.upperBound] - starts[span.columns.lowerBound]), height: box.height)
         }

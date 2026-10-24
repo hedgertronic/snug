@@ -178,8 +178,9 @@ public enum TextLayout {
     /// no soft wrap; a short header over its message (a chat's name and time) was not full.
     static func wraps(_ rows: [[TextLine]]) -> [Bool] {
         guard !rows.isEmpty else { return [] }
-        // A bullet, or a hyphen, dash, star, plus or number with a period or parenthesis before a space, and the spaces after it.
-        let marker = /(?:[\u{2022}\u{25E6}\u{25AA}\u{2023}\u{2043}]|(?:[-*+\u{2013}\u{2014}]|\d{1,3}[.)])(?=\s|$))\s*/
+        // A bullet (Claude Code's message dot and tool-result corner too), or a hyphen, dash, star, plus or number with a period or
+        // parenthesis before a space, and the spaces after it.
+        let marker = /(?:[\u{2022}\u{25E6}\u{25AA}\u{2023}\u{2043}\u{23FA}\u{23BF}]|(?:[-*+\u{2013}\u{2014}]|\d{1,3}[.)])(?=\s|$))\s*/
         let boxes = rows.map { $0.dropFirst().reduce($0[0].bounds) { $0.union($1.bounds) } }
         let height = boxes.map(\.height).sorted()[boxes.count / 2]
         let right = boxes.map(\.maxX).max()!
