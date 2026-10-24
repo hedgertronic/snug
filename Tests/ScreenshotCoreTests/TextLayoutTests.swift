@@ -98,9 +98,23 @@ struct TextLayoutTests {
 
     @Test func columnsComeOneAfterAnotherNotInterleaved() {
         let page = [TextLine(text: "Page title", bounds: CGRect(x: 25, y: 60, width: 700, height: 17)),
-                    term("First paragraph wraps", 25, 100), term("onto a second row.", 25, 119), term("Second paragraph.", 25, 156),
-                    term("Settings", 600, 100), term("Keys", 600, 130), term("About", 600, 160)]
-        #expect(paragraphs(page) == "Page title\n\nFirst paragraph wraps onto a second row.\n\nSecond paragraph.\n\nSettings\nKeys\nAbout")
+                    term("First paragraph wraps here", 25, 100), term("onto a second row and", 25, 119), term("a third row.", 25, 138),
+                    term("Second paragraph.", 25, 175), term("Settings", 600, 100), term("Keys", 600, 130), term("About", 600, 160)]
+        #expect(paragraphs(page) == "Page title\n\nFirst paragraph wraps here onto a second row and a third row.\n\nSecond paragraph.\n\nSettings\nKeys\nAbout")
+    }
+
+    @Test func aCartWithOneLabelOverItsValueKeepsPricesInTheirRows() {
+        // form-test.png's cart in image pixels: titles over smaller subtitles, a promo label over its code, prices on the right.
+        func box(_ text: String, _ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat) -> TextLine {
+            TextLine(text: text, bounds: CGRect(x: x, y: y, width: width, height: height))
+        }
+        let cart = [box("Product name", 1689, 415, 213, 37), box("$12", 2125, 417, 60, 33), box("Brief description", 1689, 458, 220, 26),
+                    box("Second product", 1685, 528, 250, 41), box("$8", 2140, 528, 45, 33), box("Brief description", 1689, 573, 220, 26),
+                    box("Third item", 1685, 642, 157, 34), box("$5", 2140, 640, 45, 33), box("Brief description", 1686, 685, 220, 30),
+                    box("Promo code", 1685, 752, 187, 37), box("-$5", 2121, 759, 63, 30), box("EXAMPLECODE", 1686, 800, 212, 30),
+                    box("Total (USD)", 1685, 878, 175, 34), box("$20", 2117, 878, 67, 33)]
+        let text = paragraphs(cart)
+        #expect(["Product name $12", "Second product $8", "Third item $5", "Promo code -$5", "Total (USD) $20"].allSatisfy(text.contains), "\(text)")
     }
 
     @Test func evenlySpacedFormRowsGetNoBlankLines() {
@@ -118,7 +132,7 @@ struct TextLayoutTests {
     @Test func anItemAndPriceListKeepsItsRowsWhole() {
         #expect(paragraphs([term("Coffee", 25, 100), term("$4", 300, 100), term("Bagel", 25, 130), term("$3", 300, 130),
                             term("Orange juice", 25, 160), term("$5", 300, 160)]) == "Coffee $4\nBagel $3\nOrange juice $5")
-        // A cart: each item's smaller subtitle joins it, but a title over a subtitle is no prose, so the prices stay in their rows.
+        // A cart: each item's subtitle joins it, but a two-word title over a subtitle is no prose, so the prices stay in their rows.
         func cart(_ text: String, _ x: CGFloat, _ y: CGFloat, _ height: CGFloat) -> TextLine {
             TextLine(text: text, bounds: CGRect(x: x, y: y, width: CGFloat(text.count) * 8, height: height))
         }

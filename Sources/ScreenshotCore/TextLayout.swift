@@ -87,17 +87,19 @@ public enum TextLayout {
 
     /// Splits rows into blocks in reading order: where two or more rows of an unbroken run have a cell (the table rule's wide gap)
     /// starting at the same x, within half a line height, and no line of the run crosses that x, the run may be two columns. It is
-    /// when it is prose side by side: one part has a soft wrap (`wraps`) between rows of one size (a title over a smaller subtitle is
-    /// not one). Then its left part comes before its right part, and the rows above and below the run, and each part, split again
-    /// the same way. Rows that each stand alone (label and value, item and price) and a single row with a wide gap stay whole.
+    /// when it is prose side by side: in one part, soft wraps (`wraps`) after rows of 4 or more words number at least 2 and at least
+    /// a third of its rows. A label over its value or a title over its subtitle (a cart's "Product name" over "Brief description",
+    /// whose OCR boxes can be the same height) has fewer words. Then its left part comes before its right part, and the rows above
+    /// and below the run, and each part, split again the same way. Rows that each stand alone (label and value, item and price) and
+    /// a single row with a wide gap stay whole.
     static func columns(_ rows: [[TextLine]]) -> [[[TextLine]]] {
         guard !rows.isEmpty else { return [] }
         let heights = rows.joined().map(\.bounds.height).sorted()
         let tolerance = heights[heights.count / 2] / 2
         let edges = rows.flatMap { row in zip(row, row.dropFirst()).filter { $1.bounds.minX - $0.bounds.maxX > $0.bounds.height }.map(\.1.bounds.minX) }
         func prose(_ part: [[TextLine]]) -> Bool {
-            let sizes = part.map { $0.dropFirst().reduce($0[0].bounds) { $0.union($1.bounds) }.height }
-            return zip(wraps(part), sizes.indices).contains { $0 && min(sizes[$1], sizes[$1 - 1]) >= 0.75 * max(sizes[$1], sizes[$1 - 1]) }
+            let joins = zip(wraps(part), part.indices).filter { $0 && part[$1 - 1].flatMap { $0.text.split(separator: " ") }.count >= 4 }.count
+            return joins >= 2 && 3 * joins >= part.count
         }
         for x in Set(edges).sorted() {
             func crosses(_ line: TextLine) -> Bool { line.bounds.minX < x - tolerance && line.bounds.maxX > x }

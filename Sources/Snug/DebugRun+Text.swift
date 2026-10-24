@@ -447,10 +447,8 @@ extension DebugRun {
         pasteboard.clearContents()
         key(returnKey, "\r")
         let allCopied = await copied() ?? ""
-        let leftEnd = allCopied.range(of: "Save this information for next time"), cartStart = allCopied.range(of: "Product name")
-        require(allCopied.hasPrefix("Below is an example form") && leftEnd != nil && cartStart != nil && leftEnd!.upperBound < cartStart!.lowerBound
-                    && !allCopied.split(separator: "\n").contains { $0.contains("Username") && $0.contains("Brief description") },
-                "Return copies all of it, the left column before the cart and no line mixing the two: \(allCopied.debugDescription)")
+        require(allCopied.hasPrefix("Below is an example form") && allCopied.hasSuffix("Save this information for next time") && allCopied.contains("Product name $12"),
+                "Return copies all of it; the form beside the cart is no prose, so rows stay whole with their prices: \(allCopied.debugDescription)")
 
         // C copies the color under the pointer.
         try await open()
