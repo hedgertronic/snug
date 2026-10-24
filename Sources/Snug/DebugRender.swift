@@ -742,7 +742,8 @@ extension DebugRun {
     /// `--render-toasts DIR`: the toast in each state, in the light and the dark look, as `toast-<state>-<look>.png` on a backdrop of
     /// that look; the preview states draw the preview panel where it sits by the capsule. Checks the sizes the design fixes: one line
     /// is 40 pt tall, a long warning two lines, the capsule at most 360 pt wide; the preview of a very tall and a very wide capture
-    /// at 72 pt on their short side, cropped at the top and in the middle; hovering and the preview moving or resizing nothing.
+    /// at 72 pt on their short side, cropped at the top and in the middle; hovering and the preview moving or resizing nothing. Then a stack
+    /// of three toasts as `toast-stack-<look>.png`.
     static func renderToasts(into directory: URL, image: CGImage) async throws {
         Toast.isSuppressed = true
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -866,6 +867,16 @@ extension DebugRun {
                 }
                 toast.dismiss()
             }
+        }
+        // A stack of three, the newest at the bottom, with the middle one's preview, as `toast-stack-<look>.png`.
+        for (look, backdrop) in [(NSAppearance.Name.aqua, NSColor(srgbRed: 0.84, green: 0.87, blue: 0.93, alpha: 1)), (.darkAqua, NSColor(srgbRed: 0.13, green: 0.15, blue: 0.22, alpha: 1))] {
+            NSApp.appearance = NSAppearance(named: look)
+            let stacked = [Toast(png: tall, message: "Copied", detail: "1280 x 9000", file: nil, color: nil, defaults: defaults),
+                           Toast(png: screenshot, message: "Copied, saved to Desktop", detail: "1280 x 800", file: URL(fileURLWithPath: "/tmp/Snug.png"), color: nil, defaults: defaults),
+                           Toast(png: nil, message: "Copied", detail: "#3A7BD5", file: nil, color: swatch, text: "#3A7BD5", defaults: defaults)]
+            for toast in stacked { Toast.stack(toast) }
+            try renderPanels(stacked + [stacked[1].preview!], on: backdrop, to: directory.appending(path: "toast-stack-\(look == .aqua ? "light" : "dark").png"))
+            for toast in stacked { toast.dismiss() }
         }
         NSApp.appearance = nil
     }

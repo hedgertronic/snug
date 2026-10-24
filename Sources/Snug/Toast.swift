@@ -12,11 +12,17 @@ import ScreenshotCore
 /// pointer can cross to it without either closing. Drag the thumbnail or the preview to drop the image, or click either to open it as
 /// Open does; a click elsewhere closes the toast, and a saved toast reveals the file first. It goes away after the lifetime setting (4 s unless changed) while the pointer is elsewhere, and
 /// stays while it is over the toast or its preview; leaving starts the full lifetime again. A lifetime of 0 shows only failure toasts
-/// (red), for 4 s; Forever keeps the toast until it is closed or replaced.
+/// (red), for 4 s; Forever keeps the toast until it is closed or drops off the stack.
+/// Toasts stack, each on its own timer: the newest at the anchor and the older ones a gap further from it (up from a bottom anchor, down
+/// from the top right). Closing one settles the ones past it back toward the anchor; a new one that makes the stack taller than a third of
+/// the screen's visible height closes the oldest.
 /// The capture is held only while the toast is visible: `dismiss` releases it.
 @MainActor
 final class Toast: NSPanel, NSDraggingSource {
-    private static var current: Toast?
+    /// The toasts on screen, oldest first.
+    private(set) static var shown: [Toast] = []
+    /// The space between stacked capsules.
+    static let gap: CGFloat = 8
     /// Debug runs set this so scripted copies never put a toast on screen or open Preview.
     static var isSuppressed = false
     /// Transparent margin around the capsule, so the close button can hang off a corner; it is also the gap to the preview.
@@ -62,8 +68,12 @@ final class Toast: NSPanel, NSDraggingSource {
     private var overPreview = false
     private var thumbnailArea: NSTrackingArea?
     private var previewArea: NSTrackingArea?
-    /// The preview's frame on screen, and the thumbnail-sized frame at its edge by the capsule that it grows from.
-    private var previewFrames = (from: CGRect.zero, to: CGRect.zero)
+    /// The preview's frame, and the thumbnail-sized frame at its edge by the capsule that it grows from, relative to the toast's origin.
+    private var previewOffsets = (from: CGRect.zero, to: CGRect.zero)
+    /// The toast's origin at the anchor, whether the stack grows down from it (the top right), and the visible screen it is on.
+    private var anchor = NSPoint.zero
+    private var fromTop = false
+    private var screenArea = CGRect.zero
     private var settle: Task<Void, any Error>?
     /// The ends of the hover fade and of the preview's shrink: hiding the faded side, and ordering out the preview.
     private var fade: Task<Void, any Error>?
@@ -74,11 +84,39 @@ final class Toast: NSPanel, NSDraggingSource {
     static func show(png: Data? = nil, message: String, detail: String = "", file: URL? = nil, color: NSColor? = nil, text: String? = nil,
                      defaults: UserDefaults = .standard, pasteboard: NSPasteboard = .general) {
         guard !isSuppressed, defaults.integer(forKey: Pref.toastLifetime) != 0 || color == .systemRed else { return }
-        current?.dismiss()
         let toast = Toast(png: png, message: message, detail: detail, file: file, color: color, text: text, defaults: defaults, pasteboard: pasteboard)
-        current = toast
+        stack(toast)
         toast.orderFrontRegardless()
         toast.scheduleDismissal()
+    }
+
+    /// Adds a toast at the anchor and moves the others away from it, closing the oldest while the stack is taller than a third of the screen.
+    static func stack(_ toast: Toast) {
+        shown.append(toast)
+        while shown.count > 1 && shown.reduce(-gap, { $0 + $1.card.frame.height + gap }) > toast.screenArea.height / 3 { shown[0].dismiss() }
+        layout()
+    }
+
+    /// Places the toasts from the newest at its anchor, each a gap past the one after it, with each preview by its own toast. A toast on
+    /// screen slides to its place over 0.2 s (at once under Reduce Motion); one off screen is put there.
+    private static func layout() {
+        var offset: CGFloat = 0
+        for toast in shown.reversed() {
+            let place = CGRect(origin: CGPoint(x: toast.anchor.x, y: toast.anchor.y + (toast.fromTop ? -offset : offset)), size: toast.frame.size)
+            offset += toast.card.frame.height + gap
+            // A preview shrinking away keeps shrinking toward the thumbnail.
+            let peek = (toast.preview?.isVisible == true && !toast.isPeeking ? toast.previewOffsets.from : toast.previewOffsets.to).offsetBy(dx: place.minX, dy: place.minY)
+            if toast.isVisible && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.2
+                    toast.animator().setFrame(place, display: true)
+                    toast.preview?.animator().setFrame(peek, display: true)
+                }
+            } else {
+                toast.setFrame(place, display: false)
+                toast.preview?.setFrame(peek, display: false)
+            }
+        }
     }
 
     func scheduleDismissal() {
@@ -96,7 +134,10 @@ final class Toast: NSPanel, NSDraggingSource {
         settle?.cancel()
         orderOut(nil)
         preview?.orderOut(nil)
-        if Toast.current === self { Toast.current = nil }
+        if let index = Toast.shown.firstIndex(where: { $0 === self }) {
+            Toast.shown.remove(at: index)
+            Toast.layout()
+        }
         png = nil
         lead.layer?.contents = nil
         preview?.contentView!.layer!.contents = nil
@@ -237,7 +278,7 @@ final class Toast: NSPanel, NSDraggingSource {
         root.addSubview(card)
         root.addSubview(closeButton)
         contentView = root
-        let screenArea = (NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main!).visibleFrame
+        screenArea = (NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main!).visibleFrame
         let position = defaults.string(forKey: Pref.toastPosition)!
         let origin = switch position {
         case "bottomRight": NSPoint(x: screenArea.maxX - size.width - 20, y: screenArea.minY + 48)
@@ -245,6 +286,8 @@ final class Toast: NSPanel, NSDraggingSource {
         default: NSPoint(x: (screenArea.midX - size.width / 2).rounded(), y: screenArea.minY + 48)
         }
         setFrame(CGRect(x: origin.x - margin, y: origin.y - margin, width: size.width + 2 * margin, height: size.height + 2 * margin), display: false)
+        anchor = frame.origin
+        fromTop = position == "topRight"
         root.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
         guard let image else { return }
 
@@ -252,9 +295,8 @@ final class Toast: NSPanel, NSDraggingSource {
         // as the thumbnail is. It starts at the thumbnail's left edge, kept on screen, a margin above the capsule (below it at the top right).
         let fit = min(1, 240 / image.size.width, 160 / image.size.height)
         let previewSize = CGSize(width: max(72, (image.size.width * fit).rounded()), height: max(72, (image.size.height * fit).rounded()))
-        let below = position == "topRight"
         let thumbnail = lead.convert(lead.bounds, to: nil)
-        let previewFrame = CGRect(x: min(frame.minX + thumbnail.minX, screenArea.maxX - 20 - previewSize.width), y: below ? frame.minY - previewSize.height : frame.maxY,
+        let previewFrame = CGRect(x: min(frame.minX + thumbnail.minX, screenArea.maxX - 20 - previewSize.width), y: fromTop ? frame.minY - previewSize.height : frame.maxY,
                                   width: previewSize.width, height: previewSize.height)
         let panel = ToastPreview(contentRect: previewFrame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.level = level
@@ -291,7 +333,8 @@ final class Toast: NSPanel, NSDraggingSource {
         picture.addTrackingArea(area)
         previewArea = area
         preview = panel
-        previewFrames = (CGRect(x: frame.minX + thumbnail.minX, y: below ? frame.minY - thumbnail.height : frame.maxY, width: thumbnail.width, height: thumbnail.height), previewFrame)
+        previewOffsets = (CGRect(x: thumbnail.minX, y: fromTop ? -thumbnail.height : frame.height, width: thumbnail.width, height: thumbnail.height),
+                          previewFrame.offsetBy(dx: -frame.minX, dy: -frame.minY))
         let thumbnailRect = NSTrackingArea(rect: thumbnail, options: [.mouseEnteredAndExited, .activeAlways], owner: self)
         root.addTrackingArea(thumbnailRect)
         thumbnailArea = thumbnailRect
@@ -346,14 +389,15 @@ final class Toast: NSPanel, NSDraggingSource {
         guard let preview, peeking != isPeeking else { return }
         isPeeking = peeking
         guard isVisible else { return }
+        let (from, to) = (previewOffsets.from.offsetBy(dx: frame.minX, dy: frame.minY), previewOffsets.to.offsetBy(dx: frame.minX, dy: frame.minY))
         if peeking && !preview.isVisible {
-            preview.setFrame(previewFrames.from, display: false)
+            preview.setFrame(from, display: false)
             preview.alphaValue = 0
             preview.orderFrontRegardless()
         }
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.18
-            preview.animator().setFrame(peeking ? previewFrames.to : previewFrames.from, display: true)
+            preview.animator().setFrame(peeking ? to : from, display: true)
             preview.animator().alphaValue = peeking ? 1 : 0
         }
         peekFade?.cancel()

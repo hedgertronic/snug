@@ -781,6 +781,30 @@ extension DebugRun {
         print("toast after close: toast released \(weakToast == nil), preview released \(weakPreview == nil)")
         require(weakToast == nil && weakPreview == nil, "the toast and its preview are freed once closed")
 
+        // Toasts stack (kept off screen here): the newest at the anchor and the older ones a gap above it, each preview above its own
+        // toast; closing the middle one settles the top one into its place, and a stack past a third of the visible screen drops its oldest.
+        let stacked = [toast(), toast(), toast()]
+        for each in stacked { Toast.stack(each) }
+        func capsule(_ toast: Toast) -> CGRect { toast.card.frame.offsetBy(dx: toast.frame.minX, dy: toast.frame.minY) }
+        let middleFrame = stacked[1].frame
+        require(Toast.shown.elementsEqual(stacked, by: ===) && stacked[2].frame == plain.frame && capsule(stacked[1]).minY - capsule(stacked[2]).maxY == Toast.gap
+                    && capsule(stacked[0]).minY - capsule(stacked[1]).maxY == Toast.gap && stacked.allSatisfy { $0.preview!.frame.minY == $0.frame.maxY },
+                "three toasts stack newest at the anchor, the others a gap above with no overlap, each preview above its own toast: \(stacked.map { capsule($0) })")
+        stacked[1].dismiss()
+        require(Toast.shown.elementsEqual([stacked[0], stacked[2]], by: ===) && stacked[0].frame == middleFrame && stacked[2].frame == plain.frame && stacked[0].preview!.frame.minY == middleFrame.maxY,
+                "closing the middle toast settles the top one into its place, with its preview: \(stacked[0].frame) \(middleFrame)")
+        var added: [Toast] = []
+        while Toast.shown.first === stacked[0] {
+            added.append(toast())
+            Toast.stack(added.last!)
+        }
+        let stackHeight = Toast.shown.reduce(-Toast.gap) { $0 + $1.card.frame.height + Toast.gap }
+        require(stacked[0].png == nil && Toast.shown.first === stacked[2] && stackHeight <= screenArea.height / 3 && stackHeight + 40 + Toast.gap > screenArea.height / 3
+                    && capsule(Toast.shown.last!).minY == capsule(plain).minY,
+                "a toast that takes the stack past a third of the visible screen drops the oldest: \(Toast.shown.count) toasts, \(stackHeight) of \(screenArea.height)")
+        for each in Toast.shown { each.dismiss() }
+        require(Toast.shown.isEmpty, "closing every toast empties the stack")
+
         plain.scheduleDismissal()
         plain.mouseEntered(with: hoverEvent)
         require(plain.dismissal!.isCancelled, "the toast stays while the pointer is over it")
