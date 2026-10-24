@@ -36,13 +36,19 @@ public struct HandoffServer: Sendable {
 
     static var tools: [[String: Any]] { [
         ["name": "get_capture",
-         "description": "Returns a screenshot the user handed you with Snug's Copy for Agent (Cmd-Return): the image, unstyled and at full "
-            + "resolution, and its manifest (app, window, the element's accessibility role and title, its ancestors, and coordinates). Pass "
-            + "the id from the user's \"[Snug capture ID: ...]\" reference, or \"latest\" for the current capture. Only the most "
-            + "recent capture is kept: the next Copy for Agent replaces it. Image pixel (x, y) is the global screen point "
-            + "(geometry.crop_global.x + x / image.scale, geometry.crop_global.y + y / image.scale). Snug never takes a new "
-            + "screenshot: a replaced capture is an error. A capture over \(imageSide) px on its long side or 3.75 MB "
-            + "comes back as a smaller copy, with returned_image giving its size and scale_to_capture; zoom returns full resolution.",
+         "description": ["Returns a screenshot the user handed you with Snug's Copy for Agent (Cmd-Return): the image, unstyled and at full ",
+            "resolution, and its manifest: the app (name, bundle id, bundle path, version), the window (title, frame, and its open ",
+            "document's file URL as source.document), a web page's URL and title (source.url, source.page_title), the display, and the target: ",
+            "its accessibility role, subrole, role description, title, identifier (AXIdentifier, often set in code), description, value ",
+            "(cut short; a few KB for text), help, placeholder, labeled_by, url, enabled/focused/selected, frame, up to 20 children and ",
+            "siblings (role and name), and ancestors innermost first; inside a web page also dom_id, dom_classes (on ancestors too) and a ",
+            "CSS-like selector to search the source for. target.provenance \"accessibility\" means the element's frame is the capture; ",
+            "otherwise the accessibility fields describe the element holding the capture or under its center, at target.frame. Pass ",
+            "the id from the user's \"[Snug capture ID: ...]\" reference, or \"latest\" for the current capture. Only the most ",
+            "recent capture is kept: the next Copy for Agent replaces it. Image pixel (x, y) is the global screen point ",
+            "(geometry.crop_global.x + x / image.scale, geometry.crop_global.y + y / image.scale). Snug never takes a new ",
+            "screenshot: a replaced capture is an error. A capture over \(imageSide) px on its long side or 3.75 MB ",
+            "comes back as a smaller copy, with returned_image giving its size and scale_to_capture; zoom returns full resolution."].joined(),
          "inputSchema": ["type": "object", "properties": ["id": ["type": "string", "description": "A capture id, or \"latest\"."]], "required": ["id"]]],
         ["name": "zoom",
          "description": "Returns a crop of a capture's stored image, in image pixels, at most \(zoomLimit) px a side. Pixel (u, v) of the crop "

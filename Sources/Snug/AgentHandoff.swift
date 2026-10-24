@@ -14,8 +14,9 @@ extension OverlayController {
     /// Copies the selection, or the hovered target, for an agent. The crop is the frozen pixels at full resolution with no Frame and
     /// no rounded corners, so its pixels map one-to-one to the screen. It is written with its manifest as a bundle in the agent folder,
     /// then copied as one clipboard item: the PNG (the manifest in its text chunk), the reference line, and the manifest.
-    /// The target's Accessibility data is what the hover read for this rectangle; without it (a drawn area, a candidate from geometry),
-    /// one hit test at the crop's center, only on a live capture outside debug runs. The source is the window holding the crop.
+    /// The target's Accessibility data comes from one read at the crop's center (`Accessibility.handoff`), only on a live capture outside
+    /// debug runs, for every kind of target; when that reads nothing, from what the hover read for this rectangle. The source is the
+    /// window holding the crop, with the app's bundle and version and, from that read, the window's document and the web page's URL and title.
     func copyForAgent() {
         let hovered = selection == nil ? session?.selected : nil
         guard let image, let rect = selection?.rect ?? hovered?.bounds else { return }
@@ -34,29 +35,33 @@ extension OverlayController {
         let global = CGRect(x: display.minX + crop.minX / scale, y: display.minY + crop.minY / scale, width: crop.width / scale, height: crop.height / scale)
         let observation = accessibilityObservations[rect]
         let (scale, displayID, capturedAt, live) = (scale, displayID, frozenAt, displayID != nil && !isHeadless)
+        let (tolerance, displayName) = (max(4, 6 / scale), displayID == nil ? nil : window.screen?.localizedName)
         dismiss()
         commitTask = Task { [pasteboard, defaults] in
             do {
                 let info = windowID.flatMap { (CGWindowListCopyWindowInfo([.optionIncludingWindow], $0) as? [[String: Any]])?.first }
                 let pid = info?[kCGWindowOwnerPID as String] as? Int32
-                let read: (frames: [AXFrame], observedAt: Date)? = if let observation { observation } else if live, let pid {
-                    (await Accessibility.frames(at: CGPoint(x: global.midX, y: global.midY), pid: pid), .now)
-                } else { nil }
+                let lookup = if live, let pid {
+                    await Accessibility.handoff(at: CGPoint(x: global.midX, y: global.midY), pid: pid, crop: global, display: display, tolerance: tolerance)
+                } else { nil as (frames: [AXFrame], document: String?, url: String?, pageTitle: String?)? }
+                let read: (frames: [AXFrame], observedAt: Date)? = if let lookup, !lookup.frames.isEmpty { (lookup.frames, .now) } else { observation }
                 let target = HandoffManifest.Target(kind: kind, label: label, provenance: provenance, frames: read?.frames ?? [], observedAt: read?.observedAt,
-                                                    crop: global, display: display, tolerance: max(4, 6 / scale))
+                                                    crop: global, display: display, tolerance: tolerance)
                 var warnings: [HandoffManifest.Warning] = []
                 if !live || !AXIsProcessTrusted() { warnings.append(.accessibilityUnavailable) }
                 if let observed = target.observedAt, observed.timeIntervalSince(capturedAt) > HandoffManifest.staleAfter { warnings.append(.accessibilityStale) }
                 if !live { warnings.append(.sourceUnavailable) }
+                let app = pid.flatMap { NSRunningApplication(processIdentifier: $0) }
                 let source = windowID.map { id in
-                    HandoffManifest.Source(app: info?[kCGWindowOwnerName as String] as? String,
-                                           bundleId: pid.flatMap { NSRunningApplication(processIdentifier: $0)?.bundleIdentifier }, pid: pid, windowId: id,
-                                           windowTitle: (info?[kCGWindowName as String] as? String).flatMap { $0.isEmpty ? nil : $0 },
-                                           windowFrame: info.map { CGRect(dictionaryRepresentation: $0[kCGWindowBounds as String] as! CFDictionary)! })
+                    HandoffManifest.Source(app: info?[kCGWindowOwnerName as String] as? String, bundleId: app?.bundleIdentifier, bundlePath: app?.bundleURL?.path,
+                                           appVersion: app?.bundleURL.flatMap { Bundle(url: $0)?.infoDictionary?["CFBundleShortVersionString"] as? String },
+                                           pid: pid, windowId: id, windowTitle: (info?[kCGWindowName as String] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                                           windowFrame: info.map { CGRect(dictionaryRepresentation: $0[kCGWindowBounds as String] as! CFDictionary)! },
+                                           document: lookup?.document, url: lookup?.url, pageTitle: lookup?.pageTitle)
                 }
                 let manifest = HandoffManifest(captureId: HandoffManifest.newId(), capturedAt: capturedAt,
                                                image: .init(width: Int(crop.width), height: Int(crop.height), scale: scale),
-                                               geometry: .init(cropPixels: crop, scale: scale, displayId: displayID, displayFrame: display),
+                                               geometry: .init(cropPixels: crop, scale: scale, displayId: displayID, displayName: displayName, displayFrame: display),
                                                source: source, target: target, warnings: warnings)
                 let json = try manifest.json()
                 let png = HandoffManifest.embedding(json, in: try await Output.png(image.cropping(to: crop)!))

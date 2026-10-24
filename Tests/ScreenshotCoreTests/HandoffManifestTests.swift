@@ -30,8 +30,9 @@ func handoffManifest(id: String = HandoffManifest.newId(), capturedAt: Date = Da
     return HandoffManifest(
         captureId: id, capturedAt: capturedAt,
         image: .init(width: 472, height: 88, scale: 2),
-        geometry: .init(cropPixels: crop, scale: 2, displayId: 3, displayFrame: display),
-        source: .init(app: "Finder", bundleId: "com.apple.finder", pid: 512, windowId: 9001, windowTitle: "Recents", windowFrame: CGRect(x: -1430, y: 0, width: 900, height: 700)),
+        geometry: .init(cropPixels: crop, scale: 2, displayId: 3, displayName: "Built-in Retina Display", displayFrame: display),
+        source: .init(app: "Finder", bundleId: "com.apple.finder", bundlePath: "/System/Library/CoreServices/Finder.app", appVersion: "15.0", pid: 512,
+                      windowId: 9001, windowTitle: "Recents", windowFrame: CGRect(x: -1430, y: 0, width: 900, height: 700), document: "file:///Users/me/Recents/"),
         target: .init(kind: .element, label: "Row", provenance: .accessibility, frames: frames, observedAt: capturedAt.addingTimeInterval(1.5),
                       crop: CGRect(x: -1412, y: 50, width: 236, height: 44), display: display),
         warnings: [.accessibilityStale])
@@ -43,14 +44,17 @@ struct HandoffManifestTests {
         let json = try manifest.json()
         #expect(try HandoffManifest(json: json) == manifest)
         let object = try JSONSerialization.jsonObject(with: json) as! [String: Any]
-        #expect(object["schema_version"] as? Int == 2 && object["expires_at"] == nil && object["capture_id"] as? String == manifest.captureId)
+        #expect(object["schema_version"] as? Int == 3 && object["expires_at"] == nil && object["capture_id"] as? String == manifest.captureId)
         #expect(object["captured_at"] as? String == "2026-10-03T04:00:00.125Z")
         let geometry = object["geometry"] as! [String: Any]
-        #expect(geometry["display_id"] as? Int == 3)
+        #expect(geometry["display_id"] as? Int == 3 && geometry["display_name"] as? String == "Built-in Retina Display")
         #expect(geometry["crop_global"] as! [String: Double] == ["x": -1412, "y": 50, "width": 236, "height": 44])
         let target = object["target"] as! [String: Any]
         #expect(target["role_description"] as? String == "row" && target["provenance"] as? String == "accessibility" && target["value"] == nil)
-        #expect((object["source"] as! [String: Any])["bundle_id"] as? String == "com.apple.finder")
+        let source = object["source"] as! [String: Any]
+        #expect(source["bundle_id"] as? String == "com.apple.finder" && source["bundle_path"] as? String == "/System/Library/CoreServices/Finder.app"
+                    && source["app_version"] as? String == "15.0" && source["document"] as? String == "file:///Users/me/Recents/" && source["url"] == nil)
+        #expect(target["frame"] as! [String: Double] == ["x": -1412, "y": 50, "width": 236, "height": 44])
         #expect(object["warnings"] as? [String] == ["accessibility_stale"])
     }
 
@@ -62,7 +66,7 @@ struct HandoffManifestTests {
         #expect(target.provenance == .accessibility && target.observedAt != nil)
     }
 
-    @Test func aFrameFartherThanTheToleranceAttachesNothing() {
+    @Test func aFrameFartherThanTheToleranceIsNotTheCrop() {
         let display = CGRect(x: 0, y: 0, width: 1512, height: 982)
         let frames = [AXFrame(roleDescription: "button", rect: CGRect(x: 100, y: 100, width: 40, height: 20), role: "AXButton", title: "OK")]
         let near = HandoffManifest.Target(kind: .element, label: "Region", provenance: .geometry, frames: frames, observedAt: .now,
@@ -70,7 +74,11 @@ struct HandoffManifestTests {
         #expect(near.role == "AXButton" && near.provenance == .accessibility)
         let far = HandoffManifest.Target(kind: .area, label: "Area", provenance: .userArea, frames: frames, observedAt: .now,
                                          crop: CGRect(x: 90, y: 100, width: 50, height: 20), display: display)
-        #expect(far.role == nil && far.ancestors == nil && far.observedAt == nil && far.provenance == .userArea)
+        // A crop no frame matches or holds takes the element under its center, keeping its provenance.
+        #expect(far.role == "AXButton" && far.ancestors == [] && far.observedAt != nil && far.provenance == .userArea
+                    && far.frame == .init(frames[0].rect))
+        let none = HandoffManifest.Target(kind: .area, label: "Area", provenance: .userArea, frames: [], observedAt: .now, crop: .zero, display: display)
+        #expect(none.role == nil && none.frame == nil && none.ancestors == nil && none.observedAt == nil)
         // A frame running off the display is compared where it is on the display.
         let offscreen = [AXFrame(roleDescription: "row", rect: CGRect(x: -50, y: 100, width: 200, height: 20), role: "AXRow")]
         let clipped = HandoffManifest.Target(kind: .element, label: "Row", provenance: .geometry, frames: offscreen, observedAt: .now,
@@ -83,6 +91,63 @@ struct HandoffManifestTests {
         let row = HandoffManifest.Target(kind: .element, label: "Row", provenance: .accessibility, frames: scrolled, observedAt: .now,
                                          crop: CGRect(x: 100, y: 210, width: 200, height: 20), display: display)
         #expect(row.title == "Downloads" && row.ancestors?.map(\.frame) == [.init(scrolled[1].rect), .init(scrolled[2].rect)])
+    }
+
+    /// Synthetic frames shaped like a Finder column-view row (the real capture 39TXZYC8 attached nothing): the selection fill Snug
+    /// found is inset from the row by more than the tolerance, and the row's text is smaller than the fill.
+    @Test func aFillInsetFromItsRowTakesTheRowAndKeepsItsProvenance() {
+        let display = CGRect(x: 0, y: 0, width: 1512, height: 982)
+        let fill = CGRect(x: 571, y: 360, width: 222, height: 21)
+        let frames = [AXFrame(roleDescription: "text", rect: CGRect(x: 600, y: 362, width: 40, height: 16), role: "AXStaticText", details: .init(value: "build")),
+                      AXFrame(roleDescription: "row", rect: CGRect(x: 565, y: 354, width: 234, height: 33), role: "AXRow", subrole: "AXTableRow"),
+                      AXFrame(roleDescription: "browser", rect: CGRect(x: 370, y: 243, width: 920, height: 384), role: "AXBrowser"),
+                      AXFrame(roleDescription: "standard window", rect: CGRect(x: 370, y: 191, width: 920, height: 436), role: "AXWindow", title: "build")]
+        let target = HandoffManifest.Target(kind: .fill, label: "Fill", provenance: .geometry, frames: frames, observedAt: .now, crop: fill, display: display)
+        #expect(target.role == "AXRow" && target.subrole == "AXTableRow" && target.provenance == .geometry && target.kind == .fill)
+        #expect(target.frame == .init(frames[1].rect) && target.ancestors?.map(\.role) == ["AXBrowser", "AXWindow"] && target.observedAt != nil)
+        var manifest = handoffManifest(id: "K7F3Q2XM")
+        manifest.target = target
+        // The row's role does not name the crop in the reference line; the fill's label does.
+        #expect(manifest.reference.hasPrefix("[Snug capture K7F3Q2XM: Finder, fill, 236 x 44 pt."))
+    }
+
+    /// Synthetic frames of a web page as WebKit reports them (AXDOMIdentifier, AXDOMClassList); not checked against a live browser.
+    @Test func aWebElementCarriesItsDetailsDOMAndASelector() throws {
+        let display = CGRect(x: 0, y: 0, width: 1512, height: 982)
+        let button = CGRect(x: 200, y: 300, width: 80, height: 24)
+        let long = String(repeating: "x", count: 5000)
+        let frames = [
+            AXFrame(roleDescription: "button", rect: button, role: "AXButton", title: "Save", identifier: "", details: .init(
+                value: long, help: "Saves the draft", placeholder: "", labeledBy: "Draft", url: nil, domId: "save", domClasses: (0..<20).map { "c\($0)" },
+                enabled: true, focused: false, selected: nil,
+                children: [.init(role: "AXStaticText", name: "Save")], siblings: (0..<30).map { .init(role: "AXButton", name: "B\($0)" + long) })),
+            AXFrame(roleDescription: "group", rect: button.insetBy(dx: -50, dy: -20), role: "AXGroup", details: .init(domClasses: ["toolbar", "flex", "gap-2", "px-4"])),
+            AXFrame(roleDescription: "banner", rect: button.insetBy(dx: -150, dy: -50), role: "AXGroup", subrole: "AXLandmarkBanner", details: .init(domId: "hdr", domClasses: [])),
+            AXFrame(roleDescription: "HTML content", rect: display, role: "AXWebArea", title: "Drafts"),
+            AXFrame(roleDescription: "standard window", rect: display, role: "AXWindow", title: "Drafts")]
+        let target = HandoffManifest.Target(kind: .element, label: "Button", provenance: .geometry, frames: frames, observedAt: handoffManifest().capturedAt,
+                                            crop: button, display: display)
+        #expect(target.provenance == .accessibility && target.domId == "save" && target.domClasses?.count == HandoffManifest.maxClasses)
+        #expect(target.help == "Saves the draft" && target.placeholder == nil && target.labeledBy == "Draft" && target.enabled == true && target.focused == false)
+        // A button's value is cut short; the same text in a text area would keep 4096 characters.
+        #expect(target.value?.count == HandoffManifest.maxValue && target.value!.hasSuffix("..."))
+        #expect(target.children == [.init(role: "AXStaticText", name: "Save")] && target.siblings?.count == HandoffManifest.maxNeighbors
+                    && target.siblings![0].name!.count == HandoffManifest.maxString)
+        #expect(target.selector == "banner#hdr > group.toolbar.flex.gap-2 > button#save.c0.c1.c2")
+        #expect(target.ancestors?.map(\.domId) == [nil, "hdr", nil, nil] && target.ancestors?[0].domClasses?.count == 4
+                    && target.ancestors?[1].domClasses == nil && target.ancestors?[1].subrole == "AXLandmarkBanner")
+        var area = frames
+        area[0] = AXFrame(roleDescription: "text area", rect: button, role: "AXTextArea", details: .init(value: long))
+        #expect(HandoffManifest.Target(kind: .element, label: "Text", provenance: .geometry, frames: area, observedAt: .now, crop: button, display: display)
+                    .value?.count == HandoffManifest.maxTextValue)
+        // Every field survives the JSON, and the manifest stays small.
+        var manifest = handoffManifest()
+        manifest.target = target
+        let json = try manifest.json()
+        #expect(try HandoffManifest(json: json) == manifest && json.count < 32_768)
+        let object = try JSONSerialization.jsonObject(with: json) as! [String: Any]
+        let encoded = object["target"] as! [String: Any]
+        #expect(encoded["dom_id"] as? String == "save" && encoded["labeled_by"] as? String == "Draft" && encoded["selector"] as? String == target.selector)
     }
 
     @Test func theReferenceIsOneASCIILineWithNoScreenTextBrackets() {

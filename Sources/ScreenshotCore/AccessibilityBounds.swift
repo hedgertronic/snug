@@ -2,7 +2,7 @@ import Foundation
 import CoreGraphics
 
 /// One accessibility element's frame in global screen points with a top-left origin, its role description, its AX role, and its title;
-/// and its subrole, identifier and description ("" where the element has none).
+/// and its subrole, identifier and description ("" where the element has none). A Copy for Agent read adds `details`.
 public struct AXFrame: Sendable, Equatable {
     public let roleDescription: String
     public let rect: CGRect
@@ -12,9 +12,11 @@ public struct AXFrame: Sendable, Equatable {
     public let identifier: String
     /// The element's `AXDescription`.
     public let elementDescription: String
+    /// What a Copy for Agent read adds (`HandoffManifest.Details`); nil from every other read.
+    public var details: HandoffManifest.Details?
 
     public init(roleDescription: String, rect: CGRect, role: String = "", title: String = "", subrole: String = "", identifier: String = "",
-                elementDescription: String = "") {
+                elementDescription: String = "", details: HandoffManifest.Details? = nil) {
         self.roleDescription = roleDescription
         self.rect = rect
         self.role = role
@@ -22,6 +24,7 @@ public struct AXFrame: Sendable, Equatable {
         self.subrole = subrole
         self.identifier = identifier
         self.elementDescription = elementDescription
+        self.details = details
     }
 }
 
@@ -29,7 +32,7 @@ extension AXFrame {
     /// The same element moved by `offset` points.
     public func translated(by offset: CGSize) -> AXFrame {
         AXFrame(roleDescription: roleDescription, rect: rect.offsetBy(dx: offset.width, dy: offset.height), role: role, title: title, subrole: subrole,
-                identifier: identifier, elementDescription: elementDescription)
+                identifier: identifier, elementDescription: elementDescription, details: details)
     }
 }
 
