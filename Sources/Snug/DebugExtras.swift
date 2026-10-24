@@ -1,6 +1,7 @@
 import AppKit
 import Carbon.HIToolbox
 import ScreenshotCore
+import UniformTypeIdentifiers
 
 extension DebugRun {
     /// `--verify-extras-ui`: modes, view toggles, color, help, and Capture hover through synthesized events.
@@ -699,7 +700,7 @@ extension DebugRun {
         require(!plain.closeButton.isHidden && !plain.actions.isHidden && plain.dismissal?.isCancelled != false, "hovering starts the fade in at once and holds the toast")
         try await Task.sleep(for: .milliseconds(300))
         let shown = plain.actions.arrangedSubviews.filter { !$0.isHidden } as! [NSButton]
-        require(plain.textBox.isHidden && plain.actions.alphaValue == 1 && plain.closeButton.alphaValue == 1 && shown.map(\.toolTip!) == ["Copy", "Save", "Open in Preview", "Share"],
+        require(plain.textBox.isHidden && plain.actions.alphaValue == 1 && plain.closeButton.alphaValue == 1 && shown.map(\.toolTip!) == ["Copy", "Save", "Open in \(Toast.appName(toOpen: .png))", "Share"],
                 "hovering an unsaved capture shows the close button and Copy, Save, Open and Share in place of the text: \(shown.map(\.toolTip!))")
         require(frames(plain) == rest, "hovering moves and resizes nothing: \(frames(plain)) \(rest)")
         require(abs(plain.actions.frame.midX - plain.textBox.frame.midX) <= 0.5 && plain.actions.frame.width <= plain.textBox.frame.width && plain.actions.superview === card
@@ -733,7 +734,7 @@ extension DebugRun {
         plain.mouseDown(with: pressText)
         require(plain.dragStart == nil, "a press on the text arms no drag; only the thumbnail and the preview drag")
 
-        // Open in Preview writes a temporary PNG when the capture was not saved (the debug run suppresses the launch); Save writes to the save
+        // Open writes a temporary PNG when the capture was not saved and opens it in the default app (the debug run suppresses the launch); Save writes to the save
         // folder and shows the saved state in the same size.
         let saveFolder = FileManager.default.temporaryDirectory.appending(path: "snug-toast-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: saveFolder, withIntermediateDirectories: true)
@@ -741,7 +742,8 @@ extension DebugRun {
         require(saving.file == nil, "an unsaved capture has no file")
         saving.openButton.performClick(nil)
         let previewFile = try Data(contentsOf: saving.file!)
-        require(previewFile == capture, "Open in Preview writes the capture to a temporary PNG")
+        require(previewFile == capture && Toast.opened! == (saving.file!, Bundle(url: NSWorkspace.shared.urlForApplication(toOpen: .png)!)!.bundleIdentifier!),
+                "Open writes the capture to a temporary PNG and opens it in the default app for PNGs: \(Toast.opened!)")
         saving.shareButton.performClick(nil)
         require(saving.file != nil, "Share has a file to share")
         let fresh = toast { $0.set(saveFolder.path, forKey: Pref.saveFolder) }
@@ -754,7 +756,7 @@ extension DebugRun {
                     && fresh.detail.stringValue == "1200 x 400",
                 "Save shows the saved state with Trash and keeps the pixel size as the detail: \(fresh.message.stringValue) \(fresh.detail.stringValue)")
         require(Array(frames(fresh).prefix(4)) == Array(unsaved.prefix(4)), "saving keeps the toast's size and place: \(frames(fresh)) \(unsaved)")
-        require(fresh.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Move to Trash", "Open in Preview", "Show in Finder", "Share"]
+        require(fresh.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Move to Trash", "Open in \(Toast.appName(toOpen: .png))", "Show in Finder", "Share"]
                     && fresh.actions.frame.width <= fresh.textBox.frame.width && abs(fresh.actions.frame.midX - fresh.textBox.frame.midX) <= 0.5,
                 "Save swaps Save for Trash and Show in Finder, centered in the room the text box kept for them: \(fresh.actions.frame) \(fresh.textBox.frame)")
         fresh.dismissal?.cancel()
@@ -2235,7 +2237,7 @@ extension DebugRun {
         let saveFolder = FileManager.default.temporaryDirectory.appending(path: "snug-toast-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: saveFolder, withIntermediateDirectories: true)
         // Trash moves the saved file to the Trash and clears the pasteboard only if it still holds this capture; the toast closes. A recording's
-        // toast opens in QuickTime Player and its pasteboard holds the file URL.
+        // toast names the default app for movies and its pasteboard holds the file URL.
         let trashDefaults = UserDefaults(suiteName: "snug-toast-\(UUID().uuidString)")!
         Pref.register(in: trashDefaults)
         func trashing(_ name: String, holding: (NSPasteboard, URL) -> Void) throws -> (toast: Toast, pasteboard: NSPasteboard) {
@@ -2255,7 +2257,9 @@ extension DebugRun {
         require(otherBoard.pasteboard.string(forType: .string) == "something else", "Trash leaves a pasteboard that holds something else")
         let movieBoard = try trashing("snug-trash-recording.mov") { board, file in board.writeObjects([file as NSURL]) }
         require(movieBoard.pasteboard.readObjects(forClasses: [NSURL.self])?.isEmpty == true, "Trash clears a pasteboard that holds the recording's file URL")
-        require(movieBoard.toast.openButton.toolTip == "Open in QuickTime Player", "a recording's toast opens in QuickTime Player")
+        let movieApp = Bundle(url: NSWorkspace.shared.urlForApplication(toOpen: .quickTimeMovie)!)!
+        require(movieBoard.toast.openButton.toolTip == "Open in \(movieApp.object(forInfoDictionaryKey: "CFBundleDisplayName") ?? movieApp.object(forInfoDictionaryKey: "CFBundleName")!)",
+                "a recording's toast names the default app for movies: \(movieBoard.toast.openButton.toolTip!)")
 
         // Copy puts the capture on the pasteboard again (a recording as its file URL, text and color values as strings) and closes the toast.
         func copying(_ toast: (NSPasteboard) -> Toast) -> NSPasteboard {
@@ -2307,19 +2311,21 @@ extension DebugRun {
             if type == .leftMouseDown { beside.mouseDown(with: event) } else { beside.mouseUp(with: event) }
         }
         require(beside.png == nil, "a click beside the thumbnail of a saved toast closes it")
-        // Open on copied text writes it as UTF-8 to a temporary file of its own and would open that in TextEdit.
+        // Open on copied text writes it as UTF-8 to a temporary file of its own and would open that in the default app for plain text.
         let copiedText = "First line\nSecond \u{2014} caf\u{E9}"
         let texting = Toast(png: nil, message: "Copied 2 lines", detail: "", file: nil, color: nil, text: copiedText, defaults: trashDefaults,
                             pasteboard: NSPasteboard(name: NSPasteboard.Name("snug-toast-text-\(UUID().uuidString)")))
-        require(texting.openButton.toolTip == "Open in TextEdit" && texting.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Open in TextEdit", "Share"],
-                "copied text offers Copy, Open in TextEdit and Share")
+        let textApp = Bundle(url: NSWorkspace.shared.urlForApplication(toOpen: .plainText)!)!
+        let textTip = "Open in \(Toast.appName(toOpen: .plainText))"
+        require(texting.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", textTip, "Share"],
+                "copied text offers Copy, Open in the default plain text app and Share: \(textTip)")
         texting.openButton.performClick(nil)
         let textFile = Toast.opened!.file
         let written = try String(contentsOf: textFile, encoding: .utf8)
-        require(Toast.opened!.app == "com.apple.TextEdit" && textFile.deletingLastPathComponent().path == FileManager.default.temporaryDirectory.appending(path: "Snug").path
+        require(Toast.opened!.app == textApp.bundleIdentifier! && textFile.deletingLastPathComponent().path == FileManager.default.temporaryDirectory.appending(path: "Snug").path
                     && textFile.lastPathComponent.hasPrefix("Snug Text ") && textFile.pathExtension == "txt" && texting.file == textFile
                     && written == copiedText,
-                "Open on copied text writes it as UTF-8 to Snug/Snug Text <date>.txt in the temporary folder and opens it in TextEdit: \(textFile.path)")
+                "Open on copied text writes it as UTF-8 to Snug/Snug Text <date>.txt in the temporary folder and opens it in the default plain text app: \(textFile.path) \(Toast.opened!.app)")
         let againText = Toast(png: nil, message: "Copied", detail: "", file: nil, color: nil, text: "other", defaults: trashDefaults,
                               pasteboard: NSPasteboard(name: NSPasteboard.Name("snug-toast-text-\(UUID().uuidString)")))
         againText.openButton.performClick(nil)

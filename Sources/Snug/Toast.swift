@@ -1,5 +1,6 @@
 import AppKit
 import ScreenshotCore
+import UniformTypeIdentifiers
 
 /// A small non-activating confirmation: one capsule on the chrome surface with a lead tile, the message, and a detail line. The lead is
 /// the capture's thumbnail (44 x 28 pt, aspect fill), the swatch for a color, a text glyph for copied text, or a mark (red for a failure
@@ -7,8 +8,8 @@ import ScreenshotCore
 /// and place for its whole life: its text box is as wide as the wider of the resting text and the actions, and on hover the text
 /// cross-fades to the actions in the same box, both centered in it. The close button fades in on the top-left corner. Copy puts the
 /// capture (or the recording's file, or the text) on the pasteboard again; Save (an unsaved capture) or Trash (a saved file), Open
-/// (Preview, or QuickTime Player for a recording), Show in Finder (a saved file) and Share act on the capture; copied text has Open (in
-/// TextEdit, from a temporary file) and Share. The toast takes no keys.
+/// (in the default app for the file, named in its tooltip), Show in Finder (a saved file) and Share act on the capture; copied text has
+/// Open (in the default app for plain text, from a temporary file) and Share. The toast takes no keys.
 /// Pointing at the thumbnail grows the capture out of it in its own panel, a margin above the capsule (below it at the top right); the
 /// pointer can cross to it without either closing. Drag the thumbnail or the preview to drop the image, or click either to open it as
 /// Open does; a click elsewhere closes the toast. It goes away after the lifetime setting (4 s unless changed) while the pointer is elsewhere, and
@@ -206,7 +207,8 @@ final class Toast: NSPanel, NSDraggingSource {
         closeButton.frame.size = CGSize(width: 22, height: 22)
         closeButton.toolTip = "Close"
         closeButton.isHidden = true
-        let openTip = copiedText != nil ? "Open in TextEdit" : file?.pathExtension == "mov" ? "Open in QuickTime Player" : "Open in Preview"
+        // Open names the default app for plain text, or for the file's type (a PNG until the capture is saved).
+        let openTip = "Open in \(Toast.appName(toOpen: copiedText != nil ? .plainText : file.map { UTType(filenameExtension: $0.pathExtension)! } ?? .png))"
         func button(_ symbol: String, _ tip: String) -> NSButton {
             let button = NSButton(image: NSImage(systemSymbolName: symbol, accessibilityDescription: tip)!, target: nil, action: nil)
             button.isBordered = false
@@ -347,6 +349,12 @@ final class Toast: NSPanel, NSDraggingSource {
         thumbnailArea = thumbnailRect
     }
 
+    /// The name of the default app for files of `type`, from its bundle.
+    static func appName(toOpen type: UTType) -> String {
+        let app = Bundle(url: NSWorkspace.shared.urlForApplication(toOpen: type)!)!
+        return (app.object(forInfoDictionaryKey: "CFBundleDisplayName") ?? app.object(forInfoDictionaryKey: "CFBundleName")) as! String
+    }
+
     /// The part of an image of `size` that fills `box`: a tall image keeps its top, a wide one its middle.
     static func crop(_ size: CGSize, to box: CGSize) -> CGRect {
         let ratio = box.width / box.height / (size.width / size.height)
@@ -445,15 +453,14 @@ final class Toast: NSPanel, NSDraggingSource {
         dismiss()
     }
 
-    /// Opens the file in Preview, in QuickTime Player for a recording, or in TextEdit for copied text, and closes the toast.
+    /// Opens the file (the capture, the recording, or the copied text's temporary file) in its default app and closes the toast.
     @objc private func openClicked() {
         let url = fileOnDisk()
-        let app = png == nil ? "com.apple.TextEdit" : url.pathExtension == "mov" ? "com.apple.QuickTimePlayerX" : "com.apple.Preview"
         guard !Toast.isSuppressed else {
-            Toast.opened = (url, app)
+            Toast.opened = (url, Bundle(url: NSWorkspace.shared.urlForApplication(toOpen: url)!)!.bundleIdentifier!)
             return
         }
-        NSWorkspace.shared.open([url], withApplicationAt: NSWorkspace.shared.urlForApplication(withBundleIdentifier: app)!, configuration: NSWorkspace.OpenConfiguration())
+        NSWorkspace.shared.open(url)
         dismiss()
     }
 

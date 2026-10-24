@@ -2,6 +2,7 @@ import AppKit
 import ScreenCaptureKit
 import SwiftUI
 import ScreenshotCore
+import UniformTypeIdentifiers
 
 extension DebugRun {
     /// `--render-states DIR`: renders the overlay offscreen to one PNG per state with `cacheDisplay`.
@@ -858,15 +859,16 @@ extension DebugRun {
                     require(toast.detail.lineBreakMode == .byTruncatingMiddle && toast.detail.toolTip == longMovie.lastPathComponent && toast.card.frame.width == 360,
                             "a long file name is cut in the middle with the full name as its tooltip")
                 case "recording-hover":
-                    require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Move to Trash", "Open in QuickTime Player", "Show in Finder", "Share"],
-                            "a saved recording offers Copy, Trash, Open in QuickTime Player, Show in Finder and Share")
+                    require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Move to Trash", "Open in \(Toast.appName(toOpen: .quickTimeMovie))", "Show in Finder", "Share"],
+                            "a saved recording offers Copy, Trash, Open in its default app, Show in Finder and Share")
                 case "saved-hover":
-                    require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Move to Trash", "Open in Preview", "Show in Finder", "Share"],
-                            "a saved capture offers Copy, Trash, Open in Preview, Show in Finder and Share")
+                    require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Move to Trash", "Open in \(Toast.appName(toOpen: .png))", "Show in Finder", "Share"],
+                            "a saved capture offers Copy, Trash, Open in its default app, Show in Finder and Share")
                 case "color-hover":
                     require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy"] && toast.lead is NSBox, "a color offers Copy, behind its swatch")
                 case "text-hover":
-                    require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Open in TextEdit", "Share"], "copied text offers Copy, Open in TextEdit and Share")
+                    require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Open in \(Toast.appName(toOpen: .plainText))", "Share"],
+                            "copied text offers Copy, Open in the default plain text app and Share")
                 case "tall", "wide":
                     let size = toast.preview!.frame.size
                     require(size == (state.name == "tall" ? CGSize(width: 72, height: 160) : CGSize(width: 240, height: 72)), "\(state.name): the preview is \(size)")
