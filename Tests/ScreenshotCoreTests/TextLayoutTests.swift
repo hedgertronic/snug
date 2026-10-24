@@ -14,6 +14,15 @@ struct TextLayoutTests {
         #expect(rows.map { $0.map(\.text) } == [["Product", "$12"], ["Brief"], ["Total"]])
     }
 
+    @Test func aLineJoinsTheRowOfAnyLineItOverlaps() {
+        // form-test's boxes read in bands: Product name joins First name's row by 19 px of 34, and $12, 15 px into First name but all
+        // of Product name, joins it too.
+        let rows = TextLayout.rows([TextLine(text: "First name", bounds: CGRect(x: 338, y: 398, width: 160, height: 34)),
+                                    TextLine(text: "Product name", bounds: CGRect(x: 1685, y: 413, width: 217, height: 37.6)),
+                                    TextLine(text: "$12", bounds: CGRect(x: 2125, y: 417, width: 60, height: 33.5))])
+        #expect(rows.map { $0.map(\.text) } == [["First name", "Product name", "$12"]])
+    }
+
     @Test func linesWithBarelyTouchingBandsStaySeparateRows() {
         let rows = TextLayout.rows([line("a", 0, 100), line("b", 0, 118)])
         #expect(rows.count == 2)
@@ -45,6 +54,13 @@ struct TextLayoutTests {
         #expect(TextLayout.selection("unread", in: ocr).map(\.text) == ["unread"])
         // Live Text splits one OCR line in two.
         #expect(TextLayout.selection("Brief\ndescription", in: ocr).map(\.text) == ["Brief description"])
+    }
+
+    @Test func aSelectionTakesOCRTextForRowsBetweenItsEnds() {
+        let ocr = [line("Plan", 10, 100), line("- shadow opacity;", 10, 140), line("- corner radius;", 10, 180), line("Next steps", 10, 220)]
+        // Live Text drops the middle item's marker and the selection starts inside the first line: the middle row keeps OCR's marker,
+        // the first row Live Text's partial text.
+        #expect(TextLayout.selection("lan\n- shadow opacity;\ncorner radius;\nNext steps", in: ocr).map(\.text) == ["lan", "- shadow opacity;", "- corner radius;", "Next steps"])
     }
 
     @Test func aSelectionDropsABoxReadAcrossTwoRows() {
@@ -163,6 +179,25 @@ struct TextLayoutTests {
     @Test func anIndentedRowStartsANewLine() {
         #expect(paragraphs([term("Run:", 25, 100), term("swift test", 49, 119)]) == "Run:\nswift test")
         #expect(paragraphs([]) == "")
+    }
+
+    @Test func aTallCropSplitsIntoOverlappingBandsAndAShortOneDoesNot() {
+        #expect(TextLayout.bands(CGRect(x: 10, y: 20, width: 2000, height: 600), height: 432) == [CGRect(x: 10, y: 20, width: 2000, height: 600)])
+        #expect(TextLayout.bands(CGRect(x: 0, y: 0, width: 2560, height: 1600), height: 432).map(\.minY) == [0, 324, 648, 972, 1168])
+        #expect(TextLayout.bands(CGRect(x: 0, y: 0, width: 2560, height: 1600), height: 432).allSatisfy { $0.height == 432 && $0.width == 2560 })
+    }
+
+    @Test func bandsMergeDuplicatesAndDropLinesCutByAnEdge() {
+        let crop = CGRect(x: 0, y: 0, width: 2560, height: 756)
+        let top = CGRect(x: 0, y: 0, width: 2560, height: 432), bottom = CGRect(x: 0, y: 324, width: 2560, height: 432)
+        let reads = [(band: top, lines: [line("First", 10, 100), line("In the overlap", 10, 360), line("Cut b", 10, 415)]),
+                     (band: bottom, lines: [line("In the overlap.", 12, 361), line("Cut by the edge", 10, 418), line("Last", 10, 700),
+                                            line("Ragged top", 10, 325)])]
+        // The overlap's line keeps its longer copy; the line the top band's edge cuts keeps the bottom band's whole copy; a line at the
+        // bottom band's top edge (cut) drops, though no other copy holds it.
+        #expect(TextLayout.merge(reads, in: crop).map(\.text) == ["First", "In the overlap.", "Cut by the edge", "Last"])
+        // Lines of one band never merge with each other.
+        #expect(TextLayout.merge([(band: crop, lines: [line("a", 10, 100), line("a b", 10, 102)])], in: crop).count == 2)
     }
 
     @Test func tableSplitsColumnsOnWideGapsOnly() {

@@ -364,6 +364,39 @@ extension DebugRun {
         hold.isEnabled = false
         suffix = ""
 
+        // A terminal's list over a busy blurred wallpaper, 2560 x 1600: accurate OCR of the whole screen in one pass drops some items'
+        // "- " markers; read in bands it keeps every one. Return on a box over the whole screen, and F then Return (whose rows between
+        // the selection's ends take OCR's text, not Live Text's, which drops a marker too), copy each item and sub-item on its own line
+        // with its marker.
+        let terminal = fixtureImage("Tests/Fixtures/terminal-list-blurred.png")
+        let listItems = ["shadow opacity", "shadow size (blur)", "corner radius of the card", "padding around the content", "Default: medium padding",
+                         "Small keeps the card", "Large leaves room", "Custom: the four values", "does the shadow follow", "should the padding scale", "is a color picker"]
+        func unmarked(_ copied: String?) -> [String] {
+            listItems.filter { item in !(copied ?? "").split(separator: "\n").contains { $0.hasPrefix("- " + item) } }
+        }
+        for boxed in [true, false] {
+            overlay.present(image: terminal, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(terminal.width) / 2, height: CGFloat(terminal.height) / 2), displayID: nil)
+            key(tKey, "t")
+            try await waitFor("the terminal fixture's Live Text analysis attaches") { liveText.analysis != nil }
+            if boxed {
+                mouse(.leftMouseDown, CGPoint(x: 4, y: 4))
+                mouse(.leftMouseDragged, CGPoint(x: 2556, y: 1596))
+                mouse(.leftMouseUp, CGPoint(x: 2556, y: 1596))
+                await overlay.textTask?.value
+            } else {
+                let transcript = liveText.text.split(separator: "\n")
+                print("Terminal fixture: Live Text reads \(listItems.filter { item in transcript.contains { $0.contains(item) } }.count) of \(listItems.count) items, "
+                      + "\(listItems.filter { item in transcript.contains { $0.hasPrefix("- " + item) } }.count) with their marker")
+                key(fKey, "f")
+            }
+            pasteboard.clearContents()
+            key(returnKey, "\r")
+            let copiedTerminal = await copied()
+            require(unmarked(copiedTerminal).isEmpty && !overlay.window.isVisible,
+                    "\(boxed ? "Return on a box over the whole terminal screen" : "F then Return on the terminal screen") copies every list item on its own line with its \"- \" marker: "
+                    + "missing \(unmarked(copiedTerminal)) in \(copiedTerminal.debugDescription)")
+        }
+
         // Esc with focus in Live Text closes.
         try await open()
         textDrag(from: CGPoint(x: productName.minX + 10, y: productName.midY), to: CGPoint(x: productName.maxX - 10, y: productName.midY))
@@ -418,7 +451,9 @@ extension DebugRun {
         mouse(.leftMouseDragged, CGPoint(x: inside.x, y: inside.y + 80))
         mouse(.leftMouseUp, CGPoint(x: inside.x, y: inside.y + 80))
         let moved = addressBox.offsetBy(dx: 0, dy: 80)
-        require(overlay.selection?.rect == moved && liveText.selectedText.isEmpty && !overlay.chrome.reading.isHidden, "a drag inside the box off text moves it and reads it again: \(String(describing: overlay.selection?.rect))")
+        require(overlay.selection?.rect == moved && liveText.selectedText.isEmpty && overlay.text.box?.rect == moved
+                    && (!overlay.chrome.reading.isHidden || overlay.text.box?.lines != nil),
+                "a drag inside the box off text moves it and reads it again (already read when the pause in the drag outlasted 150 ms): \(String(describing: overlay.selection?.rect)), read \(String(describing: overlay.text.box?.rect)) \(overlay.text.box?.lines?.count ?? -1) lines, reading pill \(!overlay.chrome.reading.isHidden), selected \(liveText.selectedText.debugDescription)")
         await overlay.textTask?.value
         requireBoxRead(moved, "the moved box shows its own lines")
         mouse(.leftMouseDown, CGPoint(x: moved.midX, y: moved.maxY))
