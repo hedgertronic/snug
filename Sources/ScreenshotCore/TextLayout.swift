@@ -113,10 +113,13 @@ public enum TextLayout {
     /// placed on `ocr` in reading order (`lines(of:in:)`), it gives every OCR line from the first matched one to the last within the
     /// matched lines' columns, with Live Text's partly selected text only in the first and last rows (where the selection starts and
     /// ends inside a line); rows between take OCR's text, which keeps what Live Text dropped (a list item's "- "). Selected lines that
-    /// match no OCR line drop out, unless none match. A box that covers most of the height of two other lines is OCR reading across
-    /// two rows and drops out first.
+    /// match no OCR line drop out, unless none match. A box that covers most of the height of two other lines, one below the other,
+    /// is OCR reading across two rows and drops out first; pieces of one row whose edges touch (a long terminal line OCR splits) stay.
     public static func selection(_ selected: String, in ocr: [TextLine]) -> [TextLine] {
-        let ocr = ocr.filter { line in ocr.filter { $0 != line && $0.bounds.intersection(line.bounds).height > $0.bounds.height / 2 }.count < 2 }
+        let ocr = ocr.filter { line in
+            let covered = ocr.filter { $0 != line && $0.bounds.intersection(line.bounds).height > $0.bounds.height / 2 }
+            return !covered.contains { upper in covered.contains { $0.bounds.minY >= upper.bounds.maxY } }
+        }
         let rows = rows(ocr)
         let placed = lines(of: selected, in: Array(rows.joined()))
         let matched = ocr.filter { line in placed.contains { $0.bounds == line.bounds } }

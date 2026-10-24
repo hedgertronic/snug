@@ -81,6 +81,16 @@ struct TextLayoutTests {
         #expect(TextLayout.selection("first row\nsecond row", in: ocr).map(\.text) == ["first row", "second row"])
     }
 
+    @Test func aSelectionKeepsPiecesOfOneRowWhoseEdgesTouch() {
+        // A long terminal line OCR splits in five, each piece's edge 3 px into the next; Live Text reads the line whole.
+        let pieces = [line("the same word much", 75, 86, width: 241), line("higher", 313, 86, width: 93),
+                      line("on the screen and pull the copy up to the top row. It now prefers", 404, 86, width: 854),
+                      line("the match at or below the", 1255, 86, width: 335), line("previous line.", 1590, 86, width: 183),
+                      line("Checked:", 49, 140)]
+        let selected = "the same word much higher on the screen and pull the copy up to the top row. It now prefers the match at or below the previous line.\nChecked:"
+        #expect(TextLayout.selection(selected, in: pieces).count == 6)
+    }
+
     /// A terminal line as accurate OCR boxes it on a 1000 px tall shot: 17 px tall, 6 px per character, its row's top at `y`.
     func term(_ text: String, _ x: CGFloat, _ y: CGFloat) -> TextLine {
         TextLine(text: text, bounds: CGRect(x: x, y: y, width: CGFloat(text.count) * 6, height: 17))
