@@ -703,14 +703,20 @@ extension DebugRun {
             try rep.representation(using: .png, properties: [:])!.write(to: file)
             print(file.path, host.fittingSize)
             if item.label == "Appearance" {
-                // The pane scrolled to its end, where the Frame section sits.
-                let scroll = descendants(of: host, NSScrollView.self).first!
-                scroll.documentView!.scroll(CGPoint(x: 0, y: scroll.documentView!.isFlipped ? scroll.documentView!.bounds.maxY : 0))
-                host.layoutSubtreeIfNeeded()
-                host.cacheDisplay(in: host.bounds, to: rep)
-                let scrolled = directory.appending(path: "settings-appearance-scrolled.png")
-                try rep.representation(using: .png, properties: [:])!.write(to: scrolled)
-                print(scrolled.path)
+                // The pane scrolled to its end, where the Frame section sits, with the default shadow and then a custom one.
+                for (suffix, shadow) in [("", "default"), ("-custom", "custom")] {
+                    UserDefaults.standard.set(shadow, forKey: Pref.frameShadow)
+                    RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+                    host.layoutSubtreeIfNeeded()
+                    let scroll = descendants(of: host, NSScrollView.self).first!
+                    scroll.documentView!.scroll(CGPoint(x: 0, y: scroll.documentView!.isFlipped ? scroll.documentView!.bounds.maxY : 0))
+                    host.layoutSubtreeIfNeeded()
+                    host.cacheDisplay(in: host.bounds, to: rep)
+                    let scrolled = directory.appending(path: "settings-appearance\(suffix)-scrolled.png")
+                    try rep.representation(using: .png, properties: [:])!.write(to: scrolled)
+                    print(scrolled.path)
+                }
+                UserDefaults.standard.removeObject(forKey: Pref.frameShadow)
             }
             guard item.label == "General" else { continue }
             let field = descendants(of: host, ShortcutRecorder.Field.self).first!

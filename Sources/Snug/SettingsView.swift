@@ -269,7 +269,7 @@ private struct MakerButton: View {
     }
 }
 
-/// The overlay's appearance, the highlight (live preview, color menu, fill, fade, glow), the toast, and the frame (live preview, padding).
+/// The overlay's appearance, the highlight (live preview, color menu, fill, fade, glow), the toast, and the frame (live preview, padding, shadow).
 private struct AppearancePane: View {
     @AppStorage(Pref.overlayAppearance) private var overlayAppearance = "system"
     @AppStorage(Pref.highlightColor) private var highlightColor = ""
@@ -279,6 +279,12 @@ private struct AppearancePane: View {
     @AppStorage(Pref.toastPosition) private var toastPosition = "bottomCenter"
     @AppStorage(Pref.toastLifetime) private var toastLifetime = 4
     @AppStorage(Pref.framePadding) private var framePadding = 24
+    @AppStorage(Pref.frameShadow) private var frameShadow = "default"
+    @AppStorage(Pref.frameShadowOpacity) private var shadowOpacity = OutputFrame.windowShadow.opacity
+    @AppStorage(Pref.frameShadowBlur) private var shadowBlur = OutputFrame.windowShadow.blur
+    @AppStorage(Pref.frameShadowDistance) private var shadowDistance = OutputFrame.windowShadow.offset
+    @AppStorage(Pref.frameShadowAngle) private var shadowAngle = 270.0
+    @AppStorage(Pref.frameShadowColor) private var shadowColor = "#000000"
 
     private static let positions: [(tag: String, title: String, alignment: Alignment)] = [
         ("bottomCenter", "Bottom center", .bottom), ("bottomRight", "Bottom right", .bottomTrailing), ("topRight", "Top right", .topTrailing)
@@ -343,24 +349,65 @@ private struct AppearancePane: View {
                     .padding(.vertical, 8)
                 }
                     caption("Frame")
-                FramePreview(padding: CGFloat(framePadding))
+                FramePreview(padding: CGFloat(framePadding), shadow: Pref.customShadow(in: .standard))
                 Card {
                     VStack(spacing: 4) {
                         LabeledContent("Padding") {
                             Text("\(framePadding) pt").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
                         }
-                        Slider(value: Binding { Double(framePadding) } set: { framePadding = Int($0.rounded()) }, in: 0...64, step: 1) {
+                        Slider(value: Binding { Double(framePadding) } set: { framePadding = Int($0.rounded()) }, in: 0...64) {
                             Text("Padding")
-                        } tick: { value in
-                            [16: "Small", 24: "Medium", 40: "Large"][Int(value)].map { SliderTick($0, value) }
+                        } ticks: {
+                            SliderTick("Small", 16)
+                            SliderTick("Medium", 24)
+                            SliderTick("Large", 40)
                         }
                         .labelsHidden()
                     }
                     .padding(.vertical, 8)
+                    LabeledContent {
+                        Picker("Shadow", selection: $frameShadow) {
+                            Text("Default").tag("default")
+                            Text("Custom").tag("custom")
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
+                    } label: {
+                        detailed("Shadow", frameShadow == "custom" ? "Every capture, windows too" : "Windows: the macOS shadow")
+                    }
+                    .padding(.vertical, 6)
+                    if frameShadow == "custom" {
+                        pointSlider("Opacity", value: Binding { shadowOpacity * 100 } set: { shadowOpacity = $0 / 100 }, range: 0...100, unit: "%")
+                        pointSlider("Size", value: $shadowBlur, range: 0...100, unit: " pt")
+                        pointSlider("Distance", value: $shadowDistance, range: 0...64, unit: " pt")
+                        pointSlider("Angle", detail: "270\u{00B0} falls down", value: $shadowAngle, range: 0...360, unit: "\u{00B0}")
+                        LabeledContent("Color") {
+                            ColorPicker("Color", selection: Binding {
+                                Color(nsColor: Highlight.color(hex: shadowColor))
+                            } set: {
+                                let picked = NSColor($0).usingColorSpace(.sRGB)!
+                                shadowColor = ColorFormat.hex.string(for: SRGBColor(red: picked.redComponent, green: picked.greenComponent, blue: picked.blueComponent))
+                            }, supportsOpacity: false)
+                            .labelsHidden()
+                        }
+                    }
                 }
             }
         }
         .frame(width: SettingsTabs.width, height: SettingsTabs.tallHeight)
+    }
+
+    /// A slider that keeps whole values, with its value and `unit`, and an optional detail line under its title.
+    private func pointSlider(_ title: String, detail: String? = nil, value: Binding<Double>, range: ClosedRange<Double>, unit: String) -> some View {
+        LabeledContent {
+            HStack(spacing: 10) {
+                Slider(value: Binding { value.wrappedValue } set: { value.wrappedValue = $0.rounded() }, in: range).frame(width: 150)
+                Text("\(value.wrappedValue.formatted())\(unit)").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).frame(width: 54, alignment: .trailing)
+            }
+        } label: {
+            if let detail { detailed(title, detail) } else { Text(title) }
+        }
     }
 
     /// A slider with its value as a percentage.
@@ -374,10 +421,11 @@ private struct AppearancePane: View {
     }
 }
 
-/// A sample window card framed exactly as output is: `OutputFrame.render` at 2x on `padding` points, the output's transparent canvas
-/// as a checkerboard on a gray backdrop, shown at its size or scaled down to fit.
+/// A sample window card framed exactly as an area is: `OutputFrame.render` at 2x on `padding` points with the card shadow or `shadow`,
+/// the output's transparent canvas as a checkerboard on a gray backdrop, shown at its size or scaled down to fit.
 struct FramePreview: View {
     let padding: CGFloat
+    let shadow: OutputFrame.Shadow?
 
     /// A 100 x 60 pt window at 2x: a white body under a gray title bar with the three window buttons.
     private static let card: CGImage = {
@@ -396,7 +444,7 @@ struct FramePreview: View {
     }()
 
     var body: some View {
-        let output = try! OutputFrame.render(Self.card, crop: CGRect(x: 0, y: 0, width: Self.card.width, height: Self.card.height), scale: 2, padding: padding)
+        let output = try! OutputFrame.render(Self.card, crop: CGRect(x: 0, y: 0, width: Self.card.width, height: Self.card.height), scale: 2, padding: padding, shadow: shadow)
         Image(decorative: output, scale: 2).resizable().scaledToFit()
             .background(Canvas { context, size in
                 context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(white: 0.97)))

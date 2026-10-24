@@ -189,6 +189,9 @@ final class OverlayController {
         panel.allowedContentTypes = [.png]
         return panel.runModal() == .OK ? panel.url : nil
     }
+    /// Captures one live window, with the system shadow when the flag is true (`DisplayCapture.image(ofWindow:shadow:interior:)`).
+    /// Debug runs record the flag and answer with a stand-in image.
+    var captureWindow: (CGWindowID, Bool, CGImage?) async throws -> CGImage = DisplayCapture.image(ofWindow:shadow:interior:)
     /// The last pointer position in image pixels.
     var pointer = CGPoint.zero
     /// Capture mode: what the pointer is over (accessibility elements, pixel geometry, windows, the display), and the running geometry analysis.
@@ -254,6 +257,8 @@ final class OverlayController {
     var framed: Bool { defaults.bool(forKey: Pref.frame) }
     /// The frame's padding in points (`Pref.framePadding`).
     var framePadding: CGFloat { CGFloat(defaults.integer(forKey: Pref.framePadding)) }
+    /// The frame's custom shadow, nil for the default shadows (`Pref.customShadow`).
+    var frameShadow: OutputFrame.Shadow? { Pref.customShadow(in: defaults) }
 
     init() {
         view.controller = self
@@ -946,8 +951,9 @@ final class OverlayController {
         }
     }
 
-    /// A live capture takes the window itself like macOS does (rounded corners, shadow, transparent background); a frozen-image run,
-    /// the Dock, the menu bar, and menus have no window to capture and crop `crop`.
+    /// A live capture takes the window itself like macOS does (rounded corners, shadow, transparent background), or under a custom
+    /// shadow without its own shadow and then framed with the custom one; a frozen-image run, the Dock, the menu bar, and menus have no
+    /// window to capture and crop `crop`.
     private func clickWindow(_ index: Int, crop rect: CGRect, framed: Bool, copy: Bool, save: Bool, saveAs: Bool = false) {
         guard displayID != nil, !windowFrozen.indices.contains(index) || !windowFrozen[index] else { return finish(crop: rect, framed: framed, copy: copy, save: save, saveAs: saveAs) }
         let id = windowIDs[index]
@@ -960,10 +966,12 @@ final class OverlayController {
         Pref.logHoverLine("window \(id) rect \(windows[index]) overlap in front \(overlap) -> " + (interior == nil ? "captured pixels" : "frozen interior"))
         let destination = saveAs ? askSaveURL() : nil
         guard !saveAs || destination != nil else { return }
+        let (shadow, padding, scale) = (framed ? frameShadow : nil, framePadding, scale)
         dismiss()
         commitTask = Task { [pasteboard, defaults] in
             do {
-                let image = roundingWindowCorners(try await DisplayCapture.image(ofWindow: id, shadow: framed, interior: interior), radius: radius)
+                var image = roundingWindowCorners(try await captureWindow(id, framed && shadow == nil, interior), radius: radius)
+                if let shadow { image = try OutputFrame.shadowed(image, shadow: shadow, padding: padding, scale: scale) }
                 let png = try await Output.png(image)
                 Output.publish(png: png, detail: "\(image.width) x \(image.height)", copy: copy, save: save, destination: destination,
                                pasteboard: pasteboard, defaults: defaults)
@@ -1049,7 +1057,7 @@ final class OverlayController {
         guard let image else { return }
         let destination = saveAs ? askSaveURL() : nil
         guard !saveAs || destination != nil else { return }
-        let padding = (framed ?? self.framed) ? framePadding : nil, scale = scale
+        let padding = (framed ?? self.framed) ? framePadding : nil, scale = scale, shadow = frameShadow
         let container = container(of: crop)
         let edited = editedRadii[crop], rounds = defaults.bool(forKey: Pref.roundCorners)
         let (known, measuring) = (radii[crop].map { (radius: $0, arcs: arcs[crop] ?? .zero) }, radiusTasks[crop])
@@ -1063,7 +1071,7 @@ final class OverlayController {
                     let windowRadius = if let windowKnown { windowKnown } else { await windowMeasuring?.value.radius ?? 0 }
                     radii = radii.replacingCorners(sharedWith: container, in: crop, with: windowRadius, arcs: measured.arcs)
                 }
-                try await Output.deliver(image, crop: crop, padding: padding, scale: scale, cornerRadii: rounds ? edited ?? radii : .zero, copy: copy, save: save,
+                try await Output.deliver(image, crop: crop, padding: padding, scale: scale, cornerRadii: rounds ? edited ?? radii : .zero, shadow: shadow, copy: copy, save: save,
                                          destination: destination, pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
@@ -1123,8 +1131,10 @@ final class OverlayController {
         overlays.hoverRadii = overlays.hover.map(cornerRadii) ?? .zero
         overlays.upHintRadii = overlays.upHint.map(cornerRadii) ?? .zero
         overlays.downHintRadii = overlays.downHint.map(cornerRadii) ?? .zero
-        // The padded card of an area or element; a live window's real shadow has no card to preview.
-        if mode == .capture, let rect = selection?.rect, framed, !capturesLiveWindow(rect) { overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, padding: framePadding) }
+        // The padded card of an area or element, or of anything under a custom shadow; a live window's real shadow has no card to preview.
+        if mode == .capture, let rect = selection?.rect, framed, frameShadow != nil || !capturesLiveWindow(rect) {
+            overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, padding: framePadding, shadow: frameShadow)
+        }
         jumping = keyJump && animates && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion && selection == nil
             && overlays.hover != nil && view.overlays.hover != nil && overlays.hover != view.overlays.hover
         view.overlays = overlays

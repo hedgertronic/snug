@@ -126,7 +126,8 @@ extension OverlayController {
         return "r " + (Set(points).count == 1 ? "\(points[0])" : points.map(String.init).joined(separator: " / "))
     }
 
-    /// Whether a copy of `rect` captures a live window with its real shadow, whose size macOS decides, rather than cropping the frozen screen.
+    /// Whether a copy of `rect` captures a live window (with its real shadow, whose size macOS decides, under the default shadow) rather
+    /// than cropping the frozen screen.
     func capturesLiveWindow(_ rect: CGRect) -> Bool {
         window(matching: rect).map { displayID != nil && !(windowFrozen.indices.contains($0) && windowFrozen[$0]) } ?? false
     }
@@ -134,15 +135,16 @@ extension OverlayController {
     /// What the output of `rect` adds when Frame is on (flipped by `option`, Option on a hovered object): "  + frame W x H" in output
     /// pixels, the padded card's for an area or element and the window shadow's canvas for a subject; and "  + frame" alone when a
     /// click takes `rect` as a live window with its real shadow, whose size macOS decides per window (a 400 x 523 pt Settings window at
-    /// 2x measured 94 x 123 px, against a subject's 208 x 210).
+    /// 2x measured 94 x 123 px, against a subject's 208 x 210). Under a custom shadow every target adds its known canvas.
     private func additions(_ rect: CGRect, option: Bool = false) -> String {
         guard framed != option else { return "" }
-        if cutout != nil {
+        let shadow = frameShadow
+        if cutout != nil, shadow == nil {
             let padding = OutputFrame.shadowPadding(scale: scale)
             return "  + frame \(2 * padding.sides) x \(padding.top + padding.bottom)"
         }
-        if capturesLiveWindow(rect) { return "  + frame" }
-        let crop = rect.integral, output = OutputFrame.rect(around: crop, scale: scale, padding: framePadding).integral
+        if capturesLiveWindow(rect), shadow == nil { return "  + frame" }
+        let crop = rect.integral, output = OutputFrame.rect(around: crop, scale: scale, padding: framePadding, shadow: shadow).integral
         return "  + frame \(Int(output.width - crop.width)) x \(Int(output.height - crop.height))"
     }
 

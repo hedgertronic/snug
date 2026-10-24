@@ -16,6 +16,16 @@ enum Pref {
     static let frame = "SnugFrame"
     /// The transparent padding around a framed area or element, in whole points from 0 to 64 (Settings > Appearance > Frame).
     static let framePadding = "SnugFramePadding"
+    /// The frame's shadow: "default" (a live window its real macOS shadow, a subject the synthetic window shadow, an area or element the
+    /// card's shadow scaled to the padding) or "custom" (live windows captured without their shadow, and every framed output drawn with
+    /// the shadow below). The custom shadow: opacity 0 to 1, blur and distance in points, the angle it falls in degrees counterclockwise
+    /// from the right (270 is straight down), and its color as hex. The defaults are `OutputFrame.windowShadow`'s.
+    static let frameShadow = "SnugFrameShadow"
+    static let frameShadowOpacity = "SnugFrameShadowOpacity"
+    static let frameShadowBlur = "SnugFrameShadowBlur"
+    static let frameShadowDistance = "SnugFrameShadowDistance"
+    static let frameShadowAngle = "SnugFrameShadowAngle"
+    static let frameShadowColor = "SnugFrameShadowColor"
     private static let legacyStyle = "SnugStyle"
     private static let legacyShadow = "SnugShadow"
     static let saveFolder = "SnugSaveFolder"
@@ -69,6 +79,15 @@ enum Pref {
         try! handle.write(contentsOf: Data((line + "\n").utf8))
     }
 
+    /// The custom shadow when `frameShadow` is "custom"; nil for the default shadows.
+    static func customShadow(in defaults: UserDefaults) -> OutputFrame.Shadow? {
+        guard defaults.string(forKey: frameShadow) == "custom" else { return nil }
+        let color = Highlight.color(hex: defaults.string(forKey: frameShadowColor)!)
+        return OutputFrame.Shadow(opacity: defaults.double(forKey: frameShadowOpacity), blur: defaults.double(forKey: frameShadowBlur),
+                                  distance: defaults.double(forKey: frameShadowDistance), angle: defaults.double(forKey: frameShadowAngle),
+                                  color: SRGBColor(red: color.redComponent, green: color.greenComponent, blue: color.blueComponent))
+    }
+
     static func register(in defaults: UserDefaults) {
         if let style = defaults.string(forKey: legacyStyle) {
             defaults.set(style == "backdrop", forKey: frame)
@@ -80,6 +99,12 @@ enum Pref {
             snap: true,
             frame: false,
             framePadding: 24,
+            frameShadow: "default",
+            frameShadowOpacity: OutputFrame.windowShadow.opacity,
+            frameShadowBlur: OutputFrame.windowShadow.blur,
+            frameShadowDistance: OutputFrame.windowShadow.offset,
+            frameShadowAngle: 270,
+            frameShadowColor: "#000000",
             saveFolder: NSHomeDirectory() + "/Desktop",
             hotKeyCode: 49,
             hotKeyModifiers: Int(NSEvent.ModifierFlags([.control, .shift]).rawValue),
@@ -113,27 +138,28 @@ enum Output {
         return data as Data
     }
 
-    /// Renders the frame on `padding` points (or none when nil) and encodes a PNG off the main thread.
+    /// Renders the frame on `padding` points (or none when nil) with the card shadow or `shadow`, and encodes a PNG off the main thread.
     @concurrent
-    static func encode(_ image: CGImage, crop: CGRect, padding: CGFloat?, scale: CGFloat, cornerRadii: CornerRadii = .zero) async throws -> (png: Data, width: Int, height: Int) {
-        let rendered = try OutputFrame.render(image, crop: crop, scale: scale, padding: padding, cornerRadii: cornerRadii)
+    static func encode(_ image: CGImage, crop: CGRect, padding: CGFloat?, scale: CGFloat, cornerRadii: CornerRadii = .zero,
+                       shadow: OutputFrame.Shadow? = nil) async throws -> (png: Data, width: Int, height: Int) {
+        let rendered = try OutputFrame.render(image, crop: crop, scale: scale, padding: padding, cornerRadii: cornerRadii, shadow: shadow)
         return (try await png(rendered), rendered.width, rendered.height)
     }
 
     /// Renders a cutout (`OutputFrame.renderCutout`) and encodes a PNG off the main thread.
     @concurrent
-    static func encodeCutout(_ subject: CGImage, bounds: CGRect?, cornerRadii: CornerRadii, framed: Bool, scale: CGFloat) async throws
-        -> (png: Data, width: Int, height: Int) {
-        let rendered = try OutputFrame.renderCutout(subject, bounds: bounds, cornerRadii: cornerRadii, framed: framed, scale: scale)
+    static func encodeCutout(_ subject: CGImage, bounds: CGRect?, cornerRadii: CornerRadii, framed: Bool, scale: CGFloat,
+                             shadow: OutputFrame.Shadow? = nil, padding: CGFloat = 0) async throws -> (png: Data, width: Int, height: Int) {
+        let rendered = try OutputFrame.renderCutout(subject, bounds: bounds, cornerRadii: cornerRadii, framed: framed, scale: scale, shadow: shadow, padding: padding)
         return (try await png(rendered), rendered.width, rendered.height)
     }
 
     /// Encodes a crop, then copies it to the pasteboard or saves it, and shows a toast (see `publish`).
     @MainActor
-    static func deliver(_ image: CGImage, crop: CGRect, padding: CGFloat?, scale: CGFloat, cornerRadii: CornerRadii = .zero,
+    static func deliver(_ image: CGImage, crop: CGRect, padding: CGFloat?, scale: CGFloat, cornerRadii: CornerRadii = .zero, shadow: OutputFrame.Shadow? = nil,
                         copy: Bool, save: Bool, destination: URL? = nil, warning: String? = nil, pasteboard: NSPasteboard, defaults: UserDefaults) async throws {
         let id = signposter.beginInterval("encode")
-        let output = try await encode(image, crop: crop, padding: padding, scale: scale, cornerRadii: cornerRadii)
+        let output = try await encode(image, crop: crop, padding: padding, scale: scale, cornerRadii: cornerRadii, shadow: shadow)
         signposter.endInterval("encode", id)
         publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save, destination: destination,
                 warning: warning, pasteboard: pasteboard, defaults: defaults)
