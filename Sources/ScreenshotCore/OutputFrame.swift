@@ -19,9 +19,9 @@ public enum OutputFrame {
             CGSize(width: distance * cos(angle * .pi / 180), height: distance * sin(angle * .pi / 180))
         }
 
-        /// The canvas around a shape that holds this shadow on at least `padding` points, in whole pixels at `scale`. The blur fades out
-        /// within 1.3 times its value of the offset shape (the window shadow fit gives 52 pt for a blur of 42; at full opacity a little
-        /// more is needed).
+        /// The canvas around a shape that holds this shadow on at least `padding` points, in whole pixels at `scale`. Each side reaches
+        /// 1.3 times the blur past the offset shape: at full opacity the shadow is down to 2/255 within 1.1 times the blur, and 0.9 times
+        /// leaves 3/255 at the edge (aCustomShadowIsNeverClipped).
         public func margins(padding: CGFloat, scale: CGFloat) -> (left: Int, top: Int, right: Int, bottom: Int) {
             let reach = blur * 1.3, offset = offset
             func side(_ extent: CGFloat) -> Int { Int((max(padding, extent) * scale).rounded(.up)) }

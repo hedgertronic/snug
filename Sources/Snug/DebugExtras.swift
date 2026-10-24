@@ -2320,6 +2320,64 @@ extension DebugRun {
             require(overlay.view.overlays.styleFrame == OutputFrame.rect(around: framedWindow.insetBy(dx: 40, dy: 40), scale: overlay.scale, padding: 24), "an area inside \(name) keeps the card preview")
             overlay.dismiss()
         }
+
+        // Shadow: Default captures a live window with its system shadow; Custom without it, and the live window, a frozen window, a
+        // window of an imported image, and an area inside each come out on the canvas OutputFrame.rect gives with the custom shadow
+        // below them, the canvas the preview card draws. Live capture cannot run headless, so a stand-in answers for the window and
+        // records the shadow flag it was asked for.
+        var requested: [Bool] = []
+        let standIn = CGContext(data: nil, width: Int(framedWindow.width), height: Int(framedWindow.height), bitsPerComponent: 8, bytesPerRow: 0,
+                                space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        standIn.setFillColor(CGColor(gray: 1, alpha: 1))
+        standIn.fill(CGRect(origin: .zero, size: framedWindow.size))
+        let windowImage = standIn.makeImage()!
+        overlay.captureWindow = { _, shadow, _ in
+            requested.append(shadow)
+            return windowImage
+        }
+        let custom = OutputFrame.Shadow(opacity: 0.8, blur: 10, distance: 20, angle: 270, color: SRGBColor(red: 1, green: 0, blue: 0))
+        for (key, value) in [(Pref.frameShadowOpacity, 0.8), (Pref.frameShadowBlur, 10), (Pref.frameShadowDistance, 20), (Pref.frameShadowAngle, 270)] {
+            defaults.set(value, forKey: key)
+        }
+        defaults.set("#FF0000", forKey: Pref.frameShadowColor)
+        for shadow in ["default", "custom"] {
+            defaults.set(shadow, forKey: Pref.frameShadow)
+            require(overlay.frameShadow == (shadow == "custom" ? custom : nil), "the \(shadow) shadow reads back from its prefs")
+            for (name, display, frozen) in [("a live window", CGMainDisplayID() as CGDirectDisplayID?, false), ("a frozen window", CGMainDisplayID(), true),
+                                            ("a window of an imported image", nil, false)] {
+                for target in [framedWindow, framedWindow.insetBy(dx: 40, dy: 40)] where shadow == "custom" || (!frozen && display != nil && target == framedWindow) {
+                    overlay.present(image: image, frame: frame, displayID: display)
+                    overlay.detectionTask?.cancel()
+                    overlay.setWindows([framedWindow], names: ["Window"], ids: [1], frozen: [frozen], pointer: CGPoint(x: frame.minX, y: frame.maxY))
+                    overlay.selection = AreaSelection(extent: extent, exact: target)
+                    overlay.refresh()
+                    let live = target == framedWindow && display != nil && !frozen, preview = overlay.view.overlays.styleFrame
+                    requested = []
+                    pasteboard.clearContents()
+                    overlay.copy()
+                    await overlay.commitTask?.value
+                    let png = pasteboard.data(forType: .png)
+                    let label = "\(target == framedWindow ? name : "an area inside \(name)") under the \(shadow) shadow"
+                    guard shadow == "custom" else {
+                        require(requested == [true] && pngSize(png) == framedWindow.size, "\(label) is captured with the system shadow: \(requested)")
+                        continue
+                    }
+                    let expected = OutputFrame.rect(around: target, scale: overlay.scale, padding: 24, shadow: custom)
+                    require(requested == (live ? [false] : []), "\(label) asks for no system shadow: \(requested)")
+                    require(preview == expected && pngSize(png) == expected.size && expected.height - target.height > expected.width - target.width,
+                            "\(label) and its preview card come out \(expected.size), grown more below: \(String(describing: pngSize(png))) \(String(describing: preview))")
+                    // Just under the target's bottom edge, at its middle, the shadow is red (raw PNG bytes, 8-bit sRGB RGBA).
+                    let rep = NSBitmapImageRep(data: png!)!
+                    let offset = (Int(target.maxY - expected.minY) + 4) * rep.bytesPerRow + Int(target.midX - expected.minX) * 4
+                    let under = (0..<4).map { Int(rep.bitmapData![offset + $0]) }
+                    require(under[3] > 80 && under[0] > 230 && under[1] < 10 && under[2] < 10, "\(label) casts the red shadow below: \(under)")
+                }
+            }
+        }
+        overlay.captureWindow = DisplayCapture.image(ofWindow:shadow:interior:)
+        for key in [Pref.frameShadow, Pref.frameShadowOpacity, Pref.frameShadowBlur, Pref.frameShadowDistance, Pref.frameShadowAngle, Pref.frameShadowColor] {
+            defaults.removeObject(forKey: key)
+        }
         defaults.set(false, forKey: Pref.frame)
 
         // Hot keys: each handler takes only presses of its own ID (the capture shortcut and the overlay's Esc share the app's target).
