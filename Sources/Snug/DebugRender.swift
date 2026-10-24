@@ -634,6 +634,7 @@ extension DebugRun {
         require(Shortcut.label(from: defaults) == "\u{2303}\u{2325}K", "the recorded shortcut displays from code and modifiers: \(Shortcut.label(from: defaults))")
         let hintFill = overlay.chrome.topBar.groups[0].layer!.backgroundColor.flatMap(NSColor.init(cgColor:))!
         require(hintFill.alphaComponent >= 0.92, "the settings bar is on the chrome surface: \(hintFill.alphaComponent)")
+        requireBackground(overlay)
         exit(EXIT_SUCCESS)
     }
 
@@ -663,6 +664,7 @@ extension DebugRun {
         } else {
             print("capture filter: skipped, this process has no Screen Recording permission")
         }
+        requireBackground(overlay)
         exit(EXIT_SUCCESS)
     }
 

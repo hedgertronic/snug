@@ -261,7 +261,7 @@ final class OverlayView: NSView {
         }
         // A new hover target, or none, crossfades the dim in 150 ms; a drag or selection changes it at once.
         let hovering = o.selection == nil && o.preview == nil && o.ghost == nil
-        if hovering, let previous = dimTarget, previous != o.hover, !jumping, controller?.isHeadless == false {
+        if hovering, let previous = dimTarget, previous != o.hover, !jumping, controller?.animates == true {
             let fade = CATransition()
             fade.type = .fade
             fade.duration = 0.15

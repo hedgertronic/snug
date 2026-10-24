@@ -173,9 +173,9 @@ extension DebugRun {
         open()
         select(CGRect(x: 600, y: 300, width: 400, height: 200))
         overlay.chrome.strip.layer!.removeAllAnimations()
-        overlay.isHeadless = false
+        overlay.animates = true
         key(9, "v")
-        overlay.isHeadless = true
+        overlay.animates = false
         let armFade = overlay.chrome.strip.layer!.animation(forKey: kCATransition)
         require(overlay.armedRecording != nil && (NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? armFade == nil : armFade?.duration == 0.14),
                 "with motion, arming cross-fades the strip over 140 ms (Reduce Motion \(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)): \(String(describing: armFade))")

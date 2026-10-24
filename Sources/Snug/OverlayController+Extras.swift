@@ -229,7 +229,7 @@ extension OverlayController {
         let armed = armedRecording != nil
         guides.crosshair.isHidden = armed || !defaults.bool(forKey: Pref.crosshair)
         let animation = GuidesAnimation(rawValue: defaults.string(forKey: Pref.guidesAnimation)!)!
-        let animated = !isHeadless && animation != GuidesAnimation.none
+        let animated = animates && animation != GuidesAnimation.none
         guides.setShown(guides.rulers, !armed && defaults.bool(forKey: Pref.rulers), from: animation == .slide ? Guides.rulersHiddenTransform : CATransform3DIdentity, animated: animated)
         guides.setShown(guides.loupe, !armed && scrollArea == nil && mode != .text && defaults.bool(forKey: Pref.loupe), from: Guides.loupeHiddenTransform, animated: animated)
         guides.slidesPlacement = animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion

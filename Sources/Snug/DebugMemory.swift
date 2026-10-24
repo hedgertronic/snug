@@ -126,6 +126,7 @@ extension DebugRun {
                 print("cycle \(cycle): footprint \(footprint())")
             }
         }
+        requireBackground(overlay)
         exit(EXIT_SUCCESS)
     }
 }

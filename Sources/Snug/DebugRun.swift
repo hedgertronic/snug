@@ -8,7 +8,17 @@ import ScreenshotCore
 enum DebugRun {
     static func privateSetup(_ overlay: OverlayController, timeout: Duration = .seconds(120)) -> URL {
         overlay.isHeadless = true
+        overlay.animates = false
+        overlay.chooseSaveURL = { _ in preconditionFailure("a debug run shows no Save As panel") }
+        overlay.openURL = { preconditionFailure("a debug run opens nothing: \($0)") }
         Toast.isSuppressed = true
+        // A debug run never takes the keyboard or activation from the app in front: either ends it at once.
+        for name in [NSWindow.didBecomeKeyNotification, NSApplication.didBecomeActiveNotification] {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: nil) { note in
+                FileHandle.standardError.write(Data("Debug run took focus: \(note.name.rawValue) \(note.object.map { "\($0)" } ?? "")\n".utf8))
+                exit(EXIT_FAILURE)
+            }
+        }
         Task {
             try? await Task.sleep(for: timeout)
             FileHandle.standardError.write(Data("Debug run timed out after \(timeout)\n".utf8))
@@ -25,6 +35,12 @@ enum DebugRun {
         overlay.defaults = defaults
         overlay.pasteboard = NSPasteboard.withUniqueName()
         return folder
+    }
+
+    /// Ends a headless check: Snug is not active, no window is key, and the overlay never registered its Esc hot key.
+    static func requireBackground(_ overlay: OverlayController?) {
+        precondition(!NSApp.isActive && !NSApp.windows.contains(where: \.isKeyWindow) && overlay?.escape == nil,
+                     "the debug run stayed in the background: active \(NSApp.isActive), key \(NSApp.windows.filter(\.isKeyWindow)), Esc hot key \(overlay?.escape != nil)")
     }
 
     static func pngSize(_ data: Data?) -> CGSize? {
@@ -612,6 +628,7 @@ enum DebugRun {
 
         passed += try await verifyEditing(image: image, frame: frame, overlay: overlay, folder: folder)
 
+        requireBackground(overlay)
         print("Area UI verification passed (\(passed.count) checks)")
         passed.forEach { print("  ok: \($0)") }
         exit(EXIT_SUCCESS)
@@ -757,6 +774,7 @@ enum DebugRun {
         } else {
             print("capture               skipped: this process has no Screen Recording permission")
         }
+        requireBackground(overlay)
         exit(EXIT_SUCCESS)
     }
 }

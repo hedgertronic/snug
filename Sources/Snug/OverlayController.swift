@@ -7,7 +7,8 @@ import Translation
 /// overlay is drawn: until then the app being left keeps the cursor (Finder holds it at the arrow).
 @MainActor
 final class OverlayWindow: NSPanel {
-    override var canBecomeKey: Bool { true }
+    /// Debug runs send their events to the window directly; it never becomes key there, so the keyboard stays with the app in front.
+    override var canBecomeKey: Bool { (contentView as? OverlayView)?.controller?.isHeadless != true }
 
     init() {
         super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -62,8 +63,11 @@ final class OverlayController {
     var pasteboard = NSPasteboard.general
     var defaults = UserDefaults.standard
     var mode = Mode.capture
-    /// Debug runs drive the window with synthesized events; it stays transparent, below other apps' windows' level, and never takes focus.
+    /// Debug runs drive the window with synthesized events; it stays transparent, below other apps' windows' level, and never takes focus,
+    /// activates, beeps, registers a hot key or reaches outside the process.
     var isHeadless = false
+    /// Chrome, guides, the dim and key jumps animate; debug runs turn this off, and on only around the event whose animation they check.
+    var animates = true
 
     /// The system alert for a key that can't act here; silent in debug runs, which hit these paths on purpose.
     func beep() { if !isHeadless { NSSound.beep() } }
@@ -212,7 +216,7 @@ final class OverlayController {
     var previousApp: NSRunningApplication?
     /// Esc as a global hot key while the overlay is up (never in debug runs): Snug is not the active app (see `OverlayWindow`), and when
     /// the shortcut opened the overlay over another app's open menu a plain Esc would go to that app. A press reaches the overlay as its Esc key.
-    private var escape: HotKey?
+    private(set) var escape: HotKey?
     private var interaction = Interaction.none
     private var snapSuggestions: [CGRect] = []
     /// Debug runs replace the accessibility lookup behind snap fits and edges with synthetic frames (image pixels).
@@ -1095,7 +1099,7 @@ final class OverlayController {
         overlays.downHintRadii = overlays.downHint.map(cornerRadii) ?? .zero
         // The padded card of an area or element; a live window's real shadow has no card to preview.
         if let rect = selection?.rect, framed, !capturesLiveWindow(rect) { overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, framed: true) }
-        jumping = keyJump && !isHeadless && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion && selection == nil
+        jumping = keyJump && animates && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion && selection == nil
             && overlays.hover != nil && view.overlays.hover != nil && overlays.hover != view.overlays.hover
         view.overlays = overlays
         refreshExtras()

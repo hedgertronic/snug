@@ -74,6 +74,7 @@ extension DebugRun {
             overlay.present(image: image, frame: frame, displayID: nil)
         }
         overlay.dismiss()
+        requireBackground(overlay)
         exit(EXIT_SUCCESS)
     }
 }

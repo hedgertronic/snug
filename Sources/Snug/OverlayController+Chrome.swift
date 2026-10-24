@@ -168,11 +168,11 @@ extension OverlayController {
         if c.topBar.appearance?.name != look?.name {
             for item in c.all + [cornerChip, view.guides.readout] where item !== c.help { item.appearance = look }
         }
-        // Chrome motion, off headless and with Reduce Motion: the strip's buttons cross-fade their labels and caps and animate their
+        // Chrome motion, off in debug runs and with Reduce Motion: the strip's buttons cross-fade their labels and caps and animate their
         // widths, the strip moves and resizes, the settings bar slides, and the chips and strip fade in and out, 140 ms, ease out.
         // Everything else, the hover outline and the selection among it, changes at once. Frames take their final values at once; the
         // layers animate to them.
-        let motion = !isHeadless && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let motion = animates && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         // A key's jump to another hover candidate moves the chrome on the outline's own 100 ms animation, so nothing trails it.
         let duration = jumping ? Self.jumpDuration : Self.motionDuration
         // The chrome on the hover outline and where each piece showed, which a jump moves from there to its new place.

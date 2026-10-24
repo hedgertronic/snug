@@ -964,6 +964,7 @@ extension DebugRun {
                 "a selection across both columns boxes both: \(columns)")
         overlay.dismiss()
 
+        requireBackground(overlay)
         print("Text UI verification passed (\(passed.count) checks):")
         passed.forEach { print("- \($0)") }
         exit(EXIT_SUCCESS)

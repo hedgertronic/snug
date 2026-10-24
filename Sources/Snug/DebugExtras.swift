@@ -331,10 +331,10 @@ extension DebugRun {
             open()
             overlay.updateGuides()
             for layer in [guides.rulers, guides.loupe] { layer.removeAllAnimations() }
-            overlay.isHeadless = false
+            overlay.animates = true
             for key in [Pref.rulers, Pref.loupe] { defaults.set(true, forKey: key) }
             overlay.updateGuides()
-            overlay.isHeadless = true
+            overlay.animates = false
             let rulersGroup = guides.rulers.animation(forKey: "transition") as? CAAnimationGroup
             require((rulersGroup != nil) == animates && (guides.loupe.animation(forKey: "transition") != nil) == animates, "\(animation): the layers \(animates ? "animate" : "flip at once")")
             require(animates || (guides.rulers.animationKeys() == nil && guides.loupe.animationKeys() == nil), "none: no implicit animation runs either")
@@ -1122,9 +1122,9 @@ extension DebugRun {
         // With motion (a live overlay without Reduce Motion), Command cross-fades Copy's label and caps and animates its width, 140 ms,
         // while its frame reads the final value at once; headless, nothing animates.
         let restCopy = chrome.copy.frame
-        overlay.isHeadless = false
+        overlay.animates = true
         flags(.command)
-        overlay.isHeadless = true
+        overlay.animates = false
         let copyLayer = chrome.copy.layer!, animating = copyLayer.animationKeys() ?? []
         require(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
                     ? animating.isEmpty : animating.contains("transition") && copyLayer.animation(forKey: "transition")?.duration == 0.14
@@ -1157,9 +1157,9 @@ extension DebugRun {
         flags([])
         // With motion the name's chip fades out when the pointer leaves the tool, and is hidden at once.
         chrome.toolTip.layer!.removeAllAnimations()
-        overlay.isHeadless = false
+        overlay.animates = true
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
-        overlay.isHeadless = true
+        overlay.animates = false
         let tipFade = chrome.toolTip.layer!.animationKeys() ?? []
         require(chrome.toolTip.isHidden && (NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? tipFade.isEmpty : chrome.toolTip.layer!.animation(forKey: "transition")?.duration == 0.14),
                 "moving off the tool hides its name at once, with a 140 ms fade under motion: \(tipFade)")
@@ -1529,9 +1529,9 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
         require(chrome.radius.isHidden, "a hover with its measured radius shows no radius chip")
         // With motion the radius chip fades in; it is shown at once.
-        overlay.isHeadless = false
+        overlay.animates = true
         key(30, "]")
-        overlay.isHeadless = true
+        overlay.animates = false
         let radiusFade = chrome.radius.layer!.animationKeys() ?? []
         require(!chrome.radius.isHidden && (NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? radiusFade.isEmpty : radiusFade.contains("transition")),
                 "with motion, the radius chip fades in and is shown at once: \(radiusFade)")
@@ -1560,9 +1560,9 @@ extension DebugRun {
         let hintsBefore = [overlay.view.overlays.upHint, overlay.view.overlays.downHint].compactMap { $0 }.count
         settleJump()
         let jumpStart = overlay.view.levelHintLayer.convertTime(CACurrentMediaTime(), from: nil)
-        overlay.isHeadless = false
+        overlay.animates = true
         key(126, "")
-        overlay.isHeadless = true
+        overlay.animates = false
         let jumped = jumpAnimations(), hoverAfter = overlay.view.overlays.hover, stripAfter = chrome.strip.frame, chipAfter = chrome.hover.frame
         require(hoverAfter != hoverBefore && hoverAfter != nil, "Up moves the hover to another candidate: \(String(describing: hoverBefore)) to \(String(describing: hoverAfter))")
         // The hint layer gets no path animation, only the delayed fade, even though the jump changes how many hints it holds; each
@@ -1590,18 +1590,18 @@ extension DebugRun {
                 "the animated jump's frames equal an instant placement, and headless nothing animates: \(chrome.strip.frame) \(stripAfter)")
         // The pointer's hover change moves outline and strip at once, and so does a repeated key.
         settleJump()
-        overlay.isHeadless = false
+        overlay.animates = true
         mouse(.mouseMoved, CGPoint(x: jumpAim.x + 100, y: jumpAim.y))
-        overlay.isHeadless = true
+        overlay.animates = false
         require(overlay.view.overlays.hover != hoverAfter, "the pointer returns the hover to the element under it")
         require(jumpAnimations().enumerated().allSatisfy { $0.offset == 1 || $0.element.isEmpty }, "with motion, a pointer hover change moves the outline, strip and chip at once: \(jumpAnimations())")
         settleJump()
-        overlay.isHeadless = false
+        overlay.animates = true
         for type in [NSEvent.EventType.keyDown, .keyUp] {
             overlay.window.sendEvent(NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
                 windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: true, keyCode: 126)!)
         }
-        overlay.isHeadless = true
+        overlay.animates = false
         require(overlay.view.overlays.hover == hoverAfter && jumpAnimations().allSatisfy(\.isEmpty), "with motion, a repeated Up moves the hover at once: \(jumpAnimations())")
         overlay.dismiss()
 
@@ -1650,9 +1650,9 @@ extension DebugRun {
                 require(overlay.view.viewRect(rect).contains(group), "in the large selection the arrow caps and the legend sit inside it: \(group)")
                 // With motion, an arrow nudge moves the strip with its outline at once: nothing in the strip animates its position.
                 let stripTop = chrome.strip.frame.maxY
-                overlay.isHeadless = false
+                overlay.animates = true
                 key(125, "")
-                overlay.isHeadless = true
+                overlay.animates = false
                 func moving(_ view: NSView) -> [String] { (view.layer!.animationKeys() ?? []) + view.subviews.flatMap(moving) }
                 require(moving(chrome.strip).isEmpty && chrome.strip.frame.maxY == stripTop - 1 / overlay.scale,
                         "with motion, an arrow nudge moves the strip with the outline and animates nothing: \(moving(chrome.strip)) \(chrome.strip.frame.maxY) from \(stripTop)")
@@ -2181,6 +2181,7 @@ extension DebugRun {
         }
         require(fired == [7, 8, 7] && hotKeys.count == 2, "each hot key acts on its own presses only: \(fired)")
 
+        requireBackground(overlay)
         print("Extras UI verification passed (\(passed.count) checks)")
         passed.forEach { print("  ok: \($0)") }
         exit(EXIT_SUCCESS)
@@ -2267,6 +2268,7 @@ extension DebugRun {
                                          defaults: trashDefaults, pasteboard: $0) }
         require(colorBoard.string(forType: .string) == "#3A7BD5", "Copy puts the color value on the pasteboard again")
 
+        requireBackground(nil)
         print("Toast trash verification passed (\(passed.count) checks)")
         passed.forEach { print("  ok: \($0)") }
         exit(EXIT_SUCCESS)

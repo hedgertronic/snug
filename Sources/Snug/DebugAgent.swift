@@ -14,6 +14,7 @@ extension DebugRun {
             }
             passed.append(message)
         }
+        requireBackground(overlay)
         print("Agent UI verification passed (\(passed.count) checks)")
         passed.forEach { print("  ok: \($0)") }
         exit(EXIT_SUCCESS)
