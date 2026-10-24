@@ -69,7 +69,8 @@ public enum TextLayout {
     /// several OCR lines (Live Text joins columns) gives each of them, longest first, each taking its text out of the selected line so a
     /// short OCR line ("x") matches only letters the longer ones left. One inside an OCR line (a partly selected line) takes that
     /// line's box, and one that goes on where the previous one ended inside the same OCR line (Live Text splits a row) joins it.
-    /// Matching ignores case and whitespace. A selected line found nowhere goes on its own row below the previous one.
+    /// Matching ignores case and whitespace. A line inside an OCR line takes the first one at or below the previous placed line, so a
+    /// short one ("Snug") is not placed on a line far above. A selected line found nowhere goes on its own row below the previous one.
     public static func lines(of selected: String, in ocr: [TextLine]) -> [TextLine] {
         func key(_ text: String) -> String { text.lowercased().filter { !$0.isWhitespace } }
         var unused = ocr.filter { !key($0.text).isEmpty }
@@ -84,9 +85,21 @@ public enum TextLayout {
             if !inside.isEmpty {
                 placed += unused.filter(inside.contains)
                 unused.removeAll { line in inside.contains(line) }
+                // Live Text can pair a wrapped line's start with its wrap ("Nice, team."): text the OCR lines left, 2 letters or more,
+                // goes on the OCR line just above or below them that holds it, with that line's own text, so the next selected line
+                // ("I've saved ...") joins it.
+                let near = inside.map(\.bounds).reduce(inside[0].bounds) { $0.union($1) }.insetBy(dx: 0, dy: -inside[0].bounds.height)
+                for piece in rest.split(separator: "\n") where piece.count >= 2 {
+                    guard let index = unused.firstIndex(where: { $0.bounds.intersects(near) && key($0.text).contains(piece) }) else { continue }
+                    let line = unused.remove(at: index)
+                    let letters = line.text.indices.filter { !line.text[$0].isWhitespace }
+                    let start = key(line.text).distance(from: key(line.text).startIndex, to: key(line.text).range(of: piece)!.lowerBound)
+                    placed.append(TextLine(text: String(line.text[letters[start]...letters[start + piece.count - 1]]), bounds: line.bounds))
+                }
             } else if let last = placed.last, ocr.contains(where: { $0.bounds == last.bounds && key($0.text).contains(key(last.text + text)) }) {
                 placed[placed.count - 1].text += " " + text
-            } else if let index = unused.firstIndex(where: { key($0.text).contains(key(text)) }) {
+            } else if let index = unused.firstIndex(where: { key($0.text).contains(key(text)) && $0.bounds.minY >= (placed.last?.bounds.minY ?? 0) })
+                        ?? unused.firstIndex(where: { key($0.text).contains(key(text)) }) {
                 placed.append(TextLine(text: text, bounds: unused.remove(at: index).bounds))
             } else {
                 let previous = placed.last?.bounds ?? .zero
