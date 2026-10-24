@@ -359,11 +359,12 @@ extension DebugRun {
         pick("Portrait")
         require(overlay.selection?.rect == CGRect(x: 438, y: 300, width: 125, height: 200),
                 "Portrait flips the lock to 10:16 from the same selection: \(String(describing: overlay.selection?.rect))")
-        key(35, "p")
+        require(!menu.isHidden, "Portrait keeps the menu open for the next pick")
         require(["3:4", "2:3", "10:16", "9:16", "9:21"].allSatisfy { title in menu.items.contains { $0.title == title } }
                 && menu.items.last?.title == "Portrait" && menu.items.last?.on == true, "with Portrait on the presets read tall")
         pick("Portrait")
-        require(overlay.selection?.rect == CGRect(x: 340, y: 300, width: 320, height: 200), "Portrait off flips the lock back: \(String(describing: overlay.selection?.rect))")
+        require(overlay.selection?.rect == CGRect(x: 340, y: 300, width: 320, height: 200) && !menu.isHidden,
+                "Portrait off flips the lock back and keeps the menu open: \(String(describing: overlay.selection?.rect))")
         key(right)
         pick("1:1")
         require(overlay.selection?.rect == CGRect(x: 401, y: 300, width: 200, height: 200), "after a nudge, a pick conforms the nudged rectangle: \(String(describing: overlay.selection?.rect))")
