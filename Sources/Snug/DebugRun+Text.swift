@@ -364,6 +364,42 @@ extension DebugRun {
         hold.isEnabled = false
         suffix = ""
 
+        // A terminal's list over a busy blurred wallpaper, 2560 x 1600: accurate OCR of the whole screen in one pass drops some items'
+        // "- " markers; read in bands it keeps every one. Return on a box over the text copies each item and sub-item on its own line
+        // with its marker. F then Return copies what the Live Text selection spans, with a partly matched line's text taken from Live
+        // Text, which loses markers too; that only prints.
+        let terminal = fixtureImage("Tests/Fixtures/terminal-list-blurred.png")
+        let listItems = ["shadow opacity", "shadow size (blur)", "corner radius of the card", "padding around the content", "Default: medium padding",
+                         "Small keeps the card", "Large leaves room", "Custom: the four values", "does the shadow follow", "should the padding scale", "is a color picker"]
+        func unmarked(_ copied: String?) -> [String] {
+            listItems.filter { item in !(copied ?? "").split(separator: "\n").contains { $0.hasPrefix("- " + item) } }
+        }
+        for boxed in [true, false] {
+            overlay.present(image: terminal, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(terminal.width) / 2, height: CGFloat(terminal.height) / 2), displayID: nil)
+            key(tKey, "t")
+            try await waitFor("the terminal fixture's Live Text analysis attaches") { liveText.analysis != nil }
+            if boxed {
+                mouse(.leftMouseDown, CGPoint(x: 140, y: 120))
+                mouse(.leftMouseDragged, CGPoint(x: 1400, y: 1300))
+                mouse(.leftMouseUp, CGPoint(x: 1400, y: 1300))
+                await overlay.textTask?.value
+            } else {
+                let transcript = liveText.text.split(separator: "\n")
+                print("Terminal fixture: Live Text reads \(listItems.filter { item in transcript.contains { $0.contains(item) } }.count) of \(listItems.count) items, "
+                      + "\(listItems.filter { item in transcript.contains { $0.hasPrefix("- " + item) } }.count) with their marker")
+                key(fKey, "f")
+            }
+            pasteboard.clearContents()
+            key(returnKey, "\r")
+            let copiedTerminal = await copied()
+            if boxed {
+                require(unmarked(copiedTerminal).isEmpty && !overlay.window.isVisible,
+                        "Return on a box over the terminal's text copies every list item on its own line with its \"- \" marker: missing \(unmarked(copiedTerminal)) in \(copiedTerminal.debugDescription)")
+            } else {
+                print("Terminal fixture: F then Return misses the marker of \(unmarked(copiedTerminal))")
+            }
+        }
+
         // Esc with focus in Live Text closes.
         try await open()
         textDrag(from: CGPoint(x: productName.minX + 10, y: productName.midY), to: CGPoint(x: productName.maxX - 10, y: productName.midY))

@@ -399,20 +399,29 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         }
     }
 
-    /// Runs accurate OCR on the crop only; boxes come back in full-image pixels.
+    /// Runs accurate OCR on the crop only, in 432 px bands read at once when it is taller than 648 px (`TextLayout.bands`); boxes come
+    /// back in full-image pixels.
     @concurrent
     static func recognize(_ image: CGImage, crop: CGRect) async throws -> [TextLine] {
         let region = crop.integral
-        let cropped = image.cropping(to: region)!
-        let size = CGSize(width: cropped.width, height: cropped.height)
-        var request = RecognizeTextRequest()
-        request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = true
-        request.automaticallyDetectsLanguage = true
-        return try await ImageRequestHandler(cropped).perform(request).map {
-            TextLine(text: $0.topCandidates(1)[0].string,
-                     bounds: $0.boundingBox.toImageCoordinates(size, origin: .upperLeft).offsetBy(dx: region.minX, dy: region.minY))
+        let reads = try await withThrowingTaskGroup(of: (band: CGRect, lines: [TextLine]).self) { group in
+            for band in TextLayout.bands(region, height: 432) {
+                group.addTask {
+                    let cropped = image.cropping(to: band)!
+                    let size = CGSize(width: cropped.width, height: cropped.height)
+                    var request = RecognizeTextRequest()
+                    request.recognitionLevel = .accurate
+                    request.usesLanguageCorrection = true
+                    request.automaticallyDetectsLanguage = true
+                    return (band, try await ImageRequestHandler(cropped).perform(request).map {
+                        TextLine(text: $0.topCandidates(1)[0].string,
+                                 bounds: $0.boundingBox.toImageCoordinates(size, origin: .upperLeft).offsetBy(dx: band.minX, dy: band.minY))
+                    })
+                }
+            }
+            return try await group.reduce(into: []) { $0.append($1) }
         }
+        return TextLayout.merge(reads, in: region)
     }
 
     /// Shift-Return: copies the selected text as rows, one visual row per line with columns tab-separated, from accurate OCR boxes
