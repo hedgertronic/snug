@@ -31,9 +31,9 @@ enum ChromiumAccessibility {
         return pids.filter { $0 != getpid() && NSRunningApplication(processIdentifier: $0)?.bundleURL.map(isChromium) == true }.sorted()
     }
 
-    /// Turns on `pid`'s accessibility with Electron's light switch, `AXManualAccessibility`. An app that has no such attribute (Chrome,
-    /// untested) gets `AXEnhancedUserInterface`, which also makes window managers stop animating that app's windows. The app takes
-    /// about two seconds to build what word boxes need.
+    /// Turns on `pid`'s accessibility with Electron's light switch, `AXManualAccessibility`. An app whose setter answers that the
+    /// attribute is unsupported gets `AXEnhancedUserInterface` instead, which can disturb window managers' animations (untested on
+    /// any app). The app takes about two seconds to build what word boxes need.
     @concurrent
     static func enable(pid: pid_t) async {
         let application = AXUIElementCreateApplication(pid)

@@ -50,7 +50,7 @@ extension ScreenTextReader {
                 guard text, let value = node.value else { return node.children.forEach { walk($0, depth: depth + 1) } }
                 let words = ChromiumText.words(in: value)
                 var answered = false
-                for (index, word) in words.enumerated() where pieces.count < maxWords {
+                for (index, word) in words.enumerated() where pieces.count < maxWords && began.duration(to: .now) < budget {
                     var range = CFRange(location: word.utf16.lowerBound, length: word.utf16.count)
                     var raw: CFTypeRef?
                     var box = CGRect.zero
