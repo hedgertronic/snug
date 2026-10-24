@@ -110,8 +110,8 @@ final class OverlayView: NSView {
     private let focusedDotLayer = CAShapeLayer()
     /// Text mode's pills under Live Text: the box's lines, and the flash of the lines found on entering it, which sweeps in under
     /// `flashMask` and fades out.
-    private let pillsLayer = CAShapeLayer()
-    private let flashLayer = CAShapeLayer()
+    let pillsLayer = CAShapeLayer()
+    let flashLayer = CAShapeLayer()
     private let flashMask = CALayer()
 
     override init(frame: NSRect) {

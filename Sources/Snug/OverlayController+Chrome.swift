@@ -161,7 +161,8 @@ extension OverlayController {
         let released = mode == .capture && selection != nil
         let editing = released && armedRecording == nil
         let tint = view.highlight?.color ?? .controlAccentColor
-        let restyle = tint != Chrome.tint
+        let restyle = tint.cgColor != c.drawnTint
+        c.drawnTint = tint.cgColor
         Chrome.tint = tint
         let look = Chrome.appearance(defaults)
         // The keys sheet keeps its own dark material.
