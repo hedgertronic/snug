@@ -184,7 +184,7 @@ enum DebugRun {
         for digit in ["1", "2", "3"] { key(0, digit, .command) }
         require(overlay.framed, "Cmd-1, Cmd-2 and Cmd-3 do nothing now")
         for (stored, framed) in [("backdrop", true), ("tight", false), ("margin", false)] {
-            let legacy = UserDefaults(suiteName: "snug-migrate-\(UUID().uuidString)")!
+            let legacy = UserDefaults(suiteName: FileManager.default.temporaryDirectory.appending(path: "snug-migrate-\(UUID().uuidString)").path)!
             legacy.set(stored, forKey: "SnugStyle")
             Pref.register(in: legacy)
             require(legacy.bool(forKey: Pref.frame) == framed && legacy.object(forKey: "SnugStyle") == nil,

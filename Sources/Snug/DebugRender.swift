@@ -771,7 +771,7 @@ extension DebugRun {
                 exit(EXIT_FAILURE)
             }
         }
-        let defaults = UserDefaults(suiteName: "snug-render-toast-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: FileManager.default.temporaryDirectory.appending(path: "snug-render-toast-\(UUID().uuidString)").path)!
         Pref.register(in: defaults)
         let screenshot = try await Output.png(image.cropping(to: CGRect(x: 0, y: 0, width: 1280, height: 800))!)
         // A very tall and a very wide capture: the screenshot tiled, the tall one with an orange band across its top 300 px.
@@ -791,10 +791,10 @@ extension DebugRun {
         let movie = URL(fileURLWithPath: "/tmp/Snug 2026-10-22 at 14.03.11.mov")
         let longMovie = URL(fileURLWithPath: "/tmp/Snug 2026-10-22 at 14.03.11 onboarding walkthrough for review 11.mov")
         let swatch = NSColor(srgbRed: 0x3A / 255, green: 0x7B / 255, blue: 0xD5 / 255, alpha: 1)
-        let topRight = UserDefaults(suiteName: "snug-render-toast-\(UUID().uuidString)")!
+        let topRight = UserDefaults(suiteName: FileManager.default.temporaryDirectory.appending(path: "snug-render-toast-\(UUID().uuidString)").path)!
         Pref.register(in: topRight)
         topRight.set("topRight", forKey: Pref.toastPosition)
-        let yellow = UserDefaults(suiteName: "snug-render-toast-\(UUID().uuidString)")!
+        let yellow = UserDefaults(suiteName: FileManager.default.temporaryDirectory.appending(path: "snug-render-toast-\(UUID().uuidString)").path)!
         Pref.register(in: yellow)
         yellow.set("#FFC600", forKey: Pref.highlightColor)
         let longWarning = "Pinned or moving content: the header and sidebar stayed fixed while the page scrolled, so 120 px at 4 seams may repeat. Check the stitch before sharing."

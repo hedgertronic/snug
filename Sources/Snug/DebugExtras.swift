@@ -646,7 +646,7 @@ extension DebugRun {
         // The toast: one capsule with the thumbnail, its size, position, and lifetime, and the preview in its own panel.
         let capture = try await Output.png(image.cropping(to: CGRect(x: 0, y: 0, width: 1200, height: 400))!)
         func toast(_ setup: (UserDefaults) -> Void = { _ in }) -> Toast {
-            let toastDefaults = UserDefaults(suiteName: "snug-toast-\(UUID().uuidString)")!
+            let toastDefaults = UserDefaults(suiteName: FileManager.default.temporaryDirectory.appending(path: "snug-toast-\(UUID().uuidString)").path)!
             Pref.register(in: toastDefaults)
             setup(toastDefaults)
             return Toast(png: capture, message: "Copied", detail: "1200 x 400", file: nil, color: nil, defaults: toastDefaults)
@@ -718,7 +718,7 @@ extension DebugRun {
                 "leaving puts the text back in the same place and restarts the timer")
         plain.dismissal?.cancel()
         // A failure with nothing to show keeps its text on hover, with only the close button; its lead is the red mark.
-        let failureDefaults = UserDefaults(suiteName: "snug-toast-\(UUID().uuidString)")!
+        let failureDefaults = UserDefaults(suiteName: FileManager.default.temporaryDirectory.appending(path: "snug-toast-\(UUID().uuidString)").path)!
         Pref.register(in: failureDefaults)
         let failure = Toast(png: nil, message: "Capture failed", detail: "The display is not available.", file: nil, color: .systemRed, defaults: failureDefaults)
         failure.setHovering(true)
@@ -2244,7 +2244,7 @@ extension DebugRun {
         try FileManager.default.createDirectory(at: saveFolder, withIntermediateDirectories: true)
         // Trash moves the saved file to the Trash and clears the pasteboard only if it still holds this capture; the toast closes. A recording's
         // toast names the default app for movies and its pasteboard holds the file URL.
-        let trashDefaults = UserDefaults(suiteName: "snug-toast-\(UUID().uuidString)")!
+        let trashDefaults = UserDefaults(suiteName: FileManager.default.temporaryDirectory.appending(path: "snug-toast-\(UUID().uuidString)").path)!
         Pref.register(in: trashDefaults)
         func trashing(_ name: String, holding: (NSPasteboard, URL) -> Void) throws -> (toast: Toast, pasteboard: NSPasteboard) {
             let file = saveFolder.appending(path: name)
