@@ -75,8 +75,10 @@ extension DebugRun {
             let selectionView = textView(in: liveText)!
             if !selectionView.gestureRecognizers.contains(hold) { selectionView.addGestureRecognizer(hold) }
         }
+        /// The pasteboard's text once the read and any translation it starts are done.
         func copied() async -> String? {
-            await overlay.commitTask?.value
+            await overlay.textTask?.value
+            await overlay.textTask?.value
             return pasteboard.string(forType: .string)
         }
 
@@ -196,8 +198,9 @@ extension DebugRun {
             require(!liveText.selectedText.contains("Billing"), "the drag selects only what it covers")
             pasteboard.clearContents()
             key(returnKey, "\r")
-            require(!overlay.window.isVisible, "Return after a drag reaches the overlay and closes it")
+            require(overlay.text.reading != nil, "Return after a drag reaches the overlay and reads the boxes")
             let line = await copied() ?? ""
+            require(!overlay.window.isVisible, "Return closes the overlay once it copies")
             require(line.contains("Product name") && !line.contains("Billing"), "Return copies the selected text: \(line.debugDescription)")
 
             // A drag across a whole line reaches its last word, and a double click on the last word selects exactly that word.
@@ -336,7 +339,14 @@ extension DebugRun {
                 require(text.hasPrefix("1. Menu bar icon") && text.contains("which is almost never.") && !text.contains("3. A capture"),
                         "a drag that ends at x \(Int(endX)), right of the short row, selects through it: \(text.debugDescription)")
             }
-            overlay.dismiss()
+            // Return copies the list with each item and sub-bullet on its own line and the wrapped item joined into one.
+            textDrag(from: CGPoint(x: 250, y: 81), to: CGPoint(x: 1455, y: 224))
+            pasteboard.clearContents()
+            key(returnKey, "\r")
+            let list = (await copied() ?? "").split(separator: "\n")
+            require(["1. Menu bar icon", "- A is the sharper", "- D at 1x", "2. Tab", "3. A capture", "4. Cleanup"].allSatisfy { start in list.filter { $0.hasPrefix(start) }.count == 1 }
+                    && list.contains { $0.hasPrefix("2. Tab") && $0.hasSuffix("real alternative, which is almost never.") } && !overlay.window.isVisible,
+                    "Return on the list copies one line per item and sub-bullet, the wrapped item joined: \(list)")
         }
         // The rest runs with presses reaching Live Text at once: a held press in the found-items fixture started a drag session that waits
         // for a real mouse up.
@@ -351,7 +361,7 @@ extension DebugRun {
         require(!overlay.window.isVisible, "Esc after a drag in the text closes")
 
         // A drag that starts off text draws a box like Capture's drag, never a Live Text selection, and on release copies the text
-        // inside the box in reading order. Here the box starts left of the Address label and covers that block's four lines.
+        // inside the box with soft wraps joined. Here the box starts left of the Address label and covers that block's four lines.
         let boxStart = CGPoint(x: 300, y: 900), boxEnd = CGPoint(x: 1590, y: 1230)
         try await open()
         mouse(.mouseMoved, boxStart)
@@ -375,7 +385,7 @@ extension DebugRun {
         await overlay.textTask?.value
         let boxed = await copied()
         require(boxed == "Address\n1234 Main St\nAddress 2 (Optional)\nApartment or suite" && !overlay.window.isVisible,
-                "the release copies the box's lines in reading order and closes: \(boxed.debugDescription)")
+                "the release copies the box's lines, evenly spaced so without blank lines, and closes: \(boxed.debugDescription)")
         // A drag that starts on text never draws a box.
         try await open()
         mouse(.leftMouseDown, CGPoint(x: productName.minX + 10, y: productName.midY))
@@ -407,7 +417,9 @@ extension DebugRun {
                 "a drag down selects across lines in order: \(lines.debugDescription)")
         pasteboard.clearContents()
         key(cKey, "c", .command)
-        require(!overlay.window.isVisible && pasteboard.string(forType: .string) == lines, "Cmd-C copies the selection and closes")
+        let joined = await copied()
+        require(!overlay.window.isVisible && joined == "Product name $12 Brief description\n\nSecond product $8 Brief description",
+                "Cmd-C copies the cart rows the selection spans, prices in their rows and the other column left out, and closes: \(joined.debugDescription) (Live Text: \(lines.debugDescription))")
 
         // Double click selects a word, triple click the line.
         try await open()
@@ -434,7 +446,9 @@ extension DebugRun {
         require(liveText.selectedText == all && all.count > 100, "F selects all text on screen")
         pasteboard.clearContents()
         key(returnKey, "\r")
-        require(await copied() == all, "Return copies all of it")
+        let allCopied = await copied() ?? ""
+        require(allCopied.hasPrefix("Below is an example form") && allCopied.hasSuffix("Save this information for next time") && allCopied.contains("Product name $12"),
+                "Return copies all of it; the form beside the cart is no prose, so rows stay whole with their prices: \(allCopied.debugDescription)")
 
         // C copies the color under the pointer.
         try await open()
@@ -482,7 +496,7 @@ extension DebugRun {
         overlay.translate = { text, _, _ in sent = text; return "UEBERSETZT" }
         key(returnKey, "\r", .option)
         await overlay.textTask?.value
-        require(await copied() == "UEBERSETZT" && sent == all && !overlay.window.isVisible, "an installed pair translates the selected text and copies the translation")
+        require(await copied() == "UEBERSETZT" && sent == allCopied && !overlay.window.isVisible, "an installed pair translates the text Return copies and copies the translation")
         overlay.targetLanguage = Locale.Language(identifier: "en")
         try await open()
         key(fKey, "f")
@@ -590,7 +604,9 @@ extension DebugRun {
         liveText.selectedRanges = [transcript.range(of: "Product name")!.lowerBound..<transcript.range(of: "Second product")!.upperBound]
         pasteboard.clearContents()
         key(returnKey, "\r")
-        require(await copied() == liveOrder, "Return still copies in Live Text's order")
+        let returned = await copied()
+        require(returned == "Product name $12 Brief description\n\nSecond product",
+                "Return copies the rows the selection spans in reading order, not Live Text's: \(returned.debugDescription) (Live Text: \(liveOrder.debugDescription))")
 
         // Found items on a generated page: a link, an email address, a phone number, and a QR code.
         let fixture = itemsFixture(width: image.width, height: image.height)

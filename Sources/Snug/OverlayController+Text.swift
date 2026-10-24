@@ -309,8 +309,9 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
                 text.reading = nil
                 let table = TextLayout.table(rows)
                 let isTable = table.contains("\t") && !translating
-                let lines = "\(rows.count) \(rows.count == 1 ? "line" : "lines")"
-                copyText(isTable ? table : TextLayout.readingOrder(rows), message: isTable ? "Copied as table, \(rows.count) rows" : "Copied \(lines)",
+                let paragraphs = TextLayout.paragraphs(rows)
+                let lines = paragraphs.split(whereSeparator: \.isNewline).count
+                copyText(isTable ? table : paragraphs, message: isTable ? "Copied as table, \(rows.count) rows" : "Copied \(lines) \(lines == 1 ? "line" : "lines")",
                          translating: translating)
                 refresh()
             } catch {
@@ -348,6 +349,28 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
                 try Task.checkCancellation()
                 text.reading = nil
                 copyText(TextLayout.table(rows), message: "Copied \(rows.count) \(rows.count == 1 ? "row" : "rows")", translating: false)
+                refresh()
+            } catch {
+                report(error)
+            }
+        }
+    }
+
+    /// Return / Cmd-C / Option-Return: copies the selected text, or its translation, as accurate OCR reads the span the selection
+    /// covers, with soft wraps joined.
+    func copySelectedText(translating: Bool, key: String) {
+        let selected = view.liveText.selectedText
+        guard !selected.isEmpty, text.reading == nil, let image else { return beep() }
+        guard !waitsForWarmUp(key, { self.copySelectedText(translating: translating, key: key) }) else { return }
+        text.reading = extent
+        textTask = Task {
+            do {
+                let lines = TextLayout.selection(selected, in: try await Self.recognize(image, crop: extent))
+                try Task.checkCancellation()
+                text.reading = nil
+                let copied = TextLayout.paragraphs(TextLayout.rows(lines))
+                let count = copied.split(whereSeparator: \.isNewline).count
+                copyText(copied, message: "Copied \(count) \(count == 1 ? "line" : "lines")", translating: translating)
                 refresh()
             } catch {
                 report(error)
@@ -415,7 +438,8 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     }
 
     /// With an item picked: Return copies it, Cmd-Return opens it, Esc unpicks. Otherwise Esc: close. F: select all text. Return or
-    /// Cmd-C: copy the selection; Shift-Return: copy it as rows; Option-Return: translate it. Tab / Shift-Tab: step through found items.
+    /// Cmd-C: copy the selection with soft wraps joined; Shift-Return: copy it as rows; Option-Return: translate it. Tab / Shift-Tab:
+    /// step through found items.
     func handleTextKey(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags
         let liveText = view.liveText
@@ -444,10 +468,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         case (36, false, _) where flags.contains(.shift):
             copyTextRows()
         case (36, _, _), (76, _, _), (_, true, "c"):
-            let selected = liveText.selectedText
-            guard !selected.isEmpty else { beep(); break }
-            let lines = selected.split(whereSeparator: \.isNewline).count
-            copyText(selected, message: "Copied \(lines) \(lines == 1 ? "line" : "lines")", translating: flags.contains(.option))
+            copySelectedText(translating: flags.contains(.option), key: flags.contains(.option) ? "Option-Return" : event.keyCode == 8 ? "Cmd-C" : "Return")
         default:
             return false
         }
