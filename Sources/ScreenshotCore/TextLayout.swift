@@ -14,20 +14,54 @@ public struct TextLine: Equatable, Sendable {
 
 /// Pure layout logic for recognized text: reading order, paragraphs and table clustering.
 public enum TextLayout {
-    /// Groups lines into rows by vertical overlap with the row's first line, top to bottom, each row left to right.
+    /// Groups lines into rows top to bottom, each row left to right: a line joins the last row when it overlaps any line of it vertically
+    /// by more than half the smaller height. (Against the row's first line alone, a price a few pixels lower than its item's name,
+    /// which joined a row on the other column, started a row of its own.)
     public static func rows(_ lines: [TextLine]) -> [[TextLine]] {
         var rows: [[TextLine]] = []
         for line in lines.sorted(by: { $0.bounds.minY < $1.bounds.minY }) {
-            if let anchor = rows.last?.first?.bounds {
-                let overlap = min(anchor.maxY, line.bounds.maxY) - max(anchor.minY, line.bounds.minY)
-                if overlap > 0.5 * min(anchor.height, line.bounds.height) {
-                    rows[rows.count - 1].append(line)
-                    continue
-                }
-            }
-            rows.append([line])
+            let joins = rows.last?.contains { member in
+                min(member.bounds.maxY, line.bounds.maxY) - max(member.bounds.minY, line.bounds.minY) > 0.5 * min(member.bounds.height, line.bounds.height)
+            } ?? false
+            if joins { rows[rows.count - 1].append(line) } else { rows.append([line]) }
         }
         return rows.map { $0.sorted { $0.bounds.minX < $1.bounds.minX } }
+    }
+
+    /// Full-width bands `height` tall covering `crop` top to bottom, each starting a quarter band before the previous one ends, the
+    /// last ending at the crop's bottom. A crop up to 1.5 bands tall is one band. Accurate OCR reads a tall image's lines less well
+    /// (on a 2560 x 1600 terminal screen it dropped list items' "- " markers) than the same lines in bands.
+    public static func bands(_ crop: CGRect, height: CGFloat) -> [CGRect] {
+        guard crop.height > 1.5 * height else { return [crop] }
+        var bands: [CGRect] = []
+        var y = crop.minY
+        while y + height < crop.maxY {
+            bands.append(CGRect(x: crop.minX, y: y, width: crop.width, height: height))
+            y += (0.75 * height).rounded()
+        }
+        return bands + [CGRect(x: crop.minX, y: crop.maxY - height, width: crop.width, height: height)]
+    }
+
+    /// The lines read in each band, as one read: a line within 3 px of a band edge inside `crop` is cut by it and drops (the overlap
+    /// holds it whole in the next band), and of lines from different bands that overlap by more than half the smaller box, the one
+    /// with the longer text stays.
+    public static func merge(_ reads: [(band: CGRect, lines: [TextLine])], in crop: CGRect) -> [TextLine] {
+        let whole = reads.indices.flatMap { index in
+            let band = reads[index].band
+            return reads[index].lines.filter {
+                !(band.minY > crop.minY && $0.bounds.minY < band.minY + 3) && !(band.maxY < crop.maxY && $0.bounds.maxY > band.maxY - 3)
+            }.map { (index, $0) }
+        }
+        var kept: [(Int, TextLine)] = []
+        for (index, line) in whole.sorted(by: { $0.1.text.count > $1.1.text.count }) {
+            let overlaps = kept.contains { other in
+                let shared = other.1.bounds.intersection(line.bounds)
+                return other.0 != index && !shared.isNull
+                    && shared.width * shared.height > 0.5 * min(other.1.bounds.width * other.1.bounds.height, line.bounds.width * line.bounds.height)
+            }
+            if !overlaps { kept.append((index, line)) }
+        }
+        return kept.map(\.1)
     }
 
     /// Places each line of `selected` (Live Text, which has no boxes) on the OCR line it came from, in order. A selected line holding
