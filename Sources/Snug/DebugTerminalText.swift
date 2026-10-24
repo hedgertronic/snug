@@ -10,6 +10,13 @@ extension DebugRun {
             let began = ContinuousClock.now
             let areas = await Accessibility.terminalRows(pid: app.processIdentifier)
             print("\(app.bundleIdentifier!): \(areas.count) text areas in \(String(format: "%.1f", began.duration(to: .now).milliseconds)) ms")
+            // Text mode keeps an area only when a second read 250 ms later matches; say which rows changed.
+            try? await Task.sleep(for: .milliseconds(250))
+            let again = await Accessibility.terminalRows(pid: app.processIdentifier)
+            for (area, second) in zip(areas, again) {
+                let changed = area.rows.indices.filter { $0 >= second.rows.count || area.rows[$0].text != second.rows[$0].text }
+                print("  second read 250 ms later: \(changed.isEmpty ? "same" : "rows \(changed) changed: " + changed.prefix(3).map { area.rows[$0].text.prefix(60).debugDescription }.joined(separator: ", "))")
+            }
             for area in areas {
                 let text = TerminalText(rows: area.rows, frame: area.frame, window: 0)
                 print("  area \(area.frame), \(area.rows.count) rows")
@@ -117,6 +124,13 @@ extension DebugRun {
         key(8, "c", .command)
         let row2 = await copied()
         require(row2 == "edge and joins.", "Cmd-C copies the clicked row: \(row2.debugDescription)")
+
+        // F selects all of Live Text's text and clears the terminal selection, so Return copies what is highlighted.
+        try await open(windows: [terminalWindow], window: 0)
+        click(CGPoint(x: column(8), y: row(0)), times: 2)
+        key(3, "f")
+        require(overlay.text.terminalSelection == nil && overlay.view.overlays.textPills.isEmpty && !liveText.selectedText.isEmpty,
+                "F selects all of Live Text's text and clears the terminal selection")
 
         // A press on the form's text goes to Live Text and clears the terminal selection.
         try await open(windows: [terminalWindow], window: 0)

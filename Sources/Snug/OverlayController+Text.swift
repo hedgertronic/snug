@@ -585,7 +585,9 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         case (48, false, _):
             stepItem(backward: flags.contains(.shift))
         case (_, false, "f"):
+            text.terminalSelection = nil
             liveText.selectedRanges = [liveText.text.startIndex..<liveText.text.endIndex]
+            refresh()
         case (36, false, _) where flags.contains(.shift):
             copyTextRows()
         case (36, _, _), (76, _, _), (_, true, "c"):

@@ -10,6 +10,7 @@ extension OverlayController {
     func readTerminals() {
         terminalTask?.cancel()
         terminals = []
+        text.terminalSelection = nil
         guard !isHeadless, AXIsProcessTrusted() else { return }
         let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
         let owners = windowIDs.map { id in info.first { $0[kCGWindowNumber as String] as? CGWindowID == id }?[kCGWindowOwnerPID as String] as? pid_t }
@@ -27,13 +28,19 @@ extension OverlayController {
                 try? await Task.sleep(for: .milliseconds(250))
                 let second = await Accessibility.terminalRows(pid: pid)
                 guard !Task.isCancelled else { return }
-                for area in first where second.contains(where: { $0.frame == area.frame && $0.rows.map(\.text) == area.rows.map(\.text) }) {
+                for area in first {
                     let frame = pixels(area.frame)
-                    guard let window = windows.indices.first(where: { owners[$0] == pid && windows[$0].contains(CGPoint(x: frame.midX, y: frame.midY)) }) else { continue }
+                    let window = windows.indices.first { owners[$0] == pid && windows[$0].contains(CGPoint(x: frame.midX, y: frame.midY)) }
+                    let same = second.contains { $0.frame == area.frame && $0.rows.map(\.text) == area.rows.map(\.text) }
+                    Pref.logHoverLine("terminal pid \(pid) area \(frame) \(area.rows.count) rows: "
+                                      + (!same ? "changed between reads, Live Text" : window == nil ? "in no window, Live Text" : "kept, window \(window!)"),
+                                      key: Pref.logText, file: "text.log")
+                    guard same, let window else { continue }
                     read.append(TerminalText(rows: area.rows.map { ($0.text, pixels($0.box)) }, frame: frame, window: window))
                 }
             }
             terminals = read
+            text.terminalSelection = nil
             terminalTask = nil
         }
     }
