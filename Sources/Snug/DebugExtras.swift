@@ -424,7 +424,7 @@ extension DebugRun {
         require(!overlay.window.isVisible && pasteboard.string(forType: .string) == palette[0], "a click on a row copies its value \(palette[0])")
         overlay.dismiss()
 
-        // The ratio menu numbers its nine rows 1-9 (the separator has no cap). Each digit picks its row and closes the menu as a click does,
+        // The ratio menu numbers its nine rows 1-9 (the separator has no cap). Each digit picks its row as a click does (Portrait keeps the menu open),
         // as one undo step; Cmd-Z restores the selection and the lock.
         open()
         let box = CGRect(x: 1000, y: 500, width: 300, height: 200)
@@ -444,9 +444,11 @@ extension DebugRun {
             require(overlay.selection!.rect == box && !overlay.ratioLocked, "undo restores the box after the click on row \(number + 1)")
             key(35, "p")
             key(code, "\(number + 1)")
-            require(ratioMenu.isHidden && overlay.window.isVisible && overlay.window.firstResponder === overlay.view
+            // Portrait opens the menu again with the flipped presets; every other row closes it.
+            let flips = ratioMenu.items[index].title == "Portrait"
+            require(ratioMenu.isHidden != flips && overlay.window.isVisible && overlay.window.firstResponder === (flips ? ratioMenu : overlay.view)
                         && overlay.selection!.rect == byClick.0 && overlay.ratioLocked == byClick.1 && overlay.ratioReadout == byClick.2,
-                    "the \(number + 1) key picks \(ratioMenu.items[index].title) as a click does and closes the menu: \(overlay.selection!.rect) vs \(byClick.0)")
+                    "the \(number + 1) key picks \(ratioMenu.items[index].title) as a click does: \(overlay.selection!.rect) vs \(byClick.0)")
             key(6, "z", .command)
             require(overlay.selection!.rect == box && !overlay.ratioLocked, "undo restores the selection and the lock after the \(number + 1) key")
         }
