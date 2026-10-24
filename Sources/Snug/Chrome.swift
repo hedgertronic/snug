@@ -431,7 +431,8 @@ final class Chrome {
     /// the loupe's readout) keep theirs with or without a key cap inside.
     static let controlHeight: CGFloat = 32
     static let labelHeight: CGFloat = 26
-    /// The highlight color: the primary button, pressed caps, lit toggles, the highlighted menu row. Set on each refresh.
+    /// The highlight color: the primary button, pressed caps, lit toggles, the highlighted menu row. Set on each refresh, and by
+    /// Settings' preview as it draws.
     static var tint = NSColor.controlAccentColor
     /// The look `SnugOverlayAppearance` picks for the chrome; nil follows the system.
     static func appearance(_ defaults: UserDefaults) -> NSAppearance? {
@@ -537,6 +538,8 @@ final class Chrome {
     /// The cap texts of the key just pressed, lit for 150 ms.
     var pressed: Set<String> = []
     var pressTask: Task<Void, any Error>?
+    /// The tint the chrome was last drawn in, resolved. Settings' preview sets `Chrome.tint` too, so a new tint is told from this.
+    var drawnTint: CGColor?
 
     init() {
         ratio.isClickThrough = false

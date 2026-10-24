@@ -1,6 +1,7 @@
 import AppKit
 import Carbon.HIToolbox
 import ScreenshotCore
+import SwiftUI
 
 extension DebugRun {
     /// `--verify-extras-ui`: modes, view toggles, color, help, and Capture hover through synthesized events.
@@ -641,6 +642,121 @@ extension DebugRun {
             }
         }
         for key in [Pref.highlightColor, Pref.highlightFill, Pref.highlightFade, Pref.highlightGlow] { defaults.removeObject(forKey: key) }
+
+        // The highlight color changed from pink to blue while Snug runs, with Settings' preview drawing the new color in between: the
+        // next overlay draws every tinted layer, button, cap, menu row, guide and pill in blue, and nothing in pink, checked on the
+        // colors themselves (a pink hue survives washes and blends) and on renders.
+        do {
+            let pink = Highlight.color(hex: "#F74F9E"), blue = Highlight.color(hex: "#007AFF")
+            func pinkish(_ color: CGColor?) -> Bool {
+                guard let color, let c = NSColor(cgColor: color)?.usingColorSpace(.sRGB), c.alphaComponent > 0.05 else { return false }
+                return (0.86...0.97).contains(c.hueComponent) && c.saturationComponent > 0.3 && c.brightnessComponent > 0.3
+            }
+            /// The pink colors on `layer` and the layers under it that show; a closed menu keeps its old rows hidden until it opens again
+            /// and builds new ones.
+            func pinks(_ layer: CALayer, _ path: String) -> [String] {
+                guard !layer.isHidden else { return [] }
+                var colors = [("background", layer.backgroundColor), ("border", layer.borderColor), ("shadow", layer.shadowColor)]
+                if let shape = layer as? CAShapeLayer { colors += [("stroke", shape.strokeColor), ("fill", shape.fillColor)] }
+                if let text = layer as? CATextLayer { colors.append(("text", text.foregroundColor)) }
+                let here = path + "/" + (layer.delegate.map { "\(type(of: $0))" } ?? "\(type(of: layer))")
+                return colors.filter { pinkish($0.1) }.map { "\(here) \($0.0)" } + (layer.sublayers ?? []).flatMap { pinks($0, here) }
+            }
+            func pinks(_ view: NSView) -> [String] {
+                let colors = [(view as? NSTextField)?.textColor, (view as? NSImageView)?.contentTintColor].compactMap { $0 }
+                let here = colors.contains { pinkish($0.cgColor) } ? ["\(type(of: view)) \(texts(in: view))"] : []
+                return here + view.subviews.flatMap(pinks)
+            }
+            let renders = FileManager.default.temporaryDirectory.appending(path: "snug-tint")
+            try FileManager.default.createDirectory(at: renders, withIntermediateDirectories: true)
+            /// Writes a render of `view` and returns how many of its pixels are a saturated pink.
+            func render(_ view: NSView, _ name: String) throws -> Int {
+                view.layoutSubtreeIfNeeded()
+                let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)!
+                view.cacheDisplay(in: view.bounds, to: rep)
+                try rep.representation(using: .png, properties: [:])!.write(to: renders.appending(path: "\(name).png"))
+                print(renders.appending(path: "\(name).png").path)
+                let data = rep.bitmapData!
+                var count = 0
+                for y in 0..<rep.pixelsHigh {
+                    for x in 0..<rep.pixelsWide {
+                        let at = y * rep.bytesPerRow + x * rep.samplesPerPixel
+                        let (r, g, b) = (Int(data[at]), Int(data[at + 1]), Int(data[at + 2]))
+                        let chroma = r - g
+                        if r >= b, g <= b, r > 90, chroma * 10 > r * 3, (b - g) * 100 >= chroma * 18, (b - g) * 100 <= chroma * 84 { count += 1 }
+                    }
+                }
+                return count
+            }
+            require(source.bitsPerSample == 8, "the fixture's pixels can be scanned as bytes")
+            let fixturePinks = (0..<source.pixelsHigh).reduce(0) { sum, y in
+                sum + (0..<source.pixelsWide).filter { x in
+                    let rgb = pixel(x, y), (r, g, b) = (rgb[0], rgb[1], rgb[2]), chroma = r - g
+                    return r >= b && g <= b && r > 90 && chroma * 10 > r * 3 && (b - g) * 100 >= chroma * 18 && (b - g) * 100 <= chroma * 84
+                }.count
+            }
+            require(fixturePinks == 0, "the fixture has no pink pixels for the renders to be blamed on: \(fixturePinks)")
+            let rowBox = peerRows[1].bounds, selected = CGRect(x: 1000, y: 500, width: 300, height: 200)
+            defaults.set(true, forKey: Pref.candidates)
+            for key in [Pref.loupe, Pref.rulers, Pref.crosshair] { defaults.set(true, forKey: key) }
+            /// Hover with the candidate list, strip, lit toggles and guides; then a selection with its strip and the ratio menu open on a
+            /// highlighted row; then Text mode's pills and flash on it, and Text mode. Each state is rendered and checked to draw in `color`; in blue,
+            /// nothing may be pink, and in pink the renders must show pink, so the scan is known to find it.
+            func exercise(_ name: String, _ color: NSColor) throws {
+                let expected = bytes(color), inPink = color == pink
+                func clean(_ state: String) {
+                    let buttons = overlay.chrome.buttons + [overlay.cornerChip]
+                    let left = pinks(overlay.view.layer!, "") + pinks(overlay.view) + buttons.flatMap(pinks) + buttons.flatMap { pinks($0.layer!, $0.title.stringValue) }
+                    require(inPink || left.isEmpty, "\(name): nothing in the \(state) is pink: \(left)")
+                }
+                func scan(_ state: String) throws {
+                    let found = try render(overlay.view, "\(name)-\(state)")
+                    require(inPink ? found > 0 : found == 0, "\(name): a render of the \(state) has \(inPink ? "pink" : "no pink") pixels: \(found)")
+                }
+                open()
+                overlay.detectionTask?.cancel()
+                overlay.session = SelectionSession(candidates: peerRows, extent: extent, anchor: CGPoint(x: rowBox.midX, y: rowBox.midY))
+                mouse(.mouseMoved, CGPoint(x: rowBox.midX, y: rowBox.midY))
+                let c = overlay.chrome, guides = overlay.view.guides
+                func fill(_ view: NSView) -> [Int] { bytes(NSColor(cgColor: view.layer!.backgroundColor!)!) }
+                func strokes(_ layer: CAShapeLayer) -> [Int] { bytes(NSColor(cgColor: layer.strokeColor!)!) }
+                let listRow = c.list.subviews.first { $0.layer?.backgroundColor != nil }
+                require(!c.list.isHidden && listRow.map(fill) == expected && fill(c.copy) == expected && fill(c.modeButtons[.capture]!) == expected
+                            && c.viewToggles.allSatisfy(\.1.lit) && strokes(overlay.view.hoverLayer) == expected && strokes(guides.crosshair) == expected
+                            && strokes(guides.centerAccent) == expected && bytes(NSColor(cgColor: guides.flags[0].backgroundColor!)!) == expected,
+                        "\(name): the hover's list row, Copy, the mode, the hover outline and the guides are \(expected): \(String(describing: listRow.map(fill))) \(fill(c.copy)) \(fill(c.modeButtons[.capture]!)) \(strokes(guides.crosshair))")
+                clean("hover")
+                try scan("hover")
+                drag(selected)
+                key(35, "p")
+                key(125, "")
+                require(!c.ratioMenu.isHidden && fill(c.ratioMenu.rows[c.ratioMenu.highlighted!]) == expected && fill(c.copy) == expected && c.edit.lit
+                            && strokes(overlay.view.outlineLayer) == expected && strokes(overlay.view.handlesLayer) == expected,
+                        "\(name): the ratio menu's row, Copy, the outline and the handles are \(expected)")
+                clean("selection and ratio menu")
+                try scan("selection")
+                key(53, "\u{1B}")
+                overlay.view.overlays.textPills = [CGRect(x: 1010, y: 520, width: 200, height: 30), CGRect(x: 1010, y: 560, width: 160, height: 30)]
+                overlay.view.overlays.flashPills = [CGRect(x: 400, y: 900, width: 300, height: 30)]
+                require([overlay.view.pillsLayer, overlay.view.flashLayer].allSatisfy { bytes(NSColor(cgColor: $0.fillColor!)!) == expected },
+                        "\(name): Text mode's pills and flash are \(expected)")
+                clean("pills")
+                try scan("pills")
+                key(17, "t")
+                require(overlay.mode == .text && fill(c.modeButtons[.text]!) == expected, "\(name): Text mode's button is \(expected)")
+                clean("Text mode")
+                key(0, "a")
+                overlay.dismiss()
+            }
+            defaults.set("#F74F9E", forKey: Pref.highlightColor)
+            try exercise("pink", pink)
+            defaults.set("#007AFF", forKey: Pref.highlightColor)
+            let preview = NSHostingView(rootView: OverlayPreview(appearance: "system", color: Highlight.color(hex: defaults.string(forKey: Pref.highlightColor)!), fill: 0.1, fade: 0.5, glow: 0.2))
+            preview.frame = CGRect(x: 0, y: 0, width: 420, height: 140)
+            require(try render(preview, "settings-preview") == 0 && Chrome.tint == blue, "Settings' preview draws in the blue, with no pink pixels, and sets the shared tint to it")
+            try exercise("blue", blue)
+            for key in [Pref.highlightColor, Pref.candidates, Pref.loupe, Pref.rulers, Pref.crosshair] { defaults.removeObject(forKey: key) }
+        }
 
         // The toast: one capsule with the thumbnail, its size, position, and lifetime, and the preview in its own panel.
         let capture = try await Output.png(image.cropping(to: CGRect(x: 0, y: 0, width: 1200, height: 400))!)

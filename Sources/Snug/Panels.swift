@@ -28,7 +28,7 @@ final class CandidateList: NSVisualEffectView {
     func update(_ candidates: [Candidate], parents: [Candidate], current: String?, onAllowAccessibility: (() -> Void)?) {
         let rows = Array(candidates.prefix(5))
         let parentRows = Array(parents.prefix(Self.parentRows))
-        let key = (rows + parentRows).map(\.id).joined(separator: ",") + "|" + (current ?? "") + (onAllowAccessibility == nil ? "" : "|ax")
+        let key = (rows + parentRows).map(\.id).joined(separator: ",") + "|" + (current ?? "") + (onAllowAccessibility == nil ? "" : "|ax") + "|\(Chrome.tint.cgColor.components!)"
         guard key != self.key else { return }
         self.key = key
         subviews.forEach { $0.removeFromSuperview() }
