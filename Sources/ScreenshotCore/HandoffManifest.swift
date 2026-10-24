@@ -2,10 +2,12 @@ import CoreGraphics
 import Foundation
 import zlib
 
-/// What an agent handoff (Copy for Agent) records about its capture, schema version 2: the image, where it sat on screen, the app and
-/// window it came from, and what the target is. Every field is observed; an unknown one is nil and left out of the JSON.
+/// What an agent handoff (Copy for Agent) records about its capture, schema version 3: the image, where it sat on screen, the app and
+/// window it came from, and what the target is. Every field is observed; an unknown one is nil and left out of the JSON. Version 3 attaches
+/// the Accessibility element containing (or under the center of) a crop that no element's frame matches, so a target's role no longer
+/// implies its frame is the crop: `provenance` `accessibility` says it is, and `target.frame` gives the element's frame either way.
 public struct HandoffManifest: Codable, Sendable, Equatable {
-    public var schemaVersion = 2
+    public var schemaVersion = 3
     /// 8 characters of Crockford base32.
     public var captureId: String
     /// When the pixels were frozen.
@@ -54,32 +56,43 @@ public struct HandoffManifest: Codable, Sendable, Equatable {
         public var cropPoints: Rect
         public var cropGlobal: Rect
         public var displayId: UInt32?
+        public var displayName: String?
         /// The display's frame in global points.
         public var displayFrame: Rect
 
-        public init(cropPixels: CGRect, scale: CGFloat, displayId: UInt32?, displayFrame: CGRect) {
+        public init(cropPixels: CGRect, scale: CGFloat, displayId: UInt32?, displayName: String? = nil, displayFrame: CGRect) {
             let points = CGRect(x: cropPixels.minX / scale, y: cropPixels.minY / scale, width: cropPixels.width / scale, height: cropPixels.height / scale)
             self.cropPixels = Rect(cropPixels)
             cropPoints = Rect(points)
             cropGlobal = Rect(points.offsetBy(dx: displayFrame.minX, dy: displayFrame.minY))
-            self.displayId = displayId
+            (self.displayId, self.displayName) = (displayId, displayName)
             self.displayFrame = Rect(displayFrame)
         }
     }
 
-    /// The app and window under the target. A window id names a window only while it is open.
+    /// The app and window under the target. A window id names a window only while it is open. The document, page URL and page title are
+    /// read through Accessibility from the window holding the crop's center: its `AXDocument` (the open file's URL) and its innermost web
+    /// area's `AXURL` and `AXTitle`. The window title and page title are cut to `maxString` characters, the document and URL to `maxURL`.
     public struct Source: Codable, Sendable, Equatable {
         public var app: String?
         public var bundleId: String?
+        public var bundlePath: String?
+        /// `CFBundleShortVersionString`.
+        public var appVersion: String?
         public var pid: Int32?
         public var windowId: UInt32?
         public var windowTitle: String?
         /// Global points.
         public var windowFrame: Rect?
+        public var document: String?
+        public var url: String?
+        public var pageTitle: String?
 
-        public init(app: String?, bundleId: String?, pid: Int32?, windowId: UInt32?, windowTitle: String?, windowFrame: CGRect?) {
-            (self.app, self.bundleId, self.pid, self.windowId, self.windowTitle) = (app, bundleId, pid, windowId, windowTitle)
-            self.windowFrame = windowFrame.map(Rect.init)
+        public init(app: String?, bundleId: String?, bundlePath: String? = nil, appVersion: String? = nil, pid: Int32?, windowId: UInt32?,
+                    windowTitle: String?, windowFrame: CGRect?, document: String? = nil, url: String? = nil, pageTitle: String? = nil) {
+            (self.app, self.bundleId, self.bundlePath, self.appVersion, self.pid, self.windowId) = (app, bundleId, bundlePath, appVersion, pid, windowId)
+            (self.windowTitle, self.windowFrame) = (cut(windowTitle, maxString), windowFrame.map(Rect.init))
+            (self.document, self.url, self.pageTitle) = (cut(document, maxURL), cut(url, maxURL), cut(pageTitle, maxString))
         }
     }
 
@@ -97,14 +110,58 @@ public struct HandoffManifest: Codable, Sendable, Equatable {
     /// Seconds between the frozen pixels and an Accessibility read past which the read is marked stale.
     public static let staleAfter: TimeInterval = 5
 
-    /// One enclosing Accessibility element, its frame in global points.
+    /// `text` cut to `limit` characters, ending in "..."; nil when it is empty.
+    static func cut(_ text: String?, _ limit: Int) -> String? {
+        text.flatMap { $0.isEmpty ? nil : $0.count > limit ? $0.prefix(limit - 3) + "..." : $0 }
+    }
+
+    /// The most children, and siblings, a target lists; the most classes an element lists; the most steps its selector takes.
+    public static let maxNeighbors = 10, maxClasses = 4, maxSelectorSteps = 8
+    /// The longest value kept for a text element (`AXStaticText`, `AXTextField`, `AXTextArea`, `AXComboBox`) and for any other; the
+    /// longest other string of the target (title, help, placeholder, label...); the longest string of an ancestor or neighbor, and class.
+    /// Longer ones are cut, ending in "...". With every list full and every string at its limit the JSON stays under 32 KB in ASCII.
+    public static let maxTextValue = 3072, maxValue = 200, maxString = 120, maxName = 40, maxClass = 32, maxURL = 512
+
+    /// What a Copy for Agent read adds to an element's frame, as read (the manifest cuts it): for the target, its value (none for a secure
+    /// text field), help, placeholder, the title of its label element (`AXTitleUIElement`), its link (`AXURL`), its state, and its first
+    /// children and nearest siblings; for any element inside a web area, its DOM id and classes.
+    public struct Details: Sendable, Equatable {
+        public var value, help, placeholder, labeledBy, url, domId: String?
+        public var domClasses: [String]?
+        public var enabled, focused, selected: Bool?
+        public var children, siblings: [Neighbor]?
+
+        public init(value: String? = nil, help: String? = nil, placeholder: String? = nil, labeledBy: String? = nil, url: String? = nil, domId: String? = nil,
+                    domClasses: [String]? = nil, enabled: Bool? = nil, focused: Bool? = nil, selected: Bool? = nil, children: [Neighbor]? = nil, siblings: [Neighbor]? = nil) {
+            (self.value, self.help, self.placeholder, self.labeledBy, self.url, self.domId) = (value, help, placeholder, labeledBy, url, domId)
+            (self.domClasses, self.enabled, self.focused, self.selected, self.children, self.siblings) = (domClasses, enabled, focused, selected, children, siblings)
+        }
+    }
+
+    /// A child or sibling of the target: its role and name (its title, else its description, else its text value).
+    public struct Neighbor: Codable, Sendable, Equatable {
+        public var role: String?
+        public var name: String?
+
+        public init(role: String?, name: String?) {
+            (self.role, self.name) = (role, name)
+        }
+    }
+
+    /// One enclosing Accessibility element, its frame in global points; inside a web area, with its DOM id and classes.
     public struct Ancestor: Codable, Sendable, Equatable {
         public var role: String?
+        public var subrole: String?
+        public var roleDescription: String?
         public var title: String?
+        public var identifier: String?
+        public var description: String?
+        public var domId: String?
+        public var domClasses: [String]?
         public var frame: Rect
     }
 
-    /// What was captured. The Accessibility fields come from one element, never its value (a field's contents may be private).
+    /// What was captured. The Accessibility fields come from one element; its value is cut to `maxTextValue` or `maxValue`.
     public struct Target: Codable, Sendable, Equatable {
         public var kind: Kind
         public var label: String
@@ -114,19 +171,35 @@ public struct HandoffManifest: Codable, Sendable, Equatable {
         public var title: String?
         public var identifier: String?
         public var description: String?
+        public var value: String?
+        public var help: String?
+        public var placeholder: String?
+        public var labeledBy: String?
+        public var url: String?
+        public var enabled: Bool?
+        public var focused: Bool?
+        public var selected: Bool?
+        public var domId: String?
+        public var domClasses: [String]?
+        /// Inside a web area, a CSS-like path from below the innermost web area down to the element, each step its role description
+        /// (spaces as "-"), `#id` and `.class`es, at most `maxSelectorSteps` steps (the outer ones dropped for "... > "). Class
+        /// names are as the page wrote them, unescaped, for searching the source.
+        public var selector: String?
+        /// The element's frame in global points.
+        public var frame: Rect?
+        public var children: [Neighbor]?
+        public var siblings: [Neighbor]?
         /// Innermost first.
         public var ancestors: [Ancestor]?
         public var provenance: Provenance
         /// When the Accessibility data was read.
         public var observedAt: Date?
 
-        /// A target with the Accessibility fields of the innermost of `frames` (innermost first, global points) whose frame, clipped to
-        /// its scroll viewports (as hover candidates are) and to `display`, is within `tolerance` points of `crop` on every side, and the
-        /// frames after it, unclipped, as its ancestors; its provenance is then `accessibility`. Without such a frame it has no
-        /// Accessibility fields and keeps `provenance`.
-        public init(kind: Kind, label: String, provenance: Provenance, frames: [AXFrame], observedAt: Date?, crop: CGRect, display: CGRect,
-                    tolerance: CGFloat = 4) {
-            (self.kind, self.label, self.provenance) = (kind, label, provenance)
+        /// The index in `frames` (innermost first, global points) of the element a target for `crop` describes, and whether its frame is
+        /// the crop: the innermost whose frame, clipped to its scroll viewports (as hover candidates are) and to `display`, is within
+        /// `tolerance` points of `crop` on every side; else the innermost whose clipped frame holds `crop` (give or take `tolerance`);
+        /// else the innermost, the element under the crop's center. Nil without frames.
+        public static func match(_ frames: [AXFrame], crop: CGRect, display: CGRect, tolerance: CGFloat) -> (index: Int, isCrop: Bool)? {
             // Outermost first, so each viewport is already clipped to its own.
             var visible = frames.map { $0.rect.intersection(display) }
             for index in frames.indices.reversed() {
@@ -134,17 +207,48 @@ public struct HandoffManifest: Codable, Sendable, Equatable {
                     visible[index] = visible[index].intersection(visible[viewport])
                 }
             }
-            guard let index = visible.firstIndex(where: { $0.isNear(crop, within: tolerance) }) else { return }
+            if let index = visible.firstIndex(where: { $0.isNear(crop, within: tolerance) }) { return (index, true) }
+            if let index = visible.firstIndex(where: { $0.insetBy(dx: -tolerance, dy: -tolerance).contains(crop) }) { return (index, false) }
+            return frames.isEmpty ? nil : (0, false)
+        }
+
+        /// A target with the Accessibility fields of the element `match` picks from `frames` and the frames after it, unclipped, as its
+        /// ancestors. When that element's frame is the crop, its provenance is `accessibility`; otherwise it keeps `provenance`, and
+        /// `frame` shows how the element sits around the crop. Without frames it has no Accessibility fields.
+        public init(kind: Kind, label: String, provenance: Provenance, frames: [AXFrame], observedAt: Date?, crop: CGRect, display: CGRect,
+                    tolerance: CGFloat = 4) {
+            (self.kind, self.label, self.provenance) = (kind, label, provenance)
+            guard let (index, isCrop) = Self.match(frames, crop: crop, display: display, tolerance: tolerance) else { return }
             let element = frames[index]
-            let known = { (value: String) in value.isEmpty ? nil : value }
-            role = known(element.role)
-            subrole = known(element.subrole)
-            roleDescription = known(element.roleDescription)
-            title = known(element.title)
-            identifier = known(element.identifier)
-            description = known(element.elementDescription)
-            ancestors = frames[(index + 1)...].map { Ancestor(role: known($0.role), title: known($0.title), frame: Rect($0.rect)) }
-            self.provenance = .accessibility
+            let details = element.details ?? Details()
+            let classes = { (frame: AXFrame) in frame.details?.domClasses.flatMap { $0.isEmpty ? nil : $0.prefix(maxClasses).compactMap { cut($0, maxClass) } } }
+            let neighbors = { (list: [Neighbor]?) in list.flatMap { $0.isEmpty ? nil : $0.prefix(maxNeighbors).map { Neighbor(role: cut($0.role, maxName), name: cut($0.name, maxName)) } } }
+            role = cut(element.role, maxString)
+            subrole = cut(element.subrole, maxString)
+            roleDescription = cut(element.roleDescription, maxString)
+            title = cut(element.title, maxString)
+            identifier = cut(element.identifier, maxString)
+            description = cut(element.elementDescription, maxString)
+            value = cut(details.value, ["AXStaticText", "AXTextField", "AXTextArea", "AXComboBox"].contains(element.role) ? maxTextValue : maxValue)
+            (help, placeholder, labeledBy, url) = (cut(details.help, maxString), cut(details.placeholder, maxString), cut(details.labeledBy, maxString), cut(details.url, maxString))
+            (enabled, focused, selected) = (details.enabled, details.focused, details.selected)
+            domId = cut(details.domId, maxString)
+            domClasses = classes(element)
+            (children, siblings) = (neighbors(details.children), neighbors(details.siblings))
+            if let web = frames[index...].firstIndex(where: { $0.role == "AXWebArea" }), web > index {
+                let steps = frames[index..<web].reversed().map { frame in
+                    (cut(frame.roleDescription, maxName) ?? cut(String(frame.role.dropFirst(2)), maxName) ?? "").lowercased().replacingOccurrences(of: " ", with: "-")
+                        + (cut(frame.details?.domId, maxName).map { "#" + $0 } ?? "") + (classes(frame) ?? []).map { "." + $0 }.joined()
+                }
+                selector = (steps.count > maxSelectorSteps ? "... > " : "") + steps.suffix(maxSelectorSteps).joined(separator: " > ")
+            }
+            frame = Rect(element.rect)
+            ancestors = frames[(index + 1)...].map {
+                Ancestor(role: cut($0.role, maxName), subrole: cut($0.subrole, maxName), roleDescription: cut($0.roleDescription, maxName),
+                         title: cut($0.title, maxName), identifier: cut($0.identifier, maxName), description: cut($0.elementDescription, maxName),
+                         domId: cut($0.details?.domId, maxName), domClasses: classes($0), frame: Rect($0.rect))
+            }
+            if isCrop { self.provenance = .accessibility }
             self.observedAt = observedAt
         }
     }
@@ -191,8 +295,10 @@ public struct HandoffManifest: Codable, Sendable, Equatable {
                 .filter { (0x20...0x7E).contains($0.value) }))
             return plain.count > 40 ? plain.prefix(37) + "..." : plain
         }
-        let title = target.title ?? (target.kind == .window ? source?.windowTitle : nil)
-        let what = ascii((target.roleDescription ?? target.label).lowercased()) + (title.map { " \"\(ascii($0))\"" } ?? "")
+        // The Accessibility role and title name the crop only when the element's frame is the crop.
+        let matched = target.provenance == .accessibility
+        let title = (matched ? target.title : nil) ?? (target.kind == .window ? source?.windowTitle : nil)
+        let what = ascii(((matched ? target.roleDescription : nil) ?? target.label).lowercased()) + (title.map { " \"\(ascii($0))\"" } ?? "")
         let size = "\(Int(geometry.cropPoints.width.rounded())) x \(Int(geometry.cropPoints.height.rounded())) pt"
         return "[Snug capture \(captureId): " + (source?.app.map { ascii($0) + ", " } ?? "") + "\(what), \(size). Use the snug MCP tool get_capture to see it.]"
     }

@@ -20,9 +20,10 @@ extension DebugRun {
         exit(EXIT_SUCCESS)
     }
 
-    /// Copy for Agent on the frozen image, with Frame and Rounded on: Cmd-Return on a hovered geometry element, then a Command-click on
-    /// the strip's Copy (reading Agent) on a selection whose accessibility frames the hover had read. Each writes a bundle with a valid manifest to the agent folder
-    /// (the second replaces the first) and one item with the PNG (its manifest in the text chunk), the reference line and the manifest to the run's private pasteboard.
+    /// Copy for Agent on the frozen image, with Frame and Rounded on: Cmd-Return on a hovered geometry element, again with synthetic
+    /// accessibility frames whose row is larger than the element (a web page's, with details), then a Command-click on the strip's Copy
+    /// (reading Agent) on a selection whose accessibility frames the hover had read. Each writes a bundle with a valid manifest to the agent folder
+    /// (each replaces the one before) and one item with the PNG (its manifest in the text chunk), the reference line and the manifest to the run's private pasteboard.
     static func verifyAgentHandoff(image: CGImage, frame: CGRect, overlay: OverlayController, require: (Bool, String) -> Void) async throws {
         let pasteboard = overlay.pasteboard
         let defaults = overlay.defaults
@@ -107,9 +108,43 @@ extension DebugRun {
         key(36, "\r", .command)
         let element = try await copied(hovered.bounds.integral, "Cmd-Return on a hovered element")
         require(element.target.kind == (hovered.id.hasPrefix("fill-") ? .fill : .element) && element.target.provenance == .geometry && element.target.role == nil
-                    && element.target.label == hovered.label, "the hovered geometry element is the target, with no accessibility fields: \(element.target)")
+                    && element.target.frame == nil && element.target.label == hovered.label,
+                "the hovered geometry element is the target, with no accessibility fields when nothing was read: \(element.target)")
         require(element.warnings == [.accessibilityUnavailable, .sourceUnavailable] && element.source == nil,
                 "an imported image warns that accessibility and the source are unavailable: \(element.warnings)")
+
+        // Cmd-Return on the same element with synthetic frames from the hover: a row inside a web page, larger than the element by more
+        // than the tolerance on every side, holding a smaller link. The row is the target, its frame beside the crop; kind and provenance stay.
+        let scale = overlay.scale
+        let origin = CGPoint(x: overlay.window.frame.minX, y: NSScreen.screens[0].frame.height - overlay.window.frame.maxY)
+        func global(_ rect: CGRect) -> CGRect {
+            CGRect(x: origin.x + rect.minX / scale, y: origin.y + rect.minY / scale, width: rect.width / scale, height: rect.height / scale)
+        }
+        overlay.present(image: image, frame: frame, displayID: nil)
+        await overlay.detectionTask?.value
+        mouse(.mouseMoved, CGPoint(x: target.bounds.midX, y: target.bounds.midY))
+        let again = overlay.session!.selected!
+        let crop = global(again.bounds.integral)
+        let page = global(extent)
+        let rowFrames = [AXFrame(roleDescription: "link", rect: CGRect(x: crop.midX - 10, y: crop.midY - 5, width: 20, height: 10), role: "AXLink", title: "Docs",
+                                 details: .init(url: "https://example.com/docs", domId: "docs-link", domClasses: ["nav-link"])),
+                         AXFrame(roleDescription: "row", rect: crop.insetBy(dx: -8, dy: -8), role: "AXRow",
+                                 details: .init(help: "Open the docs", domClasses: ["nav-row", "flex"], enabled: true, selected: true,
+                                                children: [.init(role: "AXLink", name: "Docs")], siblings: [.init(role: "AXRow", name: "Blog")])),
+                         AXFrame(roleDescription: "HTML content", rect: page, role: "AXWebArea", title: "Example"),
+                         AXFrame(roleDescription: "standard window", rect: page, role: "AXWindow", title: "Example")]
+        overlay.accessibilityObservations[again.bounds] = (rowFrames, overlay.frozenAt.addingTimeInterval(1))
+        pasteboard.clearContents()
+        key(36, "\r", .command)
+        let row = try await copied(again.bounds.integral, "Cmd-Return on a hovered element inside a larger accessibility row")
+        require(row.target.kind == element.target.kind && row.target.provenance == .geometry && row.target.role == "AXRow" && row.target.frame == .init(rowFrames[1].rect)
+                    && row.target.ancestors?.map(\.role) == ["AXWebArea", "AXWindow"] && row.target.observedAt != nil,
+                "the row holding the element is the target, with its frame, while kind and provenance stay: \(row.target)")
+        require(row.target.help == "Open the docs" && row.target.selected == true && row.target.children?.first?.name == "Docs"
+                    && row.target.siblings?.first?.name == "Blog" && row.target.selector == "row.nav-row.flex",
+                "the row carries its details and a selector from the web area: \(row.target.selector ?? "none")")
+        require(row.reference.contains(": \(row.target.label.lowercased()), "), "the reference names the element's label, not the row: \(row.reference)")
+        require(!row.warnings.contains(.accessibilityStale), "a read 1 s after the freeze is not stale: \(row.warnings)")
 
         // The strip's Agent button on a selection the hover had read accessibility frames for.
         overlay.present(image: image, frame: frame, displayID: nil)
@@ -118,13 +153,11 @@ extension DebugRun {
         overlay.selection = AreaSelection(extent: extent, exact: rect)
         overlay.refresh()
         checkAgentLabel("the selection strip")
-        let scale = overlay.scale
-        let origin = CGPoint(x: overlay.window.frame.minX, y: NSScreen.screens[0].frame.height - overlay.window.frame.maxY)
-        let global = CGRect(x: origin.x + rect.minX / scale, y: origin.y + rect.minY / scale, width: rect.width / scale, height: rect.height / scale)
-        let frames = [AXFrame(roleDescription: "text field", rect: global.insetBy(dx: 1, dy: 1), role: "AXTextField", title: "Email",
+        let field = global(rect)
+        let frames = [AXFrame(roleDescription: "text field", rect: field.insetBy(dx: 1, dy: 1), role: "AXTextField", title: "Email",
                               identifier: "email", elementDescription: "Email address"),
-                      AXFrame(roleDescription: "group", rect: global.insetBy(dx: -40, dy: -40), role: "AXGroup"),
-                      AXFrame(roleDescription: "standard window", rect: global.insetBy(dx: -200, dy: -200), role: "AXWindow", title: "Form test")]
+                      AXFrame(roleDescription: "group", rect: field.insetBy(dx: -40, dy: -40), role: "AXGroup"),
+                      AXFrame(roleDescription: "standard window", rect: field.insetBy(dx: -200, dy: -200), role: "AXWindow", title: "Form test")]
         overlay.accessibilityObservations[rect] = (frames, overlay.frozenAt.addingTimeInterval(6))
         pasteboard.clearContents()
         // A Command-click on the strip's Copy, which reads Agent while Command is held, copies for the agent.
@@ -135,15 +168,33 @@ extension DebugRun {
         mouse(.leftMouseDown, pixel, .command)
         mouse(.leftMouseUp, pixel, .command)
         flags([])
-        let field = try await copied(rect, "A Command-click on the strip's Copy (Agent) on a selection")
-        require(field.target.kind == .area && field.target.provenance == .accessibility && field.target.role == "AXTextField" && field.target.title == "Email"
-                    && field.target.identifier == "email" && field.target.description == "Email address" && field.target.subrole == nil,
-                "a selection takes the accessibility fields of the element the hover read for it: \(field.target)")
-        require(field.target.ancestors?.map(\.role) == ["AXGroup", "AXWindow"] && field.warnings.contains(.accessibilityStale),
-                "its ancestors follow innermost first, and a read 6 s after the freeze is stale: \(field.warnings)")
-        require(try store.current() == field && FileManager.default.contentsOfDirectory(atPath: store.root.path) == [field.captureId],
-                "the second copy replaced the first: the store holds only bundle \(field.captureId), not \(element.captureId)")
-        print("replaced capture: \(element.captureId)")
+        let selected = try await copied(rect, "A Command-click on the strip's Copy (Agent) on a selection")
+        require(selected.target.kind == .area && selected.target.provenance == .accessibility && selected.target.role == "AXTextField" && selected.target.title == "Email"
+                    && selected.target.identifier == "email" && selected.target.description == "Email address" && selected.target.subrole == nil,
+                "a selection takes the accessibility fields of the element the hover read for it: \(selected.target)")
+        require(selected.target.ancestors?.map(\.role) == ["AXGroup", "AXWindow"] && selected.warnings.contains(.accessibilityStale),
+                "its ancestors follow innermost first, and a read 6 s after the freeze is stale: \(selected.warnings)")
+        require(try store.current() == selected && FileManager.default.contentsOfDirectory(atPath: store.root.path) == [selected.captureId],
+                "the last copy replaced the others: the store holds only bundle \(selected.captureId), not \(row.captureId)")
+        print("replaced captures: \(element.captureId), \(row.captureId)")
+
+        // One live read through Copy for Agent's reader, at the Dock's first icon (a 1 pt crop the icon holds): it answers within a
+        // second, and the icon is the target with the other icons as its siblings. Without Accessibility permission it reads nothing.
+        let dock = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first!.processIdentifier
+        if AXIsProcessTrusted() {
+            let strip = await Accessibility.listFrames(pid: dock).first!
+            let point = strip.width > strip.height ? CGPoint(x: strip.minX + 30, y: strip.midY) : CGPoint(x: strip.midX, y: strip.minY + 30)
+            let spot = CGRect(origin: point, size: CGSize(width: 1, height: 1))
+            let began = ContinuousClock.now
+            let read = await Accessibility.handoff(at: point, pid: dock, crop: spot, display: .infinite, tolerance: 4)
+            let took = began.duration(to: .now)
+            let icon = HandoffManifest.Target(kind: .area, label: "Area", provenance: .userArea, frames: read.frames, observedAt: .now, crop: spot, display: .infinite)
+            require(took < .seconds(1) && icon.role != nil && icon.provenance == .userArea && !(icon.siblings ?? []).isEmpty,
+                    "a live read of the Dock's first icon takes \(took), its role \(icon.role ?? "none") \"\(icon.title ?? "")\", siblings \(icon.siblings?.compactMap(\.name).prefix(3) ?? [])")
+        } else {
+            require(await Accessibility.handoff(at: .zero, pid: dock, crop: .zero, display: .infinite, tolerance: 4).frames.isEmpty,
+                    "without Accessibility permission the live read is empty")
+        }
         defaults.set(false, forKey: Pref.frame)
     }
 }
