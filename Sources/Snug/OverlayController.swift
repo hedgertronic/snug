@@ -943,7 +943,7 @@ final class OverlayController {
             do {
                 let image = roundingWindowCorners(try await DisplayCapture.image(ofWindow: id, shadow: framed, interior: interior), radius: radius)
                 let png = try await Output.png(image)
-                Output.publish(png: png, detail: "\(image.width) x \(image.height)  window", copy: copy, save: save, destination: destination,
+                Output.publish(png: png, detail: "\(image.width) x \(image.height)", copy: copy, save: save, destination: destination,
                                pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)

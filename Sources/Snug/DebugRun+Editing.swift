@@ -359,11 +359,12 @@ extension DebugRun {
         pick("Portrait")
         require(overlay.selection?.rect == CGRect(x: 438, y: 300, width: 125, height: 200),
                 "Portrait flips the lock to 10:16 from the same selection: \(String(describing: overlay.selection?.rect))")
-        key(35, "p")
+        require(!menu.isHidden, "Portrait keeps the menu open for the next pick")
         require(["3:4", "2:3", "10:16", "9:16", "9:21"].allSatisfy { title in menu.items.contains { $0.title == title } }
                 && menu.items.last?.title == "Portrait" && menu.items.last?.on == true, "with Portrait on the presets read tall")
         pick("Portrait")
-        require(overlay.selection?.rect == CGRect(x: 340, y: 300, width: 320, height: 200), "Portrait off flips the lock back: \(String(describing: overlay.selection?.rect))")
+        require(overlay.selection?.rect == CGRect(x: 340, y: 300, width: 320, height: 200) && !menu.isHidden,
+                "Portrait off flips the lock back and keeps the menu open: \(String(describing: overlay.selection?.rect))")
         key(right)
         pick("1:1")
         require(overlay.selection?.rect == CGRect(x: 401, y: 300, width: 200, height: 200), "after a nudge, a pick conforms the nudged rectangle: \(String(describing: overlay.selection?.rect))")
@@ -605,6 +606,8 @@ extension DebugRun {
         let contents = try Set(saved.map { try String(contentsOf: outputFolder.appending(path: $0), encoding: .utf8) })
         require(saved.count == 4 && contents == ["taken", "first", "second", "third"], "saves in one second keep every capture: \(saved)")
         require(saved.contains { $0.hasSuffix(" 2.png") }, "a taken default name gets \" 2\" before the extension: \(saved)")
+        let savedToast = Output.publish(png: Data("fourth".utf8), detail: "1 x 1", copy: true, save: true, pasteboard: pasteboard, defaults: defaults)
+        require(savedToast.detail == "1 x 1", "a saved capture's toast keeps the pixel size as its detail, not the file name: \(savedToast)")
 
         let blocked = folder.appending(path: "blocked")
         try FileManager.default.createDirectory(at: blocked, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o500])

@@ -84,9 +84,9 @@ enum Pref {
             hotKeyModifiers: Int(NSEvent.ModifierFlags([.control, .shift]).rawValue),
             colorFormat: ColorFormat.hex.rawValue,
             highlightColor: "",
-            highlightFill: 0.0,
-            highlightFade: 0.42,
-            highlightGlow: 0.5,
+            highlightFill: 0.1,
+            highlightFade: 0.5,
+            highlightGlow: 0.2,
             overlayAppearance: "system",
             guidesAnimation: GuidesAnimation.fade.rawValue,
             toastPosition: "bottomCenter",
@@ -134,7 +134,7 @@ enum Output {
         let id = signposter.beginInterval("encode")
         let output = try await encode(image, crop: crop, framed: framed, scale: scale, cornerRadii: cornerRadii)
         signposter.endInterval("encode", id)
-        publish(png: output.png, detail: "\(output.width) x \(output.height)" + (framed ? "  frame" : ""), copy: copy, save: save, destination: destination,
+        publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save, destination: destination,
                 warning: warning, pasteboard: pasteboard, defaults: defaults)
     }
 
@@ -146,7 +146,7 @@ enum Output {
     }
 
     /// Copies a PNG to the pasteboard and/or saves it, and shows a toast; returns the toast's message and detail. `detail` is the toast's
-    /// size line for a plain copy. A save goes to `destination` (Save As, which the panel already confirmed) or the usual file, which takes a
+    /// pixel size line, saved or not. A save goes to `destination` (Save As, which the panel already confirmed) or the usual file, which takes a
     /// numbered name when its own is taken. A write that fails (the pasteboard refusing the image, an unwritable folder) shows a red toast
     /// with its reason, keeps the capture in it, and names what worked: "Copied, save failed". Otherwise a `warning` (a capture that may be
     /// wrong) takes the detail line and an orange mark.
@@ -179,7 +179,7 @@ enum Output {
         let message = message(copy: copy, save: save, copied: copied, saved: saveError == nil, folder: folder)
         let failed = !copied || saveError != nil
         let reason = saveError.map { ($0 as NSError).localizedFailureReason ?? $0.localizedDescription } ?? "The pasteboard did not accept the image."
-        let detail = failed ? reason : warning ?? (save ? file!.lastPathComponent : detail)
+        let detail = failed ? reason : warning ?? detail
         Toast.show(png: png, message: message, detail: detail, file: file, color: failed ? .systemRed : warning.map { _ in .systemOrange },
                    defaults: defaults, pasteboard: pasteboard)
         return (message, detail)

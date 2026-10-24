@@ -152,7 +152,7 @@ extension OverlayController {
         commitTask = Task {
             do {
                 let output = try await Output.encodeCutout(subject.image, bounds: bounds, cornerRadii: radii, framed: framed, scale: scale)
-                Output.publish(png: output.png, detail: "\(output.width) x \(output.height)  subject", copy: copy, save: save,
+                Output.publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save,
                                pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)

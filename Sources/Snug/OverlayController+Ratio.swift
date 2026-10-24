@@ -11,7 +11,8 @@ extension OverlayController {
     }
 
     /// P and the ratio chip: the preset menu, under the chip. A pick conforms the selection once and locks that ratio: Free unlocks and
-    /// leaves the rectangle alone, Original takes the ratio at release, and Portrait flips the presets and the current lock.
+    /// leaves the rectangle alone, Original takes the ratio at release, and Portrait flips the presets and the current lock and opens the
+    /// menu again, so a tall preset can be picked next.
     func showRatioMenu() {
         guard let selection else { return }
         // Picks conform the selection from before the first pick, so ratios do not compound; any other edit starts a new base.
@@ -29,6 +30,7 @@ extension OverlayController {
         let flip = RatioMenu.Item(title: "Portrait", on: portrait) { [self] in
             ratioPortrait = !portrait
             if let lockedRatio { conformSelection(base, to: 1 / lockedRatio) }
+            showRatioMenu()
         }
         // Each pick is one undo step.
         let before = selectionState

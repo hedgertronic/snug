@@ -424,7 +424,7 @@ extension DebugRun {
         require(!overlay.window.isVisible && pasteboard.string(forType: .string) == palette[0], "a click on a row copies its value \(palette[0])")
         overlay.dismiss()
 
-        // The ratio menu numbers its nine rows 1-9 (the separator has no cap). Each digit picks its row and closes the menu as a click does,
+        // The ratio menu numbers its nine rows 1-9 (the separator has no cap). Each digit picks its row as a click does (Portrait keeps the menu open),
         // as one undo step; Cmd-Z restores the selection and the lock.
         open()
         let box = CGRect(x: 1000, y: 500, width: 300, height: 200)
@@ -444,9 +444,11 @@ extension DebugRun {
             require(overlay.selection!.rect == box && !overlay.ratioLocked, "undo restores the box after the click on row \(number + 1)")
             key(35, "p")
             key(code, "\(number + 1)")
-            require(ratioMenu.isHidden && overlay.window.isVisible && overlay.window.firstResponder === overlay.view
+            // Portrait opens the menu again with the flipped presets; every other row closes it.
+            let flips = ratioMenu.items[index].title == "Portrait"
+            require(ratioMenu.isHidden != flips && overlay.window.isVisible && overlay.window.firstResponder === (flips ? ratioMenu : overlay.view)
                         && overlay.selection!.rect == byClick.0 && overlay.ratioLocked == byClick.1 && overlay.ratioReadout == byClick.2,
-                    "the \(number + 1) key picks \(ratioMenu.items[index].title) as a click does and closes the menu: \(overlay.selection!.rect) vs \(byClick.0)")
+                    "the \(number + 1) key picks \(ratioMenu.items[index].title) as a click does: \(overlay.selection!.rect) vs \(byClick.0)")
             key(6, "z", .command)
             require(overlay.selection!.rect == box && !overlay.ratioLocked, "undo restores the selection and the lock after the \(number + 1) key")
         }
@@ -599,8 +601,10 @@ extension DebugRun {
         overlay.dismiss()
         for key in [Pref.highlightColor, Pref.highlightFill, Pref.highlightFade, Pref.highlightGlow] { defaults.removeObject(forKey: key) }
         open()
-        require(abs(overlay.view.dimLayer.fillColor.flatMap(NSColor.init(cgColor:))!.alphaComponent - 0.42) < 0.001 && overlay.view.hoverLayer.fillColor == nil && overlay.view.glowLayer.shadowOpacity > 0,
-                "the defaults are a 42% fade, no fill, and a glow")
+        let defaultFill = overlay.view.hoverLayer.fillColor.flatMap(NSColor.init(cgColor:))
+        require(abs(overlay.view.dimLayer.fillColor.flatMap(NSColor.init(cgColor:))!.alphaComponent - 0.5) < 0.001 && defaultFill.map { abs($0.alphaComponent - 0.1) < 0.001 } == true
+                    && abs(overlay.view.glowLayer.shadowOpacity - Float(0.2 * 1.6)) < 0.001,
+                "the defaults are a 50% fade, a 10% fill, and a 0.2 glow")
         overlay.dismiss()
 
         // The glow, sampled on rendered pixels 3, 6 and 10 pt outside the hover's right edge, against the same frame with no glow.
@@ -610,7 +614,7 @@ extension DebugRun {
             let flatPage = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
             flatPage.setFillColor(gray: gray, alpha: 1)
             flatPage.fill(CGRect(x: 0, y: 0, width: image.width, height: image.height))
-            for fade in [0.0, 0.42] {
+            for fade in [0.0, 0.5] {
                 defaults.set(fade, forKey: Pref.highlightFade)
                 var samples: [Double: [[Int]]] = [:]
                 for glow in [0.0, 0.5, 1.0] {
@@ -747,8 +751,8 @@ extension DebugRun {
         let savedData = try Data(contentsOf: saveFolder.appending(path: saved[0]))
         require(saved.count == 1 && savedData == capture, "Save writes the capture to the save location: \(saved)")
         require(fresh.message.stringValue == "Saved to \(saveFolder.lastPathComponent)" && fresh.saveButton.isHidden && !fresh.trashButton.isHidden && fresh.file?.lastPathComponent == saved[0]
-                    && fresh.detail.lineBreakMode == .byTruncatingMiddle && fresh.detail.toolTip == saved[0],
-                "Save shows the saved state with Trash, the file name truncated in the middle with the full name as its tooltip: \(fresh.message.stringValue)")
+                    && fresh.detail.stringValue == "1200 x 400",
+                "Save shows the saved state with Trash and keeps the pixel size as the detail: \(fresh.message.stringValue) \(fresh.detail.stringValue)")
         require(Array(frames(fresh).prefix(5)) == Array(unsaved.prefix(5)), "saving keeps the toast's size and place: \(frames(fresh)) \(unsaved)")
         fresh.dismissal?.cancel()
         let warningDefaults = UserDefaults(suiteName: "snug-toast-\(UUID().uuidString)")!
@@ -758,9 +762,9 @@ extension DebugRun {
                            file: nil, color: .systemOrange, defaults: warningDefaults)
         let warning = frames(warned)
         warned.saveButton.performClick(nil)
-        require(warned.file != nil && warned.detail.font == .monospacedSystemFont(ofSize: 12, weight: .regular) && warned.detail.textColor == .secondaryLabelColor
+        require(warned.file != nil && warned.detail.stringValue == "1200 x 400" && warned.detail.font == .monospacedSystemFont(ofSize: 12, weight: .regular) && warned.detail.textColor == .secondaryLabelColor
                     && warned.detail.maximumNumberOfLines == 1 && Array(frames(warned).prefix(5)) == Array(warning.prefix(5)),
-                "Save on a warning shows the file name as a plain saved capture does, in the same size: \(warned.detail.font!) \(frames(warned))")
+                "Save on a warning shows the pixel size as a plain saved capture does, in the same size: \(warned.detail.font!) \(frames(warned))")
 
         // The capture is held only while the toast is visible: closing releases the PNG, the thumbnail, the preview, and the toast itself.
         weak var weakToast: Toast?
@@ -778,6 +782,30 @@ extension DebugRun {
         try await Task.sleep(for: .milliseconds(200))
         print("toast after close: toast released \(weakToast == nil), preview released \(weakPreview == nil)")
         require(weakToast == nil && weakPreview == nil, "the toast and its preview are freed once closed")
+
+        // Toasts stack (kept off screen here): the newest at the anchor and the older ones a gap above it, each preview above its own
+        // toast; closing the middle one settles the top one into its place, and a stack past a third of the visible screen drops its oldest.
+        let stacked = [toast(), toast(), toast()]
+        for each in stacked { Toast.stack(each) }
+        func capsule(_ toast: Toast) -> CGRect { toast.card.frame.offsetBy(dx: toast.frame.minX, dy: toast.frame.minY) }
+        let middleFrame = stacked[1].frame
+        require(Toast.shown.elementsEqual(stacked, by: ===) && stacked[2].frame == plain.frame && capsule(stacked[1]).minY - capsule(stacked[2]).maxY == Toast.gap
+                    && capsule(stacked[0]).minY - capsule(stacked[1]).maxY == Toast.gap && stacked.allSatisfy { $0.preview!.frame.minY == $0.frame.maxY },
+                "three toasts stack newest at the anchor, the others a gap above with no overlap, each preview above its own toast: \(stacked.map { capsule($0) })")
+        stacked[1].dismiss()
+        require(Toast.shown.elementsEqual([stacked[0], stacked[2]], by: ===) && stacked[0].frame == middleFrame && stacked[2].frame == plain.frame && stacked[0].preview!.frame.minY == middleFrame.maxY,
+                "closing the middle toast settles the top one into its place, with its preview: \(stacked[0].frame) \(middleFrame)")
+        var added: [Toast] = []
+        while Toast.shown.first === stacked[0] {
+            added.append(toast())
+            Toast.stack(added.last!)
+        }
+        let stackHeight = Toast.shown.reduce(-Toast.gap) { $0 + $1.card.frame.height + Toast.gap }
+        require(stacked[0].png == nil && Toast.shown.first === stacked[2] && stackHeight <= screenArea.height / 3 && stackHeight + 40 + Toast.gap > screenArea.height / 3
+                    && capsule(Toast.shown.last!).minY == capsule(plain).minY,
+                "a toast that takes the stack past a third of the visible screen drops the oldest: \(Toast.shown.count) toasts, \(stackHeight) of \(screenArea.height)")
+        for each in Toast.shown { each.dismiss() }
+        require(Toast.shown.isEmpty, "closing every toast empties the stack")
 
         plain.scheduleDismissal()
         plain.mouseEntered(with: hoverEvent)
