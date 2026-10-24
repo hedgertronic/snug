@@ -16,7 +16,7 @@ extension OutputFrame {
     /// canvas grown to hold it; unframed, nothing is added.
     public static func renderCutout(_ subject: CGImage, bounds: CGRect?, cornerRadii: CornerRadii, framed: Bool, scale: CGFloat) throws -> CGImage {
         let image = bounds.map { subject.cropping(to: $0)! } ?? subject
-        let shaped = try render(image, crop: CGRect(x: 0, y: 0, width: image.width, height: image.height), scale: scale, framed: false,
+        let shaped = try render(image, crop: CGRect(x: 0, y: 0, width: image.width, height: image.height), scale: scale, padding: nil,
                                 cornerRadii: bounds == nil ? cornerRadii : .zero)
         guard framed else { return shaped }
         let (sides, top, bottom) = shadowPadding(scale: scale)

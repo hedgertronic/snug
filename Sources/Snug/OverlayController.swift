@@ -252,6 +252,8 @@ final class OverlayController {
 
     var snapEnabled: Bool { defaults.bool(forKey: Pref.snap) }
     var framed: Bool { defaults.bool(forKey: Pref.frame) }
+    /// The frame's padding in points (`Pref.framePadding`).
+    var framePadding: CGFloat { CGFloat(defaults.integer(forKey: Pref.framePadding)) }
 
     init() {
         view.controller = self
@@ -1047,7 +1049,7 @@ final class OverlayController {
         guard let image else { return }
         let destination = saveAs ? askSaveURL() : nil
         guard !saveAs || destination != nil else { return }
-        let framed = framed ?? self.framed, scale = scale
+        let padding = (framed ?? self.framed) ? framePadding : nil, scale = scale
         let container = container(of: crop)
         let edited = editedRadii[crop], rounds = defaults.bool(forKey: Pref.roundCorners)
         let (known, measuring) = (radii[crop].map { (radius: $0, arcs: arcs[crop] ?? .zero) }, radiusTasks[crop])
@@ -1061,7 +1063,7 @@ final class OverlayController {
                     let windowRadius = if let windowKnown { windowKnown } else { await windowMeasuring?.value.radius ?? 0 }
                     radii = radii.replacingCorners(sharedWith: container, in: crop, with: windowRadius, arcs: measured.arcs)
                 }
-                try await Output.deliver(image, crop: crop, framed: framed, scale: scale, cornerRadii: rounds ? edited ?? radii : .zero, copy: copy, save: save,
+                try await Output.deliver(image, crop: crop, padding: padding, scale: scale, cornerRadii: rounds ? edited ?? radii : .zero, copy: copy, save: save,
                                          destination: destination, pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
@@ -1122,7 +1124,7 @@ final class OverlayController {
         overlays.upHintRadii = overlays.upHint.map(cornerRadii) ?? .zero
         overlays.downHintRadii = overlays.downHint.map(cornerRadii) ?? .zero
         // The padded card of an area or element; a live window's real shadow has no card to preview.
-        if mode == .capture, let rect = selection?.rect, framed, !capturesLiveWindow(rect) { overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, framed: true) }
+        if mode == .capture, let rect = selection?.rect, framed, !capturesLiveWindow(rect) { overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, padding: framePadding) }
         jumping = keyJump && animates && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion && selection == nil
             && overlays.hover != nil && view.overlays.hover != nil && overlays.hover != view.overlays.hover
         view.overlays = overlays

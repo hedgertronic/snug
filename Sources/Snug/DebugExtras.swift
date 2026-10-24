@@ -1404,10 +1404,10 @@ extension DebugRun {
         defaults.set(false, forKey: Pref.loupe)
         defaults.set(false, forKey: Pref.crosshair)
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
-        // Frame adds its padding to the hover size, from the output code: 24 pt all round.
+        // Frame adds its padding to the hover size, from the output code: 24 pt all round by default.
         defaults.set(true, forKey: Pref.frame)
         overlay.refresh()
-        let framePad = Int(2 * OutputFrame.points * overlay.scale)
+        let framePad = Int(2 * 24 * overlay.scale)
         require(texts(in: chrome.hover)[1] == "400 x 200  + frame \(framePad) x \(framePad)", "Frame on adds its padding to the hover size: \(texts(in: chrome.hover))")
         defaults.set(false, forKey: Pref.frame)
         overlay.refresh()
@@ -2317,7 +2317,7 @@ extension DebugRun {
             require((overlay.view.overlays.styleFrame != nil) == card, "with Frame on, the preview on \(name) draws the card: \(card)")
             overlay.selection = AreaSelection(extent: extent, exact: framedWindow.insetBy(dx: 40, dy: 40))
             overlay.refresh()
-            require(overlay.view.overlays.styleFrame == OutputFrame.rect(around: framedWindow.insetBy(dx: 40, dy: 40), scale: overlay.scale, framed: true), "an area inside \(name) keeps the card preview")
+            require(overlay.view.overlays.styleFrame == OutputFrame.rect(around: framedWindow.insetBy(dx: 40, dy: 40), scale: overlay.scale, padding: 24), "an area inside \(name) keeps the card preview")
             overlay.dismiss()
         }
         defaults.set(false, forKey: Pref.frame)

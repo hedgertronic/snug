@@ -687,7 +687,7 @@ enum DebugRun {
             snapCount = try await SmartSnap().suggest(in: image, roughBounds: rough).count
             run.append(start.duration(to: .now).milliseconds)
             start = ContinuousClock.now
-            let output = try await Output.encode(image, crop: rough, framed: false, scale: overlay.scale)
+            let output = try await Output.encode(image, crop: rough, padding: nil, scale: overlay.scale)
             run.append(start.duration(to: .now).milliseconds)
             start = ContinuousClock.now
             overlay.pasteboard.clearContents()
