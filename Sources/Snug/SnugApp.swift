@@ -102,6 +102,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             }
             return
         }
+        // A mistyped or image-less debug flag would otherwise launch the real app, which takes focus and registers the capture shortcut.
+        if let flag = arguments.dropFirst().first(where: { $0.hasPrefix("--") && $0 != "--image" }) {
+            FileHandle.standardError.write(Data("Unknown or incomplete debug flag \(flag)\n".utf8))
+            exit(EXIT_FAILURE)
+        }
         // One Snug per user: a second copy (another build, or a second launch) quits, so a shortcut press never reaches two overlays.
         // The --mcp bridge never registers as an app, so it is not counted; an unbundled debug binary has no identifier to check.
         if let id = Bundle.main.bundleIdentifier, NSRunningApplication.runningApplications(withBundleIdentifier: id).contains(where: { $0 != .current }) {
