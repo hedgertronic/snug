@@ -2307,6 +2307,26 @@ extension DebugRun {
             if type == .leftMouseDown { beside.mouseDown(with: event) } else { beside.mouseUp(with: event) }
         }
         require(beside.png == nil, "a click beside the thumbnail of a saved toast closes it")
+        // Open on copied text writes it as UTF-8 to a temporary file of its own and would open that in TextEdit.
+        let copiedText = "First line\nSecond \u{2014} caf\u{E9}"
+        let texting = Toast(png: nil, message: "Copied 2 lines", detail: "", file: nil, color: nil, text: copiedText, defaults: trashDefaults,
+                            pasteboard: NSPasteboard(name: NSPasteboard.Name("snug-toast-text-\(UUID().uuidString)")))
+        require(texting.openButton.toolTip == "Open in TextEdit" && texting.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Open in TextEdit", "Share"],
+                "copied text offers Copy, Open in TextEdit and Share")
+        texting.openButton.performClick(nil)
+        let textFile = Toast.opened!.file
+        let written = try String(contentsOf: textFile, encoding: .utf8)
+        require(Toast.opened!.app == "com.apple.TextEdit" && textFile.deletingLastPathComponent().path == FileManager.default.temporaryDirectory.appending(path: "Snug").path
+                    && textFile.lastPathComponent.hasPrefix("Snug Text ") && textFile.pathExtension == "txt" && texting.file == textFile
+                    && written == copiedText,
+                "Open on copied text writes it as UTF-8 to Snug/Snug Text <date>.txt in the temporary folder and opens it in TextEdit: \(textFile.path)")
+        let againText = Toast(png: nil, message: "Copied", detail: "", file: nil, color: nil, text: "other", defaults: trashDefaults,
+                              pasteboard: NSPasteboard(name: NSPasteboard.Name("snug-toast-text-\(UUID().uuidString)")))
+        againText.openButton.performClick(nil)
+        let writtenAgain = try String(contentsOf: Toast.opened!.file, encoding: .utf8)
+        require(Toast.opened!.file != textFile && writtenAgain == "other", "each text toast writes a file of its own: \(Toast.opened!.file.path)")
+        try FileManager.default.removeItem(at: textFile)
+        try FileManager.default.removeItem(at: Toast.opened!.file)
         Toast.isSuppressed = false
         let movie = saveFolder.appending(path: "snug-copy-recording.mov")
         try capture.write(to: movie)

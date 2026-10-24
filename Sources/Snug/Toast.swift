@@ -7,7 +7,8 @@ import ScreenshotCore
 /// and place for its whole life: its text box is as wide as the wider of the resting text and the actions, and on hover the text
 /// cross-fades to the actions in the same box, both centered in it. The close button fades in on the top-left corner. Copy puts the
 /// capture (or the recording's file, or the text) on the pasteboard again; Save (an unsaved capture) or Trash (a saved file), Open
-/// (Preview, or QuickTime Player for a recording), Show in Finder (a saved file) and Share act on the capture. The toast takes no keys.
+/// (Preview, or QuickTime Player for a recording), Show in Finder (a saved file) and Share act on the capture; copied text has Open (in
+/// TextEdit, from a temporary file) and Share. The toast takes no keys.
 /// Pointing at the thumbnail grows the capture out of it in its own panel, a margin above the capsule (below it at the top right); the
 /// pointer can cross to it without either closing. Drag the thumbnail or the preview to drop the image, or click either to open it as
 /// Open does; a click elsewhere closes the toast. It goes away after the lifetime setting (4 s unless changed) while the pointer is elsewhere, and
@@ -205,7 +206,7 @@ final class Toast: NSPanel, NSDraggingSource {
         closeButton.frame.size = CGSize(width: 22, height: 22)
         closeButton.toolTip = "Close"
         closeButton.isHidden = true
-        let openTip = file?.pathExtension == "mov" ? "Open in QuickTime Player" : "Open in Preview"
+        let openTip = copiedText != nil ? "Open in TextEdit" : file?.pathExtension == "mov" ? "Open in QuickTime Player" : "Open in Preview"
         func button(_ symbol: String, _ tip: String) -> NSButton {
             let button = NSButton(image: NSImage(systemSymbolName: symbol, accessibilityDescription: tip)!, target: nil, action: nil)
             button.isBordered = false
@@ -219,13 +220,13 @@ final class Toast: NSPanel, NSDraggingSource {
         copyButton = button("doc.on.doc", "Copy")
         saveButton = button("square.and.arrow.down", "Save")
         trashButton = button("trash", "Move to Trash")
-        openButton = button("arrow.up.forward.app", openTip)
+        openButton = button(copiedText != nil ? "doc.text" : "arrow.up.forward.app", openTip)
         revealButton = button("folder", "Show in Finder")
         shareButton = button("square.and.arrow.up", "Share")
         copyButton.isHidden = png == nil && text == nil
         saveButton.isHidden = png == nil || file != nil
         trashButton.isHidden = file == nil
-        openButton.isHidden = png == nil
+        openButton.isHidden = png == nil && copiedText == nil
         // Show in Finder is measured in for any capture, since Save adds it; it shows once there is a file.
         revealButton.isHidden = png == nil
         shareButton.isHidden = png == nil && copiedText == nil
@@ -416,11 +417,17 @@ final class Toast: NSPanel, NSDraggingSource {
 
     @objc private func closeClicked() { dismiss() }
 
-    /// The saved file, or the capture written to a temporary one.
+    /// The saved file, or the capture written to a temporary one, or the copied text written as UTF-8 to a temporary file of its own.
     private func fileOnDisk() -> URL {
-        if file == nil {
+        if file == nil, let png {
             file = FileManager.default.temporaryDirectory.appending(path: "Snug.png")
-            try! png!.write(to: file!)
+            try! png.write(to: file!)
+        } else if file == nil {
+            let folder = FileManager.default.temporaryDirectory.appending(path: "Snug")
+            try! FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let format = DateFormatter()
+            format.dateFormat = "yyyy-MM-dd HH.mm.ss"
+            file = try! UniqueFile.write(Data(text!.utf8), to: folder.appending(path: "Snug Text \(format.string(from: .now)).txt"))
         }
         return file!
     }
@@ -438,11 +445,14 @@ final class Toast: NSPanel, NSDraggingSource {
         dismiss()
     }
 
-    /// Opens the file in Preview, or in QuickTime Player for a recording.
+    /// Opens the file in Preview, in QuickTime Player for a recording, or in TextEdit for copied text, and closes the toast.
     @objc private func openClicked() {
         let url = fileOnDisk()
-        guard !Toast.isSuppressed else { return }
-        let app = url.pathExtension == "mov" ? "com.apple.QuickTimePlayerX" : "com.apple.Preview"
+        let app = png == nil ? "com.apple.TextEdit" : url.pathExtension == "mov" ? "com.apple.QuickTimePlayerX" : "com.apple.Preview"
+        guard !Toast.isSuppressed else {
+            Toast.opened = (url, app)
+            return
+        }
         NSWorkspace.shared.open([url], withApplicationAt: NSWorkspace.shared.urlForApplication(withBundleIdentifier: app)!, configuration: NSWorkspace.OpenConfiguration())
         dismiss()
     }

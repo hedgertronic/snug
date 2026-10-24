@@ -866,7 +866,7 @@ extension DebugRun {
                 case "color-hover":
                     require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy"] && toast.lead is NSBox, "a color offers Copy, behind its swatch")
                 case "text-hover":
-                    require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Share"], "copied text offers Copy and Share")
+                    require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Open in TextEdit", "Share"], "copied text offers Copy, Open in TextEdit and Share")
                 case "tall", "wide":
                     let size = toast.preview!.frame.size
                     require(size == (state.name == "tall" ? CGSize(width: 72, height: 160) : CGSize(width: 240, height: 72)), "\(state.name): the preview is \(size)")
