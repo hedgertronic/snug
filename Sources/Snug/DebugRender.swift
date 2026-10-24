@@ -55,10 +55,38 @@ extension DebugRun {
         }
         let rough = CGRect(x: 350, y: 458, width: 580, height: 64)
         let cart = CGRect(x: 1645, y: 384, width: 582, height: 557)
+        // The fixture is a dark page; the light states invert it.
+        let light = CIContext().createCGImage(CIImage(cgImage: image).applyingFilter("CIColorInvert"), from: CGRect(x: 0, y: 0, width: image.width, height: image.height))!
+
+        /// Text mode, light and dark: the found-text flash on entering, then a box drawn from off text mid-drag, while it is read, and
+        /// read with its pills and line count.
+        func renderTextBox() async throws {
+            for (look, content) in [("dark", image), ("light", light)] {
+                defaults.set(look, forKey: Pref.overlayAppearance)
+                overlay.present(image: content, frame: frame, displayID: CGMainDisplayID())
+                key(17, "t")
+                try await waitFor("the found-text flash") { !overlay.view.overlays.flashPills.isEmpty }
+                try snapshot("text-flash-\(look)")
+                try await waitFor("Live Text") { overlay.view.liveText.analysis != nil }
+                try await waitFor("the found-text flash to go off") { overlay.view.overlays.flashPills.isEmpty }
+                mouse(.leftMouseDown, CGPoint(x: 1645, y: 384))
+                mouse(.leftMouseDragged, CGPoint(x: 1900, y: 700))
+                mouse(.leftMouseDragged, CGPoint(x: 2227, y: 941))
+                try snapshot("text-box-drag-\(look)")
+                mouse(.leftMouseUp, CGPoint(x: 2227, y: 941))
+                try snapshot("text-box-reading-\(look)")
+                await overlay.textTask?.value
+                try snapshot("text-box-\(look)")
+                overlay.dismiss()
+            }
+            defaults.removeObject(forKey: Pref.overlayAppearance)
+        }
+        if CommandLine.arguments.contains("--text-only") {
+            try await renderTextBox()
+            exit(EXIT_SUCCESS)
+        }
 
         // Mid-drag with the loupe and rulers on: the selection's edges pass through the loupe's center cell and the rulers flag the span.
-        // The fixture is a dark page; the light state inverts it.
-        let light = CIContext().createCGImage(CIImage(cgImage: image).applyingFilter("CIColorInvert"), from: CGRect(x: 0, y: 0, width: image.width, height: image.height))!
         for (name, content) in [("dark", image), ("light", light)] {
             overlay.present(image: content, frame: frame, displayID: nil)
             for key in [Pref.loupe, Pref.rulers] { defaults.set(true, forKey: key) }
@@ -364,9 +392,7 @@ extension DebugRun {
             try snapshot("text-reading")
             let liveText = overlay.view.liveText
             try await waitFor("Live Text") { liveText.analysis != nil }
-            // Entering Text mode highlights all the text Live Text found for 1 s.
-            try snapshot("text-found-highlight")
-            try await waitFor("the found-text highlight to go off") { !liveText.selectableItemsHighlighted }
+            try await waitFor("the found-text flash to go off") { overlay.view.overlays.flashPills.isEmpty }
             let all = liveText.text
             liveText.selectedRanges = [all.range(of: "Product name")!.lowerBound..<all.range(of: "Second product")!.upperBound]
             overlay.refresh()
@@ -385,18 +411,7 @@ extension DebugRun {
             try snapshot("text-translate-missing")
             overlay.dismiss()
 
-            // A box drawn from off text, mid-drag and while its text is read after the release.
-            open()
-            key(17, "t")
-            try await waitFor("Live Text") { liveText.analysis != nil }
-            mouse(.leftMouseDown, CGPoint(x: 300, y: 900))
-            mouse(.leftMouseDragged, CGPoint(x: 900, y: 1050))
-            mouse(.leftMouseDragged, CGPoint(x: 1590, y: 1230))
-            try snapshot("text-box-drag")
-            mouse(.leftMouseUp, CGPoint(x: 1590, y: 1230))
-            try snapshot("text-box-reading")
-            await overlay.textTask?.value
-            overlay.dismiss()
+            try await renderTextBox()
 
             open()
             key(17, "t")

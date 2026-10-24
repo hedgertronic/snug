@@ -50,7 +50,7 @@ extension OverlayController {
 
     /// The corner whose dot is under `point` (image pixels), if a selection is open.
     func cornerDot(at point: CGPoint) -> Handle? {
-        guard let rect = selection?.rect else { return nil }
+        guard mode == .capture, let rect = selection?.rect else { return nil }
         return cornerRadii(of: rect).corner(at: point, in: rect, tolerance: 6 * scale, minimumInset: 8 * scale)
     }
 

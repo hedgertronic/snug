@@ -4,14 +4,17 @@ import Vision
 @preconcurrency import VisionKit
 
 /// Text state shared by both modes: where the "Reading text..." pill centers (image pixels), a dark pill that explains why
-/// Option-Return did nothing or names the picked item, Text mode's found items (nil until the first Tab) and the picked one, and a key
-/// pressed while Vision's warm-up child runs: what the notice says about it and the action that runs once the child exits.
+/// Option-Return did nothing or names the picked item, Text mode's found items (nil until the first Tab) and the picked one, a key
+/// pressed while Vision's warm-up child runs: what the notice says about it and the action that runs once the child exits, Text
+/// mode's box with the lines read in it (nil while they are read), and the lines the found-text flash shows (image pixels).
 struct TextSession {
     var reading: CGRect?
     var notice: String?
     var items: [FoundItem]?
     var picked: Int?
     var queued: (notice: String, run: @MainActor () -> Void)?
+    var box: (rect: CGRect, lines: [TextLine]?)?
+    var flash: [CGRect]?
 }
 
 /// Live Text's own drag selection is word-granular and anchors at the start of the pressed word, so a drag that goes backward leaves
@@ -26,9 +29,10 @@ extension OverlayWindow {
     /// to cover the pressed word (or the word or line a double or triple click picked), which `OverlayController.textSelectionDidChange`
     /// takes from Live Text's first caret or range after the press.
     ///
-    /// A press off text past that 16 pt, once the analysis is attached and nothing is being read, never reaches Live Text while it
-    /// may draw a box: a drag from it draws the box as Capture's drag does, and its release copies the text inside. A release within
-    /// Capture's click size sends the press and the release on to Live Text, as a click.
+    /// A press off text past that 16 pt, once the analysis is attached and nothing else is being read, and a press on the box's
+    /// handles or inside it off text, never reach Live Text: the controller draws, resizes or moves the box (its selection) as
+    /// Capture does. A release within Capture's click size that leaves no box sends the press and the release on to Live Text, as a
+    /// click. Any other press clears the box.
     func sendTextMouse(_ event: NSEvent) {
         let view = contentView as! OverlayView
         let controller = view.controller!
@@ -39,25 +43,24 @@ extension OverlayWindow {
         var onText = liveText.hasText(at: textPoint)
         var dx: CGFloat?
         if event.type == .leftMouseDown {
-            if !onText, contentView!.hitTest(event.locationInWindow)?.isDescendant(of: liveText) == true {
+            let onLiveText = contentView!.hitTest(event.locationInWindow)?.isDescendant(of: liveText) == true
+            let onHandle = controller.selection?.handle(at: view.pixelPoint(event), tolerance: 8 * controller.scale) != nil
+            if !onText, !onHandle, onLiveText {
                 dx = stride(from: 2.0, through: 16, by: 2).first { liveText.hasText(at: CGPoint(x: textPoint.x - $0, y: textPoint.y)) }.map { -$0 }
-                if dx == nil, liveText.analysis != nil, controller.text.reading == nil {
-                    textPress = nil
-                    textBox = (event, AreaDrag(extent: controller.extent, origin: view.pixelPoint(event)))
-                    return
-                }
             }
-        } else if var box = textBox {
-            box.drag.update(to: view.pixelPoint(event), moving: false)
-            textBox = event.type == .leftMouseUp ? nil : box
-            let rect = box.drag.rect
-            if event.type == .leftMouseDragged {
-                controller.refresh()
-            } else if rect.width < AreaSelection.minimumSize || rect.height < AreaSelection.minimumSize {
-                super.sendEvent(box.press)
+            if onHandle || !onText && dx == nil && onLiveText && liveText.analysis != nil && (controller.text.reading == nil || controller.selection != nil) {
+                textPress = nil
+                textBox = event
+                return controller.mouseDown(event)
+            }
+            controller.clearTextBox()
+        } else if let press = textBox {
+            guard event.type == .leftMouseUp else { return controller.mouseDragged(event) }
+            controller.mouseUp(event)
+            textBox = nil
+            if controller.selection == nil {
+                super.sendEvent(press)
                 super.sendEvent(event)
-            } else {
-                controller.copySelectionText(translating: false, box: rect)
             }
             return
         } else if textPress != nil, !onText {
@@ -114,12 +117,12 @@ extension OverlayWindow {
 
 /// Text mode is Live Text: the frozen image's text analysis is laid over it, and the user selects text as on a web page.
 extension OverlayController: ImageAnalysisOverlayViewDelegate {
-    /// Analyzes the frozen image for text once per capture and attaches the result; the pill covers the screen until then. Once the
-    /// analysis is attached, or at once when it already is, highlights all the text it found (see `highlightFoundText`).
+    /// Analyzes the frozen image for text once per capture and attaches the result; the pill covers the screen until then. Meanwhile
+    /// the found-text flash shows where the text is (see `highlightFoundText`).
     func startLiveText() {
         view.liveText.preferredInteractionTypes = .textSelection
         view.liveText.selectableItemsHighlighted = false
-        if view.liveText.analysis != nil { highlightFoundText() }
+        highlightFoundText()
         if let warmUp = Self.visionWarmUp {
             Task {
                 await warmUp.value
@@ -136,7 +139,6 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
                 try Task.checkCancellation()
                 lastLiveTextMilliseconds = start.duration(to: .now).milliseconds
                 view.liveText.analysis = analysis
-                highlightFoundText()
                 text.reading = nil
                 refresh()
             } catch {
@@ -145,23 +147,94 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         }
     }
 
-    /// Entering Text mode: Live Text highlights all the text it found, the way its Live Text button does, for 1 s.
+    /// Entering Text mode: the lines text detection finds (the cheapest Vision request that boxes text, 10-60 ms) flash as pills in
+    /// the highlight color, sweeping in from the top, for 1.25 s.
     func highlightFoundText() {
-        view.liveText.selectableItemsHighlighted = true
+        guard let image else { return }
         foundTextHighlight?.cancel()
+        let start = ContinuousClock.now
         foundTextHighlight = Task {
-            try? await Task.sleep(for: .seconds(1))
-            guard !Task.isCancelled else { return }
-            endFoundTextHighlight()
+            do {
+                let size = CGSize(width: image.width, height: image.height)
+                let lines = try await ImageRequestHandler(image).perform(DetectTextRectanglesRequest()).map { $0.boundingBox.toImageCoordinates(size, origin: .upperLeft) }
+                try Task.checkCancellation()
+                lastFlashMilliseconds = start.duration(to: .now).milliseconds
+                text.flash = lines
+                refresh()
+                try await Task.sleep(for: .seconds(1.25))
+                endFoundTextHighlight()
+            } catch {
+                report(error)
+            }
         }
     }
 
-    /// Turns the found-text highlight off while it is on; the first press or key does this at once, so it never covers a selection.
+    /// Turns the found-text flash off while it is on; the first press or key does this at once, so it never covers a selection.
     func endFoundTextHighlight() {
         guard let foundTextHighlight else { return }
         foundTextHighlight.cancel()
         self.foundTextHighlight = nil
-        view.liveText.selectableItemsHighlighted = false
+        text.flash = nil
+        refresh()
+    }
+
+    /// Drops Text mode's box and stops reading it.
+    func clearTextBox() {
+        guard selection != nil else { return }
+        selection = nil
+        if text.box != nil {
+            textTask?.cancel()
+            text.box = nil
+            text.reading = nil
+        }
+    }
+
+    /// Reads the lines in Text mode's box with accurate OCR, after Vision's warm-up, unless they are read or being read: at once with
+    /// the Reading text... pill (a release), or after `delay` without it (a pause in a drag).
+    func readTextBox(after delay: Duration = .zero) {
+        guard let rect = selection?.rect, let image else { return }
+        if text.box?.rect == rect, delay > .zero || text.box?.lines != nil || text.reading != nil { return }
+        textTask?.cancel()
+        text.box = (rect, nil)
+        text.reading = delay == .zero ? rect : nil
+        textTask = Task {
+            do {
+                try await Task.sleep(for: delay)
+                await Self.visionWarmUp?.value
+                let lines = try await Self.recognize(image, crop: rect)
+                try Task.checkCancellation()
+                text.box = (rect, lines)
+                text.reading = nil
+                refresh()
+            } catch {
+                report(error)
+            }
+        }
+    }
+
+    /// With a box: Return copies its lines with soft wraps joined, Shift-Return as a table, Option-Return translates them; lines not
+    /// yet read for the box as it is now are read first.
+    func copyTextBox(table: Bool, translating: Bool) {
+        guard let rect = selection?.rect, let image else { return beep() }
+        let read = text.box?.rect == rect ? text.box?.lines : nil
+        textTask?.cancel()
+        text.reading = read == nil ? rect : nil
+        textTask = Task {
+            do {
+                await Self.visionWarmUp?.value
+                let lines = if let read { read } else { try await Self.recognize(image, crop: rect) }
+                try Task.checkCancellation()
+                text.reading = nil
+                let rows = TextLayout.rows(lines)
+                let copied = table ? TextLayout.table(rows) : TextLayout.paragraphs(rows)
+                let count = copied.split(whereSeparator: \.isNewline).count
+                copyText(copied, message: table ? "Copied \(rows.count) \(rows.count == 1 ? "row" : "rows")" : "Copied \(count) \(count == 1 ? "line" : "lines")",
+                         translating: translating)
+                refresh()
+            } catch {
+                report(error)
+            }
+        }
     }
 
     /// Once per newly built binary, runs this binary with `--warm-vision` as a child process at utility priority, so Vision compiles the
@@ -295,12 +368,11 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         }
     }
 
-    /// Capture, Shift-Return / Option-Return on a released selection (Shift-Return also on the hovered element), and the release of a
-    /// Text mode box: reads the text of the selection, element or `box`, then copies it (tab-separated when it has columns) or its translation.
-    func copySelectionText(translating: Bool, box: CGRect? = nil) {
-        guard let rect = box ?? selection?.rect ?? hoverRect, let image else { return beep() }
-        let key = translating ? "Option-Return" : box == nil ? "Shift-Return" : "Copying the box"
-        guard !waitsForWarmUp(key, { self.copySelectionText(translating: translating, box: box) }) else { return }
+    /// Capture, Shift-Return / Option-Return on a released selection (Shift-Return also on the hovered element): reads the text of the
+    /// selection or element, then copies it (tab-separated when it has columns) or its translation.
+    func copySelectionText(translating: Bool) {
+        guard let rect = selection?.rect ?? hoverRect, let image else { return beep() }
+        guard !waitsForWarmUp(translating ? "Option-Return" : "Shift-Return", { self.copySelectionText(translating: translating) }) else { return }
         text.reading = rect
         textTask = Task {
             do {
@@ -437,9 +509,10 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         return FoundItems.readingOrder(items)
     }
 
-    /// With an item picked: Return copies it, Cmd-Return opens it, Esc unpicks. Otherwise Esc: close. F: select all text. Return or
-    /// Cmd-C: copy the selection with soft wraps joined; Shift-Return: copy it as rows; Option-Return: translate it. Tab / Shift-Tab:
-    /// step through found items.
+    /// With an item picked: Return copies it, Cmd-Return opens it, Esc unpicks. With a box: Esc clears it, and Return, Cmd-C,
+    /// Shift-Return and Option-Return copy or translate its lines. Otherwise Esc: close. F: select all text. Return or Cmd-C: copy the
+    /// selection with soft wraps joined; Shift-Return: copy it as rows; Option-Return: translate it. Tab / Shift-Tab: step through
+    /// found items.
     func handleTextKey(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags
         let liveText = view.liveText
@@ -458,9 +531,14 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
             }
             return true
         }
+        let boxed = selection != nil
         switch (event.keyCode, flags.contains(.command), event.charactersIgnoringModifiers ?? "") {
+        case (53, _, _) where boxed:
+            clearTextBox()
         case (53, _, _):
             dismiss()
+        case (36, _, _) where boxed, (76, _, _) where boxed, (_, true, "c") where boxed:
+            copyTextBox(table: flags.contains(.shift) && !flags.contains(.option), translating: flags.contains(.option))
         case (48, false, _):
             stepItem(backward: flags.contains(.shift))
         case (_, false, "f"):

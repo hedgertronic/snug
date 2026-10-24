@@ -22,8 +22,8 @@ final class OverlayWindow: NSPanel {
 
     /// Text mode: where the current press landed and the word (or, after a double or triple click, the word or line) it anchors.
     var textPress: (point: CGPoint, anchor: Range<String.Index>?)?
-    /// Text mode: a press off text held back from Live Text, and the box a drag from it draws (image pixels).
-    var textBox: (press: NSEvent, drag: AreaDrag)?
+    /// Text mode: a press held back from Live Text that draws, moves or resizes the box (the controller's selection) instead.
+    var textBox: NSEvent?
 
     /// Text mode: a press is down that began on a chrome button, or one that began elsewhere (Live Text's).
     var buttonPress = false
@@ -99,10 +99,12 @@ final class OverlayController {
     /// The reading pill and notice, and the running text analysis, OCR, or translation.
     var text = TextSession()
     var textTask: Task<Void, Never>?
-    /// Turns off the highlight of all found text that entering Text mode shows; nil once it is off.
+    /// Turns off the found-text flash that entering Text mode shows; nil once it is off.
     var foundTextHighlight: Task<Void, Never>?
-    /// Milliseconds the last Live Text analysis took, from the start of the analysis to the result.
+    /// Milliseconds the last Live Text analysis took, from the start of the analysis to the result, and the last found-text flash
+    /// took, from entering Text mode to its pills.
     var lastLiveTextMilliseconds = 0.0
+    var lastFlashMilliseconds = 0.0
     /// Option-Return: the language to translate into, the installed-pair check, and the translation; debug runs replace them.
     var targetLanguage = Locale.current.language
     var translationStatus: (Locale.Language, Locale.Language) async -> LanguageAvailability.Status = { await LanguageAvailability().status(from: $0, to: $1) }
@@ -471,8 +473,11 @@ final class OverlayController {
         case .rounding: cursor = .pointingHand
         case .drawing: cursor = .crosshair
         case .none where mode == .text:
-            // Live Text takes points from the top-left corner (measured), not the view's bottom-left.
-            cursor = view.liveText.hasText(at: CGPoint(x: pointer.x / scale, y: pointer.y / scale)) ? .iBeam : .crosshair
+            // Live Text takes points from the top-left corner (measured), not the view's bottom-left. The box's handles resize it and
+            // its inside off text moves it.
+            let onText = view.liveText.hasText(at: CGPoint(x: pointer.x / scale, y: pointer.y / scale))
+            cursor = selection?.handle(at: pointer, tolerance: 8 * scale).map { Self.resizeCursors[$0]! }
+                ?? (onText ? .iBeam : selection?.rect.contains(pointer) == true ? .openHand : .crosshair)
         case .none:
             if let selection {
                 cursor = cornerDot(at: pointer) != nil ? .pointingHand : selection.handle(at: pointer, tolerance: 8 * scale).map { Self.resizeCursors[$0]! }
@@ -512,8 +517,9 @@ final class OverlayController {
         return selected.bounds
     }
 
+    /// In Text mode only a press the window held back from Live Text for the box arrives here (see `OverlayWindow.sendTextMouse`).
     func mouseDown(_ event: NSEvent) {
-        guard mode == .capture, armedRecording == nil else { return }
+        guard mode == .capture || window.textBox != nil, armedRecording == nil else { return }
         let point = view.pixelPoint(event)
         pointer = point
         if cornerDot(at: point) == nil { hoveredCorner = nil }
@@ -531,10 +537,10 @@ final class OverlayController {
                 interaction = .resizing(handle, start: selection.rect)
                 edgeFrames = []
                 edgeFramesTask?.cancel()
-                edgeFramesTask = Task { edgeFrames = try await snapFrames(around: selection.rect) }
+                if mode == .capture { edgeFramesTask = Task { edgeFrames = try await snapFrames(around: selection.rect) } }
                 return updateCursor()
             }
-            if shiftHeld {
+            if shiftHeld, mode == .capture {
                 // A Shift-click counts as a move: it outlines and takes the element under the pointer.
                 movedWithShift = true
                 updateHover(pixel: point)
@@ -544,23 +550,28 @@ final class OverlayController {
                 interaction = .moving(last: point, origin: point, moved: false)
                 return updateCursor()
             }
-        } else if shiftHeld {
+        } else if shiftHeld, mode == .capture {
             updateHover(pixel: point)
             if let hovered = hoverRect { return openAsSelection(hovered) }
         }
-        selection = nil
         lockedRatio = nil
         ratioBase = nil
         ratioPortrait = nil
-        cancelWork()
-        bypassSnap = event.modifierFlags.contains(.option)
+        if mode == .capture {
+            selection = nil
+            cancelWork()
+        } else {
+            clearTextBox()
+        }
+        // Text mode's box never snaps.
+        bypassSnap = event.modifierFlags.contains(.option) || mode == .text
         interaction = .drawing(AreaDrag(extent: extent, origin: point))
         updateCursor()
         refresh()
     }
 
     func mouseDragged(_ event: NSEvent) {
-        guard mode == .capture else { return }
+        guard mode == .capture || window.textBox != nil else { return }
         let point = view.pixelPoint(event)
         pointer = point
         switch interaction {
@@ -573,7 +584,7 @@ final class OverlayController {
         case .resizing(let handle, let start):
             let old = selection!.rect
             let ratio = lockedRatio ?? (event.modifierFlags.contains(.shift) ? start.width / start.height : nil)
-            snapResize(handle, to: point, exact: event.modifierFlags.contains(.option), ratio: ratio)
+            snapResize(handle, to: point, exact: event.modifierFlags.contains(.option) || mode == .text, ratio: ratio)
             carryRadii(from: old)
         case .moving(let last, let origin, _):
             let old = selection!.rect
@@ -595,6 +606,8 @@ final class OverlayController {
             editedRadii[rect] = radii
             lastEditedCorner = corner
         }
+        // A pause while moving or resizing Text mode's box reads it again.
+        if mode == .text, selection != nil { readTextBox(after: .milliseconds(150)) }
         updateCursor()
         refresh()
     }
@@ -627,7 +640,7 @@ final class OverlayController {
     }
 
     func mouseUp(_ event: NSEvent) {
-        guard mode == .capture else { return }
+        guard mode == .capture || window.textBox != nil else { return }
         let point = view.pixelPoint(event)
         pointer = point
         let finished = interaction
@@ -642,7 +655,7 @@ final class OverlayController {
         case .none, .resizing, .rounding:
             break
         case .moving(_, _, let moved):
-            if !moved {
+            if !moved, mode == .capture {
                 // Shift-click inside the selection still grows it to the element under the pointer; Shift-drag there moves it.
                 if event.modifierFlags.contains(.shift), let hovered = hoverRect { growSelection(toInclude: hovered) } else { copy() }
             }
@@ -650,11 +663,18 @@ final class OverlayController {
             drag.update(to: point, moving: false)
             let rect = drag.rect
             if rect.width < AreaSelection.minimumSize || rect.height < AreaSelection.minimumSize {
-                cancelWork()
-                if !hadSelection { clickHover(framed: framed != event.modifierFlags.contains(.option), copy: true, save: afterCaptureSaves) }
+                if mode == .capture {
+                    cancelWork()
+                    if !hadSelection { clickHover(framed: framed != event.modifierFlags.contains(.option), copy: true, save: afterCaptureSaves) }
+                }
             } else {
                 release(rect)
             }
+        }
+        // Text mode's box, drawn, moved or resized, is read at once; the text Live Text had selected lets go.
+        if mode == .text, selection != nil {
+            view.liveText.selectedRanges = []
+            readTextBox()
         }
         updateCursor()
         refresh()
@@ -1067,12 +1087,14 @@ final class OverlayController {
         showWarmUpNotice()
         var overlays = OverlayView.Overlays()
         if case .drawing(let drag) = interaction, drag.rect.width > 0 || drag.rect.height > 0 { overlays.ghost = drag.rect }
-        if let drag = window.textBox?.drag, drag.rect.width > 0 || drag.rect.height > 0 { overlays.ghost = drag.rect }
         overlays.preview = snapPreview
         overlays.selection = selection?.rect
         overlays.snappedEdges = snappedEdges
         // Armed to record, the red outline replaces both, so the view never receives them.
         overlays.showsHandles = selection != nil && armedRecording == nil
+        overlays.showsCornerDots = mode == .capture
+        if mode == .text, let rect = selection?.rect, text.box?.rect == rect { overlays.textPills = text.box?.lines?.map(\.bounds) ?? [] }
+        overlays.flashPills = text.flash ?? []
         overlays.showsOutline = armedRecording == nil
         overlays.focusedCorner = selection == nil ? nil : focusedCorner
         if selection == nil || unionHover, case .none = interaction { overlays.hover = hoverRect }
@@ -1093,12 +1115,12 @@ final class OverlayController {
         let hints = [overlays.upHint, overlays.downHint]
         for rect in [snapPreview, settled, overlays.hover] + hints { measureRadius(rect) }
         for rect in [shown, overlays.hover] + hints { measureRadius(rect.flatMap(container)) }
-        overlays.radii = cutout?.frameRadii ?? shown.map(cornerRadii) ?? .zero
+        overlays.radii = cutout?.frameRadii ?? (mode == .text ? .zero : shown.map(cornerRadii) ?? .zero)
         overlays.hoverRadii = overlays.hover.map(cornerRadii) ?? .zero
         overlays.upHintRadii = overlays.upHint.map(cornerRadii) ?? .zero
         overlays.downHintRadii = overlays.downHint.map(cornerRadii) ?? .zero
         // The padded card of an area or element; a live window's real shadow has no card to preview.
-        if let rect = selection?.rect, framed, !capturesLiveWindow(rect) { overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, framed: true) }
+        if mode == .capture, let rect = selection?.rect, framed, !capturesLiveWindow(rect) { overlays.styleFrame = OutputFrame.rect(around: rect, scale: scale, framed: true) }
         jumping = keyJump && animates && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion && selection == nil
             && overlays.hover != nil && view.overlays.hover != nil && overlays.hover != view.overlays.hover
         view.overlays = overlays

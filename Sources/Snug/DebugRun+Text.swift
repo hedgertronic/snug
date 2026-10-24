@@ -86,6 +86,7 @@ extension DebugRun {
         overlay.present(image: image, frame: frame, displayID: nil)
         require(overlay.mode == .capture && liveText.isHidden && liveText.analysis == nil, "the overlay opens in Capture with Live Text hidden and nothing analyzed")
         key(tKey, "t")
+        let entered = ContinuousClock.now
         require(overlay.mode == .text && !liveText.isHidden, "T enters Text mode and shows Live Text")
         require(overlay.chrome.strip.isHidden && texts(in: overlay.chrome.topBar) == ["Capture", "A", "Text", "T", "Loupe", "L", "Rulers", "R", "Crosshair", "X", "?"],
                 "Text mode with nothing selected shows no strip, and the bar has the modes, view and the keys button: \(texts(in: overlay.chrome.topBar))")
@@ -93,12 +94,15 @@ extension DebugRun {
         try await waitFor("the Live Text analysis attaches") { liveText.analysis != nil }
         print("Live Text analysis: \(String(format: "%.1f", overlay.lastLiveTextMilliseconds)) ms (first in this process)")
         require(overlay.chrome.reading.isHidden, "the Reading text... pill goes away when the analysis attaches")
-        // Once the analysis attaches, Live Text highlights all the text it found, and turns that off by itself about 1 s later.
-        let highlightStart = ContinuousClock.now
-        require(liveText.selectableItemsHighlighted && liveText.preferredInteractionTypes == .textSelection, "entering Text mode highlights all the text Live Text found")
-        try await waitFor("the found-text highlight goes off") { !liveText.selectableItemsHighlighted }
-        let highlightTime = highlightStart.duration(to: .now).milliseconds
-        require(highlightTime > 850 && highlightTime < 1500, "the found-text highlight goes off by itself after about 1 s: \(Int(highlightTime)) ms")
+        // Entering Text mode flashes the lines text detection found as pills, and turns them off by itself about 1.25 s later.
+        try await waitFor("the found-text flash shows") { !overlay.view.overlays.flashPills.isEmpty }
+        let flashed = overlay.view.overlays.flashPills
+        print("Found-text flash: \(String(format: "%.1f", overlay.lastFlashMilliseconds)) ms to \(flashed.count) line boxes (first in this process)")
+        require(flashed.count > 20 && flashed.allSatisfy { overlay.extent.contains($0) } && !liveText.selectableItemsHighlighted && liveText.preferredInteractionTypes == .textSelection,
+                "entering Text mode flashes pills on the lines found, not Live Text's own highlight: \(flashed.count)")
+        try await waitFor("the found-text flash goes off") { overlay.view.overlays.flashPills.isEmpty }
+        let flashTime = entered.duration(to: .now).milliseconds
+        require(flashTime > 1150 && flashTime < 2000 && overlay.foundTextHighlight == nil, "the found-text flash goes off by itself about 1.25 s after entering: \(Int(flashTime)) ms")
         require(liveText.frame == overlay.view.bounds && liveText.superview === overlay.view, "Live Text covers the frozen image exactly")
         require(liveText.isSupplementaryInterfaceHidden, "no Live Text button sits in the corner")
         require(liveText.text.contains("Product name") && liveText.text.contains("Billing address"), "the analysis reads the screen's text")
@@ -136,16 +140,17 @@ extension DebugRun {
         overlay.defaults.set(false, forKey: Pref.loupe)
         overlay.dismiss()
 
-        // A key or a press turns the found-text highlight off at once, and A then T back into Text mode lights it again.
+        // A key or a press turns the found-text flash off at once, and A then T back into Text mode flashes it again.
         try await open()
-        require(liveText.selectableItemsHighlighted, "the found text is highlighted on entering Text mode")
+        try await waitFor("the found-text flash shows") { !overlay.view.overlays.flashPills.isEmpty }
         key(fKey, "f")
-        require(!liveText.selectableItemsHighlighted, "a key turns the found-text highlight off at once")
+        require(overlay.view.overlays.flashPills.isEmpty && overlay.foundTextHighlight == nil, "a key turns the found-text flash off at once")
         key(aKey, "a")
         key(tKey, "t")
-        require(liveText.analysis != nil && liveText.selectableItemsHighlighted, "A then T, reusing the analysis, highlights the found text again")
+        try await waitFor("the found-text flash shows again") { !overlay.view.overlays.flashPills.isEmpty }
+        require(liveText.analysis != nil, "A then T, reusing the analysis, flashes the found text again")
         mouse(.leftMouseDown, CGPoint(x: productName.minX + 40, y: productName.midY))
-        require(!liveText.selectableItemsHighlighted, "a press turns the found-text highlight off before its release")
+        require(overlay.view.overlays.flashPills.isEmpty, "a press turns the found-text flash off before its release")
         mouse(.leftMouseUp, CGPoint(x: productName.minX + 40, y: productName.midY))
         overlay.dismiss()
 
@@ -360,8 +365,8 @@ extension DebugRun {
         key(escape)
         require(!overlay.window.isVisible, "Esc after a drag in the text closes")
 
-        // A drag that starts off text draws a box like Capture's drag, never a Live Text selection, and on release copies the text
-        // inside the box with soft wraps joined. Here the box starts left of the Address label and covers that block's four lines.
+        // A drag that starts off text draws a box like Capture's drag, never a Live Text selection, and on release keeps it as a
+        // selection and reads it. Here the box starts left of the Address label and covers that block's four lines.
         let boxStart = CGPoint(x: 300, y: 900), boxEnd = CGPoint(x: 1590, y: 1230)
         try await open()
         mouse(.mouseMoved, boxStart)
@@ -380,12 +385,108 @@ extension DebugRun {
         require(boxSelected.isEmpty && overlay.view.cursor == .crosshair, "a box drag leaves Live Text's selection as it was (\(selectedBefore.debugDescription)) and the cursor the crosshair: \(boxSelected)")
         pasteboard.clearContents()
         mouse(.leftMouseUp, boxEnd)
-        require(overlay.view.overlays.ghost == nil && !overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."],
-                "on release the box goes and a Reading text... pill shows while its text is read")
+        let addressBox = CGRect(x: boxStart.x, y: boxStart.y, width: boxEnd.x - boxStart.x, height: boxEnd.y - boxStart.y)
+        let o = { overlay.view.overlays }
+        require(overlay.selection?.rect == addressBox && o().selection == addressBox && o().showsHandles && !o().showsCornerDots && o().ghost == nil && overlay.window.isVisible
+                    && pasteboard.string(forType: .string) == nil && !overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."],
+                "on release the box stays as a selection with Capture's outline and handles but no corner dots, copies nothing, and a Reading text... pill shows while it is read")
         await overlay.textTask?.value
-        let boxed = await copied()
-        require(boxed == "Address\n1234 Main St\nAddress 2 (Optional)\nApartment or suite" && !overlay.window.isVisible,
-                "the release copies the box's lines, evenly spaced so without blank lines, and closes: \(boxed.debugDescription)")
+        /// The box's pills and its chip agree with the lines read, all inside it.
+        func requireBoxRead(_ rect: CGRect, _ message: String) {
+            let pills = o().textPills, count = overlay.text.box?.lines?.count ?? -1
+            require(overlay.selection?.rect == rect && overlay.text.box?.rect == rect && pills.count == count && count > 0
+                        && pills.allSatisfy { rect.insetBy(dx: -1, dy: -1).contains($0) } && texts(in: overlay.chrome.size) == ["\(count) \(count == 1 ? "line" : "lines")"]
+                        && overlay.chrome.size.isHidden == false && overlay.chrome.reading.isHidden && !overlay.chrome.strip.isHidden,
+                    "\(message): \(count) lines, \(pills.count) pills, chip \(texts(in: overlay.chrome.size))")
+        }
+        requireBoxRead(addressBox, "once read, the box's lines show as pills, the chip counts them and the Text strip shows")
+        require(o().textPills.count == 4, "the box holds the Address block's four lines: \(overlay.text.box?.lines?.map(\.text) ?? [])")
+        // The box moves from inside off text and resizes from its handles, as a Capture selection does, and each change reads it again.
+        let inside = CGPoint(x: boxStart.x + 30, y: boxStart.y + 75)
+        mouse(.mouseMoved, inside)
+        require(!liveText.hasText(at: topLeft(inside)) && overlay.view.cursor == .openHand, "inside the box off text the cursor is the open hand")
+        mouse(.mouseMoved, CGPoint(x: addressBox.maxX, y: addressBox.maxY))
+        require(overlay.view.cursor == OverlayController.resizeCursors[.bottomRight], "on the box's corner handle the cursor resizes")
+        mouse(.leftMouseDown, inside)
+        mouse(.leftMouseDragged, CGPoint(x: inside.x, y: inside.y + 40))
+        mouse(.leftMouseDragged, CGPoint(x: inside.x, y: inside.y + 80))
+        mouse(.leftMouseUp, CGPoint(x: inside.x, y: inside.y + 80))
+        let moved = addressBox.offsetBy(dx: 0, dy: 80)
+        require(overlay.selection?.rect == moved && liveText.selectedText.isEmpty && !overlay.chrome.reading.isHidden, "a drag inside the box off text moves it and reads it again: \(String(describing: overlay.selection?.rect))")
+        await overlay.textTask?.value
+        requireBoxRead(moved, "the moved box shows its own lines")
+        mouse(.leftMouseDown, CGPoint(x: moved.midX, y: moved.maxY))
+        mouse(.leftMouseDragged, CGPoint(x: moved.midX, y: moved.maxY - 120))
+        mouse(.leftMouseUp, CGPoint(x: moved.midX, y: moved.maxY - 120))
+        let resized = CGRect(x: moved.minX, y: moved.minY, width: moved.width, height: moved.height - 120)
+        require(overlay.selection?.rect == resized, "the bottom handle resizes the box exactly, with no snap: \(String(describing: overlay.selection?.rect))")
+        await overlay.textTask?.value
+        requireBoxRead(resized, "the resized box shows its own lines")
+        // Esc clears the box and keeps the overlay; a second Esc closes it.
+        key(escape)
+        require(overlay.selection == nil && o().textPills.isEmpty && overlay.window.isVisible && overlay.chrome.size.isHidden, "Esc clears the box and keeps the overlay")
+        key(escape)
+        require(!overlay.window.isVisible, "a second Esc closes the overlay")
+        /// Opens Text mode with the Address block boxed and read.
+        func openBox() async throws {
+            try await open()
+            mouse(.leftMouseDown, boxStart)
+            mouse(.leftMouseDragged, boxEnd)
+            mouse(.leftMouseUp, boxEnd)
+            await overlay.textTask?.value
+            requireBoxRead(addressBox, "the Address block boxed and read")
+        }
+        let block = "Address\n1234 Main St\nAddress 2 (Optional)\nApartment or suite"
+        for (name, keyCode, characters, flags) in [("Return", returnKey, "\r", NSEvent.ModifierFlags()), ("keypad Enter", 76, "\u{3}", []), ("Cmd-C", cKey, "c", .command),
+                                                  ("Shift-Return", returnKey, "\r", .shift)] {
+            try await openBox()
+            pasteboard.clearContents()
+            key(keyCode, characters, flags)
+            let boxed = await copied()
+            require(boxed == block && !overlay.window.isVisible,
+                    "\(name) with a box copies its lines (Shift-Return as a table, one row per line here) and closes: \(boxed.debugDescription)")
+        }
+        // On the cart's two columns Shift-Return copies a table and Return the rows with soft wraps joined.
+        for (flags, expected) in [(NSEvent.ModifierFlags.shift, "Product name\t$12\n"), ([], "Product name $12 Brief description")] {
+            try await open()
+            mouse(.leftMouseDown, CGPoint(x: cart.minX, y: cart.minY))
+            mouse(.leftMouseDragged, CGPoint(x: cart.maxX, y: cart.maxY))
+            mouse(.leftMouseUp, CGPoint(x: cart.maxX, y: cart.maxY))
+            await overlay.textTask?.value
+            pasteboard.clearContents()
+            key(returnKey, "\r", flags)
+            let copiedCart = await copied() ?? ""
+            require(copiedCart.hasPrefix(expected) && copiedCart.contains("\t") == flags.contains(.shift),
+                    "\(flags.contains(.shift) ? "Shift-Return" : "Return") on a box over the cart copies \(flags.contains(.shift) ? "a table" : "joined rows"): \(copiedCart.debugDescription)")
+        }
+        try await openBox()
+        overlay.targetLanguage = Locale.Language(identifier: "de")
+        overlay.translationStatus = { _, _ in .installed }
+        var boxSent: String?
+        overlay.translate = { text, _, _ in boxSent = text; return "UEBERSETZT" }
+        pasteboard.clearContents()
+        key(returnKey, "\r", .option)
+        require(await copied() == "UEBERSETZT" && boxSent == block && !overlay.window.isVisible, "Option-Return with a box translates its lines: \(boxSent.debugDescription)")
+        overlay.targetLanguage = Locale.current.language
+        overlay.translationStatus = { await LanguageAvailability().status(from: $0, to: $1) }
+        overlay.translate = { try await TranslationSession(installedSource: $1, target: $2).translate($0).targetText }
+        // A new press off text outside the box starts a new box; a drag on text inside it selects that text and clears the box.
+        try await openBox()
+        mouse(.leftMouseDown, CGPoint(x: 300, y: 1450))
+        mouse(.leftMouseDragged, CGPoint(x: 1200, y: 1600))
+        mouse(.leftMouseUp, CGPoint(x: 1200, y: 1600))
+        require(overlay.selection?.rect == CGRect(x: 300, y: 1450, width: 900, height: 150), "a press off text outside the box starts a new box: \(String(describing: overlay.selection?.rect))")
+        await overlay.textTask?.value
+        mouse(.leftMouseDown, boxStart)
+        mouse(.leftMouseDragged, boxEnd)
+        mouse(.leftMouseUp, boxEnd)
+        await overlay.textTask?.value
+        let address = CGPoint(x: 345, y: 932)
+        require(liveText.hasText(at: topLeft(address)), "the Address label is text inside the box")
+        textDrag(from: address, to: CGPoint(x: 460, y: 932))
+        require(overlay.selection == nil && o().textPills.isEmpty && liveText.selectedText.hasPrefix("Address"),
+                "a drag on text inside the box selects that text and clears the box: \(liveText.selectedText.debugDescription)")
+        overlay.dismiss()
         // A drag that starts on text never draws a box.
         try await open()
         mouse(.leftMouseDown, CGPoint(x: productName.minX + 10, y: productName.midY))
@@ -648,8 +749,9 @@ extension DebugRun {
         try await waitFor("Tab finds the items") { overlay.text.picked != nil }
         key(returnKey, "\r", .command)
         try await openFixture()
-        try await waitFor("the found-text highlight goes off") { !liveText.selectableItemsHighlighted }
-        require(liveText.preferredInteractionTypes == .textSelection, "the next Text mode starts with text selection, and its found-text highlight goes off")
+        try await waitFor("the found-text flash goes off") { overlay.foundTextHighlight == nil && overlay.view.overlays.flashPills.isEmpty }
+        require(liveText.preferredInteractionTypes == .textSelection && !liveText.selectableItemsHighlighted,
+                "the next Text mode starts with text selection and no item highlight, and its found-text flash goes off")
         overlay.dismiss()
         require(opened == [URL(string: "https://example.com/snug")!] && !overlay.window.isVisible, "Cmd-Return closes and opens the picked item: \(opened)")
         try await openFixture()
