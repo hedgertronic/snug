@@ -131,8 +131,8 @@ private func caption(_ text: String) -> some View {
     Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 4)
 }
 
-/// The app icon and name once, then shortcut, after capture, save folder, open at login, recording, and the permissions; a footer
-/// with the developer's headshot, a short bio, a Ko-fi link, and the developer's credit linking to hedgertronic.com.
+/// The app icon and name once, with the developer's credit linking to hedgertronic.com, then shortcut, after capture, save folder, open at
+/// login, recording, and the permissions; a footer with the developer's headshot, a short bio, and a Ko-fi link.
 private struct GeneralPane: View {
     @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
@@ -146,7 +146,11 @@ private struct GeneralPane: View {
                 HStack(spacing: 14) {
                     Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 60, height: 60)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Snug").font(.system(size: 28, weight: .heavy, design: .rounded))
+                        HStack {
+                            Text("Snug").font(.system(size: 28, weight: .heavy, design: .rounded))
+                            Spacer(minLength: 12)
+                            MakerChip()
+                        }
                         Text("\(hotKeyCode < 0 ? "Set a shortcut to capture." : "Press \(Shortcut.label(code: hotKeyCode, modifiers: hotKeyModifiers)) to capture.")\nPress ? in the overlay for every key.")
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
@@ -214,11 +218,7 @@ private struct GeneralPane: View {
                     Text("Hi, I'm Josh. I'm a professional pitcher and an R&D analyst at Driveline Baseball. Snug is one of my side projects.")
                         .font(.system(size: 13))
                         .fixedSize(horizontal: false, vertical: true)
-                    HStack {
-                        Link("Buy me a bag of sunflower seeds", destination: URL(string: "https://ko-fi.com/hedgertronic")!).font(.system(size: 13))
-                        Spacer(minLength: 12)
-                        MakerChip()
-                    }
+                    Link("Buy me a bag of sunflower seeds", destination: URL(string: "https://ko-fi.com/hedgertronic")!).font(.system(size: 13))
                 }
             }
                 .padding(.init(top: 14, leading: 20, bottom: 14, trailing: 20))
