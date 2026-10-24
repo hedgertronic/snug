@@ -184,16 +184,27 @@ extension DebugRun {
         require(copied.colorAt(x: 0, y: 0)!.alphaComponent == 0 && copied.colorAt(x: copied.pixelsWide / 2, y: 0)!.alphaComponent == 1,
                 "the copy rounds its corners with the dot-edited radii")
 
-        // O toggles rounding; with it off, a hovered window is square, and E keeps it square until edited.
+        // O toggles rounding everywhere: with it off a hovered window, its selection and edited corners are all square; on again, they
+        // come back.
         open()
         defaults.set(true, forKey: Pref.roundCorners)
         require(overlay.view.overlays.hoverRadii == CornerRadii(radius), "hovering a window shows its radius")
         key(31, "o")
         require(!defaults.bool(forKey: Pref.roundCorners) && overlay.view.overlays.hoverRadii == .zero, "O turns rounding off and squares the hover")
         key(14, "e")
-        try await waitFor("E with rounding off carries square corners") { overlay.editedRadii[a] == CornerRadii.zero }
+        require(overlay.editedRadii[a] == nil && overlay.view.overlays.radii == .zero, "E with rounding off opens a square selection")
         key(31, "o")
-        require(defaults.bool(forKey: Pref.roundCorners) && overlay.view.overlays.radii == .zero, "O turns rounding on; the edited square corners stay")
+        require(defaults.bool(forKey: Pref.roundCorners) && overlay.view.overlays.radii == CornerRadii(radius), "O turns rounding on and the selection takes the window's radius")
+        key(30, "]")
+        let edited = overlay.view.overlays.radii
+        require(edited != CornerRadii(radius), "] edits the selection's corners")
+        key(31, "o")
+        require(overlay.view.overlays.radii == .zero, "O turns rounding off and squares the edited selection")
+        key(53, "\u{1B}")
+        require(overlay.view.overlays.hoverRadii == .zero, "back in hover with rounding off, the hover stays square")
+        key(14, "e")
+        key(30, "]")
+        require(defaults.bool(forKey: Pref.roundCorners), "editing a radius with rounding off turns rounding on")
         overlay.dismiss()
 
         // Shift-click with no selection opens the element without copying it.

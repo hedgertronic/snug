@@ -54,14 +54,15 @@ extension OverlayController {
         return cornerRadii(of: rect).corner(at: point, in: rect, tolerance: 6 * scale, minimumInset: 8 * scale)
     }
 
-    /// E and Shift-click on a hovered rectangle: it becomes an editable selection that keeps its corner radii, once they are measured.
+    /// E and Shift-click on a hovered rectangle: it becomes an editable selection that keeps its corner radii, once they are measured
+    /// (with Rounded on; with it off the selection is square and takes the measured radii if Rounded is turned on).
     func openAsSelection(_ rect: CGRect) {
         cancelWork()
         selection = AreaSelection(extent: extent, exact: rect)
         let measuring = ([rect] + [container(of: rect)].compactMap { $0 }).compactMap { radiusTasks[$0] }
         Task {
             for task in measuring { _ = await task.value }
-            guard selection?.rect == rect, editedRadii[rect] == nil else { return }
+            guard selection?.rect == rect, editedRadii[rect] == nil, defaults.bool(forKey: Pref.roundCorners) else { return }
             editedRadii[rect] = cornerRadii(of: rect)
             refresh()
         }

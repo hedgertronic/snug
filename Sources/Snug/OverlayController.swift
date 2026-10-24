@@ -528,6 +528,8 @@ final class OverlayController {
         shiftHeld = event.modifierFlags.contains(.shift)
         if let selection {
             if let corner = cornerDot(at: point) {
+                // Dragging a corner turns Rounded on, from the radii Rounded shows.
+                defaults.set(true, forKey: Pref.roundCorners)
                 interaction = .rounding(corner, start: point, from: cornerRadii(of: selection.rect))
                 measureRadius(selection.rect)
                 measureRadius(container(of: selection.rect))
@@ -1006,20 +1008,22 @@ final class OverlayController {
         windows.first { $0.insetBy(dx: -2, dy: -2).contains(rect) }
     }
 
-    /// The corner radii of `rect`: the edited ones, else its measured radius on all four corners (each corner's own arc when they agree
-    /// on none), with the corners that sit on its window's corners taking the window's radius.
+    /// The corner radii of `rect`: square with Rounded off; else the edited ones, else its measured radius on all four corners (each
+    /// corner's own arc when they agree on none), with the corners that sit on its window's corners taking the window's radius.
     func cornerRadii(of rect: CGRect) -> CornerRadii {
-        if let edited = editedRadii[rect] { return edited }
         guard defaults.bool(forKey: Pref.roundCorners) else { return .zero }
+        if let edited = editedRadii[rect] { return edited }
         let radius = radii[rect] ?? 0, arcs = arcs[rect] ?? .zero
         let measured = radius > 0 ? CornerRadii(radius) : arcs
         guard let window = container(of: rect) else { return measured }
         return measured.replacingCorners(sharedWith: window, in: rect, with: radii[window] ?? 0, arcs: arcs)
     }
 
-    /// `]` / `[`: every corner of the selection (or the hovered rectangle), or only the focused corner, grows or shrinks by `points`, from its current radii.
+    /// `]` / `[`: every corner of the selection (or the hovered rectangle), or only the focused corner, grows or shrinks by `points`, from its
+    /// current radii. Editing a radius turns Rounded on.
     private func adjustRadii(by points: CGFloat) {
         guard let rect = selection?.rect ?? hoverRect else { return }
+        defaults.set(true, forKey: Pref.roundCorners)
         let radii = cornerRadii(of: rect)
         editedRadii[rect] = radii.moving(focusedCorner ?? .topLeft, by: points * scale, alone: focusedCorner != nil, in: rect.size)
     }
@@ -1059,7 +1063,7 @@ final class OverlayController {
                     let windowRadius = if let windowKnown { windowKnown } else { await windowMeasuring?.value.radius ?? 0 }
                     radii = radii.replacingCorners(sharedWith: container, in: crop, with: windowRadius, arcs: measured.arcs)
                 }
-                try await Output.deliver(image, crop: crop, framed: framed, scale: scale, cornerRadii: edited ?? (rounds ? radii : .zero), copy: copy, save: save,
+                try await Output.deliver(image, crop: crop, framed: framed, scale: scale, cornerRadii: rounds ? edited ?? radii : .zero, copy: copy, save: save,
                                          destination: destination, pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
