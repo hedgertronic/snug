@@ -131,12 +131,13 @@ private func caption(_ text: String) -> some View {
     Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 4)
 }
 
-/// The app icon and name once, then shortcut, save folder, open at login, recording, and the permissions; then About the
+/// The app icon and name once, then shortcut, save folder, open at login, recording, the Text mode switch, and the permissions; then About the
 /// developer: the headshot, name, a link to hedgertronic.com, a short bio, and the Ko-fi button.
 private struct GeneralPane: View {
     @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
     @AppStorage(Pref.saveFolder) private var saveFolder = ""
+    @AppStorage(Pref.chromiumText) private var chromiumText = true
     @State private var opensAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -181,6 +182,15 @@ private struct GeneralPane: View {
                             opensAtLogin = SMAppService.mainApp.status == .enabled
                         }
                     }
+                }
+                caption("Text mode")
+                Card {
+                    LabeledContent {
+                        Toggle("Read text from Chromium apps", isOn: $chromiumText).labelsHidden().toggleStyle(.switch)
+                    } label: {
+                        detailed("Read text from Chromium apps", "Turns on the app's accessibility until it quits.")
+                    }
+                    .padding(.vertical, 4)
                 }
                 caption("Permissions")
                 // macOS sends no notification when a permission changes, so the rows re-read both every second.

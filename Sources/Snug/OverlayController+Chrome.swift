@@ -283,7 +283,7 @@ extension OverlayController {
                     left = [c.size]
                 }
                 attachment = (view.viewRect(rect), true, left, [])
-            } else if !window.textDragging, let box = textSelectionBox {
+            } else if !window.textDragging, let box = screenSelectionBox ?? textSelectionBox {
                 textStrip()
                 attachment = (box, true, [], [])
             }

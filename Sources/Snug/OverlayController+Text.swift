@@ -15,6 +15,8 @@ struct TextSession {
     var queued: (notice: String, run: @MainActor () -> Void)?
     var box: (rect: CGRect, lines: [TextLine]?)?
     var flash: [CGRect]?
+    /// The selection in accessibility text (an index into `OverlayController.screenTexts`): where its press began and where it is now.
+    var screenSelection: (text: Int, anchor: ScreenText.Position, focus: ScreenText.Position)?
 }
 
 /// Live Text's own drag selection is word-granular and anchors at the start of the pressed word, so a drag that goes backward leaves
@@ -37,6 +39,22 @@ extension OverlayWindow {
         let view = contentView as! OverlayView
         let controller = view.controller!
         let liveText = view.liveText
+        // A press in text that accessibility exposes, and its drag and release, select in that text instead of Live Text's.
+        if event.type == .leftMouseDown, let read = controller.screenText(at: view.pixelPoint(event)) {
+            textPress = nil
+            liveText.selectedRanges = []
+            controller.clearTextBox()
+            screenTextPress = true
+            return controller.pressScreenText(read, event: event)
+        }
+        if screenTextPress {
+            screenTextPress = event.type != .leftMouseUp
+            return controller.dragScreenText(event)
+        }
+        if event.type == .leftMouseDown, controller.text.screenSelection != nil {
+            controller.text.screenSelection = nil
+            controller.refresh()
+        }
         // `hasText(at:)` takes points from the top-left corner.
         let local = liveText.convert(event.locationInWindow, from: nil)
         let textPoint = CGPoint(x: local.x, y: liveText.bounds.height - local.y)
@@ -120,6 +138,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     /// Analyzes the frozen image for text once per capture and attaches the result; the pill covers the screen until then. Meanwhile
     /// the found-text flash shows where the text is (see `highlightFoundText`).
     func startLiveText() {
+        enableChromiumText()
         view.liveText.preferredInteractionTypes = .textSelection
         view.liveText.selectableItemsHighlighted = false
         highlightFoundText()
@@ -427,6 +446,10 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     /// Shift-Return: copies the selected text as rows, one visual row per line with columns tab-separated, from accurate OCR boxes
     /// matched to the Live Text selection.
     func copyTextRows() {
+        if let lines = screenLines {
+            let rows = TextLayout.rows(lines)
+            return copyText(TextLayout.table(rows), message: "Copied \(rows.count) \(rows.count == 1 ? "row" : "rows")", translating: false)
+        }
         let selected = view.liveText.selectedText
         guard !selected.isEmpty, text.reading == nil, let image else { return beep() }
         guard !waitsForWarmUp("Shift-Return", { self.copyTextRows() }) else { return }
@@ -447,6 +470,11 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     /// Return / Cmd-C / Option-Return: copies the selected text, or its translation, as accurate OCR reads the span the selection
     /// covers, with soft wraps joined.
     func copySelectedText(translating: Bool, key: String) {
+        if let lines = screenLines {
+            let copied = TextLayout.paragraphs(TextLayout.rows(lines))
+            let count = copied.split(whereSeparator: \.isNewline).count
+            return copyText(copied, message: "Copied \(count) \(count == 1 ? "line" : "lines")", translating: translating)
+        }
         let selected = view.liveText.selectedText
         guard !selected.isEmpty, text.reading == nil, let image else { return beep() }
         guard !waitsForWarmUp(key, { self.copySelectedText(translating: translating, key: key) }) else { return }
@@ -558,7 +586,9 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         case (48, false, _):
             stepItem(backward: flags.contains(.shift))
         case (_, false, "f"):
+            text.screenSelection = nil
             liveText.selectedRanges = [liveText.text.startIndex..<liveText.text.endIndex]
+            refresh()
         case (36, false, _) where flags.contains(.shift):
             copyTextRows()
         case (36, _, _), (76, _, _), (_, true, "c"):

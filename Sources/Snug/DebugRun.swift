@@ -11,6 +11,8 @@ enum DebugRun {
         overlay.animates = false
         overlay.chooseSaveURL = { _ in preconditionFailure("a debug run shows no Save As panel") }
         overlay.openURL = { preconditionFailure("a debug run opens nothing: \($0)") }
+        overlay.chromiumOwners = { _ in [] }
+        overlay.enableChromium = { preconditionFailure("a debug run turns on no app's accessibility: \($0)") }
         Toast.isSuppressed = true
         Toast.chooseSaveURL = { _ in preconditionFailure("a debug run shows no Save As panel") }
         // A debug run never takes the keyboard or activation from the app in front: either ends it at once.
