@@ -23,6 +23,7 @@ enum ScreenTextReader {
         if Accessibility.terminalApps.contains(bundle) {
             return await Accessibility.terminalRows(pid: pid).map { ScreenText.grid(rows: $0.rows, frame: $0.frame, window: 0) }
         }
+        if webKitApps.contains(bundle) { return await webKitTexts(pid: pid) }
         return []
     }
 }

@@ -4,8 +4,8 @@ import ScreenshotCore
 
 /// Live accessibility lookups for Capture hover and snap. Nothing here prompts; `requestTrust()` is the only prompt and runs from a click.
 enum Accessibility {
-    private static let messagingTimeout: Float = 0.1
-    private static let maxDepth = 24
+    static let messagingTimeout: Float = 0.1
+    static let maxDepth = 24
     /// The longest the peers of one lookup take to read; a slow app gets the peers it answered for.
     private static let peerBudget = Duration.milliseconds(100)
     /// The longest a walk down from the window by frames takes; a slow app gets the depth it reached.
@@ -189,7 +189,7 @@ enum Accessibility {
                        subrole: subrole as? String ?? "", identifier: identifier as? String ?? "", elementDescription: elementDescription as? String ?? "")
     }
 
-    private static func children(of element: AXUIElement, _ attribute: String) -> [AXUIElement]? {
+    static func children(of element: AXUIElement, _ attribute: String) -> [AXUIElement]? {
         var children: CFTypeRef?
         return AXUIElementCopyAttributeValue(element, attribute as CFString, &children) == .success ? children as? [AXUIElement] : nil
     }
@@ -280,7 +280,7 @@ enum Accessibility {
         }
     }
 
-    private static func value<T>(_ attribute: String, of element: AXUIElement, type: AXValueType, as seed: T) -> T? {
+    static func value<T>(_ attribute: String, of element: AXUIElement, type: AXValueType, as seed: T) -> T? {
         var raw: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &raw) == .success, let raw else { return nil }
         var result = seed
