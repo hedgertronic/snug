@@ -131,8 +131,8 @@ private func caption(_ text: String) -> some View {
     Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 4)
 }
 
-/// The app icon and name once, with the developer's credit linking to hedgertronic.com, then shortcut, after capture, save folder, open at
-/// login, recording, and the permissions; a footer with the developer's headshot, a short bio, and a Ko-fi link.
+/// The app icon and name once, then shortcut, after capture, save folder, open at login, recording, and the permissions; then About the
+/// developer: the headshot, name, a link to hedgertronic.com, a short bio, and the Ko-fi button.
 private struct GeneralPane: View {
     @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
@@ -146,11 +146,7 @@ private struct GeneralPane: View {
                 HStack(spacing: 14) {
                     Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 60, height: 60)
                     VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("Snug").font(.system(size: 28, weight: .heavy, design: .rounded))
-                            Spacer(minLength: 12)
-                            MakerChip()
-                        }
+                        Text("Snug").font(.system(size: 28, weight: .heavy, design: .rounded))
                         Text("\(hotKeyCode < 0 ? "Set a shortcut to capture." : "Press \(Shortcut.label(code: hotKeyCode, modifiers: hotKeyModifiers)) to capture.")\nPress ? in the overlay for every key.")
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
@@ -209,20 +205,27 @@ private struct GeneralPane: View {
                         permission("Accessibility", detail: "Recommended, highlights parts of apps", granted: AXIsProcessTrusted()) { Accessibility.requestTrust() }
                     }
                 }
-            }
-            Divider()
-            // The 200 px headshot drawn at 44 pt stays sharp at 2x.
-            HStack(alignment: .top, spacing: 12) {
-                Image(nsImage: NSImage(data: headshotJPEG)!).resizable().interpolation(.high).frame(width: 44, height: 44).clipShape(Circle())
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Hi, I'm Josh. I'm a professional pitcher and an R&D analyst at Driveline Baseball. Snug is one of my side projects.")
-                        .font(.system(size: 13))
-                        .fixedSize(horizontal: false, vertical: true)
-                    Link("Buy me a bag of sunflower seeds", destination: URL(string: "https://ko-fi.com/hedgertronic")!).font(.system(size: 13))
+                caption("About the developer")
+                Card {
+                    // The 200 px headshot drawn at 44 pt stays sharp at 2x.
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(nsImage: NSImage(data: headshotJPEG)!).resizable().interpolation(.high).frame(width: 44, height: 44).clipShape(Circle())
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text("Josh Hejka").font(.system(size: 13, weight: .semibold))
+                                Spacer(minLength: 8)
+                                MakerButton()
+                            }
+                            Text("Professional pitcher and R&D analyst at Driveline Baseball. Snug is one of my side projects.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(.vertical, 12)
+                    SupportButton().frame(maxWidth: .infinity).padding(.vertical, 10)
                 }
             }
-                .padding(.init(top: 14, leading: 20, bottom: 14, trailing: 20))
-                .frame(width: SettingsTabs.width, alignment: .leading)
         }
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -241,34 +244,35 @@ private struct GeneralPane: View {
     }
 }
 
-/// The developer's credit as hotstove.io shows it: a camera icon and HEDGERTRONIC in an outlined capsule, linking to hedgertronic.com.
-private struct MakerChip: View {
-    private static let card = Color(nsColor: .look(dark: NSColor(srgbRed: 0x22 / 255, green: 0x1F / 255, blue: 0x19 / 255, alpha: 1),
-                                                   light: NSColor(srgbRed: 0xFF / 255, green: 0xFD / 255, blue: 0xF6 / 255, alpha: 1)))
-    private static let ink = Color(nsColor: .look(dark: NSColor(srgbRed: 0xED / 255, green: 0xE8 / 255, blue: 0xDA / 255, alpha: 1),
-                                                  light: NSColor(srgbRed: 0x24 / 255, green: 0x22 / 255, blue: 0x1C / 255, alpha: 1)))
-    private static let line = Color(nsColor: .look(dark: NSColor(srgbRed: 0xAA / 255, green: 0xA4 / 255, blue: 0x96 / 255, alpha: 1),
-                                                   light: NSColor(srgbRed: 0x57 / 255, green: 0x53 / 255, blue: 0x4A / 255, alpha: 1)))
+/// The Ko-fi link: a sunflower and the line on a sunflower-yellow capsule, dark ink in either appearance.
+private struct SupportButton: View {
+    private static let ink = Color(red: 0x24 / 255, green: 0x22 / 255, blue: 0x1C / 255)
 
+    var body: some View {
+        Link(destination: URL(string: "https://ko-fi.com/hedgertronic")!) {
+            HStack(spacing: 5) {
+                Image(systemName: "camera.macro").font(.system(size: 11, weight: .semibold))
+                Text("Buy me a bag of sunflower seeds").font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundStyle(Self.ink)
+            .padding(.horizontal, 10)
+            .frame(height: 24)
+            .background(Capsule().fill(Color(red: 1, green: 0.83, blue: 0.23)))
+        }
+        .buttonStyle(.plain)
+        .help("Support Snug on Ko-fi")
+    }
+}
+
+/// The developer's credit: the hedgertronic camera and the site's name, linking to it.
+private struct MakerButton: View {
     var body: some View {
         Link(destination: URL(string: "https://hedgertronic.com/")!) {
             HStack(spacing: 5) {
-                // The camera: a blue rounded square with a dark lens in its top-right corner.
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Color(red: 0.42, green: 0.68, blue: 0.9))
-                    .overlay(alignment: .topTrailing) {
-                        Circle().fill(Color(white: 0.08)).frame(width: 8, height: 8)
-                            .overlay(Circle().fill(Color(white: 0.2)).frame(width: 5, height: 5))
-                            .offset(x: -0.5, y: 0.5)
-                    }
-                    .frame(width: 13, height: 13)
-                Text("HEDGERTRONIC").font(.system(size: 9, weight: .heavy, design: .rounded)).tracking(0.72)
+                Image(nsImage: NSImage(data: makerCameraPNG)!).resizable().interpolation(.high).frame(width: 14, height: 14)
+                Text("hedgertronic.com").font(.system(size: 12, weight: .medium))
             }
-            .foregroundStyle(Self.ink)
-            .padding(.horizontal, 7)
-            .frame(height: 22)
-            .background(Capsule().fill(Self.card))
-            .overlay(Capsule().strokeBorder(Self.line, lineWidth: 2))
+            .foregroundStyle(.secondary)
         }
         .buttonStyle(.plain)
         .help("Visit hedgertronic.com")
