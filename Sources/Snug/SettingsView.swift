@@ -353,14 +353,15 @@ private struct AppearancePane: View {
                 Card {
                     VStack(spacing: 4) {
                         LabeledContent("Padding") {
-                            Text("\(framePadding) pt").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+                            Text(([16: "Small  ", 24: "Medium  ", 40: "Large  "][framePadding] ?? "") + "\(framePadding) pt")
+                                .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
                         }
                         Slider(value: Binding { Double(framePadding) } set: { framePadding = Int($0.rounded()) }, in: 0...64) {
                             Text("Padding")
                         } ticks: {
-                            SliderTick("Small", 16)
-                            SliderTick("Medium", 24)
-                            SliderTick("Large", 40)
+                            SliderTick(16)
+                            SliderTick(24)
+                            SliderTick(40)
                         }
                         .labelsHidden()
                     }
