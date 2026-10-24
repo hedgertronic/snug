@@ -689,8 +689,8 @@ extension DebugRun {
             func descendants<T: NSView>(of view: NSView, _ type: T.Type) -> [T] { view.subviews.flatMap { (($0 as? T).map { [$0] } ?? []) + descendants(of: $0, type) } }
             let field = descendants(of: host, ShortcutRecorder.Field.self).first!
             // The Reset button, the After capture pop-up and the Save to button, then an Allow button for each missing permission; the last
-            // focus ring is the hedgertronic link, which is not a button.
-            let controls = descendants(of: host, NSView.self).filter { "\(type(of: $0))".contains("FocusRingView") }.dropLast()
+            // two focus rings are the hedgertronic and Ko-fi links, which are not buttons.
+            let controls = descendants(of: host, NSView.self).filter { "\(type(of: $0))".contains("FocusRingView") }.dropLast(2)
             print("shortcut field", host.convert(field.frame, from: field.superview), "pop-up and button frames", controls.map { host.convert($0.frame, from: $0.superview) })
             precondition(controls.count >= 2 && controls.allSatisfy { $0.frame.height == field.frame.height }, "the shortcut field is as tall as the pop-ups and buttons: \(controls.map(\.frame)) \(field.frame)")
             field.beginRecording()
