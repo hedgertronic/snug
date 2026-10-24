@@ -365,7 +365,7 @@ extension DebugRun {
         suffix = ""
 
         // A terminal's list over a busy blurred wallpaper, 2560 x 1600: accurate OCR of the whole screen in one pass drops some items'
-        // "- " markers; read in bands it keeps every one. Return on a box over the text copies each item and sub-item on its own line
+        // "- " markers; read in bands it keeps every one. Return on a box over the whole screen copies each item and sub-item on its own line
         // with its marker. F then Return copies what the Live Text selection spans, with a partly matched line's text taken from Live
         // Text, which loses markers too; that only prints.
         let terminal = fixtureImage("Tests/Fixtures/terminal-list-blurred.png")
@@ -379,9 +379,9 @@ extension DebugRun {
             key(tKey, "t")
             try await waitFor("the terminal fixture's Live Text analysis attaches") { liveText.analysis != nil }
             if boxed {
-                mouse(.leftMouseDown, CGPoint(x: 140, y: 120))
-                mouse(.leftMouseDragged, CGPoint(x: 1400, y: 1300))
-                mouse(.leftMouseUp, CGPoint(x: 1400, y: 1300))
+                mouse(.leftMouseDown, CGPoint(x: 4, y: 4))
+                mouse(.leftMouseDragged, CGPoint(x: 2556, y: 1596))
+                mouse(.leftMouseUp, CGPoint(x: 2556, y: 1596))
                 await overlay.textTask?.value
             } else {
                 let transcript = liveText.text.split(separator: "\n")
@@ -394,7 +394,7 @@ extension DebugRun {
             let copiedTerminal = await copied()
             if boxed {
                 require(unmarked(copiedTerminal).isEmpty && !overlay.window.isVisible,
-                        "Return on a box over the terminal's text copies every list item on its own line with its \"- \" marker: missing \(unmarked(copiedTerminal)) in \(copiedTerminal.debugDescription)")
+                        "Return on a box over the whole terminal screen copies every list item on its own line with its \"- \" marker: missing \(unmarked(copiedTerminal)) in \(copiedTerminal.debugDescription)")
             } else {
                 print("Terminal fixture: F then Return misses the marker of \(unmarked(copiedTerminal))")
             }
