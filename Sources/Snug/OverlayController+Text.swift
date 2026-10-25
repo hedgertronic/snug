@@ -6,7 +6,8 @@ import Vision
 /// Text state shared by both modes: where the "Reading text..." pill centers (image pixels), a dark pill that explains why
 /// Option-Return did nothing or names the picked item, Text mode's found items (nil until the first Tab) and the picked one, a key
 /// pressed while Vision's warm-up child runs: what the notice says about it and the action that runs once the child exits, Text
-/// mode's box with the lines read in it (nil while they are read), and the lines the found-text flash shows (image pixels).
+/// mode's box with the lines read in it (nil while they are read), the lines the found-text flash shows (image pixels), and accurate
+/// OCR of the whole image (`readAllText`) with its lines once read.
 struct TextSession {
     var reading: CGRect?
     var notice: String?
@@ -15,6 +16,8 @@ struct TextSession {
     var queued: (notice: String, run: @MainActor () -> Void)?
     var box: (rect: CGRect, lines: [TextLine]?)?
     var flash: [CGRect]?
+    var ocr: Task<[TextLine], any Error>?
+    var ocrLines: [TextLine]?
     /// The selection in accessibility text (an index into `OverlayController.screenTexts`): where its press began and where it is now.
     var screenSelection: (text: Int, anchor: ScreenText.Position, focus: ScreenText.Position)?
 }
@@ -159,11 +162,59 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
                 lastLiveTextMilliseconds = start.duration(to: .now).milliseconds
                 view.liveText.analysis = analysis
                 text.reading = nil
+                readAllText()
                 refresh()
             } catch {
                 report(error)
             }
         }
+    }
+
+    /// Reads the whole image with accurate OCR once per capture, after Vision's warm-up: once its lines are in, Snug draws the Live Text
+    /// selection's highlight from them (`ocrHighlight`), and the copies take them without reading again.
+    func readAllText() {
+        guard text.ocr == nil, let image else { return }
+        let extent = extent
+        text.ocr = Task {
+            await Self.visionWarmUp?.value
+            let lines = try await Self.recognize(image, crop: extent)
+            try Task.checkCancellation()
+            text.ocrLines = lines
+            refresh()
+            return lines
+        }
+    }
+
+    /// Snug's highlight for the Live Text selection once the whole image is read, in image pixels: the boxes of the OCR lines the copy
+    /// takes (`TextLayout.selection` of the lines in the selection's span), so rows Live Text's own highlight skips still show, a line
+    /// on the row where the selection starts from there and one on the row where it ends to there. Live Text's last line is not always
+    /// on the last row (it can order a terminal's lines differently), so only a line its box's middle falls in is cut. Nil while the
+    /// lines are being read, with nothing selected, or an item picked.
+    var ocrHighlight: [CGRect]? {
+        let selected = view.liveText.selectedText
+        guard let ocr = text.ocrLines, text.picked == nil, !selected.isEmpty else { return nil }
+        let boxes = liveTextBoxes
+        return TextLayout.selection(selected, in: ocr.filter { $0.bounds.maxY > boxes.all.minY && $0.bounds.minY < boxes.all.maxY }).compactMap { line in
+            let box = line.bounds
+            let left = (box.minY...box.maxY).contains(boxes.first.midY) ? max(box.minX, boxes.first.minX) : box.minX
+            let right = (box.minY...box.maxY).contains(boxes.last.midY) ? min(box.maxX, boxes.last.maxX) : box.maxX
+            return right > left ? CGRect(x: left, y: box.minY, width: right - left, height: box.height) : nil
+        }
+    }
+
+    /// The boxes, in image pixels, of the Live Text selection's glyphs: all of them, those on its first line and those on its last. Live
+    /// Text's text view gives each as `firstRect(forCharacterRange:)` of that part of the selected range (the union of its glyphs' boxes,
+    /// in points from the top-left corner). The copies take only OCR lines that reach into the box of all of them, so a selected word
+    /// ("address") is placed on its own line, not on one above or below with the same text.
+    var liveTextBoxes: (all: CGRect, first: CGRect, last: CGRect) {
+        let client = liveTextClient, range = client.selectedRange(), units = view.liveText.selectedText.utf16
+        let firstBreak = units.firstIndex(of: 10).map { units.distance(from: units.startIndex, to: $0) } ?? range.length
+        let lastBreak = units.lastIndex(of: 10).map { units.distance(from: units.startIndex, to: $0) + 1 } ?? 0
+        func pixels(_ range: NSRange) -> CGRect {
+            let rect = client.firstRect(forCharacterRange: range, actualRange: nil)
+            return CGRect(x: rect.minX * scale, y: rect.minY * scale, width: rect.width * scale, height: rect.height * scale)
+        }
+        return (pixels(range), pixels(NSRange(location: range.location, length: firstBreak)), pixels(NSRange(location: range.location + lastBreak, length: range.length - lastBreak)))
     }
 
     /// Entering Text mode: the lines fast text recognition reads flash as pills in the highlight color, sweeping in from the top, for
@@ -327,10 +378,15 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     /// the protocol names. The text view covers Live Text, which covers the overlay view.
     var textSelectionBox: CGRect? {
         guard text.picked == nil, !view.liveText.selectedText.isEmpty else { return nil }
-        func client(in view: NSView) -> NSTextInputClient? { (view as? NSTextInputClient) ?? view.subviews.lazy.compactMap(client).first }
-        let selection = client(in: view.liveText)!
+        let selection = liveTextClient
         let rect = selection.firstRect(forCharacterRange: selection.selectedRange(), actualRange: nil)
         return CGRect(x: rect.minX, y: view.bounds.height - rect.maxY, width: rect.width, height: rect.height)
+    }
+
+    /// Live Text's text view, its subview that is an `NSTextInputClient`.
+    var liveTextClient: NSTextInputClient {
+        func client(in view: NSView) -> NSTextInputClient? { (view as? NSTextInputClient) ?? view.subviews.lazy.compactMap(client).first }
+        return client(in: view.liveText)!
     }
 
     /// A click on a highlighted item does not open it behind the overlay; Cmd-Return opens the picked one.
@@ -453,12 +509,15 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
             return copyText(TextLayout.table(rows), message: "Copied \(rows.count) \(rows.count == 1 ? "row" : "rows")", translating: false)
         }
         let selected = view.liveText.selectedText
-        guard !selected.isEmpty, text.reading == nil, let image else { return beep() }
+        guard !selected.isEmpty, text.reading == nil, image != nil else { return beep() }
         guard !waitsForWarmUp("Shift-Return", { self.copyTextRows() }) else { return }
         text.reading = extent
+        let boxes = liveTextBoxes
+        readAllText()
         textTask = Task {
             do {
-                let rows = TextLayout.rows(TextLayout.lines(of: selected, in: try await Self.recognize(image, crop: extent)))
+                let ocr = try await text.ocr!.value.filter { $0.bounds.maxY > boxes.all.minY && $0.bounds.minY < boxes.all.maxY }
+                let rows = TextLayout.rows(TextLayout.lines(of: selected, in: ocr))
                 try Task.checkCancellation()
                 text.reading = nil
                 copyText(TextLayout.table(rows), message: "Copied \(rows.count) \(rows.count == 1 ? "row" : "rows")", translating: false)
@@ -478,12 +537,15 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
             return copyText(copied, message: "Copied \(count) \(count == 1 ? "line" : "lines")", translating: translating)
         }
         let selected = view.liveText.selectedText
-        guard !selected.isEmpty, text.reading == nil, let image else { return beep() }
+        guard !selected.isEmpty, text.reading == nil, image != nil else { return beep() }
         guard !waitsForWarmUp(key, { self.copySelectedText(translating: translating, key: key) }) else { return }
         text.reading = extent
+        let boxes = liveTextBoxes
+        readAllText()
         textTask = Task {
             do {
-                let lines = TextLayout.selection(selected, in: try await Self.recognize(image, crop: extent))
+                let ocr = try await text.ocr!.value.filter { $0.bounds.maxY > boxes.all.minY && $0.bounds.minY < boxes.all.maxY }
+                let lines = TextLayout.selection(selected, in: ocr)
                 try Task.checkCancellation()
                 text.reading = nil
                 let copied = TextLayout.paragraphs(TextLayout.rows(lines))
