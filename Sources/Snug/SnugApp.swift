@@ -127,6 +127,18 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             return NSApp.terminate(nil)
         }
         installStatusItem()
+        // Snug has no main menu, where Cmd-W usually closes a window, so Cmd-W closes Settings and the welcome window here. A shortcut
+        // field that is recording takes the press instead.
+        _ = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [unowned self] event in
+            guard event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command, event.charactersIgnoringModifiers == "w" else { return event }
+            let closed = MainActor.assumeIsolated {
+                guard let window = NSApp.keyWindow, window === settingsWindow || window === firstRunWindow,
+                      (window.firstResponder as? ShortcutRecorder.Field)?.recording != true else { return false }
+                window.performClose(nil)
+                return true
+            }
+            return closed ? nil : event
+        }
         ScreenRecording.requested = { [unowned self] in startRecording(displayID: $0, area: $1, showsCursor: $2, capturesAudio: $3) }
         hotKey = HotKey(id: 1) { [unowned self] in capture() }
         registerHotKey()

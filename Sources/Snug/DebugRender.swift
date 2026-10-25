@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import ScreenCaptureKit
 import SwiftUI
 import ScreenshotCore
@@ -767,6 +768,30 @@ extension DebugRun {
             precondition(!field.recording && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode, "Esc stops recording and keeps the shortcut")
             descendants(of: field, NSButton.self).first!.performClick(nil)
             precondition(field.recording && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode, "the clear button starts recording and writes nothing")
+            // Command alone and a shortcut macOS has turned on are refused: recording goes on, with the reason in place of the placeholder.
+            func press(_ code: Int, _ flags: NSEvent.ModifierFlags) {
+                let character = Shortcut.keyNames[code]?.lowercased() ?? ""
+                field.keyDown(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: offscreen.windowNumber, context: nil,
+                                                     characters: character, charactersIgnoringModifiers: character, isARepeat: false, keyCode: UInt16(code))!)
+            }
+            func shown() -> [String] { descendants(of: field, NSTextField.self).filter { !$0.isHiddenOrHasHiddenAncestor }.map(\.stringValue) }
+            press(13, .command)
+            precondition(field.recording && shown() == ["Add \u{2303}, \u{2325} or \u{21E7}"] && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode,
+                         "Cmd-W is refused as every app's own: \(shown())")
+            var symbolic: Unmanaged<CFArray>?
+            precondition(CopySymbolicHotKeys(&symbolic) == noErr)
+            let system = (symbolic!.takeRetainedValue() as! [[String: Any]]).first {
+                $0["kHISymbolicHotKeyEnabled"] as? Bool == true && Shortcut.keyNames[$0["kHISymbolicHotKeyCode"] as? Int ?? -1] != nil
+                    && ($0["kHISymbolicHotKeyModifiers"] as? Int ?? 0) & (controlKey | optionKey | cmdKey) != 0
+                    && ($0["kHISymbolicHotKeyModifiers"] as? Int ?? 0) & (cmdKey | shiftKey | optionKey | controlKey) != cmdKey
+            }!
+            let systemCode = system["kHISymbolicHotKeyCode"] as! Int, carbon = system["kHISymbolicHotKeyModifiers"] as! Int
+            let pairs: [(Int, NSEvent.ModifierFlags)] = [(cmdKey, .command), (shiftKey, .shift), (optionKey, .option), (controlKey, .control)]
+            let systemFlags = NSEvent.ModifierFlags(pairs.filter { carbon & $0.0 != 0 }.map(\.1))
+            press(systemCode, systemFlags)
+            precondition(field.recording && shown() == ["Used by macOS"] && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode,
+                         "\(Shortcut.label(code: systemCode, modifiers: Int(systemFlags.rawValue))), a macOS shortcut, is refused: \(shown())")
+            print("shortcut field refuses Cmd-W and \(Shortcut.label(code: systemCode, modifiers: Int(systemFlags.rawValue))) (macOS)")
             offscreen.makeFirstResponder(nil)
             precondition(!field.recording && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode, "clearing then leaving the field keeps the shortcut")
         }

@@ -844,6 +844,7 @@ struct ShortcutRecorder: NSViewRepresentable {
 
         @objc func beginRecording() {
             window?.makeFirstResponder(self)
+            placeholder.stringValue = "Type shortcut"
             show(code: code, modifiers: modifiers, recording: true)
             // Clicking empty space in the window does not take first responder, so a click outside the field ends recording here.
             clickMonitor = clickMonitor ?? NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
@@ -879,6 +880,12 @@ struct ShortcutRecorder: NSViewRepresentable {
             let isFunctionKey = Shortcut.functionKeys[Int(event.keyCode)] != nil
             guard isFunctionKey || !modifiers.isDisjoint(with: [.control, .option, .command]) else { NSSound.beep(); return }
             guard isFunctionKey || Shortcut.keyNames[Int(event.keyCode)] != nil else { NSSound.beep(); return }
+            // A shortcut every app or macOS already uses keeps recording, with the reason in place of the placeholder.
+            if let conflict = HotKey.conflict(keyCode: Int(event.keyCode), modifiers: modifiers) {
+                placeholder.stringValue = conflict
+                NSSound.beep()
+                return
+            }
             let defaults = UserDefaults.standard
             defaults.set(Int(event.keyCode), forKey: Pref.hotKeyCode)
             defaults.set(Int(modifiers.rawValue), forKey: Pref.hotKeyModifiers)
