@@ -13,7 +13,7 @@ Open it once and the first-run screen walks through the permissions below. The d
 ## Permissions
 
 - **Screen Recording (required).** Snug freezes the display under the pointer so you can choose from it, and records the screen on request.
-- **Accessibility (recommended).** Lets Snug read the layout of other apps, so it can highlight buttons, sidebars and rows exactly instead of guessing from pixels. Without it Snug falls back to edge detection.
+- **Accessibility (recommended).** Lets Snug read the layout of other apps, so it can highlight buttons, sidebars and rows exactly instead of guessing from pixels, and lets Text mode copy their text exactly instead of reading it with OCR. Without it Snug falls back to edge detection and OCR.
 
 ## Using it
 

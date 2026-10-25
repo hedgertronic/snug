@@ -202,7 +202,7 @@ private struct GeneralPane: View {
                         }
                     }
                     TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        permission("Accessibility", detail: "Recommended, highlights parts of apps", granted: AXIsProcessTrusted()) { Accessibility.requestTrust() }
+                        permission("Accessibility", detail: "Recommended, exact highlights and text", granted: AXIsProcessTrusted()) { Accessibility.requestTrust() }
                     }
                 }
                 caption("About the developer")
