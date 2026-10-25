@@ -955,7 +955,7 @@ extension DebugRun {
     /// when another process writes `SnugMenuBarIcon`.
     static func renderMenuBarIcons(into directory: URL) async throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let variants = ["a", "d", "e", "f", "g", "h"]
+        let variants = ["h", "a"]
         let cells: [(scale: Int, dark: Bool)] = [(1, false), (2, false), (1, true), (2, true)]
         let sheet = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 40 + 304 * cells.count, pixelsHigh: 348 * variants.count, bitsPerSample: 8,
                                      samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
@@ -1005,12 +1005,24 @@ extension DebugRun {
             }
         }
 
+        // At 1x, variant h's arch dashes and band step are fully clear (top-left pixel and size, rows from the top) and the tile between them solid.
+        let solidTile = SnugApp.menuBarIcon("h").representations.first { $0.pixelsWide == 18 } as! NSBitmapImageRep
+        let clear = [(5, 3, 2, 1), (8, 3, 2, 1), (11, 3, 2, 1), (4, 5, 1, 2), (13, 5, 1, 2), (1, 10, 3, 1), (4, 9, 10, 1), (14, 10, 3, 1)]
+        for (x, y, width, height) in clear {
+            for column in x..<x + width {
+                for row in y..<y + height { precondition(solidTile.colorAt(x: column, y: row)!.alphaComponent == 0, "1x h: pixel \(column), \(row) is clear") }
+            }
+        }
+        for (column, row) in [(7, 3), (10, 3), (4, 4), (4, 7), (13, 4), (4, 8), (9, 7), (9, 10), (2, 9), (2, 11)] {
+            precondition(solidTile.colorAt(x: column, y: row)!.alphaComponent == 1, "1x h: pixel \(column), \(row) is solid")
+        }
+
         let suite = FileManager.default.temporaryDirectory.appending(path: "snug-icon-\(UUID().uuidString)").path
         let defaults = UserDefaults(suiteName: suite)!
         Pref.register(in: defaults)
         let button = NSButton()
         let observation = SnugApp.observeMenuBarIcon(on: button, defaults: defaults)
-        // "a" is the registered default, so "d" goes first to make both writes real changes.
+        // "h" is the registered default, so "a" goes first to make both writes real changes.
         for variant in variants.reversed() {
             let writer = try Process.run(URL(fileURLWithPath: "/usr/bin/defaults"), arguments: ["write", suite, Pref.menuBarIcon, variant])
             writer.waitUntilExit()

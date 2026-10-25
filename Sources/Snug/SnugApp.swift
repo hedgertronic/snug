@@ -191,8 +191,9 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     /// The menu bar logo as a template image, drawn in an 18 pt space into a 1x and a 2x bitmap so each display scale gets pixels placed for it.
     /// "a": the app tile, solid, with five arch dots and the band cut out. The dots sit on whole points, 2 x 2 squares at 1x and circles at 2x,
     /// and the band's curve is a 1 px step at 1x.
-    /// "d" to "h" are candidates drawn at the logo's proportions (the band's top at about half the tile's height) and share the solid tile's
-    /// dashed arch, whose round-capped dashes mirror around one centered on top. Their 1x pixels are not hand-aligned yet.
+    /// "h", the default: the app tile, solid, in the logo's proportions, with its dashed arch and the band's curve cut out; the band's top sits
+    /// at about half the tile's height in the middle and 53% from the top at the sides. At 2x the arch's round-capped dashes mirror around
+    /// one centered on top; at 1x they are 2 px on top and 2 px down each leg with 1 px gaps, and the curve is a 1 px step.
     static func menuBarIcon(_ variant: String) -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18))
         for scale in [1, 2] {
@@ -222,114 +223,38 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     band.lineWidth = 1.5
                     band.stroke()
                 }
-            case "d":
-                // No tile: the solid band, with rounded bottom corners, at the logo's height, under the solid tile's dashed arch.
-                let band = NSBezierPath()
-                band.move(to: CGPoint(x: 1, y: 6.85))
-                band.line(to: CGPoint(x: 1, y: 5))
-                band.appendArc(withCenter: CGPoint(x: 5, y: 5), radius: 4, startAngle: 180, endAngle: 270)
-                band.line(to: CGPoint(x: 13, y: 1))
-                band.appendArc(withCenter: CGPoint(x: 13, y: 5), radius: 4, startAngle: 270, endAngle: 360)
-                band.line(to: CGPoint(x: 17, y: 6.85))
-                band.curve(to: CGPoint(x: 1, y: 6.85), controlPoint1: CGPoint(x: 12.6, y: 8.85), controlPoint2: CGPoint(x: 5.4, y: 8.85))
-                band.fill()
-                for side: CGFloat in [-1, 1] {
-                    let half = NSBezierPath()
-                    half.move(to: CGPoint(x: 9, y: 14.25))
-                    half.line(to: CGPoint(x: 9 + 2 * side, y: 14.25))
-                    half.appendArc(withCenter: CGPoint(x: 9 + 2 * side, y: 12), radius: 2.25, startAngle: 90, endAngle: side < 0 ? 180 : 0, clockwise: side > 0)
-                    half.line(to: CGPoint(x: 9 + 4.25 * side, y: 10))
-                    half.lineWidth = 1.25
-                    half.lineCapStyle = .round
-                    half.setLineDash([0.25, 1.85, 0.5, 1.85, 0.5, 1.85, 0.5, 10], count: 8, phase: 0)
-                    half.stroke()
-                }
-            case "e":
-                // The app tile in outline, its band filled at the logo's height, under the solid tile's dashed arch.
-                let tile = NSBezierPath(roundedRect: CGRect(x: 1.75, y: 1.75, width: 14.5, height: 14.5), xRadius: 4, yRadius: 4)
-                tile.lineWidth = 1.5
-                tile.stroke()
-                NSGraphicsContext.saveGraphicsState()
-                tile.addClip()
-                let band = NSBezierPath()
-                band.move(to: CGPoint(x: 0, y: 0))
-                band.line(to: CGPoint(x: 0, y: 6.85))
-                band.curve(to: CGPoint(x: 18, y: 6.85), controlPoint1: CGPoint(x: 5.4, y: 8.85), controlPoint2: CGPoint(x: 12.6, y: 8.85))
-                band.line(to: CGPoint(x: 18, y: 0))
-                band.fill()
-                NSGraphicsContext.restoreGraphicsState()
-                for side: CGFloat in [-1, 1] {
-                    let half = NSBezierPath()
-                    half.move(to: CGPoint(x: 9, y: 14.25))
-                    half.line(to: CGPoint(x: 9 + 2 * side, y: 14.25))
-                    half.appendArc(withCenter: CGPoint(x: 9 + 2 * side, y: 12), radius: 2.25, startAngle: 90, endAngle: side < 0 ? 180 : 0, clockwise: side > 0)
-                    half.line(to: CGPoint(x: 9 + 4.25 * side, y: 10))
-                    half.lineWidth = 1.25
-                    half.lineCapStyle = .round
-                    half.setLineDash([0.25, 1.85, 0.5, 1.85, 0.5, 1.85, 0.5, 10], count: 8, phase: 0)
-                    half.stroke()
-                }
-            case "f":
-                // A solid frame open at the top, its sides standing in a band at the logo's height, as if the selection were tucked in under it.
-                for side: CGFloat in [-1, 1] {
-                    let corner = NSBezierPath()
-                    corner.move(to: CGPoint(x: 9 + 6 * side, y: 6))
-                    corner.line(to: CGPoint(x: 9 + 6 * side, y: 13.5))
-                    corner.appendArc(withCenter: CGPoint(x: 9 + 3.5 * side, y: 13.5), radius: 2.5, startAngle: side < 0 ? 180 : 0, endAngle: 90, clockwise: side < 0)
-                    corner.line(to: CGPoint(x: 9 + 1.75 * side, y: 16))
-                    corner.lineWidth = 1.5
-                    corner.lineCapStyle = .round
-                    corner.lineJoinStyle = .round
-                    corner.stroke()
-                }
-                let band = NSBezierPath()
-                band.move(to: CGPoint(x: 1, y: 6.85))
-                band.line(to: CGPoint(x: 1, y: 5))
-                band.appendArc(withCenter: CGPoint(x: 5, y: 5), radius: 4, startAngle: 180, endAngle: 270)
-                band.line(to: CGPoint(x: 13, y: 1))
-                band.appendArc(withCenter: CGPoint(x: 13, y: 5), radius: 4, startAngle: 270, endAngle: 360)
-                band.line(to: CGPoint(x: 17, y: 6.85))
-                band.curve(to: CGPoint(x: 1, y: 6.85), controlPoint1: CGPoint(x: 12.6, y: 8.85), controlPoint2: CGPoint(x: 5.4, y: 8.85))
-                band.fill()
-            case "g":
-                // The app tile's silhouette alone: an outline filled below the band's curve, at the logo's height.
-                let tile = NSBezierPath(roundedRect: CGRect(x: 1.75, y: 1.75, width: 14.5, height: 14.5), xRadius: 4, yRadius: 4)
-                tile.lineWidth = 1.5
-                tile.stroke()
-                NSGraphicsContext.saveGraphicsState()
-                tile.addClip()
-                let band = NSBezierPath()
-                band.move(to: CGPoint(x: 0, y: 0))
-                band.line(to: CGPoint(x: 0, y: 6.85))
-                band.curve(to: CGPoint(x: 18, y: 6.85), controlPoint1: CGPoint(x: 5.4, y: 8.85), controlPoint2: CGPoint(x: 12.6, y: 8.85))
-                band.line(to: CGPoint(x: 18, y: 0))
-                band.fill()
-                NSGraphicsContext.restoreGraphicsState()
             case "h":
-                // The app tile solid, with its dashed selection and the band's curve cut out of it, in the logo's proportions: the band's top
-                // at about half the tile's height in the middle and 53% from the top at the sides.
                 NSBezierPath(roundedRect: CGRect(x: 1, y: 1, width: 16, height: 16), xRadius: 4, yRadius: 4).fill()
                 NSGraphicsContext.current!.compositingOperation = .clear
-                // Each half of the arch runs from the top center down a leg: 2 pt of top, a 2.25 pt radius corner, 2 pt of leg. Dashes
-                // mirror around one centered on top, and each leg ends in a gap above the band.
-                for side: CGFloat in [-1, 1] {
-                    let half = NSBezierPath()
-                    half.move(to: CGPoint(x: 9, y: 14.25))
-                    half.line(to: CGPoint(x: 9 + 2 * side, y: 14.25))
-                    half.appendArc(withCenter: CGPoint(x: 9 + 2 * side, y: 12), radius: 2.25, startAngle: 90, endAngle: side < 0 ? 180 : 0, clockwise: side > 0)
-                    half.line(to: CGPoint(x: 9 + 4.25 * side, y: 10))
-                    half.lineWidth = 1.25
-                    half.lineCapStyle = .round
-                    half.setLineDash([0.25, 1.85, 0.5, 1.85, 0.5, 1.85, 0.5, 10], count: 8, phase: 0)
-                    half.stroke()
+                if scale == 1 {
+                    // The arch as 2 x 1 px dashes on top and 1 x 2 px dashes down each leg, with 1 px gaps; the band's curve as a 1 px step.
+                    for x: CGFloat in [5, 8, 11] { CGRect(x: x, y: 14, width: 2, height: 1).fill() }
+                    for x: CGFloat in [4, 13] { CGRect(x: x, y: 11, width: 1, height: 2).fill() }
+                    CGRect(x: 1, y: 7, width: 3, height: 1).fill()
+                    CGRect(x: 4, y: 8, width: 10, height: 1).fill()
+                    CGRect(x: 14, y: 7, width: 3, height: 1).fill()
+                } else {
+                    // Each half of the arch runs from the top center down a leg: 2 pt of top, a 2.25 pt radius corner, 2 pt of leg. Dashes
+                    // mirror around one centered on top, and each leg ends in a gap above the band.
+                    for side: CGFloat in [-1, 1] {
+                        let half = NSBezierPath()
+                        half.move(to: CGPoint(x: 9, y: 14.25))
+                        half.line(to: CGPoint(x: 9 + 2 * side, y: 14.25))
+                        half.appendArc(withCenter: CGPoint(x: 9 + 2 * side, y: 12), radius: 2.25, startAngle: 90, endAngle: side < 0 ? 180 : 0, clockwise: side > 0)
+                        half.line(to: CGPoint(x: 9 + 4.25 * side, y: 10))
+                        half.lineWidth = 1.25
+                        half.lineCapStyle = .round
+                        half.setLineDash([0.25, 1.85, 0.5, 1.85, 0.5, 1.85, 0.5, 10], count: 8, phase: 0)
+                        half.stroke()
+                    }
+                    let cut = NSBezierPath()
+                    cut.move(to: CGPoint(x: 0, y: 7.6))
+                    cut.curve(to: CGPoint(x: 18, y: 7.6), controlPoint1: CGPoint(x: 5.4, y: 9.6), controlPoint2: CGPoint(x: 12.6, y: 9.6))
+                    cut.lineWidth = 1.5
+                    cut.stroke()
                 }
-                let cut = NSBezierPath()
-                cut.move(to: CGPoint(x: 0, y: 7.6))
-                cut.curve(to: CGPoint(x: 18, y: 7.6), controlPoint1: CGPoint(x: 5.4, y: 9.6), controlPoint2: CGPoint(x: 12.6, y: 9.6))
-                cut.lineWidth = 1.5
-                cut.stroke()
             default:
-                preconditionFailure("SnugMenuBarIcon is a, d, e, f, g or h: \(variant)")
+                preconditionFailure("SnugMenuBarIcon is a or h: \(variant)")
             }
             NSGraphicsContext.restoreGraphicsState()
             image.addRepresentation(rep)

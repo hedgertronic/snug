@@ -68,8 +68,8 @@ enum Pref {
     static let logScroll = "SnugLogScroll"
     /// The modification date of the Snug binary whose `--warm-vision` child process warmed Vision's accurate OCR models.
     static let visionWarmedBuild = "SnugVisionWarmedBuild"
-    /// The menu bar icon variant, "a" or "d" (see `SnugApp.menuBarIcon`). The status item redraws as soon as it changes, so
-    /// `defaults write com.hedgertronic.snug SnugMenuBarIcon d` switches the icon live.
+    /// The menu bar icon variant, "h" or "a" (see `SnugApp.menuBarIcon`). The status item redraws as soon as it changes, so
+    /// `defaults write com.hedgertronic.snug SnugMenuBarIcon a` switches the icon live.
     static let menuBarIcon = "SnugMenuBarIcon"
 
     static func logHoverLine(_ line: String, key: String = logHover, file name: String = "hover.log") {
@@ -125,7 +125,7 @@ enum Pref {
             playSounds: true,
             roundCorners: true,
             chromiumText: true,
-            menuBarIcon: "a",
+            menuBarIcon: "h",
             cutoutCrop: false,
             recordCountIn: 3,
             recordCursor: true
