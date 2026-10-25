@@ -66,8 +66,6 @@ with tempfile.TemporaryDirectory() as scratch:
             subprocess.run(["sips", "-z", str(pixels), str(pixels), str(master), "--out", str(iconset / name)],
                            check=True, capture_output=True)
     subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(snug_contents / "Resources/Snug.icns")], check=True)
-for sound in (root / "sounds").glob("*.caf"):
-    shutil.copy2(sound, snug_contents / "Resources" / sound.name)
 snug_info = {
     "CFBundleExecutable": "Snug",
     "CFBundleIdentifier": "local.snug",
