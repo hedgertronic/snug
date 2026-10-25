@@ -4,9 +4,9 @@ import OSLog
 import ScreenshotCore
 import UniformTypeIdentifiers
 
-let signposter = OSSignposter(subsystem: "local.snug", category: "capture")
+let signposter = OSSignposter(subsystem: "com.hedgertronic.snug", category: "capture")
 /// Times from the shortcut to the overlay: the capture, the first draw, and the window list.
-let openLog = Logger(subsystem: "local.snug", category: "open")
+let openLog = Logger(subsystem: "com.hedgertronic.snug", category: "open")
 
 /// UserDefaults keys and their registered defaults.
 enum Pref {
@@ -57,19 +57,19 @@ enum Pref {
     static let toastLifetime = "SnugToastLifetime"
     /// Whether Snug plays its sounds on a capture and a recording's start and stop (Settings > General). Failures beep either way.
     static let playSounds = "SnugPlaySounds"
-    /// Off unless set with `defaults write local.snug SnugLogHover -bool true`: each hover lookup and the Dock's window rect append to
+    /// Off unless set with `defaults write com.hedgertronic.snug SnugLogHover -bool true`: each hover lookup and the Dock's window rect append to
     /// ~/Library/Logs/Snug/hover.log, so live accessibility frames can be read back without Accessibility in a terminal.
     static let logHover = "SnugLogHover"
-    /// Off unless set with `defaults write local.snug SnugLogText -bool true`: each Text mode press, drag event and release appends
+    /// Off unless set with `defaults write com.hedgertronic.snug SnugLogText -bool true`: each Text mode press, drag event and release appends
     /// Live Text's selection before and after Snug's fix to ~/Library/Logs/Snug/text.log.
     static let logText = "SnugLogText"
-    /// Off unless set with `defaults write local.snug SnugLogScroll -bool true`: each scrolling capture writes every frame it captures,
+    /// Off unless set with `defaults write com.hedgertronic.snug SnugLogScroll -bool true`: each scrolling capture writes every frame it captures,
     /// numbered in order, to a folder named for its start under ~/Library/Logs/Snug/scroll/, so a bad stitch can be replayed in a test.
     static let logScroll = "SnugLogScroll"
     /// The modification date of the Snug binary whose `--warm-vision` child process warmed Vision's accurate OCR models.
     static let visionWarmedBuild = "SnugVisionWarmedBuild"
     /// The menu bar icon variant, "a" or "d" (see `SnugApp.menuBarIcon`). The status item redraws as soon as it changes, so
-    /// `defaults write local.snug SnugMenuBarIcon d` switches the icon live.
+    /// `defaults write com.hedgertronic.snug SnugMenuBarIcon d` switches the icon live.
     static let menuBarIcon = "SnugMenuBarIcon"
 
     static func logHoverLine(_ line: String, key: String = logHover, file name: String = "hover.log") {

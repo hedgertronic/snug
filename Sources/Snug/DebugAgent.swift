@@ -64,7 +64,7 @@ extension DebugRun {
             let items = pasteboard.pasteboardItems ?? []
             require(items.count == 1, "\(name): one clipboard item (\(items.count))")
             let types = items[0].types.map(\.rawValue)
-            require(["public.png", "public.utf8-plain-text", "local.snug.capture-json"].allSatisfy(types.contains), "\(name): the item has the PNG, text and manifest types: \(types)")
+            require(["public.png", "public.utf8-plain-text", "com.hedgertronic.snug.capture-json"].allSatisfy(types.contains), "\(name): the item has the PNG, text and manifest types: \(types)")
             let json = items[0].data(forType: .snugCapture)!
             let manifest = try HandoffManifest(json: json)
             let bundle = store.root.appending(path: manifest.captureId)

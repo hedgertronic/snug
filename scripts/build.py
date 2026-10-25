@@ -1,14 +1,21 @@
-"""Build and package the local macOS prototype without third-party dependencies."""
+"""Build and package the local macOS prototype without third-party dependencies.
+
+With --release, Snug is also timestamped, zipped, notarized with the snug-notary keychain profile, stapled and zipped again for
+download as build/Snug-VERSION.zip. SNUG_SIGNING_IDENTITY must then be the Developer ID Application identity.
+"""
 from pathlib import Path
+import json
 import os
 import plistlib
 import shutil
 import subprocess
+import sys
 import tempfile
 
 root = Path(__file__).resolve().parents[1]
 # A fixed identity, bundle ID, and path keep the Screen Recording grant across rebuilds.
 signing_identity = os.environ["SNUG_SIGNING_IDENTITY"]
+release = sys.argv[1:] == ["--release"]
 env = os.environ.copy()
 env["CLANG_MODULE_CACHE_PATH"] = str(root / ".build/clang-cache")
 env["SWIFTPM_MODULECACHE_OVERRIDE"] = str(root / ".build/swift-cache")
@@ -68,7 +75,7 @@ with tempfile.TemporaryDirectory() as scratch:
     subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(snug_contents / "Resources/Snug.icns")], check=True)
 snug_info = {
     "CFBundleExecutable": "Snug",
-    "CFBundleIdentifier": "local.snug",
+    "CFBundleIdentifier": "com.hedgertronic.snug",
     "CFBundleName": "Snug",
     "CFBundleDisplayName": "Snug",
     "CFBundleIconFile": "Snug",
@@ -83,8 +90,23 @@ snug_info = {
 }
 with (snug_contents / "Info.plist").open("wb") as stream:
     plistlib.dump(snug_info, stream)
-subprocess.run(["codesign", "--force", "--sign", signing_identity, str(snug)], check=True)
+# The hardened runtime is on in every build, so local builds run under the same rules as a notarized release.
+subprocess.run(["codesign", "--force", "--options", "runtime", *(["--timestamp"] if release else []), "--sign", signing_identity, str(snug)], check=True)
 subprocess.run(["codesign", "--verify", "--strict", str(snug)], check=True)
+if release:
+    archive = root / f"build/Snug-{snug_info['CFBundleShortVersionString']}.zip"
+    subprocess.run(["ditto", "-c", "-k", "--keepParent", str(snug), str(archive)], check=True)
+    submitted = subprocess.run(["xcrun", "notarytool", "submit", str(archive), "--keychain-profile", "snug-notary", "--wait", "--output-format", "json"],
+                               check=True, text=True, capture_output=True)
+    submission = json.loads(submitted.stdout)
+    if submission["status"] != "Accepted":
+        subprocess.run(["xcrun", "notarytool", "log", submission["id"], "--keychain-profile", "snug-notary"], check=True)
+        sys.exit(f"Notarization {submission['status']}: {submission['id']}")
+    subprocess.run(["xcrun", "stapler", "staple", str(snug)], check=True)
+    # The download holds the stapled app, so Gatekeeper accepts it offline.
+    subprocess.run(["ditto", "-c", "-k", "--keepParent", str(snug), str(archive)], check=True)
+    subprocess.run(["spctl", "--assess", "--type", "execute", "--verbose", str(snug)], check=True)
+    print(f"Release: {archive}")
 print(f"Local app: {app}")
 print(f"Snug: {snug}")
 print(f"Benchmark: {root / 'build/ScreenshotBench'}")

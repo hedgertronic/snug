@@ -76,7 +76,15 @@ SNUG_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" uv run scripts/bui
 swift test --disable-sandbox    # unit tests
 ```
 
-`scripts/build.py` signs Snug with the code signing identity in `SNUG_SIGNING_IDENTITY` (`security find-identity -v -p codesigning` lists yours) and stops if it is unset. A fixed identity keeps the Screen Recording permission across rebuilds. Test fixtures are in `Tests/Fixtures` and `Tests/ScreenshotCoreTests/Fixtures`. The repo also holds the original detector lab (`ScreenshotLab`) and `ScreenshotBench`, the detector benchmark:
+`scripts/build.py` signs Snug with the code signing identity in `SNUG_SIGNING_IDENTITY` (`security find-identity -v -p codesigning` lists yours) and stops if it is unset. A fixed identity keeps the Screen Recording permission across rebuilds. Every build runs under the hardened runtime.
+
+A release build signs with a Developer ID Application identity, notarizes with the `snug-notary` keychain profile (`xcrun notarytool store-credentials snug-notary --apple-id APPLE_ID --team-id TEAMID`), staples the ticket and writes `build/Snug-VERSION.zip`:
+
+```sh
+SNUG_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)" uv run scripts/build.py --release
+```
+
+Test fixtures are in `Tests/Fixtures` and `Tests/ScreenshotCoreTests/Fixtures`. The repo also holds the original detector lab (`ScreenshotLab`) and `ScreenshotBench`, the detector benchmark:
 
 ```sh
 build/ScreenshotBench suite --manifest Tests/Fixtures/evaluation/public-suite.json --baseline Tests/Fixtures/evaluation/baselines/public-suite.json --output DIR

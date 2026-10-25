@@ -116,6 +116,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             FileHandle.standardError.write(Data("Unknown or incomplete debug flag \(flag)\n".utf8))
             exit(EXIT_FAILURE)
         }
+        // Settings saved before the bundle ID became com.hedgertronic.snug move over on the first launch under it.
+        if let id = Bundle.main.bundleIdentifier, UserDefaults.standard.persistentDomain(forName: id) == nil,
+           let old = UserDefaults.standard.persistentDomain(forName: "local.snug") {
+            UserDefaults.standard.setPersistentDomain(old, forName: id)
+        }
         // One Snug per user: a second copy (another build, or a second launch) quits, so a shortcut press never reaches two overlays.
         // The --mcp bridge never registers as an app, so it is not counted; an unbundled debug binary has no identifier to check.
         if let id = Bundle.main.bundleIdentifier, NSRunningApplication.runningApplications(withBundleIdentifier: id).contains(where: { $0 != .current }) {

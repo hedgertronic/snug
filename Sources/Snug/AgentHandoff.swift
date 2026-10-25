@@ -3,7 +3,7 @@ import ScreenshotCore
 
 extension NSPasteboard.PasteboardType {
     /// The manifest JSON on a Copy for Agent clipboard item. A type is a UTI, which allows no "+".
-    static let snugCapture = NSPasteboard.PasteboardType("local.snug.capture-json")
+    static let snugCapture = NSPasteboard.PasteboardType("com.hedgertronic.snug.capture-json")
 }
 
 /// Copy for Agent (Cmd-Return, the strip's Agent button).
