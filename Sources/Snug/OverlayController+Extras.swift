@@ -3,7 +3,7 @@ import ScreenshotCore
 
 /// Mode switching, view toggles, color picking, the help sheet, and Capture mode's hover.
 extension OverlayController {
-    private var colorFormat: ColorFormat { ColorFormat(rawValue: defaults.string(forKey: Pref.colorFormat)!)! }
+    var colorFormat: ColorFormat { ColorFormat(rawValue: defaults.string(forKey: Pref.colorFormat)!)! }
 
     /// The pointer pixel clamped into the image.
     private var pointerPixel: CGPoint {
@@ -230,6 +230,7 @@ extension OverlayController {
         guides.crosshair.isHidden = armed || !defaults.bool(forKey: Pref.crosshair)
         let animation = GuidesAnimation(rawValue: defaults.string(forKey: Pref.guidesAnimation)!)!
         let animated = animates && animation != GuidesAnimation.none
+        let readoutWasShown = !guides.readout.isHidden, clusterWas = chrome.coordinates.isHidden ? nil : chrome.coordinates.frame.origin
         guides.setShown(guides.rulers, !armed && defaults.bool(forKey: Pref.rulers), from: animation == .slide ? Guides.rulersHiddenTransform : CATransform3DIdentity, animated: animated)
         guides.setShown(guides.loupe, !armed && scrollArea == nil && mode != .text && defaults.bool(forKey: Pref.loupe), from: Guides.loupeHiddenTransform, animated: animated)
         guides.slidesPlacement = animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
@@ -253,9 +254,19 @@ extension OverlayController {
                 coordinates.frame.origin = origin
                 tag.frame.origin = CGPoint(x: origin.x + coordinates.frame.width + Guides.clusterGap, y: origin.y)
                 tag.isHidden = false
+                // When the loupe opens or closes the cluster slides between its corner of the pointer and its spot under the readout, as the
+                // loupe's placement slides: additively, so it still tracks the pointer.
+                if let was = clusterWas, guides.slidesPlacement, guides.readout.isHidden == readoutWasShown {
+                    let slide = CABasicAnimation(keyPath: "position")
+                    slide.isAdditive = true
+                    slide.fromValue = NSValue(point: CGPoint(x: was.x - origin.x, y: was.y - origin.y))
+                    slide.toValue = NSValue(point: .zero)
+                    slide.duration = Guides.transitionDuration
+                    slide.timingFunction = Guides.introCurve
+                    for item in [coordinates, tag] { item.layer!.add(slide, forKey: "placement") }
+                }
             }
         }
-        guides.setReadout(format: colorFormat, shift: shiftHeld)
         guard !(guides.crosshair.isHidden && guides.rulers.isHidden && guides.loupe.isHidden) else { return }
         // While a drag carries a max side with the pointer, the loupe centers on the last pixel inside the crop, whose max sides round up,
         // so the outline keeps to the center cell's far side as the pointer crosses pixel boundaries.
