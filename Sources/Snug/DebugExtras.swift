@@ -1972,8 +1972,9 @@ extension DebugRun {
         }
         mouse(.mouseMoved, flat)
         mouse(.mouseMoved, viewPixel(centerOf(chrome.colors)))
-        try await Task.sleep(for: .milliseconds(700))
-        require(!chrome.toolTip.isHidden && chrome.toolTip.frame.maxY <= chrome.strip.frame.minY, "the Colors tool tip shows under the strip: \(chrome.toolTip.frame) \(chrome.strip.frame)")
+        for _ in 0..<300 where chrome.toolTip.isHidden { try await Task.sleep(for: .milliseconds(10)) }
+        require(!chrome.toolTip.isHidden && chrome.toolTip.frame.maxY <= chrome.strip.frame.minY,
+                "the Colors tool tip shows under the strip: hidden \(chrome.toolTip.isHidden) \(chrome.toolTip.frame) \(chrome.strip.frame)")
         chromeClear("a hover with the Colors tool tip")
         mouse(.mouseMoved, flat)
         defaults.set(false, forKey: Pref.loupe)
