@@ -107,7 +107,9 @@ if release:
     # The download holds the stapled app, so Gatekeeper accepts it offline.
     subprocess.run(["ditto", "-c", "-k", "--keepParent", str(snug), str(archive)], check=True)
     subprocess.run(["spctl", "--assess", "--type", "execute", "--verbose", str(snug)], check=True)
+    # Only the zip stays, so Spotlight and Launch Services find one Snug: build/Snug.app.
+    shutil.rmtree(snug)
     print(f"Release: {archive}")
 print(f"Local app: {app}")
-print(f"Snug: {snug}")
+print(f"Snug: {archive if release else snug}")
 print(f"Benchmark: {root / 'build/ScreenshotBench'}")
