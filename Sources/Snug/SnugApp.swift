@@ -316,23 +316,26 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 band.fill()
                 NSGraphicsContext.restoreGraphicsState()
             case "h":
-                // The app tile solid, with its dashed selection and the band's curve cut out of it.
+                // The app tile solid, with its dashed selection and the band's curve cut out of it, in the logo's proportions: the band's top
+                // at about half the tile's height in the middle and 53% from the top at the sides.
                 NSBezierPath(roundedRect: CGRect(x: 1, y: 1, width: 16, height: 16), xRadius: 4, yRadius: 4).fill()
                 NSGraphicsContext.current!.compositingOperation = .clear
-                let selection = NSBezierPath()
-                selection.move(to: CGPoint(x: 4.75, y: 7.25))
-                selection.line(to: CGPoint(x: 4.75, y: 12))
-                selection.appendArc(withCenter: CGPoint(x: 7, y: 12), radius: 2.25, startAngle: 180, endAngle: 90, clockwise: true)
-                selection.line(to: CGPoint(x: 11, y: 14.25))
-                selection.appendArc(withCenter: CGPoint(x: 11, y: 12), radius: 2.25, startAngle: 90, endAngle: 0, clockwise: true)
-                selection.line(to: CGPoint(x: 13.25, y: 7.25))
-                selection.lineWidth = 1.25
-                selection.lineCapStyle = .round
-                selection.setLineDash([1.25, 1.75], count: 2, phase: 0)
-                selection.stroke()
+                // Each half of the arch runs from the top center down a leg: 2 pt of top, a 2.25 pt radius corner, 2 pt of leg. Dashes
+                // mirror around one centered on top, and each leg ends in a gap above the band.
+                for side: CGFloat in [-1, 1] {
+                    let half = NSBezierPath()
+                    half.move(to: CGPoint(x: 9, y: 14.25))
+                    half.line(to: CGPoint(x: 9 + 2 * side, y: 14.25))
+                    half.appendArc(withCenter: CGPoint(x: 9 + 2 * side, y: 12), radius: 2.25, startAngle: 90, endAngle: side < 0 ? 180 : 0, clockwise: side > 0)
+                    half.line(to: CGPoint(x: 9 + 4.25 * side, y: 10))
+                    half.lineWidth = 1.25
+                    half.lineCapStyle = .round
+                    half.setLineDash([0.25, 1.85, 0.5, 1.85, 0.5, 1.85, 0.5, 10], count: 8, phase: 0)
+                    half.stroke()
+                }
                 let cut = NSBezierPath()
-                cut.move(to: CGPoint(x: 0, y: 5))
-                cut.curve(to: CGPoint(x: 18, y: 5), controlPoint1: CGPoint(x: 5.4, y: 7.25), controlPoint2: CGPoint(x: 12.6, y: 7.25))
+                cut.move(to: CGPoint(x: 0, y: 7.6))
+                cut.curve(to: CGPoint(x: 18, y: 7.6), controlPoint1: CGPoint(x: 5.4, y: 9.6), controlPoint2: CGPoint(x: 12.6, y: 9.6))
                 cut.lineWidth = 1.5
                 cut.stroke()
             default:
