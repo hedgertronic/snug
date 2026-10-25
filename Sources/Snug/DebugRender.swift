@@ -238,6 +238,16 @@ extension DebugRun {
         defaults.set(true, forKey: Pref.loupe)
         mouse(.mouseMoved, CGPoint(x: 901, y: 701))
         try snapshot("window-hover-loupe")
+        // Shift held in HSL: the readout's value in HSL, then format and the Shift-C caps.
+        defaults.set(ColorFormat.hsl.rawValue, forKey: Pref.colorFormat)
+        func shift(_ flags: NSEvent.ModifierFlags) {
+            overlay.flagsChanged(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime,
+                                                  windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!)
+        }
+        shift(.shift)
+        try snapshot("window-hover-loupe-format")
+        shift([])
+        defaults.set(ColorFormat.hex.rawValue, forKey: Pref.colorFormat)
         defaults.set(false, forKey: Pref.loupe)
         overlay.dismiss()
 

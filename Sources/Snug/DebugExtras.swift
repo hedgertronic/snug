@@ -354,19 +354,41 @@ extension DebugRun {
         key(8, "c")
         require(pasteboard.string(forType: .string) == hex, "C copies \(hex) for the pixel under the pointer (copied \(pasteboard.string(forType: .string) ?? "nothing"))")
         require(!overlay.window.isVisible, "C closes the overlay")
+        let loupeWasOn = defaults.bool(forKey: Pref.loupe)
+        defaults.set(true, forKey: Pref.loupe)
         open()
         mouse(.mouseMoved, flat)
+        // Holding Shift turns the readout's "copy C" into "format" with the Shift-C caps; Shift-C cycles the format, which the readout's
+        // value takes at once, never wider than the room the loupe's placement keeps beside the disc.
+        func shift(_ held: Bool) {
+            overlay.flagsChanged(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: held ? .shift : [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                  windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!)
+        }
+        let readoutCaps = { guides.readout.subviews.compactMap { $0 as? KeyCap }.map(\.text) }
+        shift(true)
+        require(texts(in: guides.readout).dropFirst().first == "format" && readoutCaps() == ["\u{21E7}", "C"],
+                "with Shift held the readout shows format and the Shift-C caps: \(texts(in: guides.readout)) \(readoutCaps())")
         key(8, "C", .shift)
         require(defaults.string(forKey: Pref.colorFormat) == "rgb", "Shift-C cycles to RGB")
         require(overlay.window.isVisible, "Shift-C leaves the overlay open")
+        let rgb = "rgb(\(flatBytes[0]), \(flatBytes[1]), \(flatBytes[2]))"
+        require(texts(in: guides.readout).first == rgb, "the readout shows the RGB value after Shift-C: \(texts(in: guides.readout))")
+        shift(false)
+        require(texts(in: guides.readout).dropFirst().first == "copy" && readoutCaps() == ["C"], "releasing Shift brings back copy and C: \(texts(in: guides.readout))")
         key(8, "c")
-        require(pasteboard.string(forType: .string) == "rgb(\(flatBytes[0]), \(flatBytes[1]), \(flatBytes[2]))", "C copies in RGB after Shift-C")
-        for expected in ["hsl", "swift", "hex"] {
+        require(pasteboard.string(forType: .string) == rgb, "C copies in RGB after Shift-C")
+        for (expected, prefix) in [("hsl", "hsl("), ("swift", "0."), ("hex", "#")] {
             open()
+            mouse(.mouseMoved, flat)
+            shift(true)
             key(8, "C", .shift)
             require(defaults.string(forKey: Pref.colorFormat) == expected, "Shift-C cycles to \(expected)")
+            require(texts(in: guides.readout).first?.hasPrefix(prefix) == true && guides.readout.frame.width <= Guides.loupeSize + 2 * Guides.readoutOverhang,
+                    "the readout shows \(expected) within the loupe's room: \(texts(in: guides.readout)) \(guides.readout.frame.width)")
+            shift(false)
             overlay.dismiss()
         }
+        defaults.set(loupeWasOn, forKey: Pref.loupe)
         open()
         let average = CGRect(x: 2040, y: 1000, width: 60, height: 40)
         key(1, "s")
@@ -1974,7 +1996,7 @@ extension DebugRun {
         mouse(.mouseMoved, viewPixel(centerOf(chrome.colors)))
         for _ in 0..<300 where chrome.toolTip.isHidden { try await Task.sleep(for: .milliseconds(10)) }
         require(!chrome.toolTip.isHidden && chrome.toolTip.frame.maxY <= chrome.strip.frame.minY,
-                "the Colors tool tip shows under the strip: hidden \(chrome.toolTip.isHidden) \(chrome.toolTip.frame) \(chrome.strip.frame)")
+                "the Colors tool tip shows under the strip: hidden \(chrome.toolTip.isHidden) \(chrome.toolTip.frame) \(chrome.strip.frame), tip button \(chrome.tipButton.map { texts(in: $0) } ?? []), colors \(chrome.colors.frame) in strip \(chrome.colors.superview === chrome.strip), readout \(guides2.readout.frame), cluster \(chrome.coordinates.frame) \(chrome.snapTag.frame)")
         chromeClear("a hover with the Colors tool tip")
         mouse(.mouseMoved, flat)
         defaults.set(false, forKey: Pref.loupe)

@@ -109,11 +109,11 @@ extension OverlayController {
         }
     }
 
+    /// Shift-C: the next color format, which the loupe's readout and the Colors menu show.
     func cycleColorFormat() {
-        guard let color = pickedColor else { return }
-        let next = colorFormat.next
-        defaults.set(next.rawValue, forKey: Pref.colorFormat)
-        Toast.show(message: next.label, detail: next.string(for: color), color: swatch(color))
+        defaults.set(colorFormat.next.rawValue, forKey: Pref.colorFormat)
+        if !chrome.colorMenu.isHidden { showColorsMenu() }
+        refresh()
     }
 
     // MARK: Capture hover
@@ -255,6 +255,7 @@ extension OverlayController {
                 tag.isHidden = false
             }
         }
+        guides.setReadout(format: colorFormat, shift: shiftHeld)
         guard !(guides.crosshair.isHidden && guides.rulers.isHidden && guides.loupe.isHidden) else { return }
         // While a drag carries a max side with the pointer, the loupe centers on the last pixel inside the crop, whose max sides round up,
         // so the outline keeps to the center cell's far side as the pointer crosses pixel boundaries.
