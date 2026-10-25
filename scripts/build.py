@@ -74,12 +74,17 @@ with tempfile.TemporaryDirectory() as scratch:
             subprocess.run(["sips", "-z", str(pixels), str(pixels), str(master), "--out", str(iconset / name)],
                            check=True, capture_output=True)
     subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(snug_contents / "Resources/Snug.icns")], check=True)
+# macOS loads the fonts in ATSApplicationFontsPath for the app alone: the wordmark's Fredoka Bold and its license.
+(snug_contents / "Resources/Fonts").mkdir(exist_ok=True)
+for name in ("Fredoka-Bold.ttf", "OFL.txt"):
+    shutil.copy2(root / "brand/fonts" / name, snug_contents / "Resources/Fonts" / name)
 snug_info = {
     "CFBundleExecutable": "Snug",
     "CFBundleIdentifier": "com.hedgertronic.snug",
     "CFBundleName": "Snug",
     "CFBundleDisplayName": "Snug",
     "CFBundleIconFile": "Snug",
+    "ATSApplicationFontsPath": "Fonts",
     "CFBundlePackageType": "APPL",
     "CFBundleShortVersionString": "0.1.0",
     "CFBundleVersion": "1",

@@ -147,7 +147,7 @@ private struct GeneralPane: View {
                 HStack(spacing: 14) {
                     Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 60, height: 60)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Snug").font(.system(size: 28, weight: .heavy, design: .rounded))
+                        Wordmark(size: 28)
                         Text("\(hotKeyCode < 0 ? "Set a shortcut to capture." : "Press \(Shortcut.label(code: hotKeyCode, modifiers: hotKeyModifiers)) to capture.")\nPress ? in the overlay for every key.")
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)

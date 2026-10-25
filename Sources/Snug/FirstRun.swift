@@ -16,9 +16,7 @@ struct FirstRunView: View {
                 .shadow(color: .black.opacity(0.22), radius: 9, y: 10)
                 .scaleEffect(tucked ? 1 : 1.18)
                 .onAppear { withAnimation(.spring(duration: 0.4, bounce: 0.45)) { tucked = true } }
-            Text("snug")
-                .font(.system(size: 34, weight: .heavy, design: .rounded))
-                .tracking(-0.5)
+            Wordmark(size: 34)
             Text("Snug needs Screen Recording to capture your screen. Accessibility lets it highlight buttons, sidebars, and other parts of apps, and copy their text exactly. Captures stay on this Mac. Nothing is uploaded.")
                 .font(.system(size: 15))
                 .lineSpacing(3)
@@ -78,5 +76,19 @@ struct FirstRunView: View {
                 .background(Color.primary.opacity(0.08), in: Circle())
             text
         }
+    }
+}
+
+/// "Snug" in Fredoka Bold, which the app bundles (`ATSApplicationFontsPath`), in the icon's plum, or the label color in dark mode.
+struct Wordmark: View {
+    let size: CGFloat
+
+    var body: some View {
+        Text("Snug")
+            .font(.custom("Fredoka-Bold", size: size))
+            .tracking(-0.01 * size)
+            .foregroundStyle(Color(nsColor: NSColor(name: nil) { appearance in
+                appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .labelColor : NSColor(srgbRed: 0x3B / 255, green: 0x25 / 255, blue: 0x41 / 255, alpha: 1)
+            }))
     }
 }
