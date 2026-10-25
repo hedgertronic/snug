@@ -95,10 +95,11 @@ final class Toast: NSPanel, NSDraggingSource {
     private var peekFade: Task<Void, any Error>?
 
     /// A color toast passes the swatch `color` (red is a failure, orange a warning); a text toast passes the copied `text`, and a color
-    /// toast its value to copy again. `pasteboard` is where Copy writes and Trash looks for the capture.
+    /// toast its value to copy again. `pasteboard` is where Copy writes and Trash looks for the capture. A failure beeps.
     static func show(png: Data? = nil, message: String, detail: String = "", file: URL? = nil, color: NSColor? = nil, text: String? = nil,
                      defaults: UserDefaults = .standard, pasteboard: NSPasteboard = .general) {
         guard !isSuppressed, defaults.integer(forKey: Pref.toastLifetime) != 0 || color == .systemRed else { return }
+        if color == .systemRed { NSSound.beep() }
         let toast = Toast(png: png, message: message, detail: detail, file: file, color: color, text: text, defaults: defaults, pasteboard: pasteboard)
         stack(toast)
         toast.orderFrontRegardless()

@@ -405,7 +405,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         Toast.show(message: "Recording failed", detail: failure.localizedDescription, color: .systemRed)
     }
 
-    /// Stops the recording once it has started, then copies the saved file's URL and shows the toast with its first frame. `via` names
+    /// Stops the recording once it has started, then plays the stop sound, copies the saved file's URL and shows the toast with its first frame. `via` names
     /// the route, for the log: "shortcut", "menu item" or "stream stop".
     private func stopRecording(via: String) {
         recordingLog.notice("stop requested via \(via, privacy: .public), recording \(self.recording != nil)")
@@ -414,6 +414,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             do {
                 let session = try await start.value
                 let file = try await session.stop()
+                Sound.recordStop.play(defaults: .standard)
                 _ = try await ScreenRecording.deliver(file, pasteboard: .general, defaults: .standard)
             } catch {
                 showRecordingFailure(error)

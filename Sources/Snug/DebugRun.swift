@@ -14,6 +14,7 @@ enum DebugRun {
         overlay.chromiumOwners = { _ in [] }
         overlay.enableChromium = { preconditionFailure("a debug run turns on no app's accessibility: \($0)") }
         Toast.isSuppressed = true
+        Sound.isMuted = true
         Toast.chooseSaveURL = { _ in preconditionFailure("a debug run shows no Save As panel") }
         // A debug run never takes the keyboard or activation from the app in front: either ends it at once.
         for name in [NSWindow.didBecomeKeyNotification, NSApplication.didBecomeActiveNotification] {

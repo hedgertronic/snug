@@ -799,6 +799,7 @@ extension DebugRun {
     /// of three toasts as `toast-stack-<look>.png`.
     static func renderToasts(into directory: URL, image: CGImage) async throws {
         Toast.isSuppressed = true
+        Sound.isMuted = true
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         func require(_ condition: Bool, _ message: String) {
             guard condition else {

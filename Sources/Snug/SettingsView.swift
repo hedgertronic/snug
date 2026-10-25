@@ -138,6 +138,7 @@ private struct GeneralPane: View {
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
     @AppStorage(Pref.saveFolder) private var saveFolder = ""
     @AppStorage(Pref.chromiumText) private var chromiumText = true
+    @AppStorage(Pref.playSounds) private var playSounds = true
     @State private var opensAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -182,6 +183,12 @@ private struct GeneralPane: View {
                             opensAtLogin = SMAppService.mainApp.status == .enabled
                         }
                     }
+                    LabeledContent {
+                        Toggle("Play sounds", isOn: $playSounds).labelsHidden().toggleStyle(.switch)
+                    } label: {
+                        detailed("Play sounds", "On a capture and a recording's start and stop.")
+                    }
+                    .padding(.vertical, 4)
                 }
                 caption("Text mode")
                 Card {

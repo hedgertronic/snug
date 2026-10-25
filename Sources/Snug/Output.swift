@@ -55,6 +55,8 @@ enum Pref {
     /// (one of `Toast.lifetimes`: 0 shows no toast but failures, -1 keeps it until closed).
     static let toastPosition = "SnugToastPosition"
     static let toastLifetime = "SnugToastLifetime"
+    /// Whether Snug plays its sounds on a capture and a recording's start and stop (Settings > General). Failures beep either way.
+    static let playSounds = "SnugPlaySounds"
     /// Off unless set with `defaults write local.snug SnugLogHover -bool true`: each hover lookup and the Dock's window rect append to
     /// ~/Library/Logs/Snug/hover.log, so live accessibility frames can be read back without Accessibility in a terminal.
     static let logHover = "SnugLogHover"
@@ -120,6 +122,7 @@ enum Pref {
             guidesAnimation: GuidesAnimation.fade.rawValue,
             toastPosition: "bottomCenter",
             toastLifetime: 4,
+            playSounds: true,
             roundCorners: true,
             chromiumText: true,
             menuBarIcon: "a",
@@ -179,7 +182,7 @@ enum Output {
     /// Copies a PNG to the pasteboard or saves it, and shows a toast; returns the toast's message and detail. `detail` is the toast's
     /// pixel size line, saved or not. A save goes to `destination` (Save As, which the panel already confirmed) or the usual file, which takes a
     /// numbered name when its own is taken. A write that fails (the pasteboard refusing the image, an unwritable folder) shows a red toast
-    /// with its reason and keeps the capture in it: "Copy failed" or "Save failed". Otherwise a `warning` (a capture that may be wrong)
+    /// with its reason and keeps the capture in it: "Copy failed" or "Save failed"; a capture that lands plays the capture sound. Otherwise a `warning` (a capture that may be wrong)
     /// takes the detail line and an orange mark.
     @MainActor
     @discardableResult
@@ -213,6 +216,7 @@ enum Output {
         let detail = failed ? reason : warning ?? detail
         Toast.show(png: png, message: message, detail: detail, file: file, color: failed ? .systemRed : warning.map { _ in .systemOrange },
                    defaults: defaults, pasteboard: pasteboard)
+        if !failed { Sound.capture.play(defaults: defaults) }
         return (message, detail)
     }
 
