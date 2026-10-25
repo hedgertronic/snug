@@ -426,6 +426,7 @@ final class OverlayController {
         textTask = nil
         foundTextHighlight?.cancel()
         foundTextHighlight = nil
+        text.ocr?.cancel()
         text = TextSession()
         closeCutout()
         snapTask?.cancel()
@@ -1123,6 +1124,10 @@ final class OverlayController {
         if mode == .text, let selected = text.screenSelection {
             overlays.textPills = screenTexts[selected.text].highlight(from: selected.anchor, to: selected.focus)
         }
+        // Snug's highlight takes the place of Live Text's, which stays for found items and until the whole image is read.
+        let ocrHighlight = mode == .text ? ocrHighlight : nil
+        if let ocrHighlight { overlays.textPills = ocrHighlight }
+        view.liveText.alphaValue = ocrHighlight == nil ? 1 : 0
         overlays.flashPills = text.flash ?? []
         overlays.showsOutline = armedRecording == nil
         overlays.focusedCorner = selection == nil ? nil : focusedCorner

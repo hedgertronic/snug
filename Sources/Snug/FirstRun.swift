@@ -19,7 +19,7 @@ struct FirstRunView: View {
             Text("snug")
                 .font(.system(size: 34, weight: .heavy, design: .rounded))
                 .tracking(-0.5)
-            Text("Snug needs Screen Recording to capture your screen. Accessibility lets it highlight buttons, sidebars, and other parts of apps. Captures stay on this Mac. Nothing is uploaded.")
+            Text("Snug needs Screen Recording to capture your screen. Accessibility lets it highlight buttons, sidebars, and other parts of apps, and copy their text exactly. Captures stay on this Mac. Nothing is uploaded.")
                 .font(.system(size: 15))
                 .lineSpacing(3)
                 .multilineTextAlignment(.center)

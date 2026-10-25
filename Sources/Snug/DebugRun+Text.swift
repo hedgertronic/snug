@@ -268,6 +268,11 @@ extension DebugRun {
                 try await open()
                 textDrag(from: from, to: to)
                 require(liveText.selectedText == "address", "a drag inside one word selects it: \(liveText.selectedText.debugDescription)")
+                // Once the whole image is read Snug draws the highlight in Live Text's place, from where the selection starts.
+                try await waitFor("the whole image's accurate OCR finishes") { overlay.text.ocrLines != nil }
+                let pills = overlay.view.overlays.textPills
+                require(pills.count == 1 && pills[0].minX > billing.minX + 100 && pills[0].maxX <= billing.maxX + 4 && liveText.alphaValue == 0,
+                        "Snug's highlight covers only \"address\", and Live Text's is hidden: \(pills) \(liveText.alphaValue)")
                 overlay.dismiss()
             }
             // A press on the line's last pixels or just past its last glyph, then a drag back, selects the whole line.
@@ -388,6 +393,17 @@ extension DebugRun {
                 print("Terminal fixture: Live Text reads \(listItems.filter { item in transcript.contains { $0.contains(item) } }.count) of \(listItems.count) items, "
                       + "\(listItems.filter { item in transcript.contains { $0.hasPrefix("- " + item) } }.count) with their marker")
                 key(fKey, "f")
+                // Snug's highlight covers each item from its marker, which Live Text's own highlight leaves out on one of them.
+                try await waitFor("the terminal fixture's accurate OCR finishes") { overlay.text.ocrLines != nil }
+                let pills = overlay.view.overlays.textPills
+                let unlit = listItems.filter { item in
+                    let line = overlay.text.ocrLines!.first { $0.text.hasPrefix("- " + item) }
+                    return line == nil || !pills.contains { $0.intersects(line!.bounds) && $0.minX <= line!.bounds.minX + 1 }
+                }
+                require(unlit.isEmpty, "Snug's highlight covers every list item from its \"- \" marker: missing \(unlit)")
+                // Live Text puts the last row's wrap ("then run the frame") last, above the row it selects after it; the row stays lit.
+                let last = overlay.text.ocrLines!.first { $0.text.hasPrefix("checks and render") }!
+                require(pills.contains { $0.intersects(last.bounds) && $0.width >= last.bounds.width - 1 }, "Snug's highlight covers the last row whole: \(last.bounds) \(pills)")
             }
             pasteboard.clearContents()
             key(returnKey, "\r")
@@ -526,8 +542,9 @@ extension DebugRun {
         let address = CGPoint(x: 345, y: 932)
         require(liveText.hasText(at: topLeft(address)), "the Address label is text inside the box")
         textDrag(from: address, to: CGPoint(x: 460, y: 932))
-        require(overlay.selection == nil && o().textPills.isEmpty && liveText.selectedText.hasPrefix("Address"),
-                "a drag on text inside the box selects that text and clears the box: \(liveText.selectedText.debugDescription)")
+        require(overlay.selection == nil && !o().textPills.isEmpty && o().textPills.allSatisfy { $0.minY <= address.y && $0.maxY >= address.y }
+                    && liveText.selectedText.hasPrefix("Address"),
+                "a drag on text inside the box selects that text, clears the box, and highlights only its row: \(liveText.selectedText.debugDescription) \(o().textPills)")
         overlay.dismiss()
         // A drag that starts on text never draws a box.
         try await open()
@@ -556,6 +573,10 @@ extension DebugRun {
         try await open()
         textDrag(from: CGPoint(x: productName.minX + 10, y: productName.midY), to: CGPoint(x: 1900, y: 600))
         let lines = liveText.selectedText
+        try await waitFor("the whole image's accurate OCR finishes") { overlay.text.ocrLines != nil }
+        let cartPills = overlay.view.overlays.textPills
+        require(cartPills.contains { $0.minY < 470 && $0.maxY > 470 } && cartPills.contains { $0.minY < 548 && $0.maxY > 548 } && cartPills.allSatisfy { $0.minX >= 1600 },
+                "the highlight covers the cart rows the copy takes, the descriptions between included, and not the other column: \(cartPills)")
         require(lines.contains("Product name") && lines.contains("Second product") && lines.range(of: "Product name")!.lowerBound < lines.range(of: "Second product")!.lowerBound,
                 "a drag down selects across lines in order: \(lines.debugDescription)")
         pasteboard.clearContents()
@@ -775,7 +796,7 @@ extension DebugRun {
                 "the link's box covers the link, not the whole line: \(items[0].bounds)")
         require(abs(items[3].bounds.minX - qrBounds.minX) < 20 && abs(items[3].bounds.maxY - qrBounds.maxY) < 20, "the QR code's box is the code: \(items[3].bounds)")
         require(overlay.text.picked == 0 && overlay.view.overlays.hover == items[0].bounds, "the first Tab picks the first item and outlines it")
-        require(liveText.selectableItemsHighlighted && liveText.preferredInteractionTypes == .dataDetectors,
+        require(liveText.selectableItemsHighlighted && liveText.preferredInteractionTypes == .dataDetectors && liveText.alphaValue == 1,
                 "while an item is picked Live Text highlights its data detectors")
         require(overlay.text.notice?.hasPrefix("https://example.com/snug") == true, "a pill names the picked item: \(overlay.text.notice.debugDescription)")
         key(48, "\t")
