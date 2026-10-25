@@ -488,6 +488,11 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
                     request.recognitionLevel = .accurate
                     request.usesLanguageCorrection = true
                     request.automaticallyDetectsLanguage = true
+                    // Vision reads differently on the CPU and GPU (on the terminal fixture, a list item loses its "- " marker), so OCR
+                    // stays on the Neural Engine on every Mac that has one.
+                    for (stage, devices) in request.supportedComputeStageDevices {
+                        if let engine = devices.first(where: { if case .neuralEngine = $0 { true } else { false } }) { request.setComputeDevice(engine, for: stage) }
+                    }
                     return (band, try await ImageRequestHandler(cropped).perform(request).map {
                         TextLine(text: $0.topCandidates(1)[0].string,
                                  bounds: $0.boundingBox.toImageCoordinates(size, origin: .upperLeft).offsetBy(dx: band.minX, dy: band.minY))
@@ -600,6 +605,10 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
         request.automaticallyDetectsLanguage = true
+        // On the Neural Engine, as `recognize` is.
+        for (stage, devices) in request.supportedComputeStageDevices {
+            if let engine = devices.first(where: { if case .neuralEngine = $0 { true } else { false } }) { request.setComputeDevice(engine, for: stage) }
+        }
         let handler = ImageRequestHandler(image)
         var items: [FoundItem] = []
         for line in try await handler.perform(request) {
