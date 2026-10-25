@@ -67,7 +67,12 @@ extension OverlayController {
     /// The selected accessibility text as `TextLayout` lines; nil with no such selection or an empty one.
     var screenLines: [TextLine]? {
         guard let selected = text.screenSelection else { return nil }
-        let lines = screenTexts[selected.text].lines(from: selected.anchor, to: selected.focus)
+        let text = screenTexts[selected.text]
+        // Outside a terminal (one font throughout, where a bold word in a line would only shift its weight) each line takes its style
+        // from the pixels, as OCR's do, so a title never joins its subtitle as a soft wrap.
+        let lines = text.lines(from: selected.anchor, to: selected.focus).map { line in
+            text.claimsFrame ? line : TextLine(text: line.text, bounds: line.bounds, style: image.flatMap { TextStyle.measure(in: $0, box: line.bounds) })
+        }
         return lines.isEmpty ? nil : lines
     }
 

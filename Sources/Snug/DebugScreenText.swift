@@ -31,7 +31,7 @@ extension DebugRun {
     /// over its blank lower middle (`screenTexts` set directly; headless runs read no real app). Checks the highlight and the copy of a
     /// drag, a backward drag, a double and a triple click, Shift-Return's rows, F, that a press on the form's text still selects in Live
     /// Text, that a window in front of the terminal keeps its part of the area for Live Text, and that a page's text (word boxes, not a
-    /// grid) takes presses on its lines only.
+    /// grid) takes presses on its lines only and copies a title and its subtitle on their own lines.
     static func verifyScreenText(image: CGImage, frame: CGRect, overlay: OverlayController) async throws {
         _ = privateSetup(overlay)
         let liveText = overlay.view.liveText
@@ -164,6 +164,19 @@ extension DebugRun {
         key(36, "\r", .shift)
         let summary = await copied()
         require(summary == "summary\nShips in 2", "Shift-Return copies the page's exact text as rows: \(summary.debugDescription)")
+        // The cart's larger title over its smaller description, as a page's lines whose boxes take the line height around the ink: the
+        // title reaches as far right as the description, so only their styles, measured from the pixels, keep them apart.
+        overlay.present(image: image, frame: frame, displayID: nil)
+        key(17, "t")
+        try await waitFor("the Live Text analysis attaches") { liveText.analysis != nil }
+        overlay.windows = [page]
+        overlay.screenTexts = [ScreenText(lines: [.init(text: "Product name", box: CGRect(x: 1690, y: 404, width: 212, height: 48)),
+                                                  .init(text: "Brief description", box: CGRect(x: 1689, y: 452, width: 220, height: 36))],
+                                          frame: page, window: 0)]
+        drag(from: CGPoint(x: 1692, y: 430), to: CGPoint(x: 1908, y: 470))
+        key(36, "\r")
+        let cart = await copied()
+        require(cart == "Product name\nBrief description", "Return copies a page's title and its subtitle on their own lines: \(cart.debugDescription)")
         overlay.present(image: image, frame: frame, displayID: nil)
         key(17, "t")
         try await waitFor("the Live Text analysis attaches") { liveText.analysis != nil }
