@@ -262,7 +262,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     let cut = NSBezierPath()
                     cut.move(to: CGPoint(x: 0, y: 7.6))
                     cut.curve(to: CGPoint(x: 18, y: 7.6), controlPoint1: CGPoint(x: 5.4, y: 9.6), controlPoint2: CGPoint(x: 12.6, y: 9.6))
-                    cut.lineWidth = 1.5
+                    // As heavy as the arch's dashes.
+                    cut.lineWidth = 1
                     cut.stroke()
                 }
             default:
