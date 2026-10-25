@@ -82,7 +82,7 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     }
 
     /// Starts recording `area` of the display into `file`, with the system's audio when `capturesAudio`. With `showsPanels`, the rest of the display dims, a thin red outline just
-    /// outside the area pulses once as capture starts, and the stop reminder sits outside it. The handlers are set before capture starts,
+    /// outside the area pulses once as capture starts, the stop reminder sits outside it, and the start sound plays before capture starts. The handlers are set before capture starts,
     /// so no stop or failure is missed. The log gets one line at each step of a start (requested, content fetched, capture started, panels
     /// visible) with the milliseconds since the request, so a slow start shows where the time went.
     static func start(displayID: CGDirectDisplayID, area: CGRect, file: URL, showsCursor: Bool, capturesAudio: Bool, showsPanels: Bool, defaults: UserDefaults,
@@ -99,6 +99,8 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         // The dim shows at once, so the screen stays dimmed from the overlay's close through the stream's start; Snug is left out of
         // the video by application whether or not a window is listed yet.
         dim?.alphaValue = 1
+        // The start sound ends before capture starts, so a recording of the system's audio never holds it.
+        let cueEnds = ContinuousClock.now + (showsPanels ? Sound.recordStart.play(defaults: defaults) : .zero)
         let recording: ScreenRecording
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
@@ -121,6 +123,7 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
             recording = try ScreenRecording(file: file, temporary: temporary, filter: filter, configuration: configuration, recordingConfiguration: recordingConfiguration, panels: panels)
             recording.onFailure = onFailure
             recording.onStop = onStop
+            try await Task.sleep(until: cueEnds)
             try await recording.stream.startCapture()
             mark("capture started")
         } catch {

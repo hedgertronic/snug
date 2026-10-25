@@ -75,6 +75,7 @@ extension OverlayController {
                 guard pasteboard.writeObjects([item]) else { throw CocoaError(.fileWriteUnknown) }
                 Self.lastAgentToast = ("Copied for agent", manifest.captureId)
                 Toast.show(png: png, message: "Copied for agent", detail: manifest.captureId, defaults: defaults, pasteboard: pasteboard)
+                Sound.capture.play(defaults: defaults)
             } catch {
                 report(error)
             }
