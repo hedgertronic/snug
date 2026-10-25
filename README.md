@@ -78,7 +78,7 @@ swift test --disable-sandbox    # unit tests
 
 `scripts/build.py` signs Snug with the code signing identity in `SNUG_SIGNING_IDENTITY` (`security find-identity -v -p codesigning` lists yours) and stops if it is unset. A fixed identity keeps the Screen Recording permission across rebuilds. Every build runs under the hardened runtime.
 
-A release build signs with a Developer ID Application identity, notarizes with the `snug-notary` keychain profile (`xcrun notarytool store-credentials snug-notary --apple-id APPLE_ID --team-id TEAMID`), staples the ticket and writes `build/Snug-VERSION.zip`:
+A release build signs with a Developer ID Application identity, notarizes with the `snug-notary` keychain profile (`xcrun notarytool store-credentials snug-notary --apple-id APPLE_ID --team-id TEAMID`), staples the ticket and writes `build/release/Snug.app` and `build/release/Snug-VERSION.zip`, leaving `build/Snug.app` as it was:
 
 ```sh
 SNUG_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)" uv run scripts/build.py --release

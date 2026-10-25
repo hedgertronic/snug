@@ -1,7 +1,7 @@
 """Build and package the local macOS prototype without third-party dependencies.
 
 With --release, Snug is also timestamped, zipped, notarized with the snug-notary keychain profile, stapled and zipped again for
-download as build/Snug-VERSION.zip. SNUG_SIGNING_IDENTITY must then be the Developer ID Application identity.
+download as build/release/Snug-VERSION.zip. SNUG_SIGNING_IDENTITY must then be the Developer ID Application identity.
 """
 from pathlib import Path
 import json
@@ -56,7 +56,8 @@ with (contents / "Info.plist").open("wb") as stream:
 subprocess.run(["codesign", "--force", "--sign", "-", str(app)], check=True)
 subprocess.run(["codesign", "--verify", "--strict", str(app)], check=True)
 
-snug = root / "build/Snug.app"
+# A release builds its own copy, so the everyday build/Snug.app keeps its signature and permissions.
+snug = root / ("build/release/Snug.app" if release else "build/Snug.app")
 snug_contents = snug / "Contents"
 (snug_contents / "MacOS").mkdir(parents=True, exist_ok=True)
 (snug_contents / "Resources").mkdir(exist_ok=True)
@@ -94,7 +95,7 @@ with (snug_contents / "Info.plist").open("wb") as stream:
 subprocess.run(["codesign", "--force", "--options", "runtime", *(["--timestamp"] if release else []), "--sign", signing_identity, str(snug)], check=True)
 subprocess.run(["codesign", "--verify", "--strict", str(snug)], check=True)
 if release:
-    archive = root / f"build/Snug-{snug_info['CFBundleShortVersionString']}.zip"
+    archive = root / f"build/release/Snug-{snug_info['CFBundleShortVersionString']}.zip"
     subprocess.run(["ditto", "-c", "-k", "--keepParent", str(snug), str(archive)], check=True)
     submitted = subprocess.run(["xcrun", "notarytool", "submit", str(archive), "--keychain-profile", "snug-notary", "--wait", "--output-format", "json"],
                                check=True, text=True, capture_output=True)
