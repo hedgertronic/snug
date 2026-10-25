@@ -609,6 +609,8 @@ extension OverlayController {
             item.isHidden = !shown
             animate(true, duration: duration) { item.isHidden = shown }
         }
+        // The readout relabels with the strip, before the caps light, so a cap it just made for Shift is lit with the rest.
+        view.guides.setReadout(format: colorFormat, shift: shiftHeld, animated: motion)
         lightCaps(restyle: restyle)
     }
 }

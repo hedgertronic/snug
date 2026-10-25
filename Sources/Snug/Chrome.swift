@@ -96,6 +96,12 @@ final class Pill: NSView {
             return label
         }
         for view in shown where !items.contains(where: { $0 === view }) { view.removeFromSuperview() }
+        layOut(items)
+    }
+
+    /// Sizes the pill to `items` and places them in order, adding any not in it yet; `show` calls it for new views, and a pill whose
+    /// view changed size in place calls it with its subviews.
+    func layOut(_ items: [NSView]) {
         let gaps = spacing * CGFloat(items.count - 1)
         let inner = vertical
             ? CGSize(width: items.map(\.frame.width).max()!, height: items.reduce(gaps) { $0 + $1.frame.height })

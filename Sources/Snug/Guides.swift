@@ -28,7 +28,7 @@ final class Guides {
     static let clusterDepth = clusterGap + Chrome.labelHeight
     /// One duration and curve for every loupe and ruler transition. The outro plays the intro backward, so its curve is the intro's mirrored.
     static let transitionDuration: CFTimeInterval = 0.18
-    private static let introCurve = CAMediaTimingFunction(controlPoints: 0.2, 0, 0, 1)
+    static let introCurve = CAMediaTimingFunction(controlPoints: 0.2, 0, 0, 1)
     private static let outroCurve = CAMediaTimingFunction(controlPoints: 1, 0, 0.8, 1)
     /// The transforms the loupe and rulers fade in from: a small scale, and a slide in from the top and left edges.
     static let loupeHiddenTransform = CATransform3DMakeScale(0.9, 0.9, 1)
@@ -63,14 +63,16 @@ final class Guides {
     private let centerHalo = CAShapeLayer()
     private let centerWhite = CAShapeLayer()
     let centerAccent = CAShapeLayer()
-    /// Under the loupe, on the chip surface: the swatch and value of the pixel at the pointer in the color format C copies, then "copy" and
-    /// the C cap, or with Shift held "format" and the Shift-C caps. The overlay view holds it. `setShown` shows and hides it with the
+    /// Under the loupe, on the chip surface: the swatch and value of the pixel at the pointer in the color format C copies, then "Copy" and
+    /// the C cap, or with Shift held "Format" and the Shift-C caps, 2 pt apart as in a hint. The overlay view holds it. `setShown` shows and hides it with the
     /// loupe's intended state, `setReadout` lays it out for a format and Shift, and `update` moves it with the loupe and changes the
     /// swatch and value in place.
     let readout = Pill.chip()
     private let swatch = NSView(frame: CGRect(x: 0, y: 0, width: 12, height: 12))
     private let value = NSTextField("#000000", size: 12, mono: true, color: .chromeText)
     private(set) var format = ColorFormat.hex
+    /// The pixel the readout shows, kept so a new format or Shift lays the readout out with the value it will show.
+    private var color = SRGBColor(red: 1, green: 1, blue: 1)
     private var tickKey: [CGFloat] = []
     /// Whether a change of the loupe's placement slides, and the loupe's offset from the pointer at the last update (nil until it first shows).
     var slidesPlacement = false
@@ -157,22 +159,43 @@ final class Guides {
         swatch.wantsLayer = true
         swatch.layer!.cornerRadius = 3
         swatch.layer!.borderWidth = 0.5
-        setReadout(format: .hex, shift: false)
+        setReadout(format: .hex, shift: false, animated: false)
         readout.isHidden = true
         for layer in [magnified, grid, edges, centerHalo, centerWhite, centerAccent] { disc.addSublayer(layer) }
         for layer in [ring, disc] { loupe.addSublayer(layer) }
     }
 
-    /// Lays the readout out for `format`, its value as wide as the format's widest, and for Shift held; it keeps its shown state.
-    func setReadout(format: ColorFormat, shift: Bool) {
+    /// Lays the readout out for `format`, its value fitted to the pixel's, and for Shift held; it keeps its shown state.
+    /// `animated`, a shown readout changes in the strip's motion.
+    func setReadout(format: ColorFormat, shift: Bool, animated: Bool) {
         self.format = format
-        let hidden = readout.isHidden
+        let hidden = readout.isHidden, before = readout.subviews, width = readout.frame.width
         readout.show("\(format) \(shift)") {
-            value.stringValue = format == .hsl ? "hsl(359, 100%, 100%)" : Self.loupeText(SRGBColor(red: 1, green: 1, blue: 1), format: format)
+            value.stringValue = Self.loupeText(color, format: format)
             value.sizeToFit()
-            return [swatch, value, NSTextField(shift ? "format" : "copy", size: 12, weight: .medium, color: .chromeText)] + (shift ? KeyCap.caps("\u{21E7}C") : [KeyCap("C")])
+            return [swatch, value, NSTextField(shift ? "Format" : "Copy", size: 12, weight: .medium, color: .chromeText), shift ? Pill.hint(["\u{21E7}C"], "") : KeyCap("C")]
         }
         readout.isHidden = hidden
+        // As a strip button relabels: the new label and caps cross-fade in, and the chip grows or shrinks about its center, additively, so
+        // it still follows the loupe.
+        guard animated, !hidden, readout.subviews != before else { return }
+        let layer = readout.layer!, grown = readout.frame.width - width
+        let fade = CATransition()
+        let move = CABasicAnimation(keyPath: "position.x")
+        move.fromValue = grown * (0.5 - layer.anchorPoint.x)
+        let resize = CABasicAnimation(keyPath: "bounds.size.width")
+        resize.fromValue = -grown
+        for animation in [fade, move, resize] {
+            animation.duration = OverlayController.motionDuration
+            animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        }
+        for animation in [move, resize] {
+            animation.isAdditive = true
+            animation.toValue = 0
+        }
+        layer.add(fade, forKey: kCATransition)
+        layer.add(move, forKey: "relabel position")
+        layer.add(resize, forKey: "relabel width")
     }
 
     /// The loupe's value for `color`: what C copies, but Swift's as its three components.
@@ -406,10 +429,13 @@ final class Guides {
                 let left = $0.minX.rounded(.down), right = $0.maxX.rounded(.up), top = $0.minY.rounded(.down), bottom = $0.maxY.rounded(.up)
                 return CGPath(rect: CGRect(x: (left - window.minX) * cell, y: Self.loupeSize - (bottom - window.minY) * cell, width: (right - left) * cell, height: (bottom - top) * cell), transform: nil)
             } : nil
-            let color = ColorFormat.average(of: image, in: CGRect(x: column, y: row, width: 1, height: 1))
+            color = ColorFormat.average(of: image, in: CGRect(x: column, y: row, width: 1, height: 1))
             swatch.layer!.backgroundColor = CGColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1)
             swatch.effectiveAppearance.performAsCurrentDrawingAppearance { swatch.layer!.borderColor = NSColor.swatchEdge.cgColor }
+            // The value fits its text, so the chip grows and shrinks with it, centered under the disc.
             value.stringValue = Self.loupeText(color, format: format)
+            value.sizeToFit()
+            readout.layOut(readout.subviews)
             let origin = Self.loupeOrigin(point: point, bounds: bounds, topInset: topInset, scale: scale, avoiding: avoiding)
             let offset = CGPoint(x: origin.x - point.x, y: origin.y - point.y)
             // A flip to the pointer's other side (past a bar or a screen edge) slides from the old offset to the new one. Only the offset animates,

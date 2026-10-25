@@ -110,14 +110,14 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: text.x - 300, y: text.y - 200))
         require(guides.loupe.position != before, "the loupe follows the pointer")
         mouse(.mouseMoved, text)
-        // The readout under the loupe is a chip: swatch, hex value, pixel coordinates, then copy with a C key cap that flashes on C (here through the flash
+        // The readout under the loupe is a chip: swatch, hex value, pixel coordinates, then Copy with a C key cap that flashes on C (here through the flash
         // hook alone, since a real C copies and closes the overlay).
         let readout = guides.readout, readoutCap = readout.subviews.compactMap { $0 as? KeyCap }.filter { $0.text == "C" }
         let loupeBox = guides.loupe.frame
-        require(!readout.isHidden && readoutCap.count == 1 && texts(in: readout).count == 3 && texts(in: readout)[0].hasPrefix("#") && texts(in: readout)[1] == "copy"
+        require(!readout.isHidden && readoutCap.count == 1 && texts(in: readout).count == 3 && texts(in: readout)[0].hasPrefix("#") && texts(in: readout)[1] == "Copy"
                     && readout.frame.height == Chrome.labelHeight && readout.frame.minY >= loupeBox.minY && readout.frame.maxY <= loupeBox.minY + Chrome.labelHeight && abs(readout.frame.midX - loupeBox.midX) <= 1
                     && overlay.view.bounds.contains(readout.frame),
-                "the loupe's readout is a chip under the disc with the value, copy, and a C cap: \(texts(in: readout)) \(readout.frame) \(loupeBox)")
+                "the loupe's readout is a chip under the disc with the value, Copy, and a C cap: \(texts(in: readout)) \(readout.frame) \(loupeBox)")
         // The pointer's pixel is a chip in the Snap tag's cluster, `[x 123  y 456] [Snap S]`: centered under the readout, clicks pass through,
         // and it follows the pointer with no animation.
         let coordinates = overlay.chrome.coordinates, snapTag = overlay.chrome.snapTag
@@ -332,11 +332,14 @@ extension DebugRun {
             for key in [Pref.rulers, Pref.loupe] { defaults.set(false, forKey: key) }
             open()
             overlay.updateGuides()
-            for layer in [guides.rulers, guides.loupe] { layer.removeAllAnimations() }
+            let cluster = [overlay.chrome.coordinates, overlay.chrome.snapTag]
+            for layer in [guides.rulers, guides.loupe] + cluster.map({ $0.layer! }) { layer.removeAllAnimations() }
             overlay.animates = true
             for key in [Pref.rulers, Pref.loupe] { defaults.set(true, forKey: key) }
             overlay.updateGuides()
             overlay.animates = false
+            require(!cluster[0].isHidden && cluster.map { $0.layer!.animation(forKey: "placement") != nil } == [animates, animates],
+                    "\(animation): the pointer cluster \(animates ? "slides" : "moves at once") to its spot under the readout")
             let rulersGroup = guides.rulers.animation(forKey: "transition") as? CAAnimationGroup
             require((rulersGroup != nil) == animates && (guides.loupe.animation(forKey: "transition") != nil) == animates, "\(animation): the layers \(animates ? "animate" : "flip at once")")
             require(animates || (guides.rulers.animationKeys() == nil && guides.loupe.animationKeys() == nil), "none: no implicit animation runs either")
@@ -358,23 +361,38 @@ extension DebugRun {
         defaults.set(true, forKey: Pref.loupe)
         open()
         mouse(.mouseMoved, flat)
-        // Holding Shift turns the readout's "copy C" into "format" with the Shift-C caps; Shift-C cycles the format, which the readout's
+        // Holding Shift turns the readout's "Copy C" into "Format" with the Shift-C caps; Shift-C cycles the format, which the readout's
         // value takes at once, never wider than the room the loupe's placement keeps beside the disc.
         func shift(_ held: Bool) {
             overlay.flagsChanged(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: held ? .shift : [], timestamp: ProcessInfo.processInfo.systemUptime,
                                                   windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!)
         }
-        let readoutCaps = { guides.readout.subviews.compactMap { $0 as? KeyCap }.map(\.text) }
+        func readoutCaps(_ view: NSView = guides.readout) -> [KeyCap] { ((view as? KeyCap).map { [$0] } ?? []) + view.subviews.flatMap(readoutCaps) }
         shift(true)
-        require(texts(in: guides.readout).dropFirst().first == "format" && readoutCaps() == ["\u{21E7}", "C"],
-                "with Shift held the readout shows format and the Shift-C caps: \(texts(in: guides.readout)) \(readoutCaps())")
+        let shiftCaps = readoutCaps()
+        require(texts(in: guides.readout).dropFirst().first == "Format" && shiftCaps.map(\.text) == ["\u{21E7}", "C"] && shiftCaps[0].pressed
+                    && shiftCaps[0].convert(shiftCaps[0].bounds, to: nil).maxX + 2 == shiftCaps[1].convert(shiftCaps[1].bounds, to: nil).minX,
+                "with Shift held the readout shows Format and the Shift-C caps 2 pt apart, Shift lit: \(texts(in: guides.readout)) \(shiftCaps.map(\.text))")
         key(8, "C", .shift)
         require(defaults.string(forKey: Pref.colorFormat) == "rgb", "Shift-C cycles to RGB")
+        require(readoutCaps().allSatisfy(\.pressed), "the readout's Shift-C caps flash on Shift-C")
         require(overlay.window.isVisible, "Shift-C leaves the overlay open")
         let rgb = "rgb(\(flatBytes[0]), \(flatBytes[1]), \(flatBytes[2]))"
         require(texts(in: guides.readout).first == rgb, "the readout shows the RGB value after Shift-C: \(texts(in: guides.readout))")
+        // With chrome motion on, the readout relabels as a strip button does: the new label and caps cross-fade in and the chip's width
+        // animates about its center.
+        let shiftWidth = guides.readout.frame.width
+        guides.readout.layer!.removeAllAnimations()
+        overlay.animates = true
         shift(false)
-        require(texts(in: guides.readout).dropFirst().first == "copy" && readoutCaps() == ["C"], "releasing Shift brings back copy and C: \(texts(in: guides.readout))")
+        overlay.animates = false
+        let relabel = guides.readout.layer!
+        let resize = relabel.animation(forKey: "relabel width") as? CABasicAnimation, move = relabel.animation(forKey: "relabel position") as? CABasicAnimation
+        require(relabel.animation(forKey: kCATransition) != nil && resize?.fromValue as? CGFloat == shiftWidth - guides.readout.frame.width
+                    && move?.fromValue as? CGFloat == (guides.readout.frame.width - shiftWidth) * (0.5 - relabel.anchorPoint.x),
+                "releasing Shift cross-fades the readout's label and caps and animates its width about its center: \(String(describing: resize?.fromValue)) \(String(describing: move?.fromValue))")
+        relabel.removeAllAnimations()
+        require(texts(in: guides.readout).dropFirst().first == "Copy" && readoutCaps().map(\.text) == ["C"], "releasing Shift brings back Copy and C: \(texts(in: guides.readout))")
         key(8, "c")
         require(pasteboard.string(forType: .string) == rgb, "C copies in RGB after Shift-C")
         for (expected, prefix) in [("hsl", "hsl("), ("swift", "0."), ("hex", "#")] {
@@ -385,6 +403,10 @@ extension DebugRun {
             require(defaults.string(forKey: Pref.colorFormat) == expected, "Shift-C cycles to \(expected)")
             require(texts(in: guides.readout).first?.hasPrefix(prefix) == true && guides.readout.frame.width <= Guides.loupeSize + 2 * Guides.readoutOverhang,
                     "the readout shows \(expected) within the loupe's room: \(texts(in: guides.readout)) \(guides.readout.frame.width)")
+            // The value fits its text, shorter than the format's widest (hsl(359, 100%, 100%)), so no gap opens before Format.
+            let valueField = guides.readout.subviews.compactMap { $0 as? NSTextField }[0]
+            require(valueField.frame.width == NSTextField(valueField.stringValue, size: 12, mono: true, color: .chromeText).frame.width,
+                    "the readout's \(expected) value fits its text: \(valueField.stringValue) \(valueField.frame.width)")
             shift(false)
             overlay.dismiss()
         }
