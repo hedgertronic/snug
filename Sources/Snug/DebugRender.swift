@@ -955,7 +955,7 @@ extension DebugRun {
     /// when another process writes `SnugMenuBarIcon`.
     static func renderMenuBarIcons(into directory: URL) async throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let variants = ["a", "d"]
+        let variants = ["a", "d", "e", "f", "g", "h"]
         let cells: [(scale: Int, dark: Bool)] = [(1, false), (2, false), (1, true), (2, true)]
         let sheet = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 40 + 304 * cells.count, pixelsHigh: 348 * variants.count, bitsPerSample: 8,
                                      samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
@@ -979,6 +979,7 @@ extension DebugRun {
                 (cell.dark ? NSColor.white : NSColor.black).set()
                 CGRect(origin: .zero, size: icon.size).fill(using: .sourceIn)
                 NSGraphicsContext.restoreGraphicsState()
+                try small.representation(using: .png, properties: [:])!.write(to: directory.appending(path: "\(variant)-\(cell.scale)x-\(cell.dark ? "dark" : "light").png"))
                 let tinted = NSImage(size: CGSize(width: pixels, height: pixels))
                 tinted.addRepresentation(small)
                 let x = CGFloat(40 + 304 * column)
