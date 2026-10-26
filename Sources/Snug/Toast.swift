@@ -300,6 +300,7 @@ final class Toast: NSPanel, NSDraggingSource {
         screenArea = (NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main!).visibleFrame
         let position = defaults.string(forKey: Pref.toastPosition)!
         let origin = switch position {
+        case "bottomLeft": NSPoint(x: screenArea.minX + 20, y: screenArea.minY + 48)
         case "bottomRight": NSPoint(x: screenArea.maxX - size.width - 20, y: screenArea.minY + 48)
         case "topRight": NSPoint(x: screenArea.maxX - size.width - 20, y: screenArea.maxY - size.height - 20)
         default: NSPoint(x: (screenArea.midX - size.width / 2).rounded(), y: screenArea.minY + 48)

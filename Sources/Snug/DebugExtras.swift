@@ -831,6 +831,8 @@ extension DebugRun {
         let bottomRight = toast { $0.set("bottomRight", forKey: Pref.toastPosition) }, topRight = toast { $0.set("topRight", forKey: Pref.toastPosition) }
         require(bottomRight.frame.minX > plain.frame.minX && bottomRight.frame.minY == plain.frame.minY && topRight.frame.minX == bottomRight.frame.minX && topRight.frame.minY > bottomRight.frame.minY,
                 "the position setting moves the toast: \(plain.frame) \(bottomRight.frame) \(topRight.frame)")
+        let bottomLeft = toast { $0.set("bottomLeft", forKey: Pref.toastPosition) }
+        require(bottomLeft.frame.minX < plain.frame.minX && bottomLeft.frame.minY == plain.frame.minY, "Bottom left sits left of center at the same height: \(bottomLeft.frame) \(plain.frame)")
         require(topRight.preview!.frame.maxY == topRight.frame.minY && bottomRight.preview!.frame.minY == bottomRight.frame.maxY,
                 "the preview is below the capsule at the top right and above it elsewhere: \(topRight.preview!.frame) \(topRight.frame)")
         let screenArea = (NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main!).visibleFrame

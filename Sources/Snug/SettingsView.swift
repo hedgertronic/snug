@@ -146,12 +146,7 @@ private struct GeneralPane: View {
             Pane {
                 HStack(spacing: 14) {
                     Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 60, height: 60)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Wordmark(size: 28)
-                        Text("\(hotKeyCode < 0 ? "Set a shortcut to capture." : "Press \(Shortcut.label(code: hotKeyCode, modifiers: hotKeyModifiers)) to capture.")\nPress ? in the overlay for every key.")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
+                    Wordmark(size: 28)
                 }
                 Card {
                     LabeledContent("Shortcut") {
@@ -183,21 +178,16 @@ private struct GeneralPane: View {
                             opensAtLogin = SMAppService.mainApp.status == .enabled
                         }
                     }
-                    LabeledContent {
+                    LabeledContent("Play sounds") {
                         Toggle("Play sounds", isOn: $playSounds).labelsHidden().toggleStyle(.switch)
-                    } label: {
-                        detailed("Play sounds", "On a capture and a recording's start and stop.")
                     }
-                    .padding(.vertical, 4)
                 }
                 caption("Text mode")
                 Card {
-                    LabeledContent {
-                        Toggle("Read text from Chromium apps", isOn: $chromiumText).labelsHidden().toggleStyle(.switch)
-                    } label: {
-                        detailed("Read text from Chromium apps", "Turns on the app's accessibility until it quits.")
+                    LabeledContent("Chrome and Electron apps") {
+                        Toggle("Chrome and Electron apps", isOn: $chromiumText).labelsHidden().toggleStyle(.switch)
                     }
-                    .padding(.vertical, 4)
+                    .help("Reads text in Chrome, Edge, Arc, Slack, VS Code and other Chromium apps by turning on the app's accessibility until it quits.")
                 }
                 caption("Permissions")
                 // macOS sends no notification when a permission changes, so the rows re-read both every second.
@@ -304,7 +294,7 @@ private struct AppearancePane: View {
     @AppStorage(Pref.frameShadowColor) private var shadowColor = "#000000"
 
     private static let positions: [(tag: String, title: String, alignment: Alignment)] = [
-        ("bottomCenter", "Bottom center", .bottom), ("bottomRight", "Bottom right", .bottomTrailing), ("topRight", "Top right", .topTrailing)
+        ("bottomLeft", "Bottom left", .bottomLeading), ("bottomCenter", "Bottom center", .bottom), ("bottomRight", "Bottom right", .bottomTrailing), ("topRight", "Top right", .topTrailing)
     ]
 
     var body: some View {
@@ -365,7 +355,7 @@ private struct AppearancePane: View {
                     }
                     .padding(.vertical, 8)
                 }
-                    caption("Frame")
+                caption("Frame")
                 FramePreview(padding: CGFloat(framePadding), shadow: Pref.customShadow(in: .standard))
                 Card {
                     VStack(spacing: 4) {
@@ -482,6 +472,8 @@ private struct ColorMenu: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSPopUpButton {
         let popUp = NSPopUpButton(frame: .zero, pullsDown: false)
+        // The button draws its own item, so its dot can sit farther from the title than the menu's do.
+        (popUp.cell as! NSPopUpButtonCell).usesItemFromMenu = false
         popUp.target = context.coordinator
         popUp.action = #selector(Coordinator.pick)
         return popUp
@@ -503,11 +495,15 @@ private struct ColorMenu: NSViewRepresentable {
             popUp.lastItem!.image = Self.dot(Highlight.color(hex: hex))
             popUp.selectItem(at: popUp.numberOfItems - 1)
         }
+        let shown = NSMenuItem(title: popUp.selectedItem!.title, action: nil, keyEquivalent: "")
+        shown.image = Self.dot(Highlight.color(hex: hex), gap: 4)
+        (popUp.cell as! NSPopUpButtonCell).menuItem = shown
     }
 
-    private static func dot(_ color: NSColor) -> NSImage {
-        NSImage(size: NSSize(width: 12, height: 12), flipped: false) { rect in
-            let circle = NSBezierPath(ovalIn: rect.insetBy(dx: 0.5, dy: 0.5))
+    /// A 12 pt color dot, with `gap` points of clear space after it.
+    private static func dot(_ color: NSColor, gap: CGFloat = 0) -> NSImage {
+        NSImage(size: NSSize(width: 12 + gap, height: 12), flipped: false) { rect in
+            let circle = NSBezierPath(ovalIn: CGRect(x: 0, y: 0, width: 12, height: 12).insetBy(dx: 0.5, dy: 0.5))
             color.setFill()
             circle.fill()
             NSColor.black.withAlphaComponent(0.15).setStroke()
@@ -596,10 +592,6 @@ private struct KeysPane: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Every overlay key, grouped like the ? sheet. Rebinding is planned.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
                 ForEach(HelpSheet.columns, id: \.title) { column in
                     caption(column.title)
                     Card(rowHeight: 30) {
@@ -615,7 +607,7 @@ private struct KeysPane: View {
                     }
                 }
             }
-            .padding(.init(top: 10, leading: 20, bottom: 20, trailing: 20))
+            .padding(.init(top: 18, leading: 20, bottom: 20, trailing: 20))
         }
         .frame(width: SettingsTabs.width, height: SettingsTabs.tallHeight)
     }
@@ -902,35 +894,27 @@ private struct AgentPane: View {
 
     var body: some View {
         Pane {
-            Text("Cmd-Return in the overlay copies a capture for an agent, with the app, window and element it shows. Only the last capture is kept.")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
             Card {
                 LabeledContent {
-                    Button("Clear last capture") {
+                    Button("Clear") {
                         try! store.clear()
                         load()
                     }.disabled(captureId == nil)
                 } label: {
-                    detailed("Last agent capture", captureId ?? "None")
+                    detailed("Last capture", captureId ?? "None")
                 }
                 .padding(.vertical, 4)
             }
-            caption("MCP server")
+            caption("Add to Claude Code")
             Card {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Agents read your captures through Snug's MCP server. To add it to Claude Code, run:")
-                    HStack(spacing: 8) {
-                        Text(command).font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
-                        Spacer(minLength: 0)
-                        Button("Copy") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(command, forType: .string)
-                        }
+                HStack(spacing: 8) {
+                    Text(command).font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                    Spacer(minLength: 0)
+                    Button("Copy") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(command, forType: .string)
                     }
                 }
-                .padding(.vertical, 10)
             }
         }
         .fixedSize(horizontal: false, vertical: true)

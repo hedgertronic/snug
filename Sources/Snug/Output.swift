@@ -51,7 +51,7 @@ enum Pref {
     static let highlightGlow = "SnugHighlightGlow"
     /// The overlay chrome's look: "system" follows macOS, "light" and "dark" force one.
     static let overlayAppearance = "SnugOverlayAppearance"
-    /// Where the toast sits (bottomCenter, bottomRight, or topRight), and how many seconds it stays while the pointer is elsewhere
+    /// Where the toast sits (bottomLeft, bottomCenter, bottomRight, or topRight), and how many seconds it stays while the pointer is elsewhere
     /// (one of `Toast.lifetimes`: 0 shows no toast but failures, -1 keeps it until closed).
     static let toastPosition = "SnugToastPosition"
     static let toastLifetime = "SnugToastLifetime"
