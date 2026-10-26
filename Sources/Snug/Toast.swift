@@ -300,14 +300,16 @@ final class Toast: NSPanel, NSDraggingSource {
         screenArea = (NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main!).visibleFrame
         let position = defaults.string(forKey: Pref.toastPosition)!
         let origin = switch position {
+        case "topLeft": NSPoint(x: screenArea.minX + 20, y: screenArea.maxY - size.height - 20)
+        case "topCenter": NSPoint(x: (screenArea.midX - size.width / 2).rounded(), y: screenArea.maxY - size.height - 20)
+        case "topRight": NSPoint(x: screenArea.maxX - size.width - 20, y: screenArea.maxY - size.height - 20)
         case "bottomLeft": NSPoint(x: screenArea.minX + 20, y: screenArea.minY + 48)
         case "bottomRight": NSPoint(x: screenArea.maxX - size.width - 20, y: screenArea.minY + 48)
-        case "topRight": NSPoint(x: screenArea.maxX - size.width - 20, y: screenArea.maxY - size.height - 20)
         default: NSPoint(x: (screenArea.midX - size.width / 2).rounded(), y: screenArea.minY + 48)
         }
         setFrame(CGRect(x: origin.x - margin, y: origin.y - margin, width: size.width + 2 * margin, height: size.height + 2 * margin), display: false)
         anchor = frame.origin
-        fromTop = position == "topRight"
+        fromTop = position.hasPrefix("top")
         root.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
         guard let image else { return }
 

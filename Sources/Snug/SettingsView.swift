@@ -146,7 +146,12 @@ private struct GeneralPane: View {
             Pane {
                 HStack(spacing: 14) {
                     Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 60, height: 60)
-                    Wordmark(size: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Wordmark(size: 28)
+                        Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as! String)")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 Card {
                     LabeledContent("Shortcut") {
@@ -193,13 +198,13 @@ private struct GeneralPane: View {
                 // macOS sends no notification when a permission changes, so the rows re-read both every second.
                 Card {
                     TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        permission("Screen Recording", detail: "Required", granted: CGPreflightScreenCaptureAccess()) {
+                        permission("Screen Recording", granted: CGPreflightScreenCaptureAccess()) {
                             CGRequestScreenCaptureAccess()
                             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
                         }
                     }
                     TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        permission("Accessibility", detail: "Recommended, exact highlights and text", granted: AXIsProcessTrusted()) { Accessibility.requestTrust() }
+                        permission("Accessibility", granted: AXIsProcessTrusted()) { Accessibility.requestTrust() }
                     }
                 }
                 caption("About the developer")
@@ -227,17 +232,14 @@ private struct GeneralPane: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func permission(_ name: String, detail: String, granted: Bool, allow: @escaping () -> Void) -> some View {
-        LabeledContent {
+    private func permission(_ name: String, granted: Bool, allow: @escaping () -> Void) -> some View {
+        LabeledContent(name) {
             if granted {
                 Label("On", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
             } else {
                 Button("Allow", action: allow).buttonStyle(.borderedProminent)
             }
-        } label: {
-            detailed(name, detail)
         }
-        .padding(.vertical, 4)
     }
 }
 
@@ -293,10 +295,6 @@ private struct AppearancePane: View {
     @AppStorage(Pref.frameShadowAngle) private var shadowAngle = 270.0
     @AppStorage(Pref.frameShadowColor) private var shadowColor = "#000000"
 
-    private static let positions: [(tag: String, title: String, alignment: Alignment)] = [
-        ("bottomLeft", "Bottom left", .bottomLeading), ("bottomCenter", "Bottom center", .bottom), ("bottomRight", "Bottom right", .bottomTrailing), ("topRight", "Top right", .topTrailing)
-    ]
-
     var body: some View {
         ScrollView {
             Pane {
@@ -332,26 +330,10 @@ private struct AppearancePane: View {
                         .fixedSize()
                     }
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Toast position")
-                        HStack(spacing: 8) {
-                            ForEach(Self.positions, id: \.tag) { position in
-                                let selected = toastPosition == position.tag
-                                Button { toastPosition = position.tag } label: {
-                                    VStack(spacing: 5) {
-                                        ZStack(alignment: position.alignment) {
-                                            RoundedRectangle(cornerRadius: 6).fill(LinearGradient(colors: [Color(red: 0.72, green: 0.77, blue: 0.82), Color(red: 0.87, green: 0.89, blue: 0.92)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                            RoundedRectangle(cornerRadius: 3).fill(selected ? Color.accentColor : Color(white: 0.16, opacity: 0.85)).frame(width: 22, height: 9).padding(5)
-                                        }
-                                        .frame(height: 46)
-                                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.accentColor, lineWidth: 2).opacity(selected ? 1 : 0))
-                                        Text(position.title).font(.system(size: 11, weight: selected ? .semibold : .regular)).foregroundStyle(selected ? Color.accentColor : .secondary)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                            }
+                        LabeledContent("Toast position") {
+                            Text(ToastPositionPicker.spots.first { $0.tag == toastPosition }!.title).foregroundStyle(.secondary)
                         }
+                        ToastPositionPicker(tag: $toastPosition)
                     }
                     .padding(.vertical, 8)
                 }
@@ -373,7 +355,7 @@ private struct AppearancePane: View {
                         .labelsHidden()
                     }
                     .padding(.vertical, 8)
-                    LabeledContent {
+                    LabeledContent("Shadow") {
                         Picker("Shadow", selection: $frameShadow) {
                             Text("Default").tag("default")
                             Text("Custom").tag("custom")
@@ -381,15 +363,12 @@ private struct AppearancePane: View {
                         .pickerStyle(.segmented)
                         .labelsHidden()
                         .fixedSize()
-                    } label: {
-                        detailed("Shadow", frameShadow == "custom" ? "Every capture, windows too" : "Windows: the macOS shadow")
                     }
-                    .padding(.vertical, 6)
                     if frameShadow == "custom" {
                         pointSlider("Opacity", value: Binding { shadowOpacity * 100 } set: { shadowOpacity = $0 / 100 }, range: 0...100, unit: "%")
                         pointSlider("Size", value: $shadowBlur, range: 0...100, unit: " pt")
                         pointSlider("Distance", value: $shadowDistance, range: 0...64, unit: " pt")
-                        pointSlider("Angle", detail: "90\u{00B0} up, 270\u{00B0} down", value: $shadowAngle, range: 0...360, unit: "\u{00B0}")
+                        pointSlider("Angle", value: $shadowAngle, range: 0...360, unit: "\u{00B0}")
                         LabeledContent("Color") { ColorSwatch(hex: $shadowColor).fixedSize() }
                     }
                 }
@@ -398,15 +377,13 @@ private struct AppearancePane: View {
         .frame(width: SettingsTabs.width, height: SettingsTabs.tallHeight)
     }
 
-    /// A slider that keeps whole values, with its value and `unit`, and an optional detail line under its title.
-    private func pointSlider(_ title: String, detail: String? = nil, value: Binding<Double>, range: ClosedRange<Double>, unit: String) -> some View {
-        LabeledContent {
+    /// A slider that keeps whole values, with its value and `unit`.
+    private func pointSlider(_ title: String, value: Binding<Double>, range: ClosedRange<Double>, unit: String) -> some View {
+        LabeledContent(title) {
             HStack(spacing: 10) {
                 Slider(value: Binding { value.wrappedValue } set: { value.wrappedValue = $0.rounded() }, in: range).frame(width: 130)
                 Text("\(value.wrappedValue.formatted())\(unit)").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).frame(width: 54, alignment: .trailing)
             }
-        } label: {
-            if let detail { detailed(title, detail) } else { Text(title) }
         }
     }
 
@@ -418,6 +395,60 @@ private struct AppearancePane: View {
                 Text("\(Int((value.wrappedValue * 100).rounded()))%").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
             }
         }
+    }
+}
+
+/// The toast's place on a mock screen: drag the toast, or click anywhere, and it snaps to the nearest of six spots, the corners and the
+/// middle of the top and bottom edges. The spots show as dashed outlines, brighter while dragging.
+private struct ToastPositionPicker: View {
+    @Binding var tag: String
+    @State private var dragged: CGPoint?
+
+    static let spots: [(tag: String, title: String, unit: UnitPoint)] = [
+        ("topLeft", "Top left", .topLeading), ("topCenter", "Top center", .top), ("topRight", "Top right", .topTrailing),
+        ("bottomLeft", "Bottom left", .bottomLeading), ("bottomCenter", "Bottom center", .bottom), ("bottomRight", "Bottom right", .bottomTrailing)
+    ]
+    private static let toast = CGSize(width: 44, height: 14)
+    private static let menuBar: CGFloat = 10
+
+    var body: some View {
+        GeometryReader { geometry in
+            let size = geometry.size
+            // A spot's toast center: 8 pt in from the screen's sides and bottom, and from the menu bar at the top.
+            let center = { (unit: UnitPoint) in
+                CGPoint(x: 8 + Self.toast.width / 2 + (size.width - 16 - Self.toast.width) * unit.x,
+                        y: Self.menuBar + 8 + Self.toast.height / 2 + (size.height - Self.menuBar - 16 - Self.toast.height) * unit.y)
+            }
+            let nearest = { (point: CGPoint) in Self.spots.min { hypot(center($0.unit).x - point.x, center($0.unit).y - point.y) < hypot(center($1.unit).x - point.x, center($1.unit).y - point.y) }! }
+            ZStack(alignment: .topLeading) {
+                LinearGradient(colors: [Color(red: 0.72, green: 0.77, blue: 0.82), Color(red: 0.87, green: 0.89, blue: 0.92)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                Rectangle().fill(.white.opacity(0.55)).frame(height: Self.menuBar)
+                ForEach(Self.spots, id: \.tag) { spot in
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(Color(white: 0.16).opacity(dragged == nil ? 0.25 : 0.5), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+                        .frame(width: Self.toast.width, height: Self.toast.height)
+                        .position(center(spot.unit))
+                }
+                RoundedRectangle(cornerRadius: 4).fill(Color.accentColor)
+                    .frame(width: Self.toast.width, height: Self.toast.height)
+                    .shadow(color: .black.opacity(0.25), radius: dragged == nil ? 1 : 4, y: 1)
+                    .position(dragged ?? center(Self.spots.first { $0.tag == tag }!.unit))
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { drag in
+                    dragged = CGPoint(x: min(max(drag.location.x, Self.toast.width / 2), size.width - Self.toast.width / 2),
+                                      y: min(max(drag.location.y, Self.menuBar + Self.toast.height / 2), size.height - Self.toast.height / 2))
+                }
+                .onEnded { drag in
+                    withAnimation(.spring(duration: 0.3)) {
+                        tag = nearest(drag.location).tag
+                        dragged = nil
+                    }
+                })
+        }
+        .frame(height: 150)
     }
 }
 

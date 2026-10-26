@@ -284,7 +284,6 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Capture Text", action: #selector(copyTextFromMenu), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
-        menu.addItem(withTitle: "About Snug", action: #selector(showAbout), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Snug", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         return menu
@@ -303,13 +302,6 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     }
 
     /// The standard About panel, its credits a link to Snug's Ko-fi page.
-    @objc private func showAbout() {
-        NSApp.activate()
-        let credits = NSAttributedString(string: "Buy me a bag of sunflower seeds", attributes: [.link: URL(string: "https://ko-fi.com/hedgertronic")!,
-                                                                                                .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)])
-        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
-    }
-
     @objc private func copyTextFromMenu() { capture(text: true) }
 
     // MARK: Capture
