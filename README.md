@@ -2,7 +2,7 @@
 
 Snug is a macOS screenshot app. Press one shortcut, point at what you want, and Snug picks the element under the pointer (a window, a sidebar row, a button, a table) so one click or Return copies it. The same overlay copies text from images, records the screen, and hands a capture to an AI agent.
 
-Snug runs entirely on your Mac. Captures are not uploaded. Requires Apple Silicon and macOS 26 or later.
+Snug runs entirely on your Mac. Captures are not uploaded; the only network request is the update check, which reads Snug's appcast on GitHub. Requires Apple Silicon and macOS 26 or later.
 
 ## Install
 
@@ -44,7 +44,7 @@ The overlay opens in Capture mode. Press `?` in the overlay for the full key lis
 | Cmd-S / Cmd-Shift-S | Save / Save As |
 | L / R / X | Loupe / rulers / crosshair |
 
-The menu bar icon also offers Capture, Capture Text, Settings, About and Quit.
+The menu bar icon also offers Capture, Capture Text, Settings, About, Check for Updates and Quit.
 
 ## Agent handoff
 
@@ -69,7 +69,7 @@ Toggles you flip in the overlay (Loupe, Rulers, Frame, Rounded, Snap, and others
 
 ## For developers
 
-Xcode with a macOS 26 SDK and Swift 6.2 or later. No third-party packages.
+Xcode with a macOS 26 SDK and Swift 6.2 or later. One third-party package: [Sparkle](https://sparkle-project.org) 2.10.0 for updates, fetched by SwiftPM as a prebuilt binary and embedded in `Snug.app/Contents/Frameworks`.
 
 ```sh
 SNUG_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" uv run scripts/build.py   # builds build/Snug.app, the lab app and build/ScreenshotBench
@@ -82,6 +82,21 @@ A release build signs with a Developer ID Application identity, notarizes with t
 
 ```sh
 SNUG_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)" uv run scripts/build.py --release
+```
+
+### Releasing an update
+
+Snug checks `appcast.xml` on the `main` branch for updates (`SUFeedURL`), and Sparkle installs only a zip signed with the EdDSA key whose public half is `SUPublicEDKey` in `scripts/build.py`. The private key is in the login keychain of the Mac that ran Sparkle's `generate_keys`. A release:
+
+1. Bump `CFBundleShortVersionString` and `CFBundleVersion` in `scripts/build.py`. Sparkle compares `CFBundleVersion`, so it must go up every release.
+2. Run the release build above. After notarizing, it signs the zip with `sign_update` (the keychain may ask to allow access) and adds the release as the newest item in `appcast.xml`, with its download at `https://github.com/hedgertronic/snug/releases/download/vVERSION/Snug-VERSION.zip`.
+3. Create the GitHub release `vVERSION` with `build/release/Snug-VERSION.zip` attached, then commit `appcast.xml` and push it to `main`. Publish the zip first: once the appcast is on `main`, running copies offer the update.
+
+Back up the private key, since without it no installed copy accepts another update. Sparkle's tools are in `.build/artifacts/<checkout directory>/Sparkle/bin` after a build:
+
+```sh
+.build/artifacts/snug/Sparkle/bin/generate_keys -x snug-sparkle-key.txt   # export; store it in a password manager, then delete the file
+.build/artifacts/snug/Sparkle/bin/generate_keys -f snug-sparkle-key.txt   # import on another Mac
 ```
 
 Test fixtures are in `Tests/Fixtures` and `Tests/ScreenshotCoreTests/Fixtures`. The repo also holds the original detector lab (`ScreenshotLab`) and `ScreenshotBench`, the detector benchmark:
