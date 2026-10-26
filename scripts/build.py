@@ -1,8 +1,10 @@
-"""Build and package the local macOS prototype without third-party dependencies.
+"""Build and package the local macOS prototype. Snug embeds Sparkle, its one third-party dependency, for updates.
 
 With --release, Snug is also timestamped, zipped, notarized with the snug-notary keychain profile, stapled and zipped again for
-download as build/release/Snug-VERSION.zip. SNUG_SIGNING_IDENTITY must then be the Developer ID Application identity.
+download as build/release/Snug-VERSION.zip, and that zip, signed with the Sparkle EdDSA key in the login keychain, becomes the newest
+item in appcast.xml. SNUG_SIGNING_IDENTITY must then be the Developer ID Application identity.
 """
+from email.utils import formatdate
 from pathlib import Path
 import json
 import os
@@ -62,6 +64,11 @@ snug_contents = snug / "Contents"
 (snug_contents / "MacOS").mkdir(parents=True, exist_ok=True)
 (snug_contents / "Resources").mkdir(exist_ok=True)
 install_binary(binary_dir / "Snug", snug_contents / "MacOS/Snug")
+# A fresh copy of Sparkle.framework, its Versions symlinks kept, so nothing from an earlier Sparkle stays behind.
+framework = snug_contents / "Frameworks/Sparkle.framework"
+if framework.exists():
+    shutil.rmtree(framework)
+subprocess.run(["ditto", str(binary_dir / "Sparkle.framework"), str(framework)], check=True)
 # Every icon size is scaled down from the 1024 master.
 master = root / "brand/snug-icon-plum-coral-1024.png"
 with tempfile.TemporaryDirectory() as scratch:
@@ -93,12 +100,22 @@ snug_info = {
     "NSPrincipalClass": "NSApplication",
     "NSHighResolutionCapable": True,
     "NSScreenCaptureUsageDescription": "Snug freezes the display under the pointer so you can choose what to copy.",
+    "SUFeedURL": "https://raw.githubusercontent.com/hedgertronic/snug/main/appcast.xml",
+    "SUPublicEDKey": "ZEuRf2celsTZdW8b4sBNlKNOXeqiNkawPIPmQE4mgWg=",
 }
 with (snug_contents / "Info.plist").open("wb") as stream:
     plistlib.dump(snug_info, stream)
-# The hardened runtime is on in every build, so local builds run under the same rules as a notarized release.
-subprocess.run(["codesign", "--force", "--options", "runtime", *(["--timestamp"] if release else []), "--sign", signing_identity, str(snug)], check=True)
-subprocess.run(["codesign", "--verify", "--strict", str(snug)], check=True)
+# The hardened runtime is on in every build, so local builds run under the same rules as a notarized release. Signing goes inside out,
+# as Sparkle's docs sign it: Sparkle's XPC services and helpers, then the framework, then the app.
+codesign = ["codesign", "--force", "--options", "runtime", *(["--timestamp"] if release else []), "--sign", signing_identity]
+sparkle = framework / "Versions/B"
+subprocess.run([*codesign, str(sparkle / "XPCServices/Installer.xpc")], check=True)
+subprocess.run([*codesign, "--preserve-metadata=entitlements", str(sparkle / "XPCServices/Downloader.xpc")], check=True)
+subprocess.run([*codesign, str(sparkle / "Autoupdate")], check=True)
+subprocess.run([*codesign, str(sparkle / "Updater.app")], check=True)
+subprocess.run([*codesign, str(framework)], check=True)
+subprocess.run([*codesign, str(snug)], check=True)
+subprocess.run(["codesign", "--verify", "--deep", "--strict", str(snug)], check=True)
 if release:
     archive = root / f"build/release/Snug-{snug_info['CFBundleShortVersionString']}.zip"
     subprocess.run(["ditto", "-c", "-k", "--keepParent", str(snug), str(archive)], check=True)
@@ -112,9 +129,34 @@ if release:
     # The download holds the stapled app, so Gatekeeper accepts it offline.
     subprocess.run(["ditto", "-c", "-k", "--keepParent", str(snug), str(archive)], check=True)
     subprocess.run(["spctl", "--assess", "--type", "execute", "--verbose", str(snug)], check=True)
+    # Sparkle's tools come with its SwiftPM artifact. sign_update prints the zip's EdDSA signature and length as enclosure attributes.
+    sign_update = root / ".build/artifacts" / root.name.lower() / "Sparkle/bin/sign_update"
+    signature = subprocess.run([str(sign_update), str(archive)], check=True, text=True, capture_output=True).stdout.strip()
+    version = snug_info["CFBundleShortVersionString"]
+    appcast = root / "appcast.xml"
+    if not appcast.exists():
+        appcast.write_text('<?xml version="1.0" encoding="utf-8"?>\n'
+                           '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">\n'
+                           '    <channel>\n        <title>Snug</title>\n    </channel>\n</rss>\n')
+    feed = appcast.read_text()
+    # Sparkle compares CFBundleVersion, so each release needs a new one.
+    if f"<sparkle:version>{snug_info['CFBundleVersion']}</sparkle:version>" in feed:
+        sys.exit(f"appcast.xml already has CFBundleVersion {snug_info['CFBundleVersion']}; bump it and CFBundleShortVersionString")
+    # The newest item comes first, right under the channel title.
+    item = f"""
+        <item>
+            <title>{version}</title>
+            <pubDate>{formatdate()}</pubDate>
+            <sparkle:version>{snug_info['CFBundleVersion']}</sparkle:version>
+            <sparkle:shortVersionString>{version}</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>{snug_info['LSMinimumSystemVersion']}</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/hedgertronic/snug/releases/download/v{version}/{archive.name}" {signature} type="application/octet-stream"/>
+        </item>"""
+    appcast.write_text(feed.replace("<title>Snug</title>", "<title>Snug</title>" + item, 1))
     # Only the zip stays, so Spotlight and Launch Services find one Snug: build/Snug.app.
     shutil.rmtree(snug)
     print(f"Release: {archive}")
+    print(f"Appcast: {appcast}")
 print(f"Local app: {app}")
 print(f"Snug: {archive if release else snug}")
 print(f"Benchmark: {root / 'build/ScreenshotBench'}")

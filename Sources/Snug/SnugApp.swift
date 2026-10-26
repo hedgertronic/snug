@@ -1,6 +1,7 @@
 import AppKit
 import ImageIO
 import ScreenshotCore
+import Sparkle
 import SwiftUI
 
 @main
@@ -20,6 +21,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         didSet { statusItem.map { Self.showRecording(recording != nil, in: $0.menu!) } }
     }
     private var iconObservation: NSKeyValueObservation?
+    /// Sparkle's updater, made only when Snug launches for real, so debug runs never check for updates or ask about automatic checks.
+    private var updater: SPUStandardUpdaterController?
 
     static func main() {
         if CommandLine.arguments.contains("--mcp") { MCPServer.run() }
@@ -126,6 +129,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         if let id = Bundle.main.bundleIdentifier, NSRunningApplication.runningApplications(withBundleIdentifier: id).contains(where: { $0 != .current }) {
             return NSApp.terminate(nil)
         }
+        updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
         installStatusItem()
         // Snug has no main menu, where Cmd-W usually closes a window, so Cmd-W closes Settings and the welcome window here. A shortcut
         // field that is recording takes the press instead.
@@ -187,6 +191,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         iconObservation = Self.observeMenuBarIcon(on: item.button!, defaults: .standard)
         let menu = Self.makeMenu(defaults: .standard)
         captureItem = menu.items[0]
+        // The updater enables Check for Updates while it can check.
+        menu.item(withTitle: "Check for Updates...")!.target = updater
         item.menu = menu
         statusItem = item
     }
@@ -284,6 +290,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Capture Text", action: #selector(copyTextFromMenu), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
+        menu.addItem(withTitle: "Check for Updates...", action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Snug", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         return menu
