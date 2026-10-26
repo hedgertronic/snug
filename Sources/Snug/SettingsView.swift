@@ -314,28 +314,29 @@ private struct AppearancePane: View {
                 caption("Highlight")
                 OverlayPreview(appearance: overlayAppearance, color: Highlight.color(hex: highlightColor), fill: highlightFill, fade: highlightFade, glow: highlightGlow)
                 Card {
-                    LabeledContent("Color") { ColorMenu(hex: $highlightColor).fixedSize() }
+                    ColorChoices(hex: $highlightColor).padding(.vertical, 8)
                     slider("Fill", value: $highlightFill, range: 0...0.3)
                     slider("Background fade", value: $highlightFade, range: 0...0.6)
                     slider("Glow", value: $highlightGlow, range: 0...1)
                 }
                 caption("Toast")
+                ToastPositionPicker(tag: $toastPosition)
                 Card {
-                    LabeledContent("Toast duration") {
-                        Picker("Toast duration", selection: $toastLifetime) {
-                            ForEach(Toast.lifetimes, id: \.self) { Text($0 < 0 ? "Forever" : "\($0) s").tag($0) }
+                    // The lifetimes as evenly spaced stops; 0 shows only failure toasts.
+                    LabeledContent("Duration") {
+                        HStack(spacing: 10) {
+                            Slider(value: Binding { Double(Toast.lifetimes.firstIndex(of: toastLifetime)!) } set: { toastLifetime = Toast.lifetimes[Int($0.rounded())] },
+                                   in: 0...Double(Toast.lifetimes.count - 1)) {
+                                Text("Duration")
+                            } ticks: {
+                                SliderTickContentForEach(Toast.lifetimes.indices.map(Double.init), id: \.self) { SliderTick($0) }
+                            }
+                            .labelsHidden()
+                            .frame(width: 150)
+                            Text(toastLifetime < 0 ? "Forever" : toastLifetime == 0 ? "Off" : "\(toastLifetime) s")
+                                .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).frame(width: 54, alignment: .trailing)
                         }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .fixedSize()
                     }
-                    VStack(alignment: .leading, spacing: 8) {
-                        LabeledContent("Toast position") {
-                            Text(ToastPositionPicker.spots.first { $0.tag == toastPosition }!.title).foregroundStyle(.secondary)
-                        }
-                        ToastPositionPicker(tag: $toastPosition)
-                    }
-                    .padding(.vertical, 8)
                 }
                 caption("Frame")
                 FramePreview(padding: CGFloat(framePadding), shadow: Pref.customShadow(in: .standard))
@@ -403,6 +404,7 @@ private struct AppearancePane: View {
 private struct ToastPositionPicker: View {
     @Binding var tag: String
     @State private var dragged: CGPoint?
+    @Environment(\.colorScheme) private var colorScheme
 
     static let spots: [(tag: String, title: String, unit: UnitPoint)] = [
         ("topLeft", "Top left", .topLeading), ("topCenter", "Top center", .top), ("topRight", "Top right", .topTrailing),
@@ -420,12 +422,19 @@ private struct ToastPositionPicker: View {
                         y: Self.menuBar + 8 + Self.toast.height / 2 + (size.height - Self.menuBar - 16 - Self.toast.height) * unit.y)
             }
             let nearest = { (point: CGPoint) in Self.spots.min { hypot(center($0.unit).x - point.x, center($0.unit).y - point.y) < hypot(center($1.unit).x - point.x, center($1.unit).y - point.y) }! }
+            let dark = colorScheme == .dark
             ZStack(alignment: .topLeading) {
-                LinearGradient(colors: [Color(red: 0.72, green: 0.77, blue: 0.82), Color(red: 0.87, green: 0.89, blue: 0.92)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                Rectangle().fill(.white.opacity(0.55)).frame(height: Self.menuBar)
+                LinearGradient(colors: dark ? [Color(red: 0.16, green: 0.18, blue: 0.24), Color(red: 0.27, green: 0.29, blue: 0.36)]
+                                            : [Color(red: 0.60, green: 0.68, blue: 0.79), Color(red: 0.80, green: 0.84, blue: 0.91)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                Rectangle().fill(dark ? Color.black.opacity(0.35) : Color.white.opacity(0.6)).frame(height: Self.menuBar)
+                Text(Self.spots.first { $0.tag == tag }!.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(dark ? Color.white.opacity(0.7) : Color.black.opacity(0.55))
+                    .position(x: size.width / 2, y: (size.height + Self.menuBar) / 2)
                 ForEach(Self.spots, id: \.tag) { spot in
                     RoundedRectangle(cornerRadius: 4)
-                        .strokeBorder(Color(white: 0.16).opacity(dragged == nil ? 0.25 : 0.5), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+                        .strokeBorder((dark ? Color.white : Color.black).opacity(dragged == nil ? 0.35 : 0.6), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
                         .frame(width: Self.toast.width, height: Self.toast.height)
                         .position(center(spot.unit))
                 }
@@ -434,7 +443,8 @@ private struct ToastPositionPicker: View {
                     .shadow(color: .black.opacity(0.25), radius: dragged == nil ? 1 : 4, y: 1)
                     .position(dragged ?? center(Self.spots.first { $0.tag == tag }!.unit))
             }
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(.quaternary, lineWidth: 0.5))
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0)
                 .onChanged { drag in
@@ -448,7 +458,7 @@ private struct ToastPositionPicker: View {
                     }
                 })
         }
-        .frame(height: 150)
+        .frame(height: 140)
     }
 }
 
@@ -457,14 +467,15 @@ private struct ToastPositionPicker: View {
 struct FramePreview: View {
     let padding: CGFloat
     let shadow: OutputFrame.Shadow?
+    @Environment(\.colorScheme) private var colorScheme
 
-    /// A 100 x 60 pt window at 2x: a white body under a gray title bar with the three window buttons.
-    private static let card: CGImage = {
+    /// A 100 x 60 pt window at 2x, light or dark: a body under a title bar with the three window buttons.
+    private static let cards = [false, true].map { dark in
         let context = CGContext(data: nil, width: 200, height: 120, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        context.setFillColor(CGColor(gray: 1, alpha: 1))
+        context.setFillColor(CGColor(gray: dark ? 0.16 : 1, alpha: 1))
         context.fill(CGRect(x: 0, y: 0, width: 200, height: 120))
-        context.setFillColor(CGColor(gray: 0.9, alpha: 1))
+        context.setFillColor(CGColor(gray: dark ? 0.24 : 0.9, alpha: 1))
         context.fill(CGRect(x: 0, y: 92, width: 200, height: 28))
         for (index, color) in [CGColor(srgbRed: 1, green: 0.37, blue: 0.34, alpha: 1), CGColor(srgbRed: 1, green: 0.74, blue: 0.18, alpha: 1),
                                CGColor(srgbRed: 0.16, green: 0.79, blue: 0.25, alpha: 1)].enumerated() {
@@ -472,16 +483,18 @@ struct FramePreview: View {
             context.fillEllipse(in: CGRect(x: 14 + index * 20, y: 100, width: 12, height: 12))
         }
         return context.makeImage()!
-    }()
+    }
 
     var body: some View {
-        let output = try! OutputFrame.render(Self.card, crop: CGRect(x: 0, y: 0, width: Self.card.width, height: Self.card.height), scale: 2, padding: padding, shadow: shadow)
+        let dark = colorScheme == .dark
+        let card = Self.cards[dark ? 1 : 0]
+        let output = try! OutputFrame.render(card, crop: CGRect(x: 0, y: 0, width: card.width, height: card.height), scale: 2, padding: padding, shadow: shadow)
         Image(decorative: output, scale: 2).resizable().scaledToFit()
             .background(Canvas { context, size in
-                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(white: 0.97)))
+                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(white: dark ? 0.5 : 0.97)))
                 for row in 0..<Int(size.height / 6) + 1 {
                     for column in 0..<Int(size.width / 6) + 1 where (row + column) % 2 == 0 {
-                        context.fill(Path(CGRect(x: column * 6, y: row * 6, width: 6, height: 6)), with: .color(Color(white: 0.88)))
+                        context.fill(Path(CGRect(x: column * 6, y: row * 6, width: 6, height: 6)), with: .color(Color(white: dark ? 0.42 : 0.86)))
                     }
                 }
             })
@@ -489,77 +502,45 @@ struct FramePreview: View {
             .padding(10)
             .frame(maxWidth: .infinity)
             .frame(height: 180)
-            .background(Color(white: 0.8))
+            .background(Color(white: dark ? 0.3 : 0.72))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(.quaternary, lineWidth: 0.5))
     }
 }
 
-/// The highlight color as a pop-up: the system accent, the eight macOS accents with a color dot each, then "Custom..." for the color panel.
-private struct ColorMenu: NSViewRepresentable {
+/// The highlight color as a row of circles, like the accent colors in System Settings: the system accent, the eight macOS accents, then
+/// a color wheel that opens the color panel and shows the picked color once it is the choice. The chosen circle has a ring; its name is above.
+private struct ColorChoices: View {
     @Binding var hex: String
 
-    func makeCoordinator() -> Coordinator { Coordinator(hex: $hex) }
-
-    func makeNSView(context: Context) -> NSPopUpButton {
-        let popUp = NSPopUpButton(frame: .zero, pullsDown: false)
-        // The button draws its own item, so its dot can sit farther from the title than the menu's do.
-        (popUp.cell as! NSPopUpButtonCell).usesItemFromMenu = false
-        popUp.target = context.coordinator
-        popUp.action = #selector(Coordinator.pick)
-        return popUp
-    }
-
-    func updateNSView(_ popUp: NSPopUpButton, context: Context) {
-        context.coordinator.hex = $hex
-        popUp.removeAllItems()
-        for preset in Highlight.presets {
-            popUp.addItem(withTitle: preset.name)
-            popUp.lastItem!.image = Self.dot(Highlight.color(hex: preset.hex))
-            popUp.lastItem!.representedObject = preset.hex
-        }
-        popUp.addItem(withTitle: "Custom...")
-        let selected = popUp.indexOfItem(withRepresentedObject: hex)
-        if selected >= 0 {
-            popUp.selectItem(at: selected)
-        } else {
-            popUp.lastItem!.image = Self.dot(Highlight.color(hex: hex))
-            popUp.selectItem(at: popUp.numberOfItems - 1)
-        }
-        let shown = NSMenuItem(title: popUp.selectedItem!.title, action: nil, keyEquivalent: "")
-        shown.image = Self.dot(Highlight.color(hex: hex), gap: 4)
-        (popUp.cell as! NSPopUpButtonCell).menuItem = shown
-    }
-
-    /// A 12 pt color dot, with `gap` points of clear space after it.
-    private static func dot(_ color: NSColor, gap: CGFloat = 0) -> NSImage {
-        NSImage(size: NSSize(width: 12 + gap, height: 12), flipped: false) { rect in
-            let circle = NSBezierPath(ovalIn: CGRect(x: 0, y: 0, width: 12, height: 12).insetBy(dx: 0.5, dy: 0.5))
-            color.setFill()
-            circle.fill()
-            NSColor.black.withAlphaComponent(0.15).setStroke()
-            circle.stroke()
-            return true
-        }
-    }
-
-    final class Coordinator: ColorPanelTarget {
-        @objc func pick(_ popUp: NSPopUpButton) {
-            if let preset = popUp.selectedItem!.representedObject as? String {
-                hex.wrappedValue = preset
-                return
+    var body: some View {
+        let preset = Highlight.presets.first { $0.hex == hex }
+        VStack(alignment: .leading, spacing: 10) {
+            LabeledContent("Color") { Text(preset?.name ?? "Custom").foregroundStyle(.secondary) }
+            HStack(spacing: 0) {
+                ForEach(Highlight.presets, id: \.hex) { preset in
+                    Button { hex = preset.hex } label: {
+                        Circle().fill(Color(nsColor: Highlight.color(hex: preset.hex))).overlay(Circle().stroke(.black.opacity(0.15), lineWidth: 0.5))
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: 20, height: 20)
+                    .overlay(Circle().stroke(Color(nsColor: Highlight.color(hex: preset.hex)), lineWidth: 2).padding(-4).opacity(hex == preset.hex ? 1 : 0))
+                    .help(preset.name)
+                    .accessibilityLabel(preset.name)
+                    Spacer(minLength: 0)
+                }
+                ColorSwatch(hex: $hex, wheel: preset != nil)
+                    .frame(width: 20, height: 20)
+                    .overlay(Circle().stroke(Color(nsColor: Highlight.color(hex: hex)), lineWidth: 2).padding(-4).opacity(preset == nil ? 1 : 0))
+                    .help("Custom")
             }
-            // Until a color is picked, the menu keeps showing the current choice.
-            let current = popUp.indexOfItem(withRepresentedObject: hex.wrappedValue)
-            if current >= 0 { popUp.selectItem(at: current) }
-            take()
-            NSColorPanel.shared.orderFront(nil)
+            .padding(.horizontal, 4)
         }
     }
 }
 
 /// The shared color panel's client: `take` makes this the panel's target and its only writer, so a color picked in the panel changes
-/// the setting of whichever control opened it last (the highlight menu or the shadow swatch) and never the other's.
+/// the setting of whichever control opened it last (the highlight's custom circle or the shadow swatch) and never the other's.
 @MainActor
 class ColorPanelTarget: NSObject {
     private static weak var owner: ColorPanelTarget?
@@ -584,9 +565,11 @@ class ColorPanelTarget: NSObject {
     }
 }
 
-/// A color swatch button that opens the shared color panel for `hex`.
+/// A color swatch button that opens the shared color panel for `hex`: a 40 x 20 pt rounded rectangle, or with `wheel` set, a 20 pt circle
+/// that shows a color wheel when true and `hex` when false.
 struct ColorSwatch: NSViewRepresentable {
     @Binding var hex: String
+    var wheel: Bool?
 
     func makeCoordinator() -> Coordinator { Coordinator(hex: $hex) }
 
@@ -599,12 +582,23 @@ struct ColorSwatch: NSViewRepresentable {
 
     func updateNSView(_ button: NSButton, context: Context) {
         context.coordinator.hex = $hex
-        let color = Highlight.color(hex: hex)
-        button.image = NSImage(size: NSSize(width: 40, height: 20), flipped: false) { rect in
-            let swatch = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 5, yRadius: 5)
+        let color = Highlight.color(hex: hex), wheel = wheel
+        button.image = NSImage(size: NSSize(width: wheel == nil ? 40 : 20, height: 20), flipped: false) { rect in
+            let swatch = wheel == nil ? NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 5, yRadius: 5) : NSBezierPath(ovalIn: rect.insetBy(dx: 0.5, dy: 0.5))
             color.setFill()
             swatch.fill()
-            NSColor.separatorColor.setStroke()
+            if wheel == true {
+                // Twelve hue wedges from the center.
+                for step in 0..<12 {
+                    let wedge = NSBezierPath()
+                    wedge.move(to: CGPoint(x: rect.midX, y: rect.midY))
+                    wedge.appendArc(withCenter: CGPoint(x: rect.midX, y: rect.midY), radius: rect.width / 2 - 0.5, startAngle: CGFloat(step) * 30, endAngle: CGFloat(step + 1) * 30)
+                    wedge.close()
+                    NSColor(hue: CGFloat(step) / 12, saturation: 0.75, brightness: 1, alpha: 1).setFill()
+                    wedge.fill()
+                }
+            }
+            (wheel == nil ? NSColor.separatorColor : NSColor.black.withAlphaComponent(0.15)).setStroke()
             swatch.stroke()
             return true
         }
@@ -671,41 +665,19 @@ private struct KeyCapView: NSViewRepresentable {
 }
 
 /// The overlay's chrome in the look the appearance setting picks: a frozen-screen mock with the dim, the highlight, a chip, and a top-bar
-/// pill with one lit toggle. "system" shows the light look and the dark one on either side of a diagonal. The chrome is the overlay's own
-/// `Pill`, `BarButton`, and `KeyCap`, each sample forced to one appearance.
+/// pill with one lit toggle. "system" shows the look of the current system appearance. The chrome is the overlay's own `Pill`, `BarButton`,
+/// and `KeyCap`, the sample forced to one appearance.
 struct OverlayPreview: View {
     let appearance: String
     let color: NSColor
     let fill: Double
     let fade: Double
     let glow: Double
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        ZStack {
-            if appearance != "dark" { Sample(dark: false, color: color, fill: fill, fade: fade, glow: glow) }
-            if appearance == "dark" { Sample(dark: true, color: color, fill: fill, fade: fade, glow: glow) }
-            if appearance == "system" {
-                Sample(dark: true, color: color, fill: fill, fade: fade, glow: glow).mask(Diagonal())
-                Diagonal(edge: true).stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-            }
-        }
-        .frame(height: 140)
-    }
-
-    /// The lower-right half of a rectangle, cut on the diagonal from its bottom-left to its top-right corner; `edge` is the cut alone.
-    private struct Diagonal: Shape {
-        var edge = false
-
-        func path(in rect: CGRect) -> Path {
-            Path { path in
-                path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
-                path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-                if !edge {
-                    path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-                    path.closeSubpath()
-                }
-            }
-        }
+        let dark = appearance == "dark" || appearance == "system" && colorScheme == .dark
+        Sample(dark: dark, color: color, fill: fill, fade: fade, glow: glow).id(dark).frame(height: 140)
     }
 
     private struct Sample: NSViewRepresentable {

@@ -714,6 +714,8 @@ extension DebugRun {
             try rep.representation(using: .png, properties: [:])!.write(to: file)
             print(file.path, host.fittingSize)
             if item.label == "Appearance" {
+                // The checks below change these real settings; they are put back as they were.
+                let saved = [Pref.frameShadow, Pref.highlightColor, Pref.frameShadowColor].map { ($0, UserDefaults.standard.object(forKey: $0)) }
                 // The pane scrolled to its end, where the Frame section sits, with the default shadow and then a custom one.
                 for (suffix, shadow) in [("", "default"), ("-custom", "custom")] {
                     UserDefaults.standard.set(shadow, forKey: Pref.frameShadow)
@@ -727,13 +729,17 @@ extension DebugRun {
                     try rep.representation(using: .png, properties: [:])!.write(to: scrolled)
                     print(scrolled.path)
                 }
-                // The highlight menu and the shadow swatch share the color panel: whichever took it last alone writes a picked color,
+                // The highlight's custom circle and the shadow swatch share the color panel: whichever took it last alone writes a picked color,
                 // even when the other still hears the change. The panel is never ordered in.
                 let defaults = UserDefaults.standard, panel = NSColorPanel.shared
-                let menu = descendants(of: host, NSPopUpButton.self).compactMap { $0.target as? ColorPanelTarget }.first!
-                let swatch = descendants(of: host, NSButton.self).compactMap { $0.target as? ColorSwatch.Coordinator }.first!
-                for (first, second, firstKey, secondKey) in [(menu, swatch as ColorPanelTarget, Pref.highlightColor, Pref.frameShadowColor),
-                                                             (swatch, menu, Pref.frameShadowColor, Pref.highlightColor)] {
+                let swatches = descendants(of: host, NSButton.self).compactMap { $0.target as? ColorSwatch.Coordinator }
+                precondition(swatches.count == 2, "the highlight's custom circle and the custom shadow's swatch: \(swatches.count)")
+                // View order is SwiftUI's, so each control is told apart by the setting its binding reads.
+                defaults.set("#ABCDEF", forKey: Pref.highlightColor)
+                RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+                let highlight = swatches.first { $0.hex.wrappedValue == "#ABCDEF" }!, swatch = swatches.first { $0 !== highlight }!
+                for (first, second, firstKey, secondKey) in [(highlight, swatch, Pref.highlightColor, Pref.frameShadowColor),
+                                                             (swatch, highlight, Pref.frameShadowColor, Pref.highlightColor)] {
                     defaults.set("#112233", forKey: firstKey)
                     defaults.set("#445566", forKey: secondKey)
                     first.take()
@@ -746,7 +752,7 @@ extension DebugRun {
                                  + "\(String(describing: defaults.string(forKey: firstKey))) \(String(describing: defaults.string(forKey: secondKey)))")
                     print("color panel: \(secondKey) took it from \(firstKey), only \(secondKey) changed")
                 }
-                for key in [Pref.frameShadow, Pref.highlightColor, Pref.frameShadowColor] { defaults.removeObject(forKey: key) }
+                for (key, value) in saved { defaults.set(value, forKey: key) }
             }
             guard item.label == "General" else { continue }
             let field = descendants(of: host, ShortcutRecorder.Field.self).first!
