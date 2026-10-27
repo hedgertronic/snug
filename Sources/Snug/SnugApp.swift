@@ -212,9 +212,9 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     /// "h": the app tile, solid, in the logo's proportions, with its dashed arch and the band's curve cut out; the band's top sits
     /// at about half the tile's height in the middle and 53% from the top at the sides. At 2x the arch's round-capped dashes mirror around
     /// one centered on top; at 1x they are 2 px on top and 2 px down each leg with 1 px gaps, and the curve is a 1 px step.
-    /// "p", the default: "h" with the pillow, the part of the tile inside the arch, at 50% opacity and the rest solid. At 2x the pillow is the arch's
-    /// centerline closed into a rounded rect, with the blanket below the band's cut kept solid; at 1x it is x 5-12, y 9-13. Template images keep partial alpha, so the
-    /// pillow shows as a lighter patch.
+    /// "p", the default: "h" in three opacities, the tile solid, the blanket below the band's cut at 70% and the pillow, the part of the tile inside
+    /// the arch, at 40%. At 2x the pillow is the arch's centerline closed into a rounded rect; at 1x it is x 5-12, y 9-13. Template images keep
+    /// partial alpha, so the blanket and pillow show as lighter patches.
     static func menuBarIcon(_ variant: String) -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18))
         for scale in [1, 2] {
@@ -276,6 +276,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     cut.stroke()
                 }
             case "p":
+                let (pillowAlpha, blanketAlpha): (CGFloat, CGFloat) = (0.4, 0.7)
                 let tile = NSBezierPath(roundedRect: CGRect(x: 1, y: 1, width: 16, height: 16), xRadius: 4, yRadius: 4)
                 let context = NSGraphicsContext.current!
                 if scale == 1 {
@@ -291,7 +292,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                         for y in 0..<18 {
                             let coverage = mask.colorAt(x: x, y: 17 - y)!.alphaComponent
                             guard coverage > 0 else { continue }
-                            NSColor(white: 0, alpha: ((5...12).contains(x) && (9...13).contains(y) ? 0.5 : 1) * coverage).setFill()
+                            let part = (5...12).contains(x) && (9...13).contains(y) ? pillowAlpha : y < ((4...13).contains(x) ? 8 : 7) ? blanketAlpha : 1
+                            NSColor(white: 0, alpha: part * coverage).setFill()
                             CGRect(x: x, y: y, width: 1, height: 1).fill()
                         }
                     }
@@ -307,16 +309,16 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     context.compositingOperation = .copy
                     NSColor.black.setFill()
                     CGRect(x: 0, y: 0, width: 18, height: 18).fill()
-                    NSColor(white: 0, alpha: 0.5).setFill()
+                    NSColor(white: 0, alpha: pillowAlpha).setFill()
                     NSBezierPath(roundedRect: CGRect(x: 4.75, y: 2, width: 8.5, height: 12.25), xRadius: 2.25, yRadius: 2.25).fill()
-                    // The blanket below the band's cut stays solid.
+                    // The blanket below the band's cut, between the pillow and the tile.
                     let blanket = NSBezierPath()
                     blanket.move(to: CGPoint(x: 0, y: 7.6))
                     blanket.curve(to: CGPoint(x: 18, y: 7.6), controlPoint1: CGPoint(x: 5.4, y: 9.6), controlPoint2: CGPoint(x: 12.6, y: 9.6))
                     blanket.line(to: CGPoint(x: 18, y: 0))
                     blanket.line(to: CGPoint(x: 0, y: 0))
                     blanket.close()
-                    NSColor.black.setFill()
+                    NSColor(white: 0, alpha: blanketAlpha).setFill()
                     blanket.fill()
                     let outside = NSBezierPath(rect: CGRect(x: 0, y: 0, width: 18, height: 18))
                     outside.append(tile)

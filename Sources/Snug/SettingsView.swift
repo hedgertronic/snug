@@ -36,8 +36,8 @@ enum Shortcut {
 @MainActor
 enum SettingsTabs {
     static let width: CGFloat = 400
-    /// The Appearance and Keys panes' height; both scroll what is taller, so the two tabs are the same size.
-    static let tallHeight: CGFloat = 641
+    /// Every pane's height; each scrolls what is taller, so the tabs are the same size.
+    static let tallHeight: CGFloat = 540
     static let panes: [(title: String, symbol: String, view: AnyView)] = [
         ("General", "gearshape", AnyView(GeneralPane())),
         ("Appearance", "paintpalette", AnyView(AppearancePane())),
@@ -130,8 +130,8 @@ private func caption(_ text: String) -> some View {
     Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 4)
 }
 
-/// The app icon and name once, then shortcut, save folder, open at login, recording, the Text mode switch, and the permissions; then About the
-/// developer: the headshot, name, a link to hedgertronic.com, a short bio, and the Ko-fi button.
+/// The app icon and name once; About the developer: the headshot, name, a link to hedgertronic.com, a short bio, and the Ko-fi button; then
+/// shortcut, save folder, open at login, sounds, the Text mode switch, the permissions, and the agent's last capture and command.
 private struct GeneralPane: View {
     @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
@@ -141,7 +141,7 @@ private struct GeneralPane: View {
     @State private var opensAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
-        VStack(spacing: 0) {
+        ScrollView {
             Pane {
                 HStack(spacing: 14) {
                     Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 60, height: 60)
@@ -151,6 +151,26 @@ private struct GeneralPane: View {
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                     }
+                }
+                caption("About the developer")
+                Card {
+                    // The 200 px headshot drawn at 44 pt stays sharp at 2x.
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(nsImage: NSImage(data: headshotJPEG)!).resizable().interpolation(.high).frame(width: 44, height: 44).clipShape(Circle())
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text("Josh Hejka").font(.system(size: 13, weight: .semibold))
+                                Spacer(minLength: 8)
+                                MakerButton()
+                            }
+                            Text("Professional pitcher and R&D analyst at Driveline Baseball. Snug is one of my side projects.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(.vertical, 12)
+                    SupportButton().frame(maxWidth: .infinity).padding(.vertical, 10)
                 }
                 Card {
                     LabeledContent("Shortcut") {
@@ -207,29 +227,9 @@ private struct GeneralPane: View {
                     }
                 }
                 AgentSection()
-                caption("About the developer")
-                Card {
-                    // The 200 px headshot drawn at 44 pt stays sharp at 2x.
-                    HStack(alignment: .top, spacing: 12) {
-                        Image(nsImage: NSImage(data: headshotJPEG)!).resizable().interpolation(.high).frame(width: 44, height: 44).clipShape(Circle())
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack {
-                                Text("Josh Hejka").font(.system(size: 13, weight: .semibold))
-                                Spacer(minLength: 8)
-                                MakerButton()
-                            }
-                            Text("Professional pitcher and R&D analyst at Driveline Baseball. Snug is one of my side projects.")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .padding(.vertical, 12)
-                    SupportButton().frame(maxWidth: .infinity).padding(.vertical, 10)
-                }
             }
         }
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(width: SettingsTabs.width, height: SettingsTabs.tallHeight)
     }
 
     private func permission(_ name: String, granted: Bool, allow: @escaping () -> Void) -> some View {
