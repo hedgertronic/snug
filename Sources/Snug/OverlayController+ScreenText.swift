@@ -9,7 +9,7 @@ extension OverlayController {
     func setScreenTexts(_ read: [(pid: pid_t, texts: [ScreenText])]) {
         let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
         let owners = windowIDs.map { id in info.first { $0[kCGWindowNumber as String] as? CGWindowID == id }?[kCGWindowOwnerPID as String] as? pid_t }
-        let origin = CGPoint(x: window.frame.minX, y: NSScreen.screens[0].frame.height - window.frame.maxY)
+        let origin = CGPoint(x: window.frame.minX, y: CGDisplayBounds(CGMainDisplayID()).height - window.frame.maxY)
         screenTexts = []
         text.screenSelection = nil
         for (pid, texts) in read {
@@ -29,7 +29,7 @@ extension OverlayController {
     /// the apps (`ScreenTextReader.read`).
     func enableChromiumText() {
         guard defaults.bool(forKey: Pref.chromiumText) else { return }
-        let display = CGRect(x: window.frame.minX, y: NSScreen.screens[0].frame.height - window.frame.maxY, width: window.frame.width, height: window.frame.height)
+        let display = CGRect(x: window.frame.minX, y: CGDisplayBounds(CGMainDisplayID()).height - window.frame.maxY, width: window.frame.width, height: window.frame.height)
         Task {
             for pid in await chromiumOwners(display) where chromiumRequested.insert(pid).inserted { await enableChromium(pid) }
         }

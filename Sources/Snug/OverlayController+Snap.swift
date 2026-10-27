@@ -9,7 +9,7 @@ extension OverlayController {
     func snapFrames(around rect: CGRect) async throws -> [CGRect] {
         if let snapFrameSource { return await snapFrameSource(rect) }
         guard displayID != nil, !isHeadless, AXIsProcessTrusted() else { return [] }
-        let origin = CGPoint(x: window.frame.minX, y: NSScreen.screens[0].frame.height - window.frame.maxY)
+        let origin = CGPoint(x: window.frame.minX, y: CGDisplayBounds(CGMainDisplayID()).height - window.frame.maxY)
         let inner = rect.insetBy(dx: min(3 * scale, rect.width / 4), dy: min(3 * scale, rect.height / 4))
         var fits: [CGRect] = []
         for pixel in [CGPoint(x: inner.midX, y: inner.midY), CGPoint(x: inner.minX, y: inner.minY), CGPoint(x: inner.maxX, y: inner.minY),

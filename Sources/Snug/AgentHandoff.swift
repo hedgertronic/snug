@@ -31,7 +31,7 @@ extension OverlayController {
         case _? where candidate!.id.hasPrefix("fill-"): (.fill, .geometry, candidate!.label)
         case _?: (.element, candidate!.id.hasPrefix("ax-") ? .accessibility : .geometry, candidate!.label)
         }
-        let display = CGRect(x: window.frame.minX, y: NSScreen.screens[0].frame.height - window.frame.maxY, width: window.frame.width, height: window.frame.height)
+        let display = CGRect(x: window.frame.minX, y: CGDisplayBounds(CGMainDisplayID()).height - window.frame.maxY, width: window.frame.width, height: window.frame.height)
         let global = CGRect(x: display.minX + crop.minX / scale, y: display.minY + crop.minY / scale, width: crop.width / scale, height: crop.height / scale)
         let observation = accessibilityObservations[rect]
         let (scale, displayID, capturedAt, live) = (scale, displayID, frozenAt, displayID != nil && !isHeadless)
