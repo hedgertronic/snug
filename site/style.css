@@ -249,6 +249,21 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .caps.hk .cap.flash { background: color-mix(in srgb, var(--coral) 70%, var(--key));
   box-shadow: 0 0 0 1px var(--coral), 0 0 0 var(--keyedge), 0 1px 2px -1px rgba(0, 0, 0, .4), inset 0 2px 4px rgba(42, 24, 48, .3), 0 0 22px 4px color-mix(in srgb, var(--coral) 80%, transparent); }
 
+/* The chord's pop: the group scales up and springs back while one coral ring ripples out of it and fades. Transform and opacity only,
+   on the group and a pseudo-element, so nothing beside the caps moves. */
+.caps.hk { position: relative; }
+.caps.hk::after { content: ""; position: absolute; inset: -5px -7px; border-radius: 13px; border: 2px solid var(--coral); opacity: 0; pointer-events: none; }
+.caps.hk.chord { animation: hk-pop .5s linear; }
+.caps.hk.chord::after { animation: hk-ring .5s cubic-bezier(.2, .6, .3, 1); }
+@keyframes hk-pop {
+  0% { transform: scale(1); animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
+  28% { transform: scale(1.15); animation-timing-function: ease-in-out; }
+  58% { transform: scale(.975); animation-timing-function: ease-in-out; }
+  80% { transform: scale(1.012); animation-timing-function: ease-out; }
+  100% { transform: scale(1); }
+}
+@keyframes hk-ring { 0% { transform: scale(1); opacity: .85; } 100% { transform: scale(1.7, 2); opacity: 0; } }
+
 /* feature art: the finished state is each piece's base style, so reduced motion shows a still frame */
 .art { position: relative; aspect-ratio: 200 / 124; border-radius: 16px; overflow: hidden; background: var(--bg2); box-shadow: 0 0 0 1px var(--line);
   --w-bg: var(--d-win); --w-bar: var(--d-bar); --w-fg: var(--d-fg); --w-fg2: var(--d-fg2); --w-line: var(--d-line); }
@@ -378,4 +393,5 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
   .o-toast { transition: none; }
   .pop, .q, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-btn, .rv-prog, .rv-busy, .rv-done, .rv-cur, .rv-out, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cc, .ag-bub, .card.flash .art { animation: none; }
   .caps.hk .cap { transition: none; }
+  .caps.hk.chord, .caps.hk.chord::after { animation: none; }
 }

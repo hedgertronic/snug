@@ -645,6 +645,7 @@
   if (caps) {
     const cap = {};
     for (const b of caps.querySelectorAll('[data-k]')) cap[b.dataset.k] = b;
+    caps.addEventListener('animationend', e => { if (e.target === caps) caps.classList.remove('chord'); });
     const real = { ctrl: false, shift: false, space: false };
     // A pointer press holds its cap down while the pointer is down, and for at least a short beat so a quick tap still shows.
     const tap = { ctrl: 0, shift: 0, space: 0 };
@@ -652,8 +653,11 @@
     const paint = () => { for (const k in cap) cap[k].classList.toggle('down', real[k] || !!tap[k]); };
     const fire = () => {
       for (const c of Object.values(cap)) c.classList.add('flash');
+      // The chord also pops the group: a bounce and one ring (CSS .chord, 500 ms). Restarting it drops the class, reflows, and adds it again.
+      // The flash lets go as the bounce settles; with reduced motion there is no pop and the flash is the whole effect.
+      if (!reduce) { caps.classList.remove('chord'); void caps.offsetWidth; caps.classList.add('chord'); }
       clearTimeout(fire.t);
-      fire.t = setTimeout(() => { for (const c of Object.values(cap)) c.classList.remove('flash'); }, 450);
+      fire.t = setTimeout(() => { for (const c of Object.values(cap)) c.classList.remove('flash'); }, reduce ? 450 : 320);
     };
     const name = e => e.key === 'Control' ? 'ctrl' : e.key === 'Shift' ? 'shift' : (e.code === 'Space' || e.key === ' ') ? 'space' : '';
     addEventListener('keydown', e => {
