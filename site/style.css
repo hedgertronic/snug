@@ -307,7 +307,6 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .art .ui { font: 500 10px var(--sans); fill: var(--w-fg); }
 .art .ui2 { font: 500 7.5px var(--sans); fill: var(--w-fg2); }
 .art .mono { font: 9.5px var(--mono); }
-.art .cb { fill: var(--d-chip); stroke: rgba(0, 0, 0, .15); stroke-width: .5; }
 .art .outline { fill: none; stroke: var(--hl); stroke-width: 1.5; }
 
 /* A card's Snug chrome: the hero's chip, strip and toast styles in HTML over the scene, sized by --pt (set in snug.js from the card's
@@ -344,15 +343,20 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .art .g-tag { fill: color-mix(in srgb, var(--d-acc) 18%, transparent); }
 .art .gm-a, .art .gm-a.t3 { fill: var(--d-addfg); font-weight: 700; }
 .art .gm-d { fill: var(--d-delfg); font-weight: 700; }
-.sc-scroll { transform: translateY(-102px); animation: scroll 4s infinite both; }
-@keyframes scroll { 0%, 8% { transform: none; } 80%, 99% { transform: translateY(-102px); } 100% { transform: none; } }
-.sc-cover { fill: var(--d-chip); transform-box: fill-box; transform-origin: bottom; transform: scaleY(0); animation: cover 4s infinite both; }
-@keyframes cover { 0%, 8% { transform: none; } 80%, 99% { transform: scaleY(0); } 100% { transform: none; } }
-.sc-view { transform: translateY(40.8px); animation: view 4s infinite both; }
-@keyframes view { 0%, 8% { transform: none; } 80%, 99% { transform: translateY(40.8px); } 100% { transform: none; } }
-/* the scroll fades out at the loop's end and in at its start, so the rewind is never seen */
-.seam { animation: seam 4s infinite both; }
-@keyframes seam { 0% { opacity: 0; } 5%, 93% { opacity: 1; } 98%, 100% { opacity: 0; } }
+/* G: the app's scrolling capture (OverlayController+Scroll.swift): the area's outline and, 8 pt to its right and centred on it, the minimap,
+   the stitched thumbnail at most 72 pt wide with a 1.5 pt marker on the part in view; it grows as the page scrolls. Return delivers
+   the stitched image: the outline goes and the toast shows it. A 7 s loop; the page fades back to its top while nothing else shows. */
+.sc-scroll { transform: translateY(-102px); animation: scroll 7s infinite both; }
+@keyframes scroll { 0%, 14% { transform: none; opacity: 1; animation-timing-function: ease-in-out; } 58%, 94% { transform: translateY(-102px); opacity: 1; } 96% { transform: translateY(-102px); opacity: 0; } 96.1% { transform: none; opacity: 0; } 98%, 100% { transform: none; opacity: 1; } }
+.sc-cap { animation: sccap 7s infinite both; }
+@keyframes sccap { 0%, 8% { opacity: 0; } 12%, 64% { opacity: 1; } 67%, 100% { opacity: 0; } }
+.art .sc-mbg { fill: var(--d-page); }
+.sc-mini { clip-path: inset(0 round 2.4px); animation: scmini 7s infinite both; }
+@keyframes scmini { 0%, 14% { clip-path: inset(0 0 54.3% 0 round 2.4px); animation-timing-function: ease-in-out; } 58%, 100% { clip-path: inset(0 0 0 0 round 2.4px); } }
+.sc-view { fill: none; stroke: var(--hl); stroke-width: .9; transform: translateY(39.2px); animation: scview 7s infinite both; }
+@keyframes scview { 0%, 14% { transform: none; animation-timing-function: ease-in-out; } 58%, 100% { transform: translateY(39.2px); } }
+.sc-ov .o-toast { animation: sct 7s infinite both; }
+@keyframes sct { 0%, 65% { opacity: 0; transform: translate(-50%, calc(6px * var(--pt))); animation-timing-function: ease-out; } 68.5%, 91% { opacity: 1; transform: translate(-50%, 0); animation-timing-function: ease-out; } 94.5%, 100% { opacity: 0; transform: translate(-50%, 0); } }
 /* V: a 6 s recording of a settings card as the app shows one (Recording.swift): the rest of the screen dimmed, a 2 pt red border
    3 pt outside the area with a radius of 4 that pulses once at the start, and the stop reminder under it, the elapsed time and the
    capture shortcut. The pointer clicks the Dark mode switch and the preview tile fades to dark, then it clicks again and the tile
