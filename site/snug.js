@@ -693,4 +693,45 @@
     });
     for (const t of ['pointerup', 'pointercancel', 'pointerleave']) caps.addEventListener(t, release);
   }
+  /* ---------- real keys light the matching caps on the feature cards and in the demo strip; a pointer press on a card cap is a short tap ---------- */
+  {
+    for (const k of document.querySelectorAll('.o-strip .tool[data-key] .k')) k.dataset.hold = k.parentNode.dataset.key;
+    for (const k of document.querySelectorAll('.o-strip .copy .k')) k.dataset.hold = 'enter';
+    const LETTERS = 'tvgkcu', held = new Set(), tapped = new Set();
+    const name = e => e.key === 'Meta' ? 'meta' : e.key === 'Enter' ? 'enter' : (e.key.length === 1 && LETTERS.includes(e.key.toLowerCase())) ? e.key.toLowerCase() : '';
+    const typing = t => !!(t && t.closest && t.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])'));
+    const paint = () => { for (const c of document.querySelectorAll('[data-hold]')) c.classList.toggle('down', held.has(c.dataset.hold) || tapped.has(c)); };
+    addEventListener('keydown', e => {
+      const k = name(e);
+      if (!k || typing(e.target)) return;
+      held.add(k);
+      paint();
+    });
+    addEventListener('keyup', e => {
+      const k = name(e);
+      if (!k) return;
+      held.delete(k);
+      // macOS sends no keyup for a letter released while Command is down, so letting go of Command lets go of every letter.
+      if (k === 'meta') for (const l of LETTERS) held.delete(l);
+      paint();
+    });
+    addEventListener('blur', () => { held.clear(); paint(); });
+    const MIN_TAP_MS = 140;
+    let down = null;
+    const lift = () => {
+      if (!down) return;
+      const { c, t0 } = down;
+      down = null;
+      setTimeout(() => { tapped.delete(c); paint(); }, Math.max(0, MIN_TAP_MS - (performance.now() - t0)));
+    };
+    document.addEventListener('pointerdown', e => {
+      const c = e.target.closest && e.target.closest('.card .cap[data-hold]');
+      if (!c || e.button !== 0) return;
+      lift();
+      down = { c, t0: performance.now() };
+      tapped.add(c);
+      paint();
+    });
+    for (const t of ['pointerup', 'pointercancel']) addEventListener(t, lift);
+  }
 })();

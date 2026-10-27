@@ -249,6 +249,22 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .caps.hk .cap.flash { background: color-mix(in srgb, var(--coral) 70%, var(--key));
   box-shadow: 0 0 0 1px var(--coral), 0 0 0 var(--keyedge), 0 1px 2px -1px rgba(0, 0, 0, .4), inset 0 2px 4px rgba(42, 24, 48, .3), 0 0 22px 4px color-mix(in srgb, var(--coral) 80%, transparent); }
 
+/* The feature cards' caps (and the demo strip's) light while their real key is down, and press briefly under a pointer. Every state draws the same five
+   shadows in the same order (ring, edge, drop, inset, glow) so press and release both interpolate; only transform moves a cap. */
+.card .cap[data-hold] { cursor: default; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; touch-action: manipulation;
+  box-shadow: 0 0 0 1px var(--keyline), 0 3px 0 var(--keyedge), 0 5px 12px -4px rgba(42, 24, 48, .25), inset 0 0 0 transparent, 0 0 0 0 transparent;
+  transition: transform .24s cubic-bezier(.3, 0, .2, 1), box-shadow .24s cubic-bezier(.3, 0, .2, 1), background-color .24s ease-out; }
+.card .cap[data-hold].down { transform: translateY(2px); background: color-mix(in srgb, var(--coral) 34%, var(--key));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--coral) 70%, var(--keyline)), 0 0 0 var(--keyedge), 0 1px 2px -1px rgba(42, 24, 48, .25), inset 0 2px 4px rgba(42, 24, 48, .3), 0 0 14px 1px color-mix(in srgb, var(--coral) 55%, transparent);
+  transition-duration: .07s; }
+.bb:not(.pressed) .k[data-hold] { transition: transform .24s cubic-bezier(.3, 0, .2, 1), box-shadow .24s cubic-bezier(.3, 0, .2, 1), background-color .24s ease-out; }
+.bb:not(.primary) .k[data-hold] { box-shadow: inset 0 0 0 calc(.5px * var(--pt)) var(--cap-edge), 0 calc(1px * var(--pt)) 0 var(--cap-sh), 0 0 0 0 transparent; }
+.bb.primary .k[data-hold] { box-shadow: 0 calc(1px * var(--pt)) 0 var(--cap-sh), 0 0 0 0 transparent, 0 0 0 0 transparent; }
+.bb:not(.primary) .k[data-hold].down { transform: translateY(calc(1px * var(--pt))); background: color-mix(in srgb, var(--coral) 40%, var(--cap-fill));
+  box-shadow: inset 0 0 0 calc(.5px * var(--pt)) color-mix(in srgb, var(--coral) 80%, var(--cap-edge)), 0 0 0 0 var(--cap-sh), 0 0 calc(7px * var(--pt)) calc(1px * var(--pt)) color-mix(in srgb, var(--coral) 55%, transparent); transition-duration: .07s; }
+.bb.primary .k[data-hold].down { transform: translateY(calc(1px * var(--pt))); background: color-mix(in srgb, var(--coral) 45%, #FFFFFF);
+  box-shadow: 0 0 0 calc(1px * var(--pt)) var(--coral), 0 0 0 0 var(--cap-sh), 0 0 calc(7px * var(--pt)) calc(1px * var(--pt)) color-mix(in srgb, var(--coral) 70%, transparent); transition-duration: .07s; }
+
 /* The chord's pop: the group scales up and springs back while one coral ring ripples out of it and fades. Transform and opacity only,
    on the group and a pseudo-element, so nothing beside the caps moves. */
 .caps.hk { position: relative; }
@@ -396,5 +412,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
   .o-toast { transition: none; }
   .pop, .q, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-btn, .rv-prog, .rv-busy, .rv-done, .rv-cur, .rv-out, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cc, .ag-bub, .card.flash .art { animation: none; }
   .caps.hk .cap { transition: none; }
+  .card .cap[data-hold], .bb .k[data-hold] { transition-duration: .01s; }
+  .card .cap[data-hold].down, .bb .k[data-hold].down { transform: none; }
   .caps.hk.chord, .caps.hk.chord::after { animation: none; }
 }
