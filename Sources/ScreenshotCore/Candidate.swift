@@ -119,9 +119,7 @@ public enum Detection {
                 guard existing.kind == .cell, candidate.kind == .cell else { return false }
                 let a = existing.bounds
                 let tolerance = min(6, min(a.width, a.height, rect.width, rect.height) * 0.15)
-                return overlap(a, rect) >= 0.80
-                    && abs(a.minX - rect.minX) <= tolerance && abs(a.maxX - rect.maxX) <= tolerance
-                    && abs(a.minY - rect.minY) <= tolerance && abs(a.maxY - rect.maxY) <= tolerance
+                return overlap(a, rect) >= 0.80 && a.isNear(rect, within: tolerance)
             }) else { continue }
             output.append(Candidate(id: candidate.id, label: candidate.label, bounds: rect, score: candidate.score, kind: candidate.kind, hitRegions: candidate.hitRegions))
         }

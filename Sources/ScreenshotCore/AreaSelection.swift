@@ -207,7 +207,6 @@ public struct AreaSelection: Equatable, Sendable {
     /// The band is `SmartSnap.band` at the capture's `scale`.
     public static func preview(_ preview: CGRect, stillFits drag: CGRect, scale: CGFloat) -> Bool {
         let band = CGFloat(SmartSnap.band(scale: scale))
-        return abs(preview.minX - drag.minX) <= band && abs(preview.maxX - drag.maxX) <= band
-            && abs(preview.minY - drag.minY) <= band && abs(preview.maxY - drag.maxY) <= band
+        return preview.isNear(drag, within: band)
     }
 }
