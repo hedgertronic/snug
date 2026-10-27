@@ -1,397 +1,265 @@
-'use strict';
-// Snug site: the main demo is a drawing of a Mac with the Snug overlay open. It plays itself until the visitor moves
-// the pointer over it, taps it or presses a key; then it is live. Coordinates are the mock screen's own (unscaled)
-// CSS pixels; the screen element is scaled to fit, so every client rect is divided by `scale`.
+// The hero demo: a scripted Snug overlay over a mock desktop. It hovers an element, then drags a loose box that snaps to the card
+// under it on a pause, and copies. Visitors can hover, drag (Option keeps the box exact), walk with Up and Down, and press Return;
+// the script picks up again after a few idle seconds.
 (() => {
+  'use strict';
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const R = Math.round;
-  const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
-  const $ = s => document.querySelector(s);
+  const IDLE_MS = 4000;
 
-  const stage = $('.stage'), screen = $('.screen'), scene = $('.scene'), ov = $('.ov');
-  const [hl, dimall, hintUp, hintDown, ghost, selEl, flashEl, sizeChip, strip] =
-    ['.hl', '.dimall', '.hint.up', '.hint.down', '.ghost', '.sel', '.flash', '.chip.size', '.strip'].map(s => ov.querySelector(s));
-  const cast = $('.cast'), cursor = $('.cursor'), toastEl = $('.toast'), statusEl = $('.status'), agentRef = $('.ag-ref');
-  const row = scene.querySelector('[data-n="Lookout Ridge"]'), card = scene.querySelector('[data-n="Conditions"]');
-
-  let W = 1000, H = 625, scale = 1;
-  let open = true, meta = false;
-  let target = row;                           // an element, 'desk' (the wallpaper), or the screen itself
-  let hold = null, path = [];                 // a key-picked target holds until the pointer leaves it
-  let sel = null, drag = null, grab = null, ptr = null;
-  let snapT = 0, glideT = 0, closeT = 0, toastT = 0, castT = 0;
-
-  const say = text => { statusEl.textContent = text; };
-  const inside = (r, p) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
-  const near = (a, b, t) => Math.abs(a.x - b.x) <= t && Math.abs(a.y - b.y) <= t &&
-    Math.abs(a.x + a.w - b.x - b.w) <= t && Math.abs(a.y + a.h - b.y - b.h) <= t;
-  const size = r => `${R(r.w)} x ${R(r.h)}`;
-
-  function box(el) {
-    if (el === screen) return { x: 0, y: 0, w: W, h: H };
-    const s = screen.getBoundingClientRect(), r = el.getBoundingClientRect();
-    const x = Math.max(0, (r.left - s.left) / scale), y = Math.max(0, (r.top - s.top) / scale);
-    return { x, y, w: Math.min(W, (r.right - s.left) / scale) - x, h: Math.min(H, (r.bottom - s.top) / scale) - y };
-  }
-  const toBase = e => {
-    const s = screen.getBoundingClientRect();
-    return { x: R((e.clientX - s.left) / scale), y: R((e.clientY - s.top) / scale) };
+  /* every box in scene px, parents before children; r is the element's corner radius */
+  const BOX = {
+    screen: { n: 'Full screen', x: 0, y: 0, w: 640, h: 400, p: null, r: 0 },
+    menubar: { n: 'Menu bar', x: 0, y: 0, w: 640, h: 22, p: 'screen', r: 0 },
+    win: { n: 'Safari window', x: 36, y: 40, w: 568, h: 336, p: 'screen', r: 12 },
+    toolbar: { n: 'Toolbar', x: 36, y: 40, w: 568, h: 38, p: 'win', r: 0 },
+    chart: { n: 'Elevation chart', x: 60, y: 128, w: 256, h: 134, p: 'win', r: 10 },
+    cond: { n: 'Conditions', x: 328, y: 128, w: 252, h: 134, p: 'win', r: 10 },
+    trail: { n: 'Trail', x: 340, y: 166, w: 70, h: 82, p: 'cond', r: 7 },
+    wind: { n: 'Wind', x: 418, y: 166, w: 70, h: 82, p: 'cond', r: 7 },
+    sunset: { n: 'Sunset', x: 496, y: 166, w: 70, h: 82, p: 'cond', r: 7 },
+    table: { n: 'Routes table', x: 60, y: 274, w: 520, h: 90, p: 'win', r: 8 },
+    row1: { n: 'Cedar Loop', x: 60, y: 297, w: 520, h: 22, p: 'table', r: 0 },
+    row2: { n: 'Lookout Ridge', x: 60, y: 319, w: 520, h: 22, p: 'table', r: 0 },
+    row3: { n: 'Fern Hollow', x: 60, y: 341, w: 520, h: 23, p: 'table', r: 0 },
   };
-  // The element under a point: the screen at its outer edge, 'desk' on the wallpaper, undefined over the chrome.
-  function hitAt(p) {
-    if (p.x < 2 || p.y < 2 || p.x > W - 2 || p.y > H - 2) return screen;
-    const s = screen.getBoundingClientRect();
-    const el = document.elementFromPoint(s.left + p.x * scale, s.top + p.y * scale);
-    if (!el || !scene.contains(el)) return undefined;
-    const m = el.closest('[data-n]');
-    return m === screen ? 'desk' : m;
-  }
-  const kids = p => [...(p === screen ? scene : p).querySelectorAll('[data-n]')]
-    .filter(e => e.parentElement.closest('[data-n]') === p && e.getClientRects().length);
-  function peers(el) {
-    const list = kids(el.parentElement.closest('[data-n]')).map(e => [e, box(e)]);
-    list.sort(([, a], [, b]) => Math.abs(a.y + a.h / 2 - b.y - b.h / 2) < Math.min(a.h, b.h) / 2 ? a.x - b.x : a.y - b.y);
-    return list.map(([e]) => e);
-  }
-  const match = r => [...scene.querySelectorAll('[data-n]')].filter(e => e.getClientRects().length && near(box(e), r, 4)).pop() || null;
+  const KEYS = Object.keys(BOX);
+  const at = k => `left:${BOX[k].x}px;top:${BOX[k].y}px;width:${BOX[k].w}px;height:${BOX[k].h}px`;
+  const stat = (k, label, val) => `<div class="b s-stat" style="${at(k)}"><small>${label}</small><b>${val}</b></div>`;
+  const row = (k, a, b, c) => `<div class="b s-row" style="${at(k)}"><span>${a}</span><span>${b}</span><span>${c}</span></div>`;
+  const SCENE = `
+    <div class="b s-screen" style="${at('screen')}"></div>
+    <div class="b s-menubar" style="${at('menubar')}"><b>Safari</b><span>File</span><span>Edit</span><span>View</span><span>History</span><span class="clock">Mon Oct 19 9:41</span></div>
+    <div class="b s-win" style="${at('win')}"></div>
+    <div class="b s-toolbar" style="${at('toolbar')}"><span class="s-lights"><i></i><i></i><i></i></span><span class="s-addr">trail-log.example</span></div>
+    <div class="b s-title" style="left:60px;top:88px">Weekend routes<small>Four loops within an hour of town.</small></div>
+    <div class="b s-card" style="${at('chart')}"><h4>Elevation gain</h4><div class="s-bars"><i style="height:45%"></i><i style="height:95%"></i><i style="height:30%"></i><i style="height:70%"></i></div></div>
+    <div class="b s-card" style="${at('cond')}"><h4>Conditions</h4></div>
+    ${stat('trail', 'Trail', 'Dry')}${stat('wind', 'Wind', '8 mph')}${stat('sunset', 'Sunset', '6:42')}
+    <div class="b s-table" style="${at('table')}"><div class="s-row h" style="height:23px"><span>Route</span><span>Distance</span><span>Gain</span></div></div>
+    ${row('row1', 'Cedar Loop', '4.2 mi', '620 ft')}${row('row2', 'Lookout Ridge', '7.8 mi', '1,940 ft')}${row('row3', 'Fern Hollow', '3.1 mi', '310 ft')}
+    <div class="ov">
+      <div class="o-hint"></div><div class="o-hl"></div><div class="o-ghost"></div><div class="o-sel"></div><div class="o-flash"></div>
+      <div class="o-chip"></div><div class="o-strip">Copy <i>&#8617;</i></div>
+      <div class="o-toast"><span class="th"><i></i></span><span><b>Copied</b><em></em></span></div>
+      <div class="o-cast out" hidden></div>
+      <div class="o-cursor"><svg viewBox="0 0 16 24" width="15" height="22"><path d="M1.5 1.5v17.2l4.3-4.1 2.9 6.6 3-1.3-2.9-6.5h6z" fill="#111" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+    </div>`;
 
-  // What Return copies now.
-  function current() {
-    if (sel) return { el: sel.el, r: sel, name: sel.el ? sel.el.dataset.n : 'Area' };
-    if (target instanceof Element) return { el: target, r: box(target), name: target.dataset.n };
-    return { el: screen, r: box(screen), name: 'Full screen' };
-  }
-
-  function hover() {
-    if (!open || sel || drag || grab || !ptr) return;
-    if (!strip.hidden) {
-      const b = box(strip);
-      if (inside({ x: b.x, y: b.y - 10, w: b.w, h: b.h + 10 }, ptr)) return;
-    }
-    if (hold) {
-      const within = target instanceof Element && target !== screen && inside(box(target), ptr) && inside(box(target), hold);
-      if (Math.hypot(ptr.x - hold.x, ptr.y - hold.y) < 30 || within) return;
-      hold = null;
-    }
-    const t = hitAt(ptr);
-    if (t !== undefined && t !== target) { target = t; path = []; }
-  }
-
-  function walk(k) {
-    if (!(target instanceof Element)) return beep();
-    let next = null;
-    if (k === 'ArrowUp') {
-      if (target !== screen) { next = target.parentElement.closest('[data-n]'); path.push(target); }
-    } else if (k === 'ArrowDown') {
-      next = path.pop() || (ptr && kids(target).find(e => inside(box(e), ptr))) || null;
-    } else if (target !== screen) {
-      const list = peers(target);
-      if (list.length > 1) next = list[(list.indexOf(target) + (k === 'ArrowRight' ? 1 : list.length - 1)) % list.length];
-      path = [];
-    }
-    if (!next) return beep();
-    target = next;
-    hold = { ...(ptr || { x: -99, y: -99 }) };
-    if (!reduce) {
-      ov.classList.add('glide');
-      clearTimeout(glideT);
-      glideT = setTimeout(() => ov.classList.remove('glide'), 120);
-    }
-    say(`${target.dataset.n}, ${size(box(target))}`);
-  }
-  function beep() {
-    sizeChip.classList.remove('shake');
-    void sizeChip.offsetWidth;
-    sizeChip.classList.add('shake');
-    say('Nothing further that way.');
-  }
-
-  // Snap: each edge of a drawn area moves to the nearest edge within 10 px of an element beside it.
-  const edges = () => [box(screen), ...[...scene.querySelectorAll('[data-n]')].filter(el => el.getClientRects().length).map(box)];
-  function snapRect(r, boxes) {
-    const to = (v, list) => {
-      let best = v, d = 10.5;
-      for (const c of list) if (Math.abs(c - v) < d) { d = Math.abs(c - v); best = c; }
-      return best;
-    };
+  const size = r => `${Math.round(r.w)} x ${Math.round(r.h)}`;
+  const inside = (r, p) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  // The innermost element under the point; the bare desktop picks nothing.
+  const hit = p => KEYS.filter(k => k !== 'screen' && inside(BOX[k], p)).pop() || null;
+  const same = (a, b) => a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+  // The corner radius of the element a rectangle lands on exactly, else square.
+  const radiusOf = r => { const k = KEYS.find(k => same(BOX[k], r)); return k ? BOX[k].r : 0; };
+  // Snap: each edge of a dragged box moves to the nearest element edge within 10 px beside it.
+  function snapRect(r) {
+    const boxes = KEYS.map(k => BOX[k]);
+    const to = (v, list) => { let best = v, d = 10.5; for (const c of list) if (Math.abs(c - v) < d) { d = Math.abs(c - v); best = c; } return best; };
     const xs = boxes.filter(b => b.y < r.y + r.h && b.y + b.h > r.y).flatMap(b => [b.x, b.x + b.w]);
     const ys = boxes.filter(b => b.x < r.x + r.w && b.x + b.w > r.x).flatMap(b => [b.y, b.y + b.h]);
     const x1 = to(r.x, xs), y1 = to(r.y, ys), x2 = to(r.x + r.w, xs), y2 = to(r.y + r.h, ys);
     return { x: x1, y: y1, w: Math.max(4, x2 - x1), h: Math.max(4, y2 - y1) };
   }
 
-  // The reference line Snug puts on the clipboard next to the image for an agent.
-  const ID = '0123456789ABCDEFGHJKMNPQRSTVWXYZ', TITLED = ['row', 'button', 'link', 'folder', 'file', 'menu bar item', 'image'];
-  function reference(el, r, name) {
-    const id = Array.from({ length: 8 }, () => ID[Math.floor(Math.random() * 32)]).join('');
-    const win = el && el !== screen ? el.closest('.win') : null;
-    const role = el && el !== screen ? el.dataset.role : null;
-    const title = role === 'window' ? win.dataset.title : TITLED.includes(role) ? name : null;
-    const what = (role || name).toLowerCase() + (title ? ` "${title}"` : '');
-    return `[Snug capture ${id}: ${win ? `${win.dataset.app}, ` : ''}${what}, ${size(r)} pt. Use the snug MCP tool get_capture to see it.]`;
-  }
-
-  function toast(title, detail, r) {
-    toastEl.querySelector('b').textContent = title;
-    toastEl.querySelector('.t-text span').textContent = detail;
-    const a = r.w / r.h, th = toastEl.querySelector('i');
-    th.style.width = `${Math.max(4, a >= 1 ? 40 : 40 * a)}px`;
-    th.style.height = `${Math.max(4, a >= 1 ? 40 / a : 40)}px`;
-    toastEl.classList.add('show');
-    clearTimeout(toastT);
-    toastT = setTimeout(() => toastEl.classList.remove('show'), 2600);
-  }
-
-  function copy(agent) {
-    const { el, r, name } = current();
-    place(flashEl, r);
-    flashEl.classList.remove('go');
-    void flashEl.offsetWidth;
-    flashEl.classList.add('go');
-    if (agent) {
-      agentRef.textContent = reference(el, r, name);
-      agentRef.closest('.ag').classList.add('live');
-      toast('Copied for agent', 'Paste it into the chat. The agent sees what you saw.', r);
-    } else toast('Copied', `${name}, ${size(r)}`, r);
-    say(`Copied ${name}, ${size(r)}${agent ? ', for an agent' : ''}.`);
-    closeT = setTimeout(closeOverlay, reduce ? 0 : 260);
-  }
-  function closeOverlay() {
-    open = false; sel = null; drag = null; grab = null; hold = null;
-    render();
-  }
-  function openOverlay() {
-    open = true;
-    hover();
-    render();
-  }
-
-  // The keys the demo knows. Returns whether it acted.
-  const GLYPH = { ArrowUp: '\u2191', ArrowDown: '\u2193', ArrowLeft: '\u2190', ArrowRight: '\u2192', Enter: '\u21A9', Escape: 'esc' };
-  function act(k, mods = {}) {
-    if (!open || !GLYPH[k]) return false;
-    if (k === 'Enter') copy(!!mods.metaKey);
-    else if (k === 'Escape') {
-      if (sel || drag) { sel = null; drag = null; grab = null; hover(); } else closeOverlay();
-    } else if (!sel && !drag) walk(k);
-    else return false;
-    render();
-    // Name the key next to the pointer, where the eye is.
-    if (ptr) {
-      cast.textContent = (mods.metaKey ? '\u2318' : '') + GLYPH[k];
-      at(cast, clamp(ptr.x + 16, 4, W - 60), clamp(ptr.y + 24, 4, H - 40));
-      cast.classList.remove('out');
-      clearTimeout(castT);
-      castT = setTimeout(() => cast.classList.add('out'), 700);
-    }
-    return true;
-  }
-
-  /* ---------- pointer: shared by the visitor and the autoplay ---------- */
-  function down(p, touch) {
-    ptr = p;
-    if (!open) return openOverlay();
-    grab = { tap: touch, start: p, moved: false, edges: edges() };
-  }
-  function move(p, alt) {
-    ptr = p;
-    if (grab) dragMove(alt); else hover();
-    render();
-  }
-  function dragMove(alt) {
-    const dx = ptr.x - grab.start.x, dy = ptr.y - grab.start.y;
-    if (!grab.moved && Math.hypot(dx, dy) < 4) return;
-    grab.moved = true;
-    if (grab.tap) return;
-    sel = null;
-    const rect = { x: Math.min(grab.start.x, ptr.x), y: Math.min(grab.start.y, ptr.y), w: Math.abs(dx), h: Math.abs(dy) };
-    const keep = !alt && drag && drag.snap && near(snapRect(rect, grab.edges), drag.snap, 0);
-    drag = { rect, snap: keep ? drag.snap : null };
-    clearTimeout(snapT);
-    // Pause to snap: the preview shows after a short rest. Option keeps the area exact.
-    if (!keep && !alt) {
-      snapT = setTimeout(() => {
-        if (!drag || !grab) return;
-        const s = snapRect(drag.rect, grab.edges);
-        drag.snap = near(s, drag.rect, .5) ? null : s;
-        render();
-      }, 80);
-    }
-  }
-  function up(alt) {
-    if (!grab) return;
-    const g = grab;
-    grab = null;
-    clearTimeout(snapT);
-    if (g.tap) {
-      if (!g.moved) tap();
-    } else if (drag) {
-      const r = drag.snap && !alt ? drag.snap : drag.rect;
-      sel = { x: r.x, y: r.y, w: Math.max(4, r.w), h: Math.max(4, r.h), snapped: r === drag.snap };
-      sel.el = match(sel);
-      drag = null;
-      say(`Area ${size(sel)}, ${sel.snapped ? 'snapped' : 'exact'}. Return copies it.`);
-    } else if (sel && !inside(sel, ptr)) { sel = null; hover(); }
-    else copy(false);
-    render();
-  }
-  // Touch: a tap frames an element, a second tap on it copies it.
-  function tap() {
-    const t = hitAt(ptr);
-    if (t === undefined) return;
-    if (t === target) return copy(false);
-    target = t; path = []; hold = { ...ptr };
-  }
-
-  // A pointer resting over the demo at load is not a takeover, and neither is a touch that scrolls the page:
-  // while it plays, only a real move of the mouse, or a touch that lifts where it landed, hands it over.
-  let first = null, touchAt = null;
-  screen.addEventListener('pointermove', e => {
-    if (playing && e.pointerType === 'touch') return;
-    first = first || { x: e.clientX, y: e.clientY };
-    if (playing && Math.hypot(e.clientX - first.x, e.clientY - first.y) < 4) return;
-    stop();
-    move(toBase(e), e.altKey);
-  });
-  screen.addEventListener('pointerdown', e => {
-    if (playing && e.pointerType === 'touch') { touchAt = { x: e.clientX, y: e.clientY }; return; }
-    stop();
-    if (e.button !== 0 || e.target.closest('button')) return;
-    e.preventDefault();
-    stage.focus({ preventScroll: true });
-    down(toBase(e), e.pointerType === 'touch');
-    if (grab && !grab.tap) screen.setPointerCapture(e.pointerId);
-  });
-  screen.addEventListener('pointerup', e => {
-    if (!touchAt) return up(e.altKey);
-    const near10 = Math.hypot(e.clientX - touchAt.x, e.clientY - touchAt.y) < 10;
-    touchAt = null;
-    if (near10 && !e.target.closest('button')) { stop(); ptr = toBase(e); tap(); render(); }
-  });
-  screen.addEventListener('pointercancel', () => { touchAt = null; grab = null; drag = null; render(); });
-  strip.addEventListener('click', () => { stop(); copy(meta); render(); });
-
-  document.addEventListener('keydown', e => {
-    stop();
-    if (e.target.closest('a')) return;
-    if (e.key === 'Meta') { meta = true; render(); return; }
-    if (e.ctrlKey && e.shiftKey && e.code === 'Space') { e.preventDefault(); if (!open) openOverlay(); return; }
-    if (!e.ctrlKey && act(e.key, e)) e.preventDefault();
-  });
-  document.addEventListener('keyup', e => { if (e.key === 'Meta') { meta = false; render(); } });
-  addEventListener('blur', () => { meta = false; render(); });
-
-  /* ---------- drawing ---------- */
-  function place(el, r) {
-    el.hidden = !r;
-    if (r) Object.assign(el.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
-  }
-  function at(el, x, y) {
-    el.hidden = false;
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
-  }
-
-  function render() {
-    screen.dataset.mode = open ? 'capture' : 'closed';
-    ov.classList.toggle('cmd', meta);
-    if (!open) return;
-    const t = !sel && !drag && target instanceof Element ? target : null;
-    const tb = t && box(t);
-    const r = drag ? drag.snap || drag.rect : sel || tb;
-
-    dimall.hidden = !(!sel && !drag && target === 'desk');
-    place(hl, tb);
-    if (t) { hl.classList.toggle('full', t === screen); hl.style.borderRadius = `${t.dataset.r || 0}px`; }
-
-    // Faint outlines show what Up and Down would pick.
-    const upEl = t && t !== screen ? t.parentElement.closest('[data-n]') : null;
-    const ub = upEl && upEl !== screen ? box(upEl) : null;
-    place(hintUp, ub && !near(ub, tb, 4) ? ub : null);
-    const db = t && path.length ? box(path[path.length - 1]) : null;
-    place(hintDown, db && !near(db, tb, 4) ? db : null);
-    for (const [h, b] of [[hintUp, ub], [hintDown, db]]) h.classList.toggle('small', !!b && (b.w < 48 || b.h < 24));
-
-    place(selEl, r && (drag || sel) ? r : null);
-    place(ghost, drag && drag.snap ? drag.rect : null);
-
-    // Size chip above the object, or inside it when there is no room.
-    const tag = on => `<span class="tag${on ? ' lit' : ''}">${on ? 'Snapped' : 'Exact'}</span>`;
-    sizeChip.innerHTML = drag ? `${size(r)} ${tag(drag.snap)}` : sel ? `${size(sel)} ${tag(sel.snapped)}`
-      : tb ? `<b>${t.dataset.n}</b><span class="muted">${size(tb)}</span>` : '';
-    sizeChip.hidden = !r;
-    if (r) {
-      const y = r.y - sizeChip.offsetHeight - 8;
-      at(sizeChip, clamp(r.x, 4, W - sizeChip.offsetWidth - 4), y < 4 ? r.y + 8 : y);
+  class Demo {
+    constructor(el) {
+      this.el = el;
+      this.gen = 0;
+      el.tabIndex = 0;
+      el.setAttribute('role', 'application');
+      el.setAttribute('aria-label', 'Demo of the Snug overlay. Hover to pick an element, or drag a box and pause to snap it; Return copies.');
+      el.innerHTML = `<div class="scene" data-open="true">${SCENE}</div>`;
+      this.scene = el.querySelector('.scene');
+      const q = s => this.scene.querySelector(s);
+      Object.assign(this, { hint: q('.o-hint'), hl: q('.o-hl'), ghost: q('.o-ghost'), sel: q('.o-sel'), flash: q('.o-flash'), chip: q('.o-chip'), strip: q('.o-strip'), toast: q('.o-toast'), cast: q('.o-cast'), cursor: q('.o-cursor') });
+      this.s = { open: true, target: 'win', drag: null, selr: null, path: [] };
+      this.ptr = { x: 300, y: 112 };
+      new ResizeObserver(() => { this.scene.style.transform = `scale(${el.clientWidth / 640})`; }).observe(el);
+      this.bindUser();
+      if (reduce) this.still(); else this.play();
     }
 
-    // The Copy button under the object, or inside its bottom edge when there is no room.
-    strip.hidden = !(!drag && (sel || tb));
-    if (!strip.hidden) {
-      strip.querySelector('.lab').textContent = meta ? 'Agent' : 'Copy';
-      const sw = strip.offsetWidth, sh = strip.offsetHeight;
-      let y = r.y + r.h + 8;
-      if (y + sh > H - 4) y = Math.min(r.y + r.h, H) - sh - 8;
-      at(strip, clamp(r.x + r.w / 2 - sw / 2, 4, W - sw - 4), y);
+    place(el, r) {
+      el.hidden = !r;
+      if (r) Object.assign(el.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px`, borderRadius: `${r.r || 0}px` });
+    }
+    pos(el, x, y) { el.hidden = false; el.style.left = `${x}px`; el.style.top = `${y}px`; }
+    aim(p) { this.ptr = p; this.cursor.style.transform = `translate(${p.x}px, ${p.y}px)`; }
+
+    render() {
+      const s = this.s;
+      this.scene.dataset.open = String(s.open);
+      if (!s.open) return;
+      const t = !s.drag && !s.selr ? s.target : null, tb = t && BOX[t];
+      this.place(this.hl, tb);
+      const up = t && BOX[t].p && BOX[t].p !== 'screen' ? BOX[BOX[t].p] : null;
+      this.place(this.hint, up);
+      const r = s.drag ? (s.drag.snap || s.drag.raw) : s.selr;
+      this.place(this.sel, r && { ...r, r: s.drag && !s.drag.snap ? 0 : radiusOf(r) });
+      this.place(this.ghost, s.drag && s.drag.snap ? s.drag.raw : null);
+      const tag = on => `<span class="tag${on ? ' lit' : ''}">${on ? 'Snapped' : 'Exact'}</span>`;
+      this.chip.innerHTML = s.drag ? `${size(r)} ${tag(!!s.drag.snap)}` : s.selr ? `${size(r)} ${tag(s.selr.snapped)}` : tb ? `<b>${tb.n}</b><span class="mut">${size(tb)}</span>` : '';
+      const cr = r || tb;
+      this.chip.hidden = !cr;
+      if (cr) { const y = cr.y - 29; this.pos(this.chip, Math.max(4, Math.min(cr.x, 640 - this.chip.offsetWidth - 4)), y < 26 ? cr.y + 8 : y); }
+      this.strip.hidden = !(!s.drag && cr);
+      if (!this.strip.hidden) {
+        let y = cr.y + cr.h + 8;
+        if (y + 24 > 396) y = cr.y + cr.h - 32;
+        this.pos(this.strip, Math.max(4, Math.min(cr.x + cr.w / 2 - this.strip.offsetWidth / 2, 640 - this.strip.offsetWidth - 4)), y);
+      }
+    }
+
+    keyCast(text) {
+      this.cast.textContent = text;
+      this.pos(this.cast, Math.min(this.ptr.x + 16, 600), Math.min(this.ptr.y + 22, 370));
+      this.cast.classList.remove('out');
+      clearTimeout(this.castT);
+      this.castT = setTimeout(() => this.cast.classList.add('out'), 700);
+    }
+    copy() {
+      const s = this.s, r = s.selr || (s.target && BOX[s.target]);
+      if (!r) return;
+      const radius = s.selr ? radiusOf(r) : r.r;
+      this.place(this.flash, { ...r, r: radius });
+      this.flash.classList.remove('go'); void this.flash.offsetWidth; this.flash.classList.add('go');
+      const th = this.toast.querySelector('i'), a = r.w / r.h, k = 32 / Math.max(r.w, r.h);
+      th.style.width = `${a >= 1 ? 32 : 32 * a}px`; th.style.height = `${a >= 1 ? 32 / a : 32}px`;
+      th.style.borderRadius = `${Math.max(2, radius * k)}px`;
+      this.toast.querySelector('em').textContent = s.selr ? `Area, ${size(r)}` : `${BOX[s.target].n}, ${size(r)}`;
+      this.toast.classList.add('show');
+      clearTimeout(this.toastT);
+      this.toastT = setTimeout(() => this.toast.classList.remove('show'), 2200);
+      setTimeout(() => { s.open = false; s.selr = null; s.drag = null; this.render(); }, reduce ? 0 : 260);
+    }
+
+    /* ---------- autoplay ---------- */
+    play() {
+      const gen = ++this.gen;
+      this.cursor.hidden = false;
+      const sleep = ms => new Promise((ok, no) => setTimeout(() => (gen === this.gen ? ok() : no(gen)), ms));
+      const glide = (to, ms, each) => new Promise((ok, no) => {
+        const a = { ...this.ptr }, t0 = performance.now();
+        const step = now => {
+          if (gen !== this.gen) return no(gen);
+          const k = Math.min(1, (now - t0) / ms), e = k < .5 ? 2 * k * k : 1 - 2 * (1 - k) ** 2;
+          this.aim({ x: a.x + (to.x - a.x) * e, y: a.y + (to.y - a.y) * e });
+          each();
+          this.render();
+          k < 1 ? requestAnimationFrame(step) : ok();
+        };
+        requestAnimationFrame(step);
+      });
+      const hover = () => { this.s.target = hit(this.ptr); };
+      const loop = async () => {
+        for (;;) {
+          const s = this.s;
+          Object.assign(s, { open: true, drag: null, selr: null, path: [] });
+          // Hover: the chart card lights up with its own rounded corners.
+          this.aim({ x: 250, y: 330 }); hover(); this.render();
+          await sleep(500);
+          await glide({ x: 170, y: 205 }, 700, hover);
+          await sleep(1300);
+          // Drag a loose box around the Conditions card, pause, and it snaps.
+          await glide({ x: 323, y: 122 }, 650, hover);
+          await sleep(200);
+          const start = { ...this.ptr };
+          s.drag = { raw: { x: start.x, y: start.y, w: 0, h: 0 }, snap: null };
+          await glide({ x: 586, y: 267 }, 1000, () => {
+            s.drag.raw = { x: start.x, y: start.y, w: this.ptr.x - start.x, h: this.ptr.y - start.y };
+          });
+          await sleep(160);
+          this.sel.classList.add('spring');
+          s.drag.snap = snapRect(s.drag.raw);
+          this.render();
+          await sleep(1300);
+          this.sel.classList.remove('spring');
+          s.selr = { ...s.drag.snap, snapped: true }; s.drag = null; this.render();
+          await sleep(900);
+          this.keyCast('↩'); this.copy();
+          await sleep(2400);
+        }
+      };
+      loop().catch(g => { if (typeof g !== 'number') throw g; });
+    }
+    stop() { this.gen++; this.cursor.hidden = true; this.sel.classList.remove('spring'); }
+    still() {
+      this.cursor.hidden = true;
+      const raw = { x: 323, y: 122, w: 263, h: 145 };
+      Object.assign(this.s, { open: true, selr: null, drag: { raw, snap: snapRect(raw) } });
+      this.render();
+    }
+
+    /* ---------- the visitor drives; the script resumes after a few idle seconds ---------- */
+    bindUser() {
+      const el = this.el, s = this.s;
+      const toScene = e => { const b = this.scene.getBoundingClientRect(), k = b.width / 640; return { x: (e.clientX - b.left) / k, y: (e.clientY - b.top) / k }; };
+      let grab = null, snapT = 0, idleT = 0, driving = false;
+      const touch = () => {
+        if (!driving) { driving = true; this.stop(); }
+        clearTimeout(idleT);
+        if (!reduce) idleT = setTimeout(() => { if (grab) return touch(); driving = false; this.toast.classList.remove('show'); this.play(); }, IDLE_MS);
+      };
+      el.addEventListener('pointerdown', e => {
+        if (e.button !== 0) return;
+        touch();
+        e.preventDefault();
+        el.focus({ preventScroll: true });
+        const p = toScene(e);
+        this.ptr = p;
+        if (!s.open) { s.open = true; s.selr = null; s.target = hit(p); this.render(); return; }
+        grab = { start: p, moved: false, id: e.pointerId };
+        el.setPointerCapture(e.pointerId);
+      });
+      el.addEventListener('pointermove', e => {
+        // A mouse over the demo takes over; touch only takes over with a press.
+        if (!driving && e.pointerType !== 'mouse') return;
+        touch();
+        const p = toScene(e);
+        this.ptr = p;
+        if (!s.open) return;
+        if (!grab) { if (!s.selr) { s.target = hit(p); this.render(); } return; }
+        if (!grab.moved && Math.hypot(p.x - grab.start.x, p.y - grab.start.y) < 4) return;
+        grab.moved = true; s.selr = null;
+        const raw = { x: Math.min(grab.start.x, p.x), y: Math.min(grab.start.y, p.y), w: Math.abs(p.x - grab.start.x), h: Math.abs(p.y - grab.start.y) };
+        const keep = !e.altKey && s.drag && s.drag.snap && same(snapRect(raw), s.drag.snap);
+        s.drag = { raw, snap: keep ? s.drag.snap : null };
+        clearTimeout(snapT);
+        // A short rest previews the snap, as in the app; Option keeps the box exact.
+        if (!keep && !e.altKey) snapT = setTimeout(() => {
+          if (!s.drag) return;
+          const sn = snapRect(s.drag.raw);
+          this.sel.classList.add('spring');
+          s.drag.snap = same(sn, s.drag.raw) ? null : sn;
+          this.render();
+          setTimeout(() => this.sel.classList.remove('spring'), 170);
+        }, 80);
+        this.render();
+      });
+      el.addEventListener('pointerup', e => {
+        if (!grab) return;
+        clearTimeout(snapT);
+        const g = grab; grab = null;
+        if (g.moved && s.drag) {
+          const r = s.drag.snap && !e.altKey ? s.drag.snap : s.drag.raw;
+          s.selr = { ...r, snapped: r === s.drag.snap }; s.drag = null;
+        } else if (s.selr && !inside(s.selr, this.ptr)) { s.selr = null; s.target = hit(this.ptr); }
+        else this.copy();
+        this.render();
+      });
+      el.addEventListener('pointercancel', () => { grab = null; s.drag = null; this.render(); });
+      el.addEventListener('keydown', e => {
+        if (!s.open) { if (e.key === 'Enter') { touch(); s.open = true; this.render(); e.preventDefault(); } return; }
+        if (e.key === 'Enter') { touch(); this.keyCast('↩'); this.copy(); }
+        else if (e.key === 'Escape') { touch(); if (s.selr) s.selr = null; else s.open = false; this.render(); }
+        else if (e.key === 'ArrowUp' && !s.selr && s.target && BOX[s.target].p && BOX[s.target].p !== 'screen') { touch(); s.path.push(s.target); s.target = BOX[s.target].p; this.keyCast('↑'); this.render(); }
+        else if (e.key === 'ArrowDown' && !s.selr && s.path.length) { touch(); s.target = s.path.pop(); this.keyCast('↓'); this.render(); }
+        else return;
+        e.preventDefault();
+      });
     }
   }
 
-  function fit() {
-    screen.classList.toggle('narrow', stage.clientWidth < 600);
-    W = screen.offsetWidth;
-    H = screen.offsetHeight;
-    const top = stage.getBoundingClientRect().top + scrollY;
-    scale = Math.min(1.08, stage.clientWidth / W, (innerHeight - top - 48) / H);
-    screen.style.transform = `scale(${scale})`;
-    screen.style.left = `${(stage.clientWidth - W * scale) / 2}px`;
-    stage.style.height = `${H * scale}px`;
-    render();
-  }
-
-  /* ---------- autoplay: hover, Up, Up, a drag that snaps, Return; then again ---------- */
-  let playing = !reduce, playT = 0, raf = 0, cur = { x: 0, y: 0 };
-  const pt = (el, fx, fy, dx = 0, dy = 0) => { const b = box(el); return { x: R(b.x + b.w * fx + dx), y: R(b.y + b.h * fy + dy) }; };
-  const aim = p => { cur = p; cursor.style.transform = `translate(${p.x}px, ${p.y}px)`; };
-  // Move the drawn cursor, acting as the pointer on every frame.
-  function glideTo(p, ms) {
-    const a = cur, t0 = performance.now();
-    const step = now => {
-      const k = Math.min(1, (now - t0) / ms), e = k < .5 ? 2 * k * k : 1 - 2 * (1 - k) ** 2;
-      aim({ x: R(a.x + (p.x - a.x) * e), y: R(a.y + (p.y - a.y) * e) });
-      move(cur);
-      if (k < 1) raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-  }
-  // Each step runs, then waits its time. The drag starts 4 px off the card's corner and ends 5 px past the other.
-  const SCRIPT = [
-    [() => { open = true; sel = null; path = []; hold = null; target = row; aim(pt(row, .5, .5)); ptr = cur; render(); }, 1300],
-    [() => act('ArrowUp'), 1000],
-    [() => act('ArrowUp'), 1100],
-    [() => glideTo(pt(card, 0, 0, -4, -4), 700), 850],
-    [() => down(cur), 120],
-    [() => glideTo(pt(card, 1, 1, 5, 4), 900), 1200],
-    [() => up(), 800],
-    [() => act('Enter'), 2000],
-    [() => { ptr = cur; openOverlay(); glideTo(pt(row, .5, .5), 800); }, 1000],
-  ];
-  function play(i) {
-    SCRIPT[i][0]();
-    playT = setTimeout(() => play((i + 1) % SCRIPT.length), SCRIPT[i][1]);
-  }
-  function stop() {
-    if (!playing) return;
-    playing = false;
-    for (const t of [playT, snapT, closeT, castT]) clearTimeout(t);
-    cancelAnimationFrame(raf);
-    cursor.hidden = true;
-    cast.hidden = true;
-    open = true; grab = null; drag = null; sel = null; hold = null; ptr = null;
-    render();
-  }
-
-  addEventListener('resize', fit);
-  fit();
-  agentRef.textContent = reference(row, box(row), row.dataset.n);
-  if (playing) { cursor.hidden = false; play(0); } else render();
+  for (const el of document.querySelectorAll('.demo')) new Demo(el);
 })();
