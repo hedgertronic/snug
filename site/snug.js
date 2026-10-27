@@ -325,8 +325,10 @@
         this.closedAt = performance.now();
         this.scene.dataset.cursor = 'arrow';
         this.render();
-        // As long as the app's default toast lifetime, 4 s.
-        this.later(() => this.toast.classList.remove('show'), 4000, gen);
+        // As long as the app's default toast lifetime, 4 s. Like the app's, it stays up when the pointer moves on, so its timer belongs to
+        // no run.
+        clearTimeout(this.toastT);
+        this.toastT = setTimeout(() => this.toast.classList.remove('show'), 4000);
       }, reduce ? 0 : 140, gen);
     }
 
@@ -347,12 +349,11 @@
     // A timer owned by the current run: a takeover or a restart of the script cancels it.
     later(fn, ms, gen = this.gen) { setTimeout(() => { if (gen === this.gen) fn(); }, ms); }
 
-    // Back to an open overlay with nothing dragged, selected, pressed or shown.
+    // Back to an open overlay with nothing dragged, selected or pressed. A toast stays until its own timer hides it.
     reset() {
       Object.assign(this.s, { open: true, drag: null, selr: null, path: [] });
       this.anim = null;
       this.copyBtn.classList.remove('pressed');
-      this.toast.classList.remove('show');
       this.scene.dataset.cursor = 'cross';
     }
 
