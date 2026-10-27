@@ -558,7 +558,7 @@ extension OverlayController {
         }
 
         if let rect = text.reading {
-            c.reading.show("reading") { [NSTextField("Reading text...", size: 12, color: .chromeText)] }
+            c.reading.show("reading") { [NSTextField("Reading text…", size: 12, color: .chromeText)] }
             let box = view.viewRect(rect), size = c.reading.frame.size, x = onScreenX((box.midX - size.width / 2).rounded(), size)
             settle([c.reading], [CGPoint(x: x, y: onScreenY((box.midY - size.height / 2).rounded(), size)), CGPoint(x: x, y: box.maxY + 8), CGPoint(x: x, y: box.minY - 8 - size.height)] + past(x: x, size, near: box.midY))
         }

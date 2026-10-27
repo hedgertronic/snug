@@ -24,7 +24,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     private var finishing: Task<Void, Never>?
     private var iconObservations: [NSKeyValueObservation] = []
     /// Sparkle's updater, made only when Snug launches for real, so debug runs never check for updates or ask about automatic checks.
-    private var updater: SPUStandardUpdaterController?
+    /// Settings' General pane switches its automatic checks.
+    private(set) var updater: SPUStandardUpdaterController?
 
     static func main() {
         if CommandLine.arguments.contains("--mcp") { MCPServer.run() }
@@ -195,7 +196,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         let menu = Self.makeMenu(defaults: .standard)
         captureItem = menu.items[0]
         // The updater enables Check for Updates while it can check.
-        menu.item(withTitle: "Check for Updates...")!.target = updater
+        menu.item(withTitle: "Check for Updates…")!.target = updater
         item.menu = menu
         statusItem = item
     }
@@ -385,8 +386,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         capture.setShortcut(from: defaults)
         menu.addItem(withTitle: "Capture Text", action: #selector(copyTextFromMenu), keyEquivalent: "")
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
-        menu.addItem(withTitle: "Check for Updates...", action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
+        menu.addItem(withTitle: "Check for Updates…", action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Snug", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         return menu
@@ -404,7 +405,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         capture()
     }
 
-    /// The standard About panel, its credits a link to Snug's Ko-fi page.
+    /// Opens the overlay in Text mode.
     @objc private func copyTextFromMenu() { capture(text: true) }
 
     // MARK: Capture

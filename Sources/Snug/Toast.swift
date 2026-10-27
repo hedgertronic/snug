@@ -240,7 +240,7 @@ final class Toast: NSPanel, NSDraggingSource {
             return button
         }
         copyButton = button("doc.on.doc", "Copy")
-        saveButton = button("square.and.arrow.down", "Save As...")
+        saveButton = button("square.and.arrow.down", "Save As…")
         trashButton = button("trash", "Move to Trash")
         openButton = button(copiedText != nil ? "doc.text" : "arrow.up.forward.app", openTip)
         revealButton = button("folder", "Show in Finder")

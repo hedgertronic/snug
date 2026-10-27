@@ -90,10 +90,10 @@ extension DebugRun {
         require(overlay.mode == .text && !liveText.isHidden, "T enters Text mode and shows Live Text")
         require(overlay.chrome.strip.isHidden && texts(in: overlay.chrome.topBar) == ["Capture", "A", "Text", "T", "Loupe", "L", "Rulers", "R", "Crosshair", "X", "?"],
                 "Text mode with nothing selected shows no strip, and the bar has the modes, view and the keys button: \(texts(in: overlay.chrome.topBar))")
-        require(!overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."], "a Reading text... pill shows while the analysis runs")
+        require(!overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text…"], "a Reading text… pill shows while the analysis runs")
         try await waitFor("the Live Text analysis attaches") { liveText.analysis != nil }
         print("Live Text analysis: \(String(format: "%.1f", overlay.lastLiveTextMilliseconds)) ms (first in this process)")
-        require(overlay.chrome.reading.isHidden, "the Reading text... pill goes away when the analysis attaches")
+        require(overlay.chrome.reading.isHidden, "the Reading text… pill goes away when the analysis attaches")
         // Entering Text mode flashes the lines fast recognition read as pills, and turns them off by itself about 1.25 s later.
         try await waitFor("the found-text flash shows") { !overlay.view.overlays.flashPills.isEmpty }
         let flashed = overlay.view.overlays.flashPills
@@ -443,8 +443,8 @@ extension DebugRun {
         let addressBox = CGRect(x: boxStart.x, y: boxStart.y, width: boxEnd.x - boxStart.x, height: boxEnd.y - boxStart.y)
         let o = { overlay.view.overlays }
         require(overlay.selection?.rect == addressBox && o().selection == addressBox && o().showsHandles && !o().showsCornerDots && o().ghost == nil && overlay.window.isVisible
-                    && pasteboard.string(forType: .string) == nil && !overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."],
-                "on release the box stays as a selection with Capture's outline and handles but no corner dots, copies nothing, and a Reading text... pill shows while it is read")
+                    && pasteboard.string(forType: .string) == nil && !overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text…"],
+                "on release the box stays as a selection with Capture's outline and handles but no corner dots, copies nothing, and a Reading text… pill shows while it is read")
         await overlay.textTask?.value
         /// The box's pills and its chip agree with the lines read, all inside it.
         func requireBoxRead(_ rect: CGRect, _ message: String) {
@@ -687,7 +687,7 @@ extension DebugRun {
             windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 56)!)
         pasteboard.clearContents()
         key(returnKey, "\r", .shift)
-        require(!overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text..."], "a Reading text... pill shows while the selection is read")
+        require(!overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text…"], "a Reading text… pill shows while the selection is read")
         await overlay.textTask?.value
         let table = await copied() ?? ""
         require(table.contains("Product name\t$12\nBrief description\nSecond product\t$8"), "Shift-Return copies a two-column selection tab-separated: \(table.debugDescription)")

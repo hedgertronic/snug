@@ -7,7 +7,7 @@ import Vision
 /// Vision warm-up failures.
 let textLog = Logger(subsystem: "com.hedgertronic.snug", category: "text")
 
-/// Text state shared by both modes: where the "Reading text..." pill centers (image pixels), a dark pill that explains why
+/// Text state shared by both modes: where the "Reading text…" pill centers (image pixels), a dark pill that explains why
 /// Option-Return did nothing or names the picked item, Text mode's found items (nil until the first Tab) and the picked one, a key
 /// pressed while Vision's warm-up child runs: what the notice says about it and the action that runs once the child exits, Text
 /// mode's box with the lines read in it (nil while they are read), the lines the found-text flash shows (image pixels), and accurate
@@ -271,7 +271,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     }
 
     /// Reads the lines in Text mode's box with accurate OCR, after Vision's warm-up, unless they are read or being read: at once with
-    /// the Reading text... pill (a release), or after `delay` without it (a pause in a drag).
+    /// the Reading text… pill (a release), or after `delay` without it (a pause in a drag).
     func readTextBox(after delay: Duration = .zero) {
         guard let rect = selection?.rect, let image else { return }
         if text.box?.rect == rect, delay > .zero || text.box?.lines != nil || text.reading != nil { return }

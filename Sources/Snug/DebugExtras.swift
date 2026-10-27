@@ -866,7 +866,7 @@ extension DebugRun {
         require(!plain.closeButton.isHidden && !plain.actions.isHidden && plain.dismissal?.isCancelled != false, "hovering starts the fade in at once and holds the toast")
         try await Task.sleep(for: .milliseconds(300))
         let shown = plain.actions.arrangedSubviews.filter { !$0.isHidden } as! [NSButton]
-        require(plain.textBox.isHidden && plain.actions.alphaValue == 1 && plain.closeButton.alphaValue == 1 && shown.map(\.toolTip!) == ["Copy", "Save As...", "Open in \(Toast.appName(toOpen: .png))", "Share"],
+        require(plain.textBox.isHidden && plain.actions.alphaValue == 1 && plain.closeButton.alphaValue == 1 && shown.map(\.toolTip!) == ["Copy", "Save As…", "Open in \(Toast.appName(toOpen: .png))", "Share"],
                 "hovering an unsaved capture shows the close button and Copy, Save As, Open and Share in place of the text: \(shown.map(\.toolTip!))")
         require(frames(plain) == rest, "hovering moves and resizes nothing: \(frames(plain)) \(rest)")
         require(abs(plain.actions.frame.midX - plain.textBox.frame.midX) <= 0.5 && plain.actions.frame.width <= plain.textBox.frame.width && plain.actions.superview === card

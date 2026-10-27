@@ -139,6 +139,8 @@ private struct GeneralPane: View {
     @AppStorage(Pref.chromiumText) private var chromiumText = true
     @AppStorage(Pref.playSounds) private var playSounds = true
     @State private var opensAtLogin = SMAppService.mainApp.status == .enabled
+    /// Sparkle's automatic checks; the row shows only while the updater runs, so never in a debug run.
+    @State private var checksForUpdates = (NSApp.delegate as? SnugApp)?.updater?.updater.automaticallyChecksForUpdates ?? false
 
     var body: some View {
         ScrollView {
@@ -173,13 +175,14 @@ private struct GeneralPane: View {
                 }
                 caption("General")
                 Card {
-                    LabeledContent("Shortcut") {
+                    LabeledContent("Capture shortcut") {
                         ShortcutRecorder(code: hotKeyCode, modifiers: hotKeyModifiers).fixedSize()
-                        // Removing both keys falls back to the registered default shortcut.
+                        // Removing both keys falls back to the registered default shortcut, so Reset is off while that is the shortcut.
                         Button("Reset") {
                             UserDefaults.standard.removeObject(forKey: Pref.hotKeyCode)
                             UserDefaults.standard.removeObject(forKey: Pref.hotKeyModifiers)
                         }
+                        .disabled(hotKeyCode == Pref.defaultHotKey.code && hotKeyModifiers == Pref.defaultHotKey.modifiers)
                     }
                     LabeledContent("Save to") {
                         Button(URL(fileURLWithPath: saveFolder).lastPathComponent) {
@@ -204,6 +207,12 @@ private struct GeneralPane: View {
                     }
                     LabeledContent("Play sounds") {
                         Toggle("Play sounds", isOn: $playSounds).labelsHidden().toggleStyle(.switch)
+                    }
+                    if let updater = (NSApp.delegate as? SnugApp)?.updater?.updater {
+                        LabeledContent("Check for updates automatically") {
+                            Toggle("Check for updates automatically", isOn: $checksForUpdates).labelsHidden().toggleStyle(.switch)
+                        }
+                        .onChange(of: checksForUpdates) { _, on in updater.automaticallyChecksForUpdates = on }
                     }
                 }
                 caption("Text mode")
@@ -304,7 +313,8 @@ private struct MakerButton: View {
     }
 }
 
-/// The overlay's appearance, the highlight (live preview, color menu, fill, fade, glow), the toast, and the frame (live preview, padding, shadow).
+/// The overlay's appearance, the highlight (live preview, color menu, fill, fade, glow), the toast, and the frame (live preview, padding, shadow),
+/// then Restore Defaults for all but the overlay's appearance.
 private struct AppearancePane: View {
     @AppStorage(Pref.overlayAppearance) private var overlayAppearance = "system"
     @AppStorage(Pref.highlightColor) private var highlightColor = Highlight.defaultHex
@@ -320,6 +330,12 @@ private struct AppearancePane: View {
     @AppStorage(Pref.frameShadowDistance) private var shadowDistance = OutputFrame.windowShadow.offset
     @AppStorage(Pref.frameShadowAngle) private var shadowAngle = 270.0
     @AppStorage(Pref.frameShadowColor) private var shadowColor = "#000000"
+    /// Every slider in a row is this wide, with its value right-aligned in a column this wide after it, so the values line up across cards.
+    private static let sliderWidth: CGFloat = 112, valueWidth: CGFloat = 84
+    /// What Restore Defaults removes: the highlight, toast, frame padding and shadow settings.
+    private static let restoredKeys = [Pref.highlightColor, Pref.highlightFill, Pref.highlightFade, Pref.highlightGlow, Pref.toastPosition, Pref.toastLifetime,
+                                       Pref.framePadding, Pref.frameShadow, Pref.frameShadowOpacity, Pref.frameShadowBlur, Pref.frameShadowDistance,
+                                       Pref.frameShadowAngle, Pref.frameShadowColor]
 
     var body: some View {
         ScrollView {
@@ -348,7 +364,7 @@ private struct AppearancePane: View {
                 caption("Toast")
                 ToastPositionPicker(tag: $toastPosition)
                 Card {
-                    // The lifetimes as evenly spaced stops, ticked at Off, 5, 10, 30 and Forever; 0 shows only failure and warning toasts.
+                    // The lifetimes as evenly spaced stops, ticked at 0, 5, 10, 30 and Forever; 0 shows only failure and warning toasts.
                     LabeledContent("Duration") {
                         HStack(spacing: 10) {
                             Slider(value: Binding { Double(Toast.lifetimeIndex(toastLifetime)) } set: { toastLifetime = Toast.lifetimes[Int($0.rounded())] },
@@ -358,9 +374,9 @@ private struct AppearancePane: View {
                                 SliderTickContentForEach([0, 5, 10, 30, -1].map { Double(Toast.lifetimeIndex($0)) }, id: \.self) { SliderTick($0) }
                             }
                             .labelsHidden()
-                            .frame(width: 170)
-                            Text(toastLifetime < 0 ? "Forever" : toastLifetime == 0 ? "Off" : "\(toastLifetime) s")
-                                .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).frame(width: 54, alignment: .trailing)
+                            .frame(width: Self.sliderWidth)
+                            Text(toastLifetime < 0 ? "Forever" : toastLifetime == 0 ? "Errors only" : "\(toastLifetime) s")
+                                .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).frame(width: Self.valueWidth, alignment: .trailing)
                         }
                     }
                 }
@@ -369,7 +385,7 @@ private struct AppearancePane: View {
                 Card {
                     VStack(spacing: 4) {
                         LabeledContent("Padding") {
-                            Text(([16: "Small  ", 24: "Medium  ", 40: "Large  "][framePadding] ?? "") + "\(framePadding) pt")
+                            Text(([16: "Small \u{00B7} ", 24: "Medium \u{00B7} ", 40: "Large \u{00B7} "][framePadding] ?? "") + "\(framePadding) pt")
                                 .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
                         }
                         Slider(value: Binding { Double(framePadding) } set: { framePadding = Int($0.rounded()) }, in: 0...64) {
@@ -399,6 +415,10 @@ private struct AppearancePane: View {
                         LabeledContent("Color") { ColorSwatch(hex: $shadowColor).fixedSize() }
                     }
                 }
+                Button("Restore Defaults") {
+                    for key in Self.restoredKeys { UserDefaults.standard.removeObject(forKey: key) }
+                }
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
         .frame(width: SettingsTabs.width, height: SettingsTabs.tallHeight)
@@ -408,8 +428,9 @@ private struct AppearancePane: View {
     private func pointSlider(_ title: String, value: Binding<Double>, range: ClosedRange<Double>, unit: String) -> some View {
         LabeledContent(title) {
             HStack(spacing: 10) {
-                Slider(value: Binding { value.wrappedValue } set: { value.wrappedValue = $0.rounded() }, in: range).frame(width: 130)
-                Text("\(value.wrappedValue.formatted())\(unit)").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).frame(width: 54, alignment: .trailing)
+                Slider(value: Binding { value.wrappedValue } set: { value.wrappedValue = $0.rounded() }, in: range).frame(width: Self.sliderWidth)
+                Text("\(value.wrappedValue.formatted())\(unit)").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+                    .frame(width: Self.valueWidth, alignment: .trailing)
             }
         }
     }
@@ -418,8 +439,9 @@ private struct AppearancePane: View {
     private func slider(_ title: String, value: Binding<Double>, range: ClosedRange<Double>) -> some View {
         LabeledContent(title) {
             HStack(spacing: 10) {
-                Slider(value: value, in: range).frame(width: 150)
-                Text("\(Int((value.wrappedValue * 100).rounded()))%").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
+                Slider(value: value, in: range).frame(width: Self.sliderWidth)
+                Text("\(Int((value.wrappedValue * 100).rounded()))%").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+                    .frame(width: Self.valueWidth, alignment: .trailing)
             }
         }
     }
@@ -653,6 +675,9 @@ struct ColorSwatch: NSViewRepresentable {
 
 /// A read-only guide to the overlay keys, built from the same table as the ? sheet: the action, then its key caps.
 private struct KeysPane: View {
+    @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
+    @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -662,7 +687,13 @@ private struct KeysPane: View {
                         ForEach(column.rows, id: \.action) { row in
                             LabeledContent {
                                 HStack(spacing: 4) {
-                                    ForEach(Self.caps(row.keys), id: \.self) { KeyCapView(text: $0).fixedSize() }
+                                    ForEach(Array(Self.tokens(row.keys, hotKeyCode: hotKeyCode, hotKeyModifiers: hotKeyModifiers).enumerated()), id: \.offset) { _, token in
+                                        if token.cap {
+                                            KeyCapView(text: token.text).fixedSize()
+                                        } else {
+                                            Text(token.text).font(.system(size: 12)).foregroundStyle(.secondary)
+                                        }
+                                    }
                                 }
                             } label: {
                                 Text(row.action).font(.system(size: 12.5))
@@ -676,10 +707,13 @@ private struct KeysPane: View {
         .frame(width: SettingsTabs.width, height: SettingsTabs.tallHeight)
     }
 
-    /// The caps for a row's keys: alternatives split on " / ", modifier words as their symbols.
-    private static func caps(_ keys: String) -> [String] {
-        keys.components(separatedBy: " / ").map {
-            $0.replacingOccurrences(of: "Option-", with: "\u{2325}").replacingOccurrences(of: "Cmd-", with: "\u{2318}").replacingOccurrences(of: "Shift-", with: "\u{21E7}")
+    /// A row's keys split as the ? sheet splits them: one cap per space-separated key, with "/" and a prefix such as "Text:" as
+    /// secondary text, and "hotkey" as one cap per key of the capture shortcut (nothing with no shortcut).
+    private static func tokens(_ keys: String, hotKeyCode: Int, hotKeyModifiers: Int) -> [(text: String, cap: Bool)] {
+        keys.split(separator: " ").flatMap { token -> [(text: String, cap: Bool)] in
+            guard token == "hotkey" else { return [(String(token), token != "/" && !token.hasSuffix(":"))] }
+            guard hotKeyCode >= 0 else { return [] }
+            return KeyCap.caps(Shortcut.label(code: hotKeyCode, modifiers: hotKeyModifiers)).map { ($0.text, true) }
         }
     }
 }
@@ -804,8 +838,8 @@ struct OverlayPreview: View {
 }
 
 /// A field that records a shortcut: click, then press one with at least one of Control, Option, or Command (or a function key).
-/// It shows the shortcut as key caps with a clear button that starts recording, and while recording an accent ring around a "Type shortcut"
-/// placeholder. Recording that ends without a new shortcut (Esc, a click anywhere else, or the window losing key) keeps the one it had.
+/// It shows the shortcut as key caps, and while recording an accent ring around a "Type shortcut" placeholder. Recording that ends
+/// without a new shortcut (Esc, a click anywhere else, or the window losing key) keeps the one it had.
 struct ShortcutRecorder: NSViewRepresentable {
     let code: Int
     let modifiers: Int
@@ -820,7 +854,6 @@ struct ShortcutRecorder: NSViewRepresentable {
         private var modifiers = 0
         private let caps = NSStackView()
         private let placeholder = NSTextField("Type shortcut", size: 12, weight: .regular, color: .secondaryLabelColor)
-        private let clear = NSButton(image: NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Clear shortcut")!, target: nil, action: nil)
         private var clickMonitor: Any?
         private var resignKeyObserver: Any?
         override var acceptsFirstResponder: Bool { true }
@@ -833,12 +866,7 @@ struct ShortcutRecorder: NSViewRepresentable {
             layer!.shadowOffset = .zero
             layer!.shadowRadius = 3
             caps.spacing = 3
-            clear.isBordered = false
-            clear.contentTintColor = .tertiaryLabelColor
-            clear.toolTip = "Clear shortcut"
-            clear.target = self
-            clear.action = #selector(beginRecording)
-            let row = NSStackView(views: [caps, placeholder, clear])
+            let row = NSStackView(views: [caps, placeholder])
             row.spacing = 6
             row.edgeInsets = NSEdgeInsets(top: 0, left: 6, bottom: 0, right: 6)
             row.translatesAutoresizingMaskIntoConstraints = false
@@ -862,7 +890,6 @@ struct ShortcutRecorder: NSViewRepresentable {
             caps.setViews((code < 0 ? [] : glyphs.map(String.init) + [String(label.dropFirst(glyphs.count))]).map { KeyCap($0) }, in: .leading)
             caps.isHidden = recording
             placeholder.isHidden = !recording
-            clear.isHidden = recording || code < 0
             layer!.borderWidth = recording ? 1.5 : 0.5
             layer!.shadowOpacity = recording ? 0.6 : 0
             effectiveAppearance.performAsCurrentDrawingAppearance {
