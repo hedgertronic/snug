@@ -313,25 +313,19 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
    width, at the hero's scale). Each card's keyframes run its toast in 0.25 s, hold it at least 2 s, and fade it in 0.25 s. */
 .cov { --pt: 1; --toast-gap: 16px; position: absolute; inset: 0; pointer-events: none; }
 .cov > * { position: absolute; }
-.cov .o-toast { opacity: 0; transition: none; max-width: calc(100% - 48px * var(--pt)); }
+.cov .o-toast { opacity: 0; transition: none; max-width: calc(100% - 32px * var(--pt)); }
+.cov .o-strip { pointer-events: none; }
+.art .cov .mono { font: 400 calc(12px * var(--pt))/1 var(--mono); }
 
 /* T: the selection sweeps over two lines, the Text strip's Copy button (Chrome.swift textStrip) appears under it, its Return cap presses, and the toast follows */
 /* A 6 s loop: the sweep takes 1.1 s, Copy shows 0.8 s before Return presses it, the selection goes with the overlay, and the toast holds 2.25 s. */
 .tx-ov .o-toast { animation: txt 6s infinite both; }
 @keyframes txt { 0%, 51.7% { opacity: 0; transform: translate(-50%, calc(6px * var(--pt))); animation-timing-function: ease-out; } 55.8%, 93.3% { opacity: 1; transform: translate(-50%, 0); animation-timing-function: ease-out; } 97.5%, 100% { opacity: 0; transform: translate(-50%, 0); } }
-.tx-btn { animation: txbtn 6s infinite both; }
-@keyframes txbtn { 0%, 28% { opacity: 0; transform: translateY(2px); } 32.5%, 50% { opacity: 1; transform: none; } 53.3%, 100% { opacity: 0; } }
-.tx-pill { fill: var(--c-surface); stroke: var(--c-hair); stroke-width: .3; filter: drop-shadow(0 1.5px 3px rgba(0, 0, 0, .25)); }
-.tx-bb { fill: var(--hl); }
-.tx-bt { font: 600 7.4px var(--sans); fill: #FFFFFF; }
-.tx-k { fill: rgba(255, 255, 255, .94); }
-.tx-kp { fill: color-mix(in srgb, var(--hl) 60%, #000); stroke: rgba(255, 255, 255, .7); stroke-width: .6; opacity: 0; animation: txkp 6s infinite both; }
-.tx-kt { font: 600 8px var(--sans); fill: var(--hl); animation: txkt 6s infinite both; }
-.tx-ktp { font: 600 8px var(--sans); fill: #FFFFFF; opacity: 0; animation: txkp 6s infinite both; }
-.tx-cap { animation: txcap 6s infinite both; }
-@keyframes txkp { 0%, 43.3% { opacity: 0; } 43.4%, 48.3% { opacity: 1; } 48.4%, 100% { opacity: 0; } }
-@keyframes txkt { 0%, 43.3% { opacity: 1; } 43.4%, 48.3% { opacity: 0; } 48.4%, 100% { opacity: 1; } }
-@keyframes txcap { 0%, 43.3% { transform: none; } 43.4%, 48.3% { transform: translateY(.6px); } 48.4%, 100% { transform: none; } }
+/* The text strip's Copy (Chrome.swift textStrip), 8 pt under the selection from its left edge; Return presses its cap as the hero's does. */
+.tx-ov .tx-btn { left: 10.5%; top: calc(56.85% + 8px * var(--pt)); animation: txbtn 6s infinite both; }
+@keyframes txbtn { 0%, 28% { opacity: 0; transform: translateY(calc(2px * var(--pt))); } 32.5%, 50% { opacity: 1; transform: none; } 53.3%, 100% { opacity: 0; transform: none; } }
+.tx-ov .bb.primary .k { animation: txk 6s infinite both; }
+@keyframes txk { 0%, 43.3% { background-color: rgba(255, 255, 255, .94); color: var(--hl); } 43.4%, 48.3% { background-color: color-mix(in srgb, var(--hl) 60%, #000); color: #FFFFFF; } 48.4%, 100% { background-color: rgba(255, 255, 255, .94); color: var(--hl); } }
 .tx-sel { fill: color-mix(in srgb, var(--hl) 55%, transparent); transform-box: fill-box; transform-origin: left; animation: sweep 6s infinite both; }
 @keyframes sweep { 0%, 6.7% { transform: scaleX(0); opacity: 1; } 25%, 50% { transform: scaleX(1); opacity: 1; } 53.3%, 100% { transform: scaleX(1); opacity: 0; } }
 /* the scrolling page: a review's title, a diff, two comments and a link card, drawn once and used by both the window and the stitched preview */
@@ -390,14 +384,15 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .rv-dim { fill: rgba(0, 0, 0, .5); }
 .rv-out { fill: none; stroke: var(--rec); stroke-width: 2; animation: rvpulse 6s infinite both; }
 @keyframes rvpulse { 0% { opacity: 0; } 2.8% { opacity: 1; } 5.6% { opacity: .25; } 8.3%, 100% { opacity: 1; } }
-.rv-pills .pl { fill: var(--c-surface); stroke: var(--c-hair); stroke-width: .3; }
-.rv-pills .kc { fill: var(--cap-fill); stroke: var(--cap-edge); stroke-width: .3; }
-.rv-t { font: 500 6.75px var(--mono); fill: var(--c-text); opacity: 0; animation: rvt 6s infinite both; }
-.rv-t.on { opacity: 1; }
+/* The stop reminder (Recording.swift makeReminder): two 32 pt pills 8 pt apart, centred 11 pt under the area, the elapsed time, then "stop" and
+   the shortcut's caps; it comes and goes with the recording. */
+.rv-ov .rv-rem { left: 50%; top: calc(63.7% + 11px * var(--pt)); transform: translateX(-50%); animation: rvrec 6s infinite both; }
+.rv-rem .pill { padding: 0 calc(14px * var(--pt)); gap: calc(6px * var(--pt)); font: 500 calc(12px * var(--pt))/1 var(--sans); }
+.rv-rem .kk { display: inline-flex; gap: calc(2px * var(--pt)); }
+.art .cov .rv-cl { display: grid; font-weight: 500; }
+.rv-cl > span { grid-area: 1 / 1; opacity: 0; animation: rvt 6s infinite both; }
+.rv-cl > .on { opacity: 1; }
 @keyframes rvt { 0%, 16.66% { opacity: 1; } 16.67%, 100% { opacity: 0; } }
-.rv-lb { font: 500 6.75px var(--sans); fill: var(--c-text); }
-.rv-kt { font: 600 6.2px var(--sans); fill: var(--c-text); }
-.rv-pills { filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .25)); }
 .art.vk { background: #fff conic-gradient(#E9E9EC 25%, transparent 0 50%, #E9E9EC 0 75%, transparent 0) 0 0 / 14px 14px; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .art.vk { background: #2A2A2D conic-gradient(#36363A 25%, transparent 0 50%, #36363A 0 75%, transparent 0) 0 0 / 14px 14px; } }
 :root[data-theme="dark"] .art.vk { background: #2A2A2D conic-gradient(#36363A 25%, transparent 0 50%, #36363A 0 75%, transparent 0) 0 0 / 14px 14px; }
@@ -500,7 +495,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .o-toast { transition: none; }
-  .tx-ov .o-toast, .tx-btn, .tx-kp, .tx-kt, .tx-ktp, .tx-cap, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-on, .rv-kn, .rv-tdk, .rv-tlt, .rv-cur, .rv-out, .rv-rec, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cp-x, .cp-xh, .cp-ov .cp-ch, .cp-ov .cp-ch.cA, .cp-ov .cp-ch.cB, .cp-ov .cp-ch.cC0, .cp-ov .o-toast, .ag-u, .ag-t, .ag-th, .ag-r, .ag-ck, .ag-i, .ag-sd, .card.flash .art { animation: none; }
+  .art *, .card.flash .art { animation: none; }
   .caps.hk .cap { transition: none; }
   .card .cap[data-hold], .bb .k[data-hold] { transition-duration: .01s; }
   .card .cap[data-hold].down, .bb .k[data-hold].down { transform: none; }

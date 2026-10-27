@@ -44,18 +44,18 @@
         <svg viewBox="0 0 200 124" aria-hidden="true">
           <rect class="win term" x="14" y="12" width="172" height="78" rx="8"/>
           <g class="lights" transform="translate(14 12)"><circle cx="9" cy="7" r="2.4"/><circle cx="16.5" cy="7" r="2.4"/><circle cx="24" cy="7" r="2.4"/></g>
-          <rect class="tx-sel" x="21" y="44" width="148" height="12.5" rx="2"/>
+          <rect class="tx-sel" x="21" y="44" width="96" height="12.5" rx="2"/>
           <rect class="tx-sel" style="animation-delay: .35s" x="21" y="58" width="104" height="12.5" rx="2"/>
           <g class="mono" fill="#E6E6EA">
             <text x="23" y="38"><tspan fill="#7FD48C">$</tspan> swift test</text>
-            <text x="23" y="53"><tspan fill="#FF7A6B" font-weight="700">error:</tspan> no 'feedRows'</text>
+            <text x="23" y="53"><tspan fill="#FF7A6B" font-weight="700">error:</tspan> no 'rows'</text>
             <text x="23" y="67">FeedView.swift:42</text>
             <text x="23" y="81" fill="#8B8B93">Test run failed.</text>
           </g>
-          <g class="tx-btn"><rect class="tx-pill" x="21" y="74" width="46" height="20" rx="6.8"/><rect class="tx-bb" x="22.9" y="75.9" width="42.2" height="16.1" rx="5"/><text class="tx-bt" x="27.2" y="86.6">Copy</text><g class="tx-cap"><rect class="tx-k" x="50.6" y="77.95" width="12.4" height="12.4" rx="3.1"/><rect class="tx-kp" x="50.6" y="77.95" width="12.4" height="12.4" rx="3.1"/><text class="tx-kt" x="56.8" y="87.2" text-anchor="middle">&#8617;</text><text class="tx-ktp" x="56.8" y="87.2" text-anchor="middle">&#8617;</text></g></g>
         </svg>
         <div class="cov tx-ov">
-          <div class="o-toast tx-ot"><svg class="ti" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="6"/><path d="M7.5 8h13v3.4h-4.8V21h-3.4v-9.6H7.5z"/></svg><b>Copied 2 lines</b><em>"error: no 'feedRows'"</em></div>
+          <div class="o-strip tx-btn"><span class="pill"><span class="bb primary"><span class="t">Copy</span><span class="k">&#8617;</span></span></span></div>
+          <div class="o-toast tx-ot"><svg class="ti" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="6"/><path d="M7.5 8h13v3.4h-4.8V21h-3.4v-9.6H7.5z"/></svg><b>Copied 2 lines</b><em>"error: no 'rows'"</em></div>
         </div>
       </div>
       <div class="card-head"><kbd class="cap" data-hold="t">T</kbd><h3>Copy text</h3></div>
@@ -80,19 +80,13 @@
           <g class="rv-rec">
           <path class="rv-dim" fill-rule="evenodd" d="M-60 -60H260V200H-60ZM30 22a8 8 0 0 1 8-8H162a8 8 0 0 1 8 8V62a8 8 0 0 1-8 8H38a8 8 0 0 1-8-8Z"/>
           <rect class="rv-out" x="27" y="11" width="146" height="62" rx="5"/>
-          <g class="rv-pills" transform="translate(-10.75 -5)">
-            <rect class="pl" x="37.75" y="83" width="36" height="18" rx="6.2"/>
-            <text class="rv-t" style="animation-delay: 0s" x="55.75" y="94.3" text-anchor="middle">0:00</text><text class="rv-t" style="animation-delay: -5s" x="55.75" y="94.3" text-anchor="middle">0:01</text><text class="rv-t" style="animation-delay: -4s" x="55.75" y="94.3" text-anchor="middle">0:02</text><text class="rv-t on" style="animation-delay: -3s" x="55.75" y="94.3" text-anchor="middle">0:03</text><text class="rv-t" style="animation-delay: -2s" x="55.75" y="94.3" text-anchor="middle">0:04</text><text class="rv-t" style="animation-delay: -1s" x="55.75" y="94.3" text-anchor="middle">0:05</text>
-            <rect class="pl" x="78.25" y="83" width="84" height="18" rx="6.2"/>
-            <text class="rv-lb" x="86" y="94.3">stop</text>
-            <rect class="kc" x="101.5" y="86.4" width="11.2" height="11.2" rx="2.8"/><text class="rv-kt" x="107.1" y="94.2" text-anchor="middle">&#8963;</text>
-            <rect class="kc" x="113.8" y="86.4" width="11.2" height="11.2" rx="2.8"/><text class="rv-kt" x="119.4" y="94.2" text-anchor="middle">&#8679;</text>
-            <rect class="kc" x="126.1" y="86.4" width="28.5" height="11.2" rx="2.8"/><text class="rv-kt" x="140.35" y="94.2" text-anchor="middle">space</text>
-          </g>
           <g class="rv-cur"><path d="M0 0V10.5L2.6 8.2L4.4 12.2L6.3 11.4L4.5 7.5H7.9Z" fill="#000" stroke="#fff" stroke-width=".8" stroke-linejoin="round" paint-order="stroke"/></g>
           </g>
           </g>
         </svg>
+        <div class="cov rv-ov">
+          <div class="o-strip rv-rem"><span class="pill"><span class="rv-cl mono"><span class="rv-t" style="animation-delay: 0s">0:00</span><span class="rv-t" style="animation-delay: -5s">0:01</span><span class="rv-t" style="animation-delay: -4s">0:02</span><span class="rv-t on" style="animation-delay: -3s">0:03</span><span class="rv-t" style="animation-delay: -2s">0:04</span><span class="rv-t" style="animation-delay: -1s">0:05</span></span></span><span class="pill"><span>stop</span><span class="kk"><span class="k">&#8963;</span><span class="k">&#8679;</span><span class="k">space</span></span></span></div>
+        </div>
       </div>
       <div class="card-head"><kbd class="cap" data-hold="v">V</kbd><h3>Record a region</h3></div>
     </article>
