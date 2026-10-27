@@ -6,6 +6,8 @@
   'use strict';
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const W = 640, H = 400, MENU = 22;
+  // A phone's scene runs this much taller than the desktop's, so the toast has desktop to sit on below the chat window.
+  const PHONE_H = 440;
   const LEAVE_MS = 1200, TOUCH_IDLE_MS = 4000;
   const NS = 'http://www.w3.org/2000/svg';
   const phoneQ = matchMedia('(max-width: 599.98px)');
@@ -47,7 +49,7 @@
      around the link preview. */
   const DESK = { view: { x: 0, y: 0, w: W, h: H }, tour: [[480, 136, 800, 1100], [520, 262, 700, 1200], [205, 229, 850, 1200]],
     from: [40, 268, 650], to: [340, 342, 1000], after: [240, 304] };
-  const PHONE = { view: { x: 372, y: 0, w: 260, h: 332 }, tour: [[480, 136, 800, 1100], [520, 262, 700, 1200]],
+  const PHONE = { view: { x: 364, y: 40, w: 276, h: 396 }, tour: [[480, 136, 800, 1100], [520, 262, 700, 1200]],
     from: [440, 222, 600], to: [600, 280, 900], after: [556, 268] };
   const ZERO = [0, 0, 0, 0];
   // Corner points in r's order.
@@ -146,7 +148,8 @@
       + `${br ? `A${f(br)} ${f(br)} 0 0 1 ${f(x + w - br)} ${f(y + h)}` : ''}H${f(x + bl)}${bl ? `A${f(bl)} ${f(bl)} 0 0 1 ${f(x)} ${f(y + h - bl)}` : ''}`
       + `V${f(y + tl)}${tl ? `A${f(tl)} ${f(tl)} 0 0 1 ${f(x + tl)} ${f(y)}` : ''}Z`;
   }
-  const FULL = `M0 0H${W}V${H}H0Z`;
+  // The dim reaches past the desktop scene's bottom edge, which clips it, so a phone's taller scene is dimmed to its end as well.
+  const FULL = `M0 0H${W}V${PHONE_H}H0Z`;
   const lerpRect = (a, b, k) => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, w: a.w + (b.w - a.w) * k, h: a.h + (b.h - a.h) * k });
   const easeInOut = k => (k < .5 ? 2 * k * k : 1 - 2 * (1 - k) ** 2);
   const easeOutBack = k => 1 + 2.2 * (k - 1) ** 3 + 1.2 * (k - 1) ** 2;
@@ -249,7 +252,7 @@
       // The toast sits at the bottom centre of what is on show.
       this.scene.style.setProperty('--vx', `${v.x}px`);
       this.scene.style.setProperty('--tl', `${v.x + v.w / 2}px`);
-      this.scene.style.setProperty('--tb', `${H - v.y - v.h}px`);
+      this.scene.style.setProperty('--tb', `${(this.phone ? PHONE_H : H) - v.y - v.h}px`);
       this.g.blur.setAttribute('stdDeviation', (3.4 * this.pt).toFixed(2));
       // The tools group comes off when the strip would not fit the screen.
       this.strip.classList.remove('narrow');

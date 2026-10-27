@@ -376,9 +376,13 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 }
 /* On a phone the demo is watch-only: the chat window alone, cropped and enlarged, ignoring touch so the page scrolls over it. */
 @media (max-width: 599.98px) {
-  .demo { aspect-ratio: 260 / 332; max-width: 440px; margin: 0 auto; touch-action: auto; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  .demo { aspect-ratio: 276 / 396; max-width: 440px; margin: 0 auto; touch-action: auto; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
   .demo, .demo * { pointer-events: none !important; }
   .rvg { display: none; }
+  /* the desktop runs on below the chat window, where the toast sits */
+  .scene, .content { height: 440px; }
+  .s-screen { height: 440px !important; }
+  .o-toast { bottom: calc(var(--tb) + 10px * var(--pt)); }
   .s-menubar { padding-left: calc(var(--vx, 0px) + 12px); }
   .s-menubar span:nth-child(4), .s-menubar span:nth-child(5) { display: none; }
 }
