@@ -192,6 +192,7 @@ extension OverlayController {
         for item in [c.hover, c.size, c.snap, c.snapTag, c.ratio, c.radius, c.legend, c.reading, c.status, c.strip, c.minimap] { item.isHidden = true }
         c.help.frame = bounds
         c.help.layoutPanel()
+        c.help.showShortcut(Shortcut.label(from: defaults))
 
         // The settings bar: the modes (not in cut out), view, style (not in Text), and the keys sheet's button; hidden while scrolling or
         // armed to record. On a screen too narrow for it, the keys sheet's button alone.

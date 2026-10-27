@@ -118,7 +118,8 @@ final class ActionButton: NSButton {
 /// The keys sheet: a scrim over the overlay and a centered material panel in three columns.
 @MainActor
 final class HelpSheet: NSView {
-    /// Each row's keys are space-separated: a cap per key, with "/" and a context ending in ":" ("Text:") as plain words.
+    /// Each row's keys are space-separated: a cap per key, with "/" and a context ending in ":" ("Text:") as plain words. "hotkey" is
+    /// the capture shortcut, drawn by `showShortcut`.
     static let columns: [(title: String, rows: [(keys: String, action: String)])] = [
         ("Capture", [("drag", "Select a region"), ("click", "Element or window"), ("\u{2325} click", "Flip Frame for this capture"), ("\u{2325} drag", "Exact, no snap"),
                      ("F", "Full screen, or all text"), ("W", "Capture the window"), ("\u{2190} \u{2192}", "Next / previous peer (hover)"), ("\u{21A9}", "Copy"),
@@ -142,6 +143,8 @@ final class HelpSheet: NSView {
                                     ("Menus: \u{2191} / \u{2193}", "Pick in a menu"), ("Subject: K / esc", "Leave the preview")])
     ]
     let panel = NSVisualEffectView()
+    /// The "hotkey" row's keys, and the right edge and vertical center it keeps as the shortcut changes.
+    private var shortcutKeys: (pill: Pill, maxX: CGFloat, midY: CGFloat)?
 
     init() {
         super.init(frame: .zero)
@@ -181,12 +184,17 @@ final class HelpSheet: NSView {
                 action.sizeToFit()
                 action.frame.origin = CGPoint(x: x, y: y + (rowHeight - action.frame.height) / 2)
                 let keys = Pill(fill: .clear, radius: 0, insets: NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0), spacing: 3)
-                keys.show(item.keys) {
-                    item.keys.split(separator: " ").map { token -> NSView in
-                        token == "/" || token.hasSuffix(":") ? NSTextField(String(token), size: 12, color: .secondaryLabelColor) : KeyCap(String(token))
+                if item.keys == "hotkey" {
+                    shortcutKeys = (keys, x + columnWidth, y + rowHeight / 2)
+                    showShortcut(Shortcut.label(from: .standard))
+                } else {
+                    keys.show(item.keys) {
+                        item.keys.split(separator: " ").map { token -> NSView in
+                            token == "/" || token.hasSuffix(":") ? NSTextField(String(token), size: 12, color: .secondaryLabelColor) : KeyCap(String(token))
+                        }
                     }
+                    keys.frame.origin = CGPoint(x: x + columnWidth - keys.frame.width, y: y + (rowHeight - keys.frame.height) / 2)
                 }
-                keys.frame.origin = CGPoint(x: x + columnWidth - keys.frame.width, y: y + (rowHeight - keys.frame.height) / 2)
                 for view in [line, action, keys] { panel.addSubview(view) }
             }
         }
@@ -196,6 +204,13 @@ final class HelpSheet: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     override func mouseDown(with event: NSEvent) {}
+
+    /// Draws the "hotkey" row as one cap per key of `label` (`Shortcut.label`), or "None" as plain words when there is no shortcut.
+    func showShortcut(_ label: String) {
+        guard let (keys, maxX, midY) = shortcutKeys else { return }
+        keys.show(label) { label == "None" ? [NSTextField(label, size: 12, color: .secondaryLabelColor)] : KeyCap.caps(label) }
+        keys.frame.origin = CGPoint(x: maxX - keys.frame.width, y: midY - keys.frame.height / 2)
+    }
 
     /// Fills `bounds` with the scrim and centers the panel.
     func layoutPanel() {

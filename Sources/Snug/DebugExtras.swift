@@ -521,8 +521,8 @@ extension DebugRun {
         func caps(in view: NSView) -> [KeyCap] { ((view as? KeyCap).map { [$0] } ?? []) + view.subviews.flatMap(caps) }
         let chords = caps(in: help).map(\.text).filter { $0.count > 1 && $0.contains { "\u{2325}\u{2318}\u{21E7}\u{2303}".contains($0) } }
         require(!help.isHidden && sheet.contains("Keys") && sheet.contains("Save As") && sheet.contains("Text:") && sheet.contains("Modes, view, recording") && chords.isEmpty
-                    && caps(in: help).map(\.text).contains("\u{21E7}"),
-                "? shows the keys sheet with every column, one cap per key: \(sheet.count) texts, chords in one cap \(chords)")
+                    && caps(in: help).map(\.text).contains("\u{21E7}") && !caps(in: help).map(\.text).contains("hotkey"),
+                "? shows the keys sheet with every column, one cap per key, the shortcut as its keys: \(sheet.count) texts, chords in one cap \(chords)")
         let helpRows = HelpSheet.columns.flatMap(\.rows)
         require(["[ ]", "\u{21E7} [ ]", "=", "\u{2325} drag", "V", "K"].allSatisfy(helpRows.map(\.keys).contains)
                     && helpRows.contains { $0.keys == "arrows" && $0.action.contains("1 px") && $0.action.contains("10 px") },
