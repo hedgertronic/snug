@@ -24,7 +24,9 @@
   /* demo desktop and overlay chrome */
   --d-wall: linear-gradient(155deg, #E6D3E4 0%, #F4C6BC 48%, #FBE5D2 100%);
   --d-win: #FFFFFF; --d-bar: #F4F4F6; --d-fg: #1D1D1F; --d-fg2: #8A8A90; --d-line: rgba(0, 0, 0, .1); --d-row: rgba(0, 0, 0, .06);
-  --d-page: #FCFBF8; --d-card: #FFFFFF; --d-ink: #23331F; --d-acc: #3E7B4F; --d-mb: rgba(255, 255, 255, .55);
+  --d-page: #FCFBF8; --d-card: #FFFFFF; --d-mb: rgba(255, 255, 255, .55);
+  --d-in: #E9E9EB; --d-infg: #1D1D1F; --d-out: #2F7CF6; --d-acc: #2F7CF6; --d-code: #24292F;
+  --d-add: rgba(40, 167, 69, .13); --d-addfg: #1F8A3B; --d-del: rgba(229, 72, 77, .12); --d-delfg: #C9373C;
   --d-dim: rgba(20, 12, 24, .30); --d-chip: rgba(250, 250, 252, .94); --d-chipfg: #1D1D1F; --d-ghost: #FFFFFF;
   /* the app's chrome surface, hairline, text and key caps (Chrome.swift NSColor.chrome*, capFill, capEdge) */
   --c-surface: rgba(246, 246, 248, .92); --c-surface-solid: #F6F6F8; --c-text: rgba(0, 0, 0, .86); --c-text2: rgba(0, 0, 0, .5); --c-hair: rgba(0, 0, 0, .12); --c-sh: .2;
@@ -43,7 +45,9 @@
     --key: #3A2843; --keyfg: #FBF1F6; --keyline: rgba(255, 255, 255, .22); --keyedge: #0C0610;
     --d-wall: linear-gradient(155deg, #23152A 0%, #4A2A40 52%, #6E3B3B 100%);
     --d-win: #1E1E20; --d-bar: #2A2A2D; --d-fg: #ECECEE; --d-fg2: #8E8E93; --d-line: rgba(255, 255, 255, .1); --d-row: rgba(255, 255, 255, .08);
-    --d-page: #18191A; --d-card: #222325; --d-ink: #E4EDE0; --d-acc: #7CC08E; --d-mb: rgba(20, 14, 24, .5);
+    --d-page: #18191A; --d-card: #222325; --d-mb: rgba(20, 14, 24, .5);
+    --d-in: #3A3A3C; --d-infg: #F2F2F4; --d-out: #2C6FE0; --d-acc: #5B9BFF; --d-code: #E6E6EA;
+    --d-add: rgba(63, 185, 80, .17); --d-addfg: #62CB78; --d-del: rgba(248, 81, 73, .17); --d-delfg: #FF7B72;
     --d-dim: rgba(0, 0, 0, .42); --d-chip: rgba(44, 44, 48, .94); --d-chipfg: #F5F5F7;
     --c-surface: rgba(48, 48, 53, .96); --c-surface-solid: #303035; --c-text: rgba(255, 255, 255, .92); --c-text2: rgba(255, 255, 255, .55); --c-hair: rgba(255, 255, 255, .22); --c-sh: .42;
     --cap-fill: rgba(255, 255, 255, .16); --cap-edge: rgba(0, 0, 0, .45); --cap-sh: rgba(0, 0, 0, .55); --wash: 26%; --lit-text: color-mix(in srgb, var(--hl) 62%, #FFF);
@@ -56,7 +60,9 @@
   --key: #3A2843; --keyfg: #FBF1F6; --keyline: rgba(255, 255, 255, .22); --keyedge: #0C0610;
   --d-wall: linear-gradient(155deg, #23152A 0%, #4A2A40 52%, #6E3B3B 100%);
   --d-win: #1E1E20; --d-bar: #2A2A2D; --d-fg: #ECECEE; --d-fg2: #8E8E93; --d-line: rgba(255, 255, 255, .1); --d-row: rgba(255, 255, 255, .08);
-  --d-page: #18191A; --d-card: #222325; --d-ink: #E4EDE0; --d-acc: #7CC08E; --d-mb: rgba(20, 14, 24, .5);
+  --d-page: #18191A; --d-card: #222325; --d-mb: rgba(20, 14, 24, .5);
+    --d-in: #3A3A3C; --d-infg: #F2F2F4; --d-out: #2C6FE0; --d-acc: #5B9BFF; --d-code: #E6E6EA;
+    --d-add: rgba(63, 185, 80, .17); --d-addfg: #62CB78; --d-del: rgba(248, 81, 73, .17); --d-delfg: #FF7B72;
   --d-dim: rgba(0, 0, 0, .42); --d-chip: rgba(44, 44, 48, .94); --d-chipfg: #F5F5F7;
   --c-surface: rgba(48, 48, 53, .96); --c-surface-solid: #303035; --c-text: rgba(255, 255, 255, .92); --c-text2: rgba(255, 255, 255, .55); --c-hair: rgba(255, 255, 255, .22); --c-sh: .42;
   --cap-fill: rgba(255, 255, 255, .16); --cap-edge: rgba(0, 0, 0, .45); --cap-sh: rgba(0, 0, 0, .55); --wash: 26%; --lit-text: color-mix(in srgb, var(--hl) 62%, #FFF);
@@ -123,20 +129,46 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .s-lights i { width: 11px; height: 11px; border-radius: 50%; background: #FF5F57; }
 .s-lights i:nth-child(2) { background: #FEBC2E; }
 .s-lights i:nth-child(3) { background: #28C840; }
-.s-addr { margin: 0 auto; width: 230px; height: 24px; border-radius: 7px; background: var(--d-row); display: flex; align-items: center; justify-content: center; color: var(--d-fg2); }
-.s-title { font-size: 16px; font-weight: 700; color: var(--d-ink); letter-spacing: -.01em; }
-.s-title small { display: block; font-size: 10.5px; font-weight: 400; color: var(--d-fg2); letter-spacing: 0; }
-.s-card { background: var(--d-card); border-radius: 10px; box-shadow: 0 0 0 .5px var(--d-line), 0 1px 3px rgba(0, 0, 0, .05); padding: 10px 12px; color: var(--d-ink); }
-.s-card h4 { margin: 0; font-size: 9.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--d-fg2); }
-.s-bars { position: absolute; left: 14px; right: 14px; bottom: 12px; height: 80px; display: flex; align-items: end; gap: 14px; border-bottom: 1px solid var(--d-line); }
-.s-bars i { flex: 1; border-radius: 4px 4px 0 0; background: var(--d-acc); }
-.s-stat { background: var(--d-row); border-radius: 7px; padding: 10px 8px; display: flex; flex-direction: column; gap: 4px; color: var(--d-ink); }
-.s-stat small { font-size: 9.5px; color: var(--d-fg2); }
-.s-stat b { font-size: 15px; white-space: nowrap; }
-.s-table { background: var(--d-card); border-radius: 8px; box-shadow: 0 0 0 .5px var(--d-line); overflow: hidden; }
-.s-row { display: grid; grid-template-columns: 2fr 1fr 1fr; align-items: center; padding: 0 12px; color: var(--d-ink); font-variant-numeric: tabular-nums; border-top: .5px solid var(--d-line); }
-.s-row.h { border-top: 0; font-size: 9px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--d-fg2); background: var(--d-row); }
-.s-row span:first-child { font-weight: 600; }
+.s-wt { position: absolute; left: 0; right: 0; text-align: center; font-weight: 600; color: var(--d-fg); pointer-events: none; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.s-toolbar .s-lights { position: relative; z-index: 1; }
+.av { display: inline-block; flex: none; width: 16px; height: 16px; border-radius: 50%; background: linear-gradient(140deg, #FFB38A, #FF7A6B); }
+.av.a2 { background: linear-gradient(140deg, #9CC7FF, #6C8CF5); }
+
+/* the review window: the change's title, then one file of the diff with an inline comment */
+.s-pr { font-size: 14px; font-weight: 700; color: var(--d-fg); letter-spacing: -.01em; }
+.s-pr small { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 10.5px; font-weight: 400; color: var(--d-fg2); letter-spacing: 0; }
+.s-tag { padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--d-acc) 16%, transparent); color: var(--d-acc); font-weight: 600; font-size: 9.5px; }
+.s-pr ins, .s-fhead ins { text-decoration: none; color: var(--d-addfg); font-weight: 600; }
+.s-pr del, .s-fhead del { text-decoration: none; color: var(--d-delfg); font-weight: 600; }
+.s-file { background: var(--d-card); border-radius: 8px; box-shadow: 0 0 0 .5px var(--d-line), 0 1px 3px rgba(0, 0, 0, .05); }
+.s-fhead { display: flex; align-items: center; justify-content: space-between; padding: 0 10px; background: var(--d-row); border-radius: 8px 8px 0 0; border-bottom: .5px solid var(--d-line); font-size: 10px; color: var(--d-fg2); }
+.s-fhead code { font: 600 10px var(--mono); color: var(--d-fg); }
+.s-ln { display: flex; align-items: center; font: 10px/1 var(--mono); color: var(--d-code); }
+.s-ln .no { width: 24px; flex: none; padding-right: 6px; text-align: right; color: var(--d-fg2); opacity: .8; font-size: 9px; }
+.s-ln .mk { width: 14px; flex: none; text-align: center; font-weight: 700; }
+.s-ln code { font: inherit; white-space: pre; }
+.s-ln.add { background: var(--d-add); }
+.s-ln.add .mk, .s-ln.add .no { color: var(--d-addfg); }
+.s-ln.del { background: var(--d-del); }
+.s-ln.del .mk, .s-ln.del .no { color: var(--d-delfg); }
+.s-cmt { display: flex; gap: 8px; padding: 9px 10px; background: var(--d-page); border-radius: 8px; box-shadow: 0 0 0 .5px var(--d-line), 0 2px 6px rgba(0, 0, 0, .06); }
+.s-cmt b { font-size: 10.5px; }
+.s-cmt small { font-size: 9.5px; color: var(--d-fg2); }
+.s-cmt p { margin-top: 3px; font-size: 10.5px; line-height: 1.35; }
+.s-cmt .act { display: block; margin-top: 6px; color: var(--d-acc); font-weight: 600; }
+
+/* the chat window: bubbles, one with a link preview, a timestamp and the message field */
+.s-ts { font-size: 9px; color: var(--d-fg2); text-align: center; }
+.s-bub { padding: 6px 11px; border-radius: 13px; font-size: 10.5px; line-height: 14px; background: var(--d-in); color: var(--d-infg); }
+.s-bub.out { background: var(--d-out); color: #FFFFFF; }
+.s-link { display: flex; flex-direction: column; overflow: hidden; border-radius: 9px; background: var(--d-card); color: var(--d-fg); }
+.s-link .th { display: flex; flex-direction: column; justify-content: center; gap: 4px; height: 32px; padding: 0 10px; flex: none; background: linear-gradient(120deg, #F7D9D3, #E4D8F0); }
+.s-link .th i { display: block; height: 4px; border-radius: 2px; background: rgba(42, 24, 48, .28); width: 62%; }
+.s-link .th i:nth-child(2) { width: 44%; background: rgba(31, 138, 59, .55); }
+.s-link .th i:nth-child(3) { width: 52%; }
+.s-link b { padding: 5px 9px 0; font-size: 10px; }
+.s-link small { padding: 1px 9px 0; font-size: 9px; color: var(--d-fg2); }
+.s-field { display: flex; align-items: center; padding: 0 12px; border-radius: 16px; box-shadow: inset 0 0 0 .5px var(--d-line); background: var(--d-row); color: var(--d-fg2); font-size: 10.5px; }
 
 /* The overlay, drawn as the app draws it: OverlayView.swift (geometry, default highlight: fill 0.1, dim 0.5, glow 0.2) and
    Chrome.swift (chips, strip buttons, key caps). --pt is the app's point in scene px, set by snug.js. */

@@ -14,17 +14,27 @@
   const BOX = {
     screen: { n: 'Full screen', x: 0, y: 0, w: 640, h: 400, p: null, r: [0, 0, 0, 0] },
     menubar: { n: 'Menu bar', x: 0, y: 0, w: 640, h: 22, p: 'screen', r: [0, 0, 0, 0] },
-    win: { n: 'Safari', x: 36, y: 40, w: 568, h: 336, p: 'screen', r: [12, 12, 12, 12] },
-    toolbar: { n: 'Toolbar', x: 36, y: 40, w: 568, h: 38, p: 'win', r: [0, 0, 0, 0] },
-    chart: { n: 'Elevation chart', x: 60, y: 128, w: 256, h: 134, p: 'win', r: [10, 10, 10, 10] },
-    cond: { n: 'Conditions', x: 328, y: 128, w: 252, h: 134, p: 'win', r: [10, 10, 10, 10] },
-    trail: { n: 'Trail', x: 340, y: 166, w: 70, h: 82, p: 'cond', r: [7, 7, 7, 7] },
-    wind: { n: 'Wind', x: 418, y: 166, w: 70, h: 82, p: 'cond', r: [7, 7, 7, 7] },
-    sunset: { n: 'Sunset', x: 496, y: 166, w: 70, h: 82, p: 'cond', r: [7, 7, 7, 7] },
-    table: { n: 'Routes table', x: 60, y: 274, w: 520, h: 90, p: 'win', r: [8, 8, 8, 8] },
-    row1: { n: 'Cedar Loop', x: 60, y: 297, w: 520, h: 22, p: 'table', r: [0, 0, 0, 0] },
-    row2: { n: 'Lookout Ridge', x: 60, y: 319, w: 520, h: 22, p: 'table', r: [0, 0, 0, 0] },
-    row3: { n: 'Fern Hollow', x: 60, y: 341, w: 520, h: 23, p: 'table', r: [0, 0, 0, 0] },
+    // The review window, behind. Its boxes come before the chat window's, so where the two overlap the chat wins the hit test.
+    rv: { n: 'Review', x: 16, y: 34, w: 412, h: 318, p: 'screen', r: [12, 12, 12, 12] },
+    rvbar: { n: 'Toolbar', x: 16, y: 34, w: 412, h: 34, p: 'rv', r: [0, 0, 0, 0] },
+    rvfile: { n: 'Header.css', x: 30, y: 116, w: 346, h: 228, p: 'rv', r: [8, 8, 8, 8] },
+    rvhead: { n: 'File header', x: 30, y: 116, w: 346, h: 26, p: 'rvfile', r: [0, 0, 0, 0] },
+    l1: { n: 'Line 12', x: 30, y: 142, w: 346, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
+    l2: { n: 'Line 13', x: 30, y: 160, w: 346, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
+    l3: { n: 'Removed line 14', x: 30, y: 178, w: 346, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
+    l4: { n: 'Added line 14', x: 30, y: 196, w: 346, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
+    l5: { n: 'Added line 15', x: 30, y: 214, w: 346, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
+    rvc: { n: 'Review comment', x: 46, y: 246, w: 314, h: 62, p: 'rvfile', r: [8, 8, 8, 8] },
+    l6: { n: 'Line 16', x: 30, y: 322, w: 346, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
+    // The chat window, in front.
+    ch: { n: 'Chat', x: 380, y: 58, w: 244, h: 328, p: 'screen', r: [12, 12, 12, 12] },
+    chbar: { n: 'Toolbar', x: 380, y: 58, w: 244, h: 34, p: 'ch', r: [0, 0, 0, 0] },
+    b1: { n: 'Message', x: 392, y: 116, w: 176, h: 40, p: 'ch', r: [13, 13, 13, 13] },
+    b2: { n: 'Message', x: 462, y: 162, w: 150, h: 26, p: 'ch', r: [13, 13, 13, 13] },
+    b3: { n: 'Message', x: 428, y: 194, w: 184, h: 98, p: 'ch', r: [13, 13, 13, 13] },
+    lk: { n: 'Link preview', x: 434, y: 216, w: 172, h: 70, p: 'b3', r: [9, 9, 9, 9] },
+    b4: { n: 'Message', x: 392, y: 300, w: 166, h: 26, p: 'ch', r: [13, 13, 13, 13] },
+    cm: { n: 'Message field', x: 390, y: 340, w: 224, h: 32, p: 'ch', r: [16, 16, 16, 16] },
   };
   const KEYS = Object.keys(BOX);
   const ZERO = [0, 0, 0, 0];
@@ -43,19 +53,33 @@
   for (const k of KEYS) BOX[k].radii = radiiOf(k);
 
   const at = k => `left:${BOX[k].x}px;top:${BOX[k].y}px;width:${BOX[k].w}px;height:${BOX[k].h}px`;
-  const stat = (k, label, val) => `<div class="b s-stat" style="${at(k)}"><small>${label}</small><b>${val}</b></div>`;
-  const row = (k, a, b, c) => `<div class="b s-row" style="${at(k)}"><span>${a}</span><span>${b}</span><span>${c}</span></div>`;
+  const lights = '<span class="s-lights"><i></i><i></i><i></i></span>';
+  // A diff line: old and new line numbers, the +/- mark, and the code.
+  const line = (k, kind, o, n, code) => `<div class="b s-ln ${kind}" style="${at(k)}"><span class="no">${o}</span><span class="no">${n}</span>`
+    + `<span class="mk">${kind === 'add' ? '+' : kind === 'del' ? '&minus;' : ''}</span><code>${code}</code></div>`;
+  const bub = (k, side, html) => `<div class="b s-bub ${side}" style="${at(k)}">${html}</div>`;
   const CONTENT = `
     <div class="b s-screen" style="${at('screen')}"></div>
-    <div class="b s-menubar" style="${at('menubar')}"><b>Safari</b><span>File</span><span>Edit</span><span>View</span><span>History</span><span class="clock">Mon Oct 19 9:41</span></div>
-    <div class="b s-win" style="${at('win')}"></div>
-    <div class="b s-toolbar" style="${at('toolbar')}"><span class="s-lights"><i></i><i></i><i></i></span><span class="s-addr">trail-log.example</span></div>
-    <div class="b s-title" style="left:60px;top:88px">Weekend routes<small>Four loops within an hour of town.</small></div>
-    <div class="b s-card" style="${at('chart')}"><h4>Elevation gain</h4><div class="s-bars"><i style="height:45%"></i><i style="height:95%"></i><i style="height:30%"></i><i style="height:70%"></i></div></div>
-    <div class="b s-card" style="${at('cond')}"><h4>Conditions</h4></div>
-    ${stat('trail', 'Trail', 'Dry')}${stat('wind', 'Wind', '8 mph')}${stat('sunset', 'Sunset', '6:42')}
-    <div class="b s-table" style="${at('table')}"><div class="s-row h" style="height:23px"><span>Route</span><span>Distance</span><span>Gain</span></div></div>
-    ${row('row1', 'Cedar Loop', '4.2 mi', '620 ft')}${row('row2', 'Lookout Ridge', '7.8 mi', '1,940 ft')}${row('row3', 'Fern Hollow', '3.1 mi', '310 ft')}`;
+    <div class="b s-menubar" style="${at('menubar')}"><b>Chat</b><span>File</span><span>Edit</span><span>View</span><span>Window</span><span class="clock">Mon Oct 26 9:41</span></div>
+    <div class="b s-win" style="${at('rv')}"></div>
+    <div class="b s-toolbar" style="${at('rvbar')}">${lights}<span class="s-wt">Review</span></div>
+    <div class="b s-pr" style="left:32px;top:74px;width:340px">Round the chat avatars<small><span class="s-tag">Ready</span>#218 &middot; 1 file &middot; <ins>+2</ins> <del>&minus;1</del></small></div>
+    <div class="b s-file" style="${at('rvfile')}"></div>
+    <div class="b s-fhead" style="${at('rvhead')}"><code>src/chat/Header.css</code><span><ins>+2</ins> <del>&minus;1</del></span></div>
+    ${line('l1', 'ctx', 12, 12, '.avatar {')}${line('l2', 'ctx', 13, 13, '  width: 28px;')}${line('l3', 'del', 14, '', '  border-radius: 4px;')}
+    ${line('l4', 'add', '', 14, '  border-radius: 50%;')}${line('l5', 'add', '', 15, '  object-fit: cover;')}
+    <div class="b s-cmt" style="${at('rvc')}"><i class="av a2"></i><div><b>Rae</b> <small>on line 14</small><p>50% keeps it round at any size. Nice.</p><small class="act">Reply &middot; Resolve</small></div></div>
+    ${line('l6', 'ctx', 15, 16, '}')}
+    <div class="b s-win" style="${at('ch')}"></div>
+    <div class="b s-toolbar" style="${at('chbar')}">${lights}<span class="s-wt"><i class="av a2"></i>Rae</span></div>
+    <div class="b s-ts" style="left:380px;top:98px;width:244px">Today 9:38</div>
+    ${bub('b1', 'in', 'Avatars in the header get clipped on small screens')}
+    ${bub('b2', 'out', 'On it, rounding them now')}
+    ${bub('b3', 'out', 'PR is up, take a look')}
+    <div class="b s-link" style="${at('lk')}"><span class="th"><i></i><i></i><i></i></span><b>Round the chat avatars</b><small>review.example &middot; #218</small></div>
+    ${bub('b4', 'in', 'Looks great, approving now')}
+    <div class="b s-ts" style="left:564px;top:307px">9:41</div>
+    <div class="b s-field" style="${at('cm')}">Message</div>`;
 
   // The strip's tool symbols, drawn after the SF Symbols the app uses (Chrome.swift: arrow.down.document, record.circle,
   // person.crop.rectangle, eyedropper).
@@ -125,7 +149,7 @@
       const id = ++uid;
       el.tabIndex = 0;
       el.setAttribute('role', 'group');
-      el.setAttribute('aria-label', 'Demo of the Snug overlay. Hover to select an element, or drag a box and pause to snap it. Return copies, Escape clears a selection, and G, V, K and U go to those features below.');
+      el.setAttribute('aria-label', 'Demo of the Snug overlay over two windows: a chat thread about rounding the avatars in a header, with a link to the change, and a code review of that change with an inline comment. Hover to select a message, the link preview, a diff line or the comment, or drag a box and pause to snap it. Return copies, Escape clears a selection, and G, V, K and U go to those features below.');
       el.innerHTML = `<div class="scene" data-open="true" data-cursor="cross">
         <div class="content">${CONTENT}</div>
         <svg class="ovg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true">
@@ -155,8 +179,8 @@
       // The toast's thumbnail is the scene's own content, scaled and cropped to the copied area.
       this.thumb = q('.thc');
       this.thumb.appendChild(q('.content').cloneNode(true));
-      this.s = { open: true, target: 'win', drag: null, selr: null, path: [] };
-      this.ptr = { x: 300, y: 112 };
+      this.s = { open: true, target: 'b1', drag: null, selr: null, path: [] };
+      this.ptr = { x: 480, y: 136 };
       this.chipKey = '';
       this.dimKey = null;
       new ResizeObserver(() => this.fit()).observe(el);
@@ -379,23 +403,31 @@
         requestAnimationFrame(step);
       });
       const hover = () => { this.s.target = hit(this.ptr); };
+      // The overlay opening again after a copy fades in under the pointer instead of appearing at once.
+      const reopen = () => {
+        this.reset(); hover(); this.render();
+        for (const e of [this.scene.querySelector('.ovg'), this.chip, this.strip]) e.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
+      };
       const loop = async () => {
+        let first = true;
         for (;;) {
           const s = this.s;
-          this.reset();
-          // Hover: a table row, then the chart card with its own rounded corners, then the toolbar, rounded only where the window is.
-          this.aim({ x: 250, y: 330 }); hover(); this.render();
-          await sleep(700);
-          await glide({ x: 170, y: 205 }, 700, hover);
+          if (first) { this.reset(); hover(); this.render(); first = false; } else reopen();
+          // Hover a message bubble, then the link preview inside the next one. The pointer glides from wherever the last run left
+          // it, so a new loop never jumps.
+          await glide({ x: 480, y: 136 }, 800, hover);
+          await sleep(1100);
+          await glide({ x: 520, y: 262 }, 700, hover);
           await sleep(1200);
-          await glide({ x: 470, y: 60 }, 650, hover);
+          // Over to the review window: an added line of the diff.
+          await glide({ x: 205, y: 205 }, 850, hover);
           await sleep(1200);
-          // Drag a loose box around the Conditions card, pause, and it snaps.
-          await glide({ x: 323, y: 122 }, 650, hover);
+          // Drag a loose box around the review comment, pause, and it snaps to the card.
+          await glide({ x: 40, y: 240 }, 650, hover);
           await sleep(200);
           const start = { ...this.ptr };
           s.drag = { raw: { x: start.x, y: start.y, w: 0, h: 0 }, snap: null };
-          await glide({ x: 586, y: 267 }, 1000, () => {
+          await glide({ x: 366, y: 314 }, 1000, () => {
             s.drag.raw = { x: start.x, y: start.y, w: this.ptr.x - start.x, h: this.ptr.y - start.y };
           });
           await sleep(180);
@@ -403,7 +435,7 @@
           this.spring(s.drag.raw);
           await sleep(1300);
           s.selr = { ...s.drag.snap, snapped: true }; s.drag = null; this.anim = null;
-          await glide({ x: 470, y: 205 }, 500, () => {});
+          await glide({ x: 250, y: 282 }, 500, () => {});
           await sleep(900);
           this.copy();
           await sleep(4600);
@@ -412,7 +444,7 @@
       loop().catch(g => { if (typeof g !== 'number') throw g; });
     }
     still() {
-      const raw = { x: 323, y: 122, w: 263, h: 145 };
+      const raw = { x: 40, y: 240, w: 326, h: 74 };
       Object.assign(this.s, { open: true, selr: null, drag: { raw, snap: snapRect(raw) } });
       this.scene.dataset.auto = 'false';
       this.render();
@@ -543,7 +575,7 @@
         e.preventDefault();
         this.takeover();
         this.resumeAfter(TOUCH_IDLE_MS * 2);
-        if (!s.open) { if (e.key === 'Enter') { this.reset(); s.target = s.target || 'win'; this.render(); } return; }
+        if (!s.open) { if (e.key === 'Enter') { this.reset(); s.target = s.target || 'ch'; this.render(); } return; }
         if (e.key === 'Enter') this.copy();
         // Esc drops a selection back to hovering what is under the pointer, else closes the overlay (OverlayController keyDown).
         else if (e.key === 'Escape') {
