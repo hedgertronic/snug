@@ -529,11 +529,42 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 let session = try await start.value
                 let file = try await session.stop()
                 Sound.recordStop.play(defaults: .standard)
-                _ = try await ScreenRecording.deliver(file, pasteboard: .general, defaults: .standard)
+                _ = try await ScreenRecording.deliver(file, warning: session.warning, pasteboard: .general, defaults: .standard)
             } catch {
                 showRecordingFailure(error)
             }
         }
+    }
+
+    /// The longest Quit waits for a recording to start and then finish its file before Snug ends anyway: the stop's own
+    /// `ScreenRecording.finishTimeout` and time for a start still under way.
+    static let quitTimeout = ScreenRecording.finishTimeout + .seconds(5)
+    private var terminationReplied = false
+
+    /// Quit while recording (or while one starts) first stops it and waits, at most `quitTimeout`, for the file to be finished and moved
+    /// to its name in the save folder, so the movie is playable and visible. Nothing else delays quitting.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let start = endRecording() else { return .terminateNow }
+        recordingLog.notice("quit while recording")
+        let reply = { [self] in
+            guard !terminationReplied else { return }
+            terminationReplied = true
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        Task {
+            do {
+                let file = try await start.value.stop()
+                recordingLog.notice("quit: recording saved as \(file.lastPathComponent, privacy: .public)")
+            } catch {
+                recordingLog.error("quit: recording did not finish: \((error as NSError).localizedDescription, privacy: .public)")
+            }
+            reply()
+        }
+        Task {
+            try? await Task.sleep(for: Self.quitTimeout)
+            reply()
+        }
+        return .terminateLater
     }
 
     // MARK: Windows
