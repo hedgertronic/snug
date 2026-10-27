@@ -18,7 +18,7 @@ enum Accessibility {
     private static let listBudget = Duration.milliseconds(300)
     private static let listElements = 400
     private static let terminalElements = 3000
-    /// The most rows read from one terminal text area.
+    /// The most rows of one terminal text area; a taller area is left to OCR.
     static let maxTerminalRows = 500
 
     /// The frames of the element at `point` (global points, top-left origin) in `pid`'s app and its parents up to the window,
@@ -263,9 +263,10 @@ enum Accessibility {
     /// box per visual row (measured on iTerm2 3.6: the visible rows only, 8 pt cells, each row padded to the grid's width).
     static let terminalApps: Set<String> = ["com.googlecode.iterm2"]
 
-    /// The text areas in `pid`'s windows, each one's frame and its visible rows' text and boxes (at most `maxTerminalRows`), in global
-    /// points, all read within one budget. Empty without permission, on a timeout, or for an area that does not answer for its rows; an
-    /// area whose rows the budget cut short keeps the rows read.
+    /// The text areas in `pid`'s windows, each one's frame and its visible rows' text and boxes, in global points, all read within one
+    /// budget. Empty without permission or on a timeout. An area is left out when it does not answer for its rows, has more than
+    /// `maxTerminalRows`, or the budget runs out before its last row, since its rows claim the whole frame (`ScreenText.grid`) and
+    /// partial rows would hide the rest from OCR.
     @concurrent
     static func terminalRows(pid: pid_t) async -> [(frame: CGRect, rows: [(text: String, box: CGRect)])] {
         guard pid != getpid(), AXIsProcessTrusted() else { return [] }
@@ -288,10 +289,10 @@ enum Accessibility {
             var raw: CFTypeRef?
             guard let frame = frame(of: area)?.rect, AXUIElementCopyAttributeValue(area, kAXValueAttribute as CFString, &raw) == .success,
                   let value = raw as? String as NSString?, value.length > 0,
-                  let last = AXValues.index(parameter("AXLineForIndex", area, value.length - 1 as CFNumber)) else { return nil }
+                  let last = AXValues.index(parameter("AXLineForIndex", area, value.length - 1 as CFNumber)), last < maxTerminalRows else { return nil }
             var rows: [(text: String, box: CGRect)] = []
-            for line in 0...min(last, maxTerminalRows - 1) {
-                guard budget.visit() else { break }
+            for line in 0...last {
+                guard budget.visit() else { return nil }
                 guard let lineRange = parameter("AXRangeForLine", area, line as CFNumber),
                       let range = AXValues.range(lineRange).flatMap({ AXValues.range($0, within: value.length) }),
                       let box = AXValues.rect(parameter("AXBoundsForRange", area, lineRange)) else { return nil }
