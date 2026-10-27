@@ -409,7 +409,8 @@ final class OverlayController {
         screenTexts = []
         radii = [:]
         arcs = [:]
-        radiusTasks.values.forEach { $0.cancel() }
+        // A copy started just before dismissing still awaits its radius task, so the tasks are dropped, not canceled; a result that
+        // arrives after the image changed is never stored.
         radiusTasks = [:]
         editedRadii = [:]
         undoStack = []
@@ -1018,8 +1019,8 @@ final class OverlayController {
     }
 
     /// Measures a rectangle's corner radius and corner arcs off the main thread, once, and redraws when they arrive. A window's radius is
-    /// fitted to where its own color starts at each corner. Canceling the task (as dismissing does) cancels the measuring with it, and a
-    /// canceled result is never stored.
+    /// fitted to where its own color starts at each corner. Canceling the task cancels the measuring with it, and a canceled result is
+    /// never stored.
     private func measureRadius(_ rect: CGRect?) {
         guard let rect, let image, radii[rect] == nil, radiusTasks[rect] == nil else { return }
         // A frozen target (the Dock) is not a window with its own opaque color; its corners are fitted to its outline like any region's.
