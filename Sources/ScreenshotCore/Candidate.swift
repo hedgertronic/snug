@@ -97,7 +97,7 @@ public enum Detection {
     /// `image` shrunk by an integer `factor` for analysis that does not need full resolution; 1 returns it untouched.
     public static func downsampled(_ image: CGImage, by factor: Int) -> CGImage {
         guard factor > 1 else { return image }
-        let context = CGContext(data: nil, width: image.width / factor, height: image.height / factor, bitsPerComponent: 8,
+        let context = CGContext(data: nil, width: max(1, image.width / factor), height: max(1, image.height / factor), bitsPerComponent: 8,
                                 bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         context.interpolationQuality = .high
