@@ -20,6 +20,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     private var recording: Task<ScreenRecording, any Error>? {
         didSet { statusItem.map { Self.showRecording(recording != nil, in: $0.menu!) } }
     }
+    /// The stopped recording's finish: its stop, the file's move to its name and the delivery. Quit waits for it; nil once it ends.
+    private var finishing: Task<Void, Never>?
     private var iconObservations: [NSKeyValueObservation] = []
     /// Sparkle's updater, made only when Snug launches for real, so debug runs never check for updates or ask about automatic checks.
     private var updater: SPUStandardUpdaterController?
@@ -531,7 +533,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     private func stopRecording(via: String) {
         recordingLog.notice("stop requested via \(via, privacy: .public), recording \(self.recording != nil)")
         guard let start = endRecording() else { return }
-        Task {
+        let finish = Task {
             do {
                 let session = try await start.value
                 let file = try await session.stop()
@@ -541,6 +543,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 showRecordingFailure(error)
             }
         }
+        finishing = finish
+        Task {
+            await finish.value
+            if finishing == finish { finishing = nil }
+        }
     }
 
     /// The longest Quit waits for a recording to start and then finish its file before Snug ends anyway: the stop's own
@@ -548,23 +555,29 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     static let quitTimeout = ScreenRecording.finishTimeout + .seconds(5)
     private var terminationReplied = false
 
-    /// Quit while recording (or while one starts) first stops it and waits, at most `quitTimeout`, for the file to be finished and moved
-    /// to its name in the save folder, so the movie is playable and visible. Nothing else delays quitting.
+    /// Quit while recording (or while one starts) first stops it, and Quit just after a stop waits for that stop's `finishing`; either
+    /// waits at most `quitTimeout` for the file to be finished and moved to its name in the save folder, so the movie is playable and
+    /// visible. Nothing else delays quitting.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let start = endRecording() else { return .terminateNow }
-        recordingLog.notice("quit while recording")
+        let start = endRecording()
+        let finishing = finishing
+        guard start != nil || finishing != nil else { return .terminateNow }
+        recordingLog.notice("quit while recording \(start != nil), while a stop finishes \(finishing != nil)")
         let reply = { [self] in
             guard !terminationReplied else { return }
             terminationReplied = true
             sender.reply(toApplicationShouldTerminate: true)
         }
         Task {
-            do {
-                let file = try await start.value.stop()
-                recordingLog.notice("quit: recording saved as \(file.lastPathComponent, privacy: .public)")
-            } catch {
-                recordingLog.error("quit: recording did not finish: \((error as NSError).localizedDescription, privacy: .public)")
+            if let start {
+                do {
+                    let file = try await start.value.stop()
+                    recordingLog.notice("quit: recording saved as \(file.lastPathComponent, privacy: .public)")
+                } catch {
+                    recordingLog.error("quit: recording did not finish: \((error as NSError).localizedDescription, privacy: .public)")
+                }
             }
+            await finishing?.value
             reply()
         }
         Task {
