@@ -41,8 +41,7 @@ enum SettingsTabs {
     static let panes: [(title: String, symbol: String, view: AnyView)] = [
         ("General", "gearshape", AnyView(GeneralPane())),
         ("Appearance", "paintpalette", AnyView(AppearancePane())),
-        ("Keys", "keyboard", AnyView(KeysPane())),
-        ("Agent", "sparkles", AnyView(AgentPane()))
+        ("Keys", "keyboard", AnyView(KeysPane()))
     ]
 
     /// AppKit gives the window the selected tab's label as its title; this puts "Settings" back.
@@ -207,6 +206,7 @@ private struct GeneralPane: View {
                         permission("Accessibility", granted: AXIsProcessTrusted()) { Accessibility.requestTrust() }
                     }
                 }
+                AgentSection()
                 caption("About the developer")
                 Card {
                     // The 200 px headshot drawn at 44 pt stays sharp at 2x.
@@ -322,17 +322,17 @@ private struct AppearancePane: View {
                 caption("Toast")
                 ToastPositionPicker(tag: $toastPosition)
                 Card {
-                    // The lifetimes as evenly spaced stops; 0 shows only failure toasts.
+                    // The lifetimes as evenly spaced stops, ticked at Off, 5, 10, 30 and Forever; 0 shows only failure toasts.
                     LabeledContent("Duration") {
                         HStack(spacing: 10) {
-                            Slider(value: Binding { Double(Toast.lifetimes.firstIndex(of: toastLifetime)!) } set: { toastLifetime = Toast.lifetimes[Int($0.rounded())] },
+                            Slider(value: Binding { Double(Toast.lifetimeIndex(toastLifetime)) } set: { toastLifetime = Toast.lifetimes[Int($0.rounded())] },
                                    in: 0...Double(Toast.lifetimes.count - 1)) {
                                 Text("Duration")
                             } ticks: {
-                                SliderTickContentForEach(Toast.lifetimes.indices.map(Double.init), id: \.self) { SliderTick($0) }
+                                SliderTickContentForEach([0, 5, 10, 30, -1].map { Double(Toast.lifetimeIndex($0)) }, id: \.self) { SliderTick($0) }
                             }
                             .labelsHidden()
-                            .frame(width: 150)
+                            .frame(width: 170)
                             Text(toastLifetime < 0 ? "Forever" : toastLifetime == 0 ? "Off" : "\(toastLifetime) s")
                                 .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).frame(width: 54, alignment: .trailing)
                         }
@@ -889,14 +889,15 @@ struct ShortcutRecorder: NSViewRepresentable {
     }
 }
 
-/// Copy for Agent: the last capture, with Clear, and the command that adds Snug's MCP server to Claude Code. Snug adds it nowhere by itself.
-private struct AgentPane: View {
+/// General's Agent section: the last capture, with Clear, and the command that adds Snug's MCP server to Claude Code. Snug adds it nowhere by itself.
+private struct AgentSection: View {
     @State private var captureId: String?
     private let store = HandoffStore(defaults: .standard)
     private let command = "claude mcp add snug -- " + { $0.contains(" ") ? "'\($0)'" : $0 }(Bundle.main.executablePath!) + " --mcp"
 
     var body: some View {
-        Pane {
+        VStack(alignment: .leading, spacing: 14) {
+            caption("Agent")
             Card {
                 LabeledContent {
                     Button("Clear") {
@@ -920,7 +921,6 @@ private struct AgentPane: View {
                 }
             }
         }
-        .fixedSize(horizontal: false, vertical: true)
         .onAppear(perform: load)
     }
 

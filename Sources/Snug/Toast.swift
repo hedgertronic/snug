@@ -42,7 +42,12 @@ final class Toast: NSPanel, NSDraggingSource {
     /// Transparent margin around the capsule, so the close button can hang off a corner; it is also the gap to the preview.
     private static let margin: CGFloat = 10
     /// The lifetime setting's choices, in seconds: 0 is no toast but failures, and -1 is Forever.
-    static let lifetimes = [0, 2, 4, 6, 10, -1]
+    static let lifetimes = [0, 1, 2, 3, 4, 5, 6, 8, 10, 15, 20, 30, -1]
+    /// The index in `lifetimes` of the stop nearest `seconds`, Forever being a stop of its own; a stored value off the list snaps to a neighbor.
+    static func lifetimeIndex(_ seconds: Int) -> Int {
+        if seconds < 0 { return lifetimes.count - 1 }
+        return lifetimes.dropLast().indices.min { abs(lifetimes[$0] - seconds) < abs(lifetimes[$1] - seconds) }!
+    }
     /// A warning's and a failure's detail, darker on the light surface so it reads.
     private static let warningText = NSColor.look(dark: NSColor(srgbRed: 1, green: 0.7, blue: 0.25, alpha: 1), light: NSColor(srgbRed: 0.64, green: 0.32, blue: 0, alpha: 1))
     private static let failureText = NSColor.look(dark: NSColor(srgbRed: 1, green: 0.41, blue: 0.38, alpha: 1), light: NSColor(srgbRed: 0.77, green: 0.13, blue: 0.1, alpha: 1))
