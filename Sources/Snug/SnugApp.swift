@@ -214,7 +214,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     /// one centered on top; at 1x they are 2 px on top and 2 px down each leg with 1 px gaps, and the curve is a 1 px step.
     /// "p": "h" in three opacities, the tile solid, the blanket below the band's cut at 70% and the pillow, the part of the tile inside
     /// the arch, at 40%. At 2x the pillow is the arch's centerline closed into a rounded rect; at 1x it is x 5-12, y 9-13. Template images keep
-    /// partial alpha, so the blanket and pillow show as lighter patches.
+    /// partial alpha, so the blanket and pillow show as lighter patches. At 2x the band sits where the app icon's does: its top 52% down the
+    /// tile in the middle and 59% at the sides; 1x keeps "h"'s whole-pixel step.
     /// "q", the default: "p" turned around to match macOS's monochrome app icons, where the tile is darkest and the marks brightest: the tile at
     /// 35%, the pillow at 60%, the blanket at 85%, and the arch's dashes and the band solid.
     static func menuBarIcon(_ variant: String) -> NSImage {
@@ -318,8 +319,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     NSBezierPath(roundedRect: CGRect(x: 4.75, y: 2, width: 8.5, height: 12.25), xRadius: 2.25, yRadius: 2.25).fill()
                     // The blanket below the band's cut, between the pillow and the tile.
                     let blanket = NSBezierPath()
-                    blanket.move(to: CGPoint(x: 0, y: 7.6))
-                    blanket.curve(to: CGPoint(x: 18, y: 7.6), controlPoint1: CGPoint(x: 5.4, y: 9.6), controlPoint2: CGPoint(x: 12.6, y: 9.6))
+                    blanket.move(to: CGPoint(x: 0, y: 7.12))
+                    blanket.curve(to: CGPoint(x: 18, y: 7.12), controlPoint1: CGPoint(x: 5.4, y: 8.56), controlPoint2: CGPoint(x: 12.6, y: 8.56))
                     blanket.line(to: CGPoint(x: 18, y: 0))
                     blanket.line(to: CGPoint(x: 0, y: 0))
                     blanket.close()
@@ -348,8 +349,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                         half.stroke()
                     }
                     let cut = NSBezierPath()
-                    cut.move(to: CGPoint(x: 0, y: 7.6))
-                    cut.curve(to: CGPoint(x: 18, y: 7.6), controlPoint1: CGPoint(x: 5.4, y: 9.6), controlPoint2: CGPoint(x: 12.6, y: 9.6))
+                    cut.move(to: CGPoint(x: 0, y: 7.12))
+                    cut.curve(to: CGPoint(x: 18, y: 7.12), controlPoint1: CGPoint(x: 5.4, y: 8.56), controlPoint2: CGPoint(x: 12.6, y: 8.56))
                     cut.lineWidth = 1
                     cut.stroke()
                 }
