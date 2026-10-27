@@ -391,32 +391,29 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 @keyframes lift { 0%, 25% { transform: none; } 38%, 88% { transform: scale(1.05); } 100% { transform: none; } }
 @keyframes shade { 0%, 25% { opacity: 0; } 38%, 88% { opacity: 1; } 100% { opacity: 0; } }
 
-/* C: the picker moves over a sunset and its readout follows each stop; C at the last stop copies and the toast shows (Toast.swift). The base style is the
-   last stop with its hex value, so reduced motion shows it. */
-.cp-x { transform: translate(178px, 103px); animation: cpx 8s infinite both; }
+/* C: a sunset picture; the picker moves over it and the app's readout (Guides.swift: swatch, value, Copy, C) follows each stop; C at the last stop copies and the toast
+   shows. The readout and toast use the hero's chip and toast styles, sized by --pt from the card's width. The base style is the last stop, so reduced motion shows it. */
+.cp-ov { --pt: 1; position: absolute; inset: 0; pointer-events: none; }
+.cp-ov > * { position: absolute; left: 50%; top: 80.6%; bottom: auto; transform: translate(-50%, -50%); }
+.cp-ov .sw { display: block; flex: none; width: calc(12px * var(--pt)); height: calc(12px * var(--pt)); border-radius: calc(3px * var(--pt)); background: var(--sw); box-shadow: inset 0 0 0 calc(.5px * var(--pt)) rgba(0, 0, 0, .3); }
+.cp-ov .o-chip .t { font-weight: 500; }
+.cp-ov .o-toast { opacity: 0; transition: none; animation: cpt 8s infinite both; }
+.cp-ov .o-toast .sw { width: calc(28px * var(--pt)); height: calc(28px * var(--pt)); margin-right: calc(10px * var(--pt)); border-radius: calc(7px * var(--pt)); box-shadow: none; border: 1px solid rgba(0, 0, 0, .3); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .cp-ov .o-toast .sw { border-color: rgba(255, 255, 255, .5); } :root:not([data-theme="light"]) .cp-ov .sw { box-shadow: inset 0 0 0 calc(.5px * var(--pt)) rgba(255, 255, 255, .5); } }
+:root[data-theme="dark"] .cp-ov .o-toast .sw { border-color: rgba(255, 255, 255, .5); } :root[data-theme="dark"] .cp-ov .sw { box-shadow: inset 0 0 0 calc(.5px * var(--pt)) rgba(255, 255, 255, .5); }
+.cp-ov .cp-ch { opacity: 0; }
+.cp-ov .cp-ch.cC0 { opacity: 1; }
+.cp-x { transform: translate(150px, 69px); animation: cpx 8s infinite both; }
 .cp-xh { animation: cpxo 8s infinite both; }
-@keyframes cpx { 0%, 24% { transform: translate(100px, 54px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 29%, 44% { transform: translate(30px, 84px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 49%, 100% { transform: translate(178px, 103px); } }
-.cp-chip, .cp-toast, .cp-key { opacity: 0; }
-.cp-chip.cC0 { opacity: 1; }
-.cp-v { font: 500 7px var(--mono); fill: var(--d-chipfg); }
-.cp-tm { font: 600 6.4px var(--sans); fill: var(--d-chipfg); }
-.cp-td { font: 400 5.2px var(--mono); fill: var(--c-text2); }
-.cp-k { fill: var(--cap-fill); stroke: var(--cap-edge); stroke-width: .4; }
-.cp-kp { fill: color-mix(in srgb, var(--hl) 45%, var(--cap-fill)); stroke: var(--hl); stroke-width: .5; opacity: 0; }
-.cp-kt { font: 600 7.4px var(--sans); fill: var(--c-text); }
+@keyframes cpx { 0%, 24% { transform: translate(100px, 46px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 29%, 44% { transform: translate(50px, 58px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 49%, 100% { transform: translate(150px, 69px); } }
 @keyframes cpxo { 0% { opacity: 0; } 1.5% { opacity: 1; } 58.5% { opacity: 1; } 60% { opacity: 0; } 100% { opacity: 0; } }
-.cp-chip.cA { animation: cpa 8s infinite both; }
+.cp-ov .cp-ch.cA { animation: cpa 8s infinite both; }
 @keyframes cpa { 0% { opacity: 0; } 2.5% { opacity: 0; } 3.3% { opacity: 1; } 23.7% { opacity: 1; } 24.5% { opacity: 0; } 100% { opacity: 0; } }
-.cp-chip.cB { animation: cpb 8s infinite both; }
+.cp-ov .cp-ch.cB { animation: cpb 8s infinite both; }
 @keyframes cpb { 0% { opacity: 0; } 28.5% { opacity: 0; } 29.3% { opacity: 1; } 43.7% { opacity: 1; } 44.5% { opacity: 0; } 100% { opacity: 0; } }
-.cp-chip.cC0 { animation: cpc0 8s infinite both; }
+.cp-ov .cp-ch.cC0 { animation: cpc0 8s infinite both; }
 @keyframes cpc0 { 0% { opacity: 0; } 48% { opacity: 0; } 48.8% { opacity: 1; } 59.2% { opacity: 1; } 60% { opacity: 0; } 100% { opacity: 0; } }
-.cp-toast { animation: cpt 8s infinite both; }
-@keyframes cpt { 0%, 61% { opacity: 0; transform: translateY(2px); } 64%, 86% { opacity: 1; transform: none; } 91%, 100% { opacity: 0; } }
-.cp-k1 { animation: cpk1 8s infinite both; }
-@keyframes cpk1 { 0%, 55% { opacity: 0; } 56%, 63% { opacity: 1; } 65%, 100% { opacity: 0; } }
-.cp-k1 .cp-kp { animation: cpkp1 8s infinite both; }
-@keyframes cpkp1 { 0%, 57% { opacity: 0; } 57.8%, 60.2% { opacity: 1; } 61.2%, 100% { opacity: 0; } }
+@keyframes cpt { 0%, 61% { opacity: 0; transform: translate(-50%, calc(-50% + 3px)); } 64%, 86% { opacity: 1; transform: translate(-50%, -50%); } 91%, 100% { opacity: 0; transform: translate(-50%, -50%); } }
 
 /* agent art: a generic chat window. The reference is pasted in the input and sent, the tool call returns the capture's link card, and a one-line reply follows */
 .ag-m { font: 400 4.6px var(--mono); fill: #FFFFFF; }
@@ -489,7 +486,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .o-toast { transition: none; }
-  .pop, .tx-btn, .tx-kp, .tx-kt, .tx-ktp, .tx-cap, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-on, .rv-kn, .rv-tdk, .rv-tlt, .rv-cur, .rv-out, .rv-rec, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cp-x, .cp-xh, .cp-chip, .cp-chip.cA, .cp-chip.cB, .cp-chip.cC0, .cp-toast, .cp-key, .cp-kp, .cp-k1 .cp-kp, .ag-u, .ag-t, .ag-th, .ag-r, .ag-ck, .ag-i, .ag-sd, .card.flash .art { animation: none; }
+  .pop, .tx-btn, .tx-kp, .tx-kt, .tx-ktp, .tx-cap, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-on, .rv-kn, .rv-tdk, .rv-tlt, .rv-cur, .rv-out, .rv-rec, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cp-x, .cp-xh, .cp-ov .cp-ch, .cp-ov .cp-ch.cA, .cp-ov .cp-ch.cB, .cp-ov .cp-ch.cC0, .cp-ov .o-toast, .ag-u, .ag-t, .ag-th, .ag-r, .ag-ck, .ag-i, .ag-sd, .card.flash .art { animation: none; }
   .caps.hk .cap { transition: none; }
   .card .cap[data-hold], .bb .k[data-hold] { transition-duration: .01s; }
   .card .cap[data-hold].down, .bb .k[data-hold].down { transform: none; }

@@ -747,3 +747,12 @@
     for (const t of ['pointerup', 'pointercancel']) addEventListener(t, lift);
   }
 })();
+
+// The color card's readout and toast use the hero's chip and toast styles, which size everything by --pt (scene px per app point); here
+// 1 pt is 0.3% of the card's width, so the 40 pt toast is 24 of the card's 200 drawing units.
+(() => {
+  const art = document.querySelector('.art.cp');
+  const ov = art && art.querySelector('.cp-ov');
+  if (!ov || !window.ResizeObserver) return;
+  new ResizeObserver(() => ov.style.setProperty('--pt', (art.clientWidth * 0.003).toFixed(4))).observe(art);
+})();
