@@ -43,6 +43,13 @@ public enum AXValues {
         return number
     }
 
+    /// An element answer, as a parent or a label element is.
+    public static func element(_ raw: CFTypeRef?) -> AXUIElement? {
+        guard let raw, CFGetTypeID(raw) == AXUIElementGetTypeID() else { return nil }
+        // The type ID check makes the cast certain.
+        return (raw as! AXUIElement)
+    }
+
     private static func value(_ raw: CFTypeRef?, _ type: AXValueType) -> AXValue? {
         guard let raw, CFGetTypeID(raw) == AXValueGetTypeID() else { return nil }
         // The type ID check makes the cast certain.

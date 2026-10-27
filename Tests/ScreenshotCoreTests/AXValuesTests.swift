@@ -38,6 +38,11 @@ struct AXValuesTests {
         for range in outside { #expect(AXValues.range(range, within: 5) == nil, "\(range.location), \(range.length)") }
     }
 
+    @Test func elementsMustBeElements() {
+        #expect(AXValues.element(AXUIElementCreateApplication(getpid())) != nil)
+        #expect(AXValues.element("AXWindow" as CFString) == nil && AXValues.element(wrapped(CGPoint.zero, .cgPoint)) == nil && AXValues.element(nil) == nil)
+    }
+
     @Test func lineIndexesAreNonnegativeNumbers() {
         #expect(AXValues.index(7 as CFNumber) == 7 && AXValues.index(0 as CFNumber) == 0)
         #expect(AXValues.index(-1 as CFNumber) == nil && AXValues.index("7" as CFString) == nil && AXValues.index(nil) == nil)

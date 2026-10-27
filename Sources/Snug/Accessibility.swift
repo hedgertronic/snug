@@ -67,7 +67,7 @@ enum Accessibility {
                 }
                 return named
             }
-            let parent = read(kAXParentAttribute, of: element).map { $0 as! AXUIElement }
+            let parent = AXValues.element(read(kAXParentAttribute, of: element))
             let siblings = frames[index].role == kAXWindowRole || parent.flatMap { text(kAXRoleAttribute, of: $0) } == kAXApplicationRole ? []
                 : parent.flatMap { children(of: $0, kAXChildrenAttribute) } ?? []
             let at = siblings.firstIndex { CFEqual($0, element) } ?? 0
@@ -75,7 +75,7 @@ enum Accessibility {
             frames[index].details = .init(
                 value: frames[index].subrole == kAXSecureTextFieldSubrole ? nil : text(kAXValueAttribute, of: element), help: text(kAXHelpAttribute, of: element),
                 placeholder: text(kAXPlaceholderValueAttribute, of: element),
-                labeledBy: read(kAXTitleUIElementAttribute, of: element).map { $0 as! AXUIElement }.flatMap { text(kAXTitleAttribute, of: $0) ?? text(kAXValueAttribute, of: $0) },
+                labeledBy: AXValues.element(read(kAXTitleUIElementAttribute, of: element)).flatMap { text(kAXTitleAttribute, of: $0) ?? text(kAXValueAttribute, of: $0) },
                 url: text(kAXURLAttribute, of: element), domId: frames[index].details?.domId, domClasses: frames[index].details?.domClasses,
                 enabled: read(kAXEnabledAttribute, of: element) as? Bool, focused: read(kAXFocusedAttribute, of: element) as? Bool,
                 selected: read(kAXSelectedAttribute, of: element) as? Bool,
@@ -112,10 +112,8 @@ enum Accessibility {
         for _ in 0..<maxDepth {
             guard let frame = frame(of: element) else { break }
             chain.append((element, frame))
-            var parent: CFTypeRef?
-            guard frame.role != kAXWindowRole, AXUIElementCopyAttributeValue(element, kAXParentAttribute as CFString, &parent) == .success,
-                  let parent else { break }
-            element = parent as! AXUIElement
+            guard frame.role != kAXWindowRole, let parent = AXValues.element(attribute(kAXParentAttribute, of: element)) else { break }
+            element = parent
         }
         // Safari can report a page's frames a screen height off (`AccessibilityBounds.displacement`): moved back, or dropped when that
         // does not put the hit under the pointer.
