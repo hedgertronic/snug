@@ -24,7 +24,7 @@ public actor ScrollStitcher {
     /// The tallest stitched image, in pixels.
     public static let maximumHeight = 30_000
     /// The most pixels in a stitched image: 60 megapixels, 229 MiB of RGBA, so a wide area stops sooner than `maximumHeight` (at
-    /// 6,000 px wide, 10,000 px tall instead of a 687 MiB buffer).
+    /// 6,000 px wide, at 10,000 px tall).
     public static let maximumPixels = 60_000_000
 
     public let width: Int
