@@ -300,7 +300,7 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     }
 
     /// The stop reminder: two floating pills 8 pt apart on the chrome surface in the overlay's look, the time recorded so far ("0:12",
-    /// counted by `start`), then "stop" and the capture shortcut's key cap (with no shortcut, "Stop from the menu bar"); placed by
+    /// counted by `start`), then "Stop" and the capture shortcut's key cap (with no shortcut, "Stop from the menu bar"); placed by
     /// `reminderFrame` within the display's visible frame. The panel draws the
     /// shadow, since a pill's own would be clipped at the panel's edge.
     static func makeReminder(around area: CGRect, on displayID: CGDirectDisplayID, defaults: UserDefaults) -> RecordingPanel {
@@ -310,7 +310,7 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         clock.stringValue = elapsed(0)
         let pills = [[clock] as [NSView], [defaults.integer(forKey: Pref.hotKeyCode) < 0
             ? NSTextField("Stop from the menu bar", size: 12, weight: .medium, color: .chromeText)
-            : Pill.hint([Shortcut.label(from: defaults)], "stop")]].map { views in
+            : Pill.hint([Shortcut.label(from: defaults)], "Stop")]].map { views in
             // Both take the control height, like the action strip, so they match.
             let pill = Pill(radius: 11, insets: NSEdgeInsets(top: 0, left: 14, bottom: 0, right: 14), spacing: 0, height: Chrome.controlHeight)
             pill.show("reminder") { views }

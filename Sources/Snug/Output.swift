@@ -28,9 +28,12 @@ enum Pref {
     static let frameShadowColor = "SnugFrameShadowColor"
     private static let legacyStyle = "SnugStyle"
     private static let legacyShadow = "SnugShadow"
+    private static let orphanedKeys = ["SnugAfterCapture", "SnugLastArea", "SnugModeBar", "SnugToastPreview"]
     static let saveFolder = "SnugSaveFolder"
     static let hotKeyCode = "SnugHotKeyCode"
     static let hotKeyModifiers = "SnugHotKeyModifiers"
+    /// The capture shortcut until another is recorded: Control-Shift-Space.
+    static let defaultHotKey = (code: 49, modifiers: Int(NSEvent.ModifierFlags([.control, .shift]).rawValue))
     static let loupe = "SnugLoupe"
     static let rulers = "SnugRulers"
     static let crosshair = "SnugCrosshair"
@@ -44,7 +47,7 @@ enum Pref {
     /// Whether crops take the corner radius measured on screen (and their window's at shared corners); off, they are square unless
     /// edited with [ and ].
     static let roundCorners = "SnugRoundCorners"
-    /// The highlight: a hex color ("" is the system accent), fill and background fade as opacities, and the hover glow as an intensity from 0 to 1.
+    /// The highlight: a hex color (`Highlight.defaultHex` unless one is chosen; "" is the system accent), fill and background fade as opacities, and the hover glow as an intensity from 0 to 1.
     static let highlightColor = "SnugHighlightColor"
     static let highlightFill = "SnugHighlightFill"
     static let highlightFade = "SnugHighlightFade"
@@ -104,6 +107,8 @@ enum Pref {
         }
         // Shadow on (its default) with Frame off stays off: Frame keeps its own value, so only the key goes.
         defaults.removeObject(forKey: legacyShadow)
+        // Keys earlier versions wrote and nothing reads.
+        for key in orphanedKeys { defaults.removeObject(forKey: key) }
         defaults.register(defaults: [
             snap: true,
             frame: false,
@@ -115,10 +120,10 @@ enum Pref {
             frameShadowAngle: 270,
             frameShadowColor: "#000000",
             saveFolder: NSHomeDirectory() + "/Desktop",
-            hotKeyCode: 49,
-            hotKeyModifiers: Int(NSEvent.ModifierFlags([.control, .shift]).rawValue),
+            hotKeyCode: defaultHotKey.code,
+            hotKeyModifiers: defaultHotKey.modifiers,
             colorFormat: ColorFormat.hex.rawValue,
-            highlightColor: "",
+            highlightColor: Highlight.defaultHex,
             highlightFill: 0.1,
             highlightFade: 0.5,
             highlightGlow: 0.2,

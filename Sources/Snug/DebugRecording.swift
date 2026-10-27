@@ -249,7 +249,7 @@ extension DebugRun {
         let reminder = ScreenRecording.makeReminder(around: recordArea, on: display, defaults: defaults)
         let settings = SettingsTabs.makeWindow()
         require(outline.contentView!.layer!.borderColor == NSColor.systemRed.cgColor, "the recording outline is red, like the armed outline")
-        require(texts(in: reminder.contentView!) == ["0:00", "stop", "\u{2303}", "\u{21E7}", "space"], "the reminder reads the time, stop, then the shortcut, one cap per key: \(texts(in: reminder.contentView!))")
+        require(texts(in: reminder.contentView!) == ["0:00", "Stop", "\u{2303}", "\u{21E7}", "space"], "the reminder reads the time, Stop, then the shortcut, one cap per key: \(texts(in: reminder.contentView!))")
         let reminderPills = reminder.contentView!.subviews.compactMap { $0 as? Pill }
         let reminderCaps = reminderPills.last.map { $0.subviews[0].subviews.flatMap { $0.subviews }.compactMap { $0 as? KeyCap } } ?? []
         require(reminderPills.count == 2 && reminderPills[1].frame.minX - reminderPills[0].frame.maxX == 8 && reminderCaps.map(\.text) == ["\u{2303}", "\u{21E7}", "space"] && reminder.hasShadow,

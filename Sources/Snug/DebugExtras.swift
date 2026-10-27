@@ -136,6 +136,19 @@ extension DebugRun {
         mouse(.mouseMoved, text)
         overlay.flash(KeyCap.event(for: "C"))
         require(readoutCap[0].pressed, "C flashes the readout's C cap")
+        // Each key lights the caps that name it, as the system types it: Space as " ", Shift-Tab still as tab, Shift-[ as "{".
+        func pressed(_ code: UInt16, _ characters: String, _ flags: NSEvent.ModifierFlags) -> Set<String> {
+            KeyCap.pressed(by: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil,
+                                                characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)!)
+        }
+        let presses: [(UInt16, String, NSEvent.ModifierFlags, String)] = [
+            (49, " ", [], "space"), (48, "\t", [], "tab"), (48, "\u{19}", [.shift], "tab"), (33, "[", [], "["), (33, "{", [.shift], "["), (30, "}", [.shift], "]"),
+            (24, "=", [], "="), (44, "?", [.shift], "?"), (35, "P", [.shift], "\u{21E7}P"), (1, "S", [.shift, .command], "\u{21E7}\u{2318}S"),
+            (36, "\r", [.command], "\u{2318}\u{21A9}"), (53, "\u{1B}", [], "esc"), (126, "\u{F700}", [.shift], "\u{2191}"), (8, "C", [.shift], "\u{21E7}C")
+        ]
+        for (code, characters, flags, cap) in presses {
+            require(pressed(code, characters, flags).contains(cap), "key code \(code) with \(flags.rawValue) lights the \(cap) cap: \(pressed(code, characters, flags))")
+        }
         // The swatch's ring is the chrome's swatch edge in both looks, so a white pixel reads in light mode.
         let swatchView = readout.subviews.first { $0.frame.size == CGSize(width: 12, height: 12) }!
         let readoutLook = readout.appearance
@@ -508,8 +521,8 @@ extension DebugRun {
         func caps(in view: NSView) -> [KeyCap] { ((view as? KeyCap).map { [$0] } ?? []) + view.subviews.flatMap(caps) }
         let chords = caps(in: help).map(\.text).filter { $0.count > 1 && $0.contains { "\u{2325}\u{2318}\u{21E7}\u{2303}".contains($0) } }
         require(!help.isHidden && sheet.contains("Keys") && sheet.contains("Save As") && sheet.contains("Text:") && sheet.contains("Modes, view, recording") && chords.isEmpty
-                    && caps(in: help).map(\.text).contains("\u{21E7}"),
-                "? shows the keys sheet with every column, one cap per key: \(sheet.count) texts, chords in one cap \(chords)")
+                    && caps(in: help).map(\.text).contains("\u{21E7}") && !caps(in: help).map(\.text).contains("hotkey"),
+                "? shows the keys sheet with every column, one cap per key, the shortcut as its keys: \(sheet.count) texts, chords in one cap \(chords)")
         let helpRows = HelpSheet.columns.flatMap(\.rows)
         require(["[ ]", "\u{21E7} [ ]", "=", "\u{2325} drag", "V", "K"].allSatisfy(helpRows.map(\.keys).contains)
                     && helpRows.contains { $0.keys == "arrows" && $0.action.contains("1 px") && $0.action.contains("10 px") },
@@ -803,7 +816,7 @@ extension DebugRun {
             for key in [Pref.highlightColor, Pref.candidates, Pref.loupe, Pref.rulers, Pref.crosshair] { defaults.removeObject(forKey: key) }
         }
 
-        // The toast: one capsule with the thumbnail, its size, position, and lifetime, and the preview in its own panel.
+        // The toast: one card with the thumbnail, its size, position, and lifetime, and the preview in its own panel.
         let capture = try await Output.png(image.cropping(to: CGRect(x: 0, y: 0, width: 1200, height: 400))!)
         func toast(_ setup: (UserDefaults) -> Void = { _ in }) -> Toast {
             let toastDefaults = UserDefaults(suiteName: FileManager.default.temporaryDirectory.appending(path: "snug-toast-\(UUID().uuidString)").path)!
@@ -814,12 +827,12 @@ extension DebugRun {
         let plain = toast()
         let card = plain.card, preview = plain.preview!
         let thumbnail = plain.lead.convert(plain.lead.bounds, to: nil)
-        require(card.frame.height == 40 && card.frame.width <= 360 && card.layer!.cornerRadius == 20 && plain.lead.frame.size == CGSize(width: 44, height: 28)
+        require(card.frame.height == 40 && card.frame.width <= 360 && card.layer!.cornerRadius == 13 && plain.lead.frame.size == CGSize(width: 44, height: 28)
                     && plain.lead.frame.minX == 6 && plain.lead.layer!.contents != nil,
-                "the toast is one 40 pt capsule up to 360 pt wide, led by a 44 x 28 pt thumbnail: \(card.frame) \(plain.lead.frame)")
+                "the toast is one 40 pt card with 13 pt corners up to 360 pt wide, led by a 44 x 28 pt thumbnail: \(card.frame) \(plain.lead.frame)")
         require(preview.frame.width == 240 && abs(preview.frame.width / preview.frame.height - 3) < 0.02, "the preview is the capture aspect-fit within 240 x 160: \(preview.frame.size)")
         require(preview.frame.minY == plain.frame.maxY && preview.frame.minY - (plain.frame.minY + card.frame.maxY) == 10 && preview.frame.minX == plain.frame.minX + thumbnail.minX,
-                "the preview sits 10 pt above the capsule at the thumbnail's left edge: \(preview.frame) \(plain.frame)")
+                "the preview sits 10 pt above the card at the thumbnail's left edge: \(preview.frame) \(plain.frame)")
         require(DisplayCapture.excludedWindowIDs().contains(CGWindowID(preview.windowNumber)) && preview.styleMask.contains(.nonactivatingPanel) && !preview.canBecomeKey, "the preview panel is left out of captures and takes no keys")
         let quick = toast { $0.set(2, forKey: Pref.toastLifetime) }, slow = toast { $0.set(10, forKey: Pref.toastLifetime) }
         require(plain.lifetime == .seconds(4) && quick.lifetime == .seconds(2) && slow.lifetime == .seconds(10),
@@ -836,12 +849,12 @@ extension DebugRun {
         require(bottomLeft.frame.minX < plain.frame.minX && bottomLeft.frame.minY == plain.frame.minY && topLeft.frame.minX == bottomLeft.frame.minX
                 && topCenter.frame.minX == plain.frame.minX && topLeft.frame.minY == topRight.frame.minY && topCenter.frame.minY == topRight.frame.minY,
                 "the six positions are the corners and the middle of the top and bottom: \(topLeft.frame) \(topCenter.frame) \(bottomLeft.frame)")
-        require(topLeft.preview!.frame.maxY == topLeft.frame.minY && topCenter.preview!.frame.maxY == topCenter.frame.minY, "the preview is below the capsule at every top position")
+        require(topLeft.preview!.frame.maxY == topLeft.frame.minY && topCenter.preview!.frame.maxY == topCenter.frame.minY, "the preview is below the card at every top position")
         require(topRight.preview!.frame.maxY == topRight.frame.minY && bottomRight.preview!.frame.minY == bottomRight.frame.maxY,
-                "the preview is below the capsule at the top right and above it elsewhere: \(topRight.preview!.frame) \(topRight.frame)")
+                "the preview is below the card at the top right and above it elsewhere: \(topRight.preview!.frame) \(topRight.frame)")
         let screenArea = (NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main!).visibleFrame
         require(bottomRight.preview!.frame.maxX <= screenArea.maxX - 20, "the preview stays on screen at the bottom right: \(bottomRight.preview!.frame) \(screenArea)")
-        // The capsule is clear at its square corners and filled in its middle, and the margin is transparent.
+        // The card is clear at its square corners and filled in its middle, and the margin is transparent.
         do {
             let root = plain.contentView!
             let rep = root.bitmapImageRepForCachingDisplay(in: root.bounds)!
@@ -851,7 +864,7 @@ extension DebugRun {
             let (left, right, top, bottom) = (Int(piece.minX * density) + 1, Int(piece.maxX * density) - 2, Int((root.bounds.height - piece.maxY) * density) + 1, Int((root.bounds.height - piece.minY) * density) - 2)
             require([(left, top), (right, top), (left, bottom), (right, bottom)].allSatisfy { rep.colorAt(x: $0, y: $1)!.alphaComponent == 0 }
                         && rep.colorAt(x: (left + right) / 2, y: (top + bottom) / 2)!.alphaComponent > 0.5,
-                    "a render of the toast is clear at the capsule's four square corners and filled in its middle: \(piece)")
+                    "a render of the toast is clear at the card's four square corners and filled in its middle: \(piece)")
             require(rep.colorAt(x: 1, y: 1)!.alphaComponent == 0 && rep.colorAt(x: rep.pixelsWide - 2, y: rep.pixelsHigh - 2)!.alphaComponent == 0, "a render of the toast is transparent in the margin")
         }
         require(!plain.isOpaque && plain.backgroundColor == .clear && plain.hasShadow, "the toast window is transparent with a shadow")
@@ -866,17 +879,17 @@ extension DebugRun {
         require(!plain.closeButton.isHidden && !plain.actions.isHidden && plain.dismissal?.isCancelled != false, "hovering starts the fade in at once and holds the toast")
         try await Task.sleep(for: .milliseconds(300))
         let shown = plain.actions.arrangedSubviews.filter { !$0.isHidden } as! [NSButton]
-        require(plain.textBox.isHidden && plain.actions.alphaValue == 1 && plain.closeButton.alphaValue == 1 && shown.map(\.toolTip!) == ["Copy", "Save As...", "Open in \(Toast.appName(toOpen: .png))", "Share"],
+        require(plain.textBox.isHidden && plain.actions.alphaValue == 1 && plain.closeButton.alphaValue == 1 && shown.map(\.toolTip!) == ["Copy", "Save As…", "Open in \(Toast.appName(toOpen: .png))", "Share"],
                 "hovering an unsaved capture shows the close button and Copy, Save As, Open and Share in place of the text: \(shown.map(\.toolTip!))")
         require(frames(plain) == rest, "hovering moves and resizes nothing: \(frames(plain)) \(rest)")
         require(abs(plain.actions.frame.midX - plain.textBox.frame.midX) <= 0.5 && plain.actions.frame.width <= plain.textBox.frame.width && plain.actions.superview === card
                     && abs(plain.message.frame.minX - (plain.textBox.bounds.width - plain.detail.frame.maxX)) <= 1,
                 "the actions and the text are both centered in the text box: \(plain.actions.frame) \(plain.textBox.frame)")
         plain.setPeeking(true)
-        require(plain.isPeeking && frames(plain) == rest && !preview.isVisible, "the preview leaves the capsule where it is, and a toast off screen keeps it off screen")
+        require(plain.isPeeking && frames(plain) == rest && !preview.isVisible, "the preview leaves the card where it is, and a toast off screen keeps it off screen")
         plain.setPeeking(false)
         let corner = plain.closeButton.frame
-        require(corner.midX < card.frame.minX + 12 && corner.midY > card.frame.maxY - 12, "the close button sits on the capsule's top-left corner: \(corner) \(card.frame)")
+        require(corner.midX < card.frame.minX + 12 && corner.midY > card.frame.maxY - 12, "the close button sits on the card's top-left corner: \(corner) \(card.frame)")
         plain.mouseExited(with: hoverEvent)
         require(!plain.closeButton.isHidden && plain.textBox.isHidden, "leaving waits 0.15 s before letting go")
         try await Task.sleep(for: .milliseconds(450))
@@ -908,11 +921,11 @@ extension DebugRun {
         let saving = toast { $0.set(saveFolder.path, forKey: Pref.saveFolder) }
         require(saving.file == nil, "an unsaved capture has no file")
         saving.openButton.performClick(nil)
-        let previewFile = try Data(contentsOf: saving.file!)
-        require(previewFile == capture && Toast.opened! == (saving.file!, Bundle(url: NSWorkspace.shared.urlForApplication(toOpen: .png)!)!.bundleIdentifier!),
-                "Open writes the capture to a temporary PNG and opens it in the default app for PNGs: \(Toast.opened!)")
+        let previewFile = try Data(contentsOf: Toast.opened!.file)
+        require(previewFile == capture && Toast.opened!.app == Bundle(url: NSWorkspace.shared.urlForApplication(toOpen: .png)!)!.bundleIdentifier! && saving.file == nil,
+                "Open writes the capture to a temporary PNG, opens it in the default app for PNGs, and leaves the capture unsaved: \(Toast.opened!)")
         saving.shareButton.performClick(nil)
-        require(saving.file != nil, "Share has a file to share")
+        require(saving.message.stringValue == "Copied", "Share has a file to share: \(saving.message.stringValue)")
         let chosen = saveFolder.appending(path: "Chosen.png")
         for answer in [nil, chosen] {
             let asking = toast { $0.set(saveFolder.path, forKey: Pref.saveFolder) }
@@ -1182,7 +1195,7 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: 422, y: 585))
         require(overlay.accessibilityTask == nil && overlay.accessibilityStarted == nil, "a headless run never starts an accessibility lookup")
         require(!overlay.session!.candidates.contains { $0.kind == .element }, "no accessibility candidates in a headless run")
-        require(!texts(in: overlay.chrome.list).contains("Allow Accessibility for app elements"), "the Allow Accessibility button never shows in a headless run")
+        require(!texts(in: overlay.chrome.list).contains("Allow Accessibility for App Elements"), "the Allow Accessibility button never shows in a headless run")
         let dock = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first!.processIdentifier
         let axFrames = await Accessibility.frames(at: .zero, pid: dock)
         require(AXIsProcessTrusted() || axFrames.isEmpty, "without Accessibility permission the lookup is empty and silent (trusted: \(AXIsProcessTrusted()))")
@@ -1482,7 +1495,7 @@ extension DebugRun {
         require(row.allSatisfy { !$0.isHidden && $0.frame.minY == chrome.size.frame.minY } && chrome.size.frame.minX == roughBox.minX && chrome.size.frame.minY == roughBox.maxY + 8
                     && zip(row, row.dropFirst()).allSatisfy { $1.frame.minX >= $0.frame.maxX + 5.99 } && chrome.radius.frame.maxX >= roughBox.maxX - 0.5,
                 "the chip row sits on the selection's top edge: \(row.map(\.frame)) \(roughBox)")
-        require(texts(in: chrome.ratio) == [overlay.ratioReadout, "P", "|", "lock", "\u{21E7}", "P"] && chrome.lock.lit == lockedBefore
+        require(texts(in: chrome.ratio) == [overlay.ratioReadout, "P", "|", "Lock", "\u{21E7}", "P"] && chrome.lock.lit == lockedBefore
                     && chrome.ratioButton.layer!.backgroundColor == nil && chrome.lock.layer!.backgroundColor == nil,
                 "the ratio chip shows the readout with P, then lock with Shift-P, with no fill of their own: \(texts(in: chrome.ratio))")
         require(texts(in: chrome.radius).count == 3 && texts(in: chrome.radius)[0].hasPrefix("r ") && texts(in: chrome.radius).suffix(2) == ["[", "]"],
@@ -1556,7 +1569,7 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: 40, y: 40))
         require(sides.allSatisfy(\.isHidden) && chrome.legend.isHidden, "with the pointer outside the selection no edge keys show")
         mouse(.mouseMoved, insideSelection)
-        require(sides.map { texts(in: $0) } == [["\u{2190}"], ["\u{2192}"], ["\u{2191}"], ["\u{2193}"]] && sides.allSatisfy { !$0.isHidden } && texts(in: chrome.legend) == ["move"],
+        require(sides.map { texts(in: $0) } == [["\u{2190}"], ["\u{2192}"], ["\u{2191}"], ["\u{2193}"]] && sides.allSatisfy { !$0.isHidden } && texts(in: chrome.legend) == ["Move"],
                 "with the pointer inside the selection the side arrows show and the legend reads move: \(sides.map(\.isHidden)) \(texts(in: chrome.legend))")
         key(124, "")
         require(keyCaps("\u{2192}", in: sides[1]).allSatisfy(\.pressed) && keyCaps("\u{2190}", in: sides[0]).allSatisfy { !$0.pressed }, "the Right arrow cap flashes when Right is pressed")
@@ -1571,7 +1584,7 @@ extension DebugRun {
             ["\u{2303}", "\u{2325}", "\u{2318}", "\u{21E7}"].allSatisfy { glyph in keyCaps(glyph, in: view).allSatisfy { $0.pressed == glyphs.contains(glyph) } }
         }
         require(keyCaps("\u{2325}", in: chrome.copy).count == 1 && lit(["\u{2325}"], chrome.strip) && lit(["\u{2325}"], chrome.legend)
-                    && texts(in: chrome.legend) == ["grow", "\u{2325}"],
+                    && texts(in: chrome.legend) == ["Grow", "\u{2325}"],
                 "holding Option lights the Option caps on the strip (Translate) and the legend, which reads grow with its cap: \(texts(in: chrome.legend))")
         // The arrow caps are a D-pad around the legend: the group centered in the selection when it fits, else wholly outside it (this
         // one is 35 pt tall, so the group is taller than it), clear of the chips.
@@ -1588,35 +1601,35 @@ extension DebugRun {
         }
         dpad("holding Option")
         flags([.option, .shift])
-        require(lit(["\u{2325}", "\u{21E7}"], chrome.legend) && texts(in: chrome.legend) == ["grow 10 px", "\u{2325}", "\u{21E7}"], "holding Option-Shift the legend reads grow 10 px with both caps: \(texts(in: chrome.legend))")
+        require(lit(["\u{2325}", "\u{21E7}"], chrome.legend) && texts(in: chrome.legend) == ["Grow 10 px", "\u{2325}", "\u{21E7}"], "holding Option-Shift the legend reads grow 10 px with both caps: \(texts(in: chrome.legend))")
         dpad("holding Option-Shift")
         flags([.option, .shift, .command])
-        require(lit(["\u{2325}", "\u{21E7}", "\u{2318}"], chrome.legend) && texts(in: chrome.legend) == ["shrink 10 px", "\u{2325}", "\u{21E7}", "\u{2318}"], "holding Option-Shift-Command the legend reads shrink 10 px: \(texts(in: chrome.legend))")
+        require(lit(["\u{2325}", "\u{21E7}", "\u{2318}"], chrome.legend) && texts(in: chrome.legend) == ["Shrink 10 px", "\u{2325}", "\u{21E7}", "\u{2318}"], "holding Option-Shift-Command the legend reads shrink 10 px: \(texts(in: chrome.legend))")
         dpad("holding Option-Shift-Command")
         flags(.option)
         flags([.option, .command])
         require(lit(["\u{2325}", "\u{2318}"], chrome.strip) && lit(["\u{2325}", "\u{2318}"], chrome.legend)
-                    && texts(in: chrome.legend) == ["shrink", "\u{2325}", "\u{2318}"] && sides.allSatisfy { !$0.isHidden },
+                    && texts(in: chrome.legend) == ["Shrink", "\u{2325}", "\u{2318}"] && sides.allSatisfy { !$0.isHidden },
                 "holding Option-Command lights every Option and Command cap, the legend reads shrink, and the side arrows stay: \(texts(in: chrome.legend))")
         flags([.control, .option])
-        require(lit(["\u{2303}", "\u{2325}"], chrome.legend) && texts(in: chrome.legend) == ["edge out", "\u{2303}", "\u{2325}"] && sides.allSatisfy { !$0.isHidden },
+        require(lit(["\u{2303}", "\u{2325}"], chrome.legend) && texts(in: chrome.legend) == ["Edge Out", "\u{2303}", "\u{2325}"] && sides.allSatisfy { !$0.isHidden },
                 "holding Control-Option the legend reads edge out with both caps lit: \(texts(in: chrome.legend))")
         dpad("holding Control-Option")
         flags([.control, .option, .shift])
-        require(texts(in: chrome.legend) == ["edge out", "\u{2303}", "\u{2325}"], "Shift changes nothing with Control: \(texts(in: chrome.legend))")
+        require(texts(in: chrome.legend) == ["Edge Out", "\u{2303}", "\u{2325}"], "Shift changes nothing with Control: \(texts(in: chrome.legend))")
         flags([.control, .option, .command])
-        require(lit(["\u{2303}", "\u{2325}", "\u{2318}"], chrome.legend) && texts(in: chrome.legend) == ["edge in", "\u{2303}", "\u{2325}", "\u{2318}"],
+        require(lit(["\u{2303}", "\u{2325}", "\u{2318}"], chrome.legend) && texts(in: chrome.legend) == ["Edge In", "\u{2303}", "\u{2325}", "\u{2318}"],
                 "holding Control-Option-Command the legend reads edge in: \(texts(in: chrome.legend))")
         dpad("holding Control-Option-Command")
         flags([.control, .option, .command, .shift])
-        require(texts(in: chrome.legend) == ["edge in", "\u{2303}", "\u{2325}", "\u{2318}"], "Shift changes nothing with Control-Option-Command: \(texts(in: chrome.legend))")
+        require(texts(in: chrome.legend) == ["Edge In", "\u{2303}", "\u{2325}", "\u{2318}"], "Shift changes nothing with Control-Option-Command: \(texts(in: chrome.legend))")
         flags(.command)
         require(lit(["\u{2318}"], chrome.strip) && sides.allSatisfy(\.isHidden) && chrome.legend.isHidden,
                 "holding Command alone lights the strip's Command caps and shows no edge keys, since Command-arrow is unbound")
         flags(.control)
         require(sides.allSatisfy(\.isHidden) && chrome.legend.isHidden, "Control alone with the pointer outside shows no edge keys")
         mouse(.mouseMoved, insideSelection, .control)
-        require(overlay.controlHeld && texts(in: chrome.legend) == ["move"] && sides.allSatisfy { !$0.isHidden },
+        require(overlay.controlHeld && texts(in: chrome.legend) == ["Move"] && sides.allSatisfy { !$0.isHidden },
                 "Control alone with the pointer inside shows nothing new: the legend reads move")
         flags(.command)
         require(sides.allSatisfy(\.isHidden) && chrome.legend.isHidden, "Command with the pointer inside hides the edge keys")
@@ -1631,7 +1644,7 @@ extension DebugRun {
         // goes back, and from all corners picks bottom-left. The focused corner lights its dot, the chip names it with its radius, and
         // [ ] change only it. Only Esc returns to all corners. Undo covers the edit.
         let radius = 12 * overlay.scale
-        let focusedKeys = ["radius", "[", "]", "next corner", "tab", "all corners", "esc"], allKeys = ["radius", "[", "]", "one corner", "tab"]
+        let focusedKeys = ["Radius", "[", "]", "Next Corner", "tab", "All Corners", "esc"], allKeys = ["Radius", "[", "]", "One Corner", "tab"]
         var focus: [Handle?] = []
         for _ in 0..<5 { key(48, "\t"); focus.append(overlay.focusedCorner) }
         require(focus == [.topLeft, .topRight, .bottomRight, .bottomLeft, .topLeft] && overlay.selection?.rect == snapped.rect, "Tab cycles the corners TL, TR, BR, BL, TL: \(focus)")
@@ -1877,7 +1890,7 @@ extension DebugRun {
             for corner in [Handle.topLeft, .topRight, .bottomRight, .bottomLeft] {
                 overlay.focusedCorner = corner
                 overlay.refresh()
-                require(!overlay.cornerChip.isHidden && texts(in: chrome.cornerKeys) == ["radius", "[", "]", "next corner", "tab", "all corners", "esc"],
+                require(!overlay.cornerChip.isHidden && texts(in: chrome.cornerKeys) == ["Radius", "[", "]", "Next Corner", "tab", "All Corners", "esc"],
                         "the \(name) selection's focused \(corner) corner shows its chip and keys: \(overlay.cornerChip.isHidden) \(texts(in: chrome.cornerKeys)); box \(overlay.view.viewRect(rect)) \(([("bar", chrome.topBar), ("strip", chrome.strip), ("size", chrome.size), ("snap", chrome.snap), ("ratio", chrome.ratio), ("radius", chrome.radius), ("chip", overlay.cornerChip), ("keys", chrome.cornerKeys)] as [(String, NSView)]).map { "\($0.0) \($0.1.isHidden ? "hidden" : "\($0.1.frame)")" })")
                 chromeClear("the \(name) selection's focused \(corner) corner, set directly")
             }
@@ -2506,7 +2519,7 @@ extension DebugRun {
         require(imageBoard.data(forType: .png) == capture && imageBoard.string(forType: .string) == nil, "Copy puts the capture on the pasteboard again")
 
         // A click on the thumbnail opens the capture as Open does (suppressed here, so nothing opens and the toast stays up); a click
-        // elsewhere on the capsule closes it.
+        // elsewhere on the card closes it.
         Toast.isSuppressed = true
         let clicked = Toast(png: capture, message: "Copied", detail: "1200 x 400", file: nil, color: nil, defaults: trashDefaults,
                             pasteboard: NSPasteboard(name: NSPasteboard.Name("snug-toast-click-\(UUID().uuidString)")))

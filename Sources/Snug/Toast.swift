@@ -2,16 +2,16 @@ import AppKit
 import ScreenshotCore
 import UniformTypeIdentifiers
 
-/// A small non-activating confirmation: one capsule on the chrome surface with a lead tile, the message, and a detail line. The lead is
-/// the capture's thumbnail (44 x 28 pt, aspect fill), the swatch for a color, a text glyph for copied text, or a mark (red for a failure
-/// with no capture). The capsule is 40 pt tall (taller for a two-line warning or failure) and up to 360 pt wide, and it keeps that size
+/// A small non-activating confirmation: one card on the chrome surface with a lead tile, the message, and a detail line. The card's
+/// 13 pt corners are concentric with the lead's 7 pt corners, 6 pt in. The lead is the capture's thumbnail (44 x 28 pt, aspect fill), the swatch for a color, a text glyph for copied text, or a mark (red for a failure
+/// with no capture). The card is 40 pt tall (taller for a two-line warning or failure) and up to 360 pt wide, and it keeps that size
 /// and place for its whole life: its text box is as wide as the wider of the resting text and the actions, and on hover the text
 /// cross-fades to the actions in the same box, both centered in it. The close button fades in on the top-left corner. Copy puts the
 /// capture (or the recording's file, or the text) on the pasteboard again; Save As (an unsaved capture: a save panel, and the toast closes
 /// once it is saved) or Trash (a saved file), Open
 /// (in the default app for the file, named in its tooltip), Show in Finder (a saved file) and Share act on the capture; copied text has
 /// Open (in the default app for plain text, from a temporary file) and Share. The toast takes no keys.
-/// Pointing at the thumbnail grows the capture out of it in its own panel, a margin above the capsule (below it at the top right); the
+/// Pointing at the thumbnail grows the capture out of it in its own panel, a margin above the card (below it at the top right); the
 /// pointer can cross to it without either closing. Drag the thumbnail or the preview to drop the image, or click either to open it as
 /// Open does; a click elsewhere closes the toast. It goes away after the lifetime setting (4 s unless changed) while the pointer is elsewhere, and
 /// stays while it is over the toast or its preview; leaving starts the full lifetime again. A lifetime of 0 shows only failure (red) and
@@ -24,7 +24,7 @@ import UniformTypeIdentifiers
 final class Toast: NSPanel, NSDraggingSource {
     /// The toasts on screen, oldest first.
     private(set) static var shown: [Toast] = []
-    /// The space between stacked capsules.
+    /// The space between stacked cards.
     static let gap: CGFloat = 8
     /// Debug runs set this so scripted copies never put a toast on screen or open an app; an action that would open one records it in `opened`.
     static var isSuppressed = false
@@ -39,7 +39,7 @@ final class Toast: NSPanel, NSDraggingSource {
         panel.allowedContentTypes = [.png]
         return panel.runModal() == .OK ? panel.url : nil
     }
-    /// Transparent margin around the capsule, so the close button can hang off a corner; it is also the gap to the preview.
+    /// Transparent margin around the card, so the close button can hang off a corner; it is also the gap to the preview.
     private static let margin: CGFloat = 10
     /// The lifetime setting's choices, in seconds: 0 is no toast but failures and warnings, and -1 is Forever.
     static let lifetimes = [0, 1, 2, 3, 4, 5, 6, 8, 10, 15, 20, 30, -1]
@@ -66,7 +66,7 @@ final class Toast: NSPanel, NSDraggingSource {
     let lifetime: Duration?
     private let defaults: UserDefaults
     private let pasteboard: NSPasteboard
-    /// The capsule, on the chrome surface with its hairline in the look the toast opens in.
+    /// The card, on the chrome surface with its hairline in the look the toast opens in.
     let card = NSView()
     /// The thumbnail, swatch, text glyph, or mark.
     let lead: NSView
@@ -82,7 +82,7 @@ final class Toast: NSPanel, NSDraggingSource {
     let openButton: NSButton
     let revealButton: NSButton
     let shareButton: NSButton
-    /// The capture at up to 240 x 160 pt, in a panel of its own so showing it never moves the capsule.
+    /// The capture at up to 240 x 160 pt, in a panel of its own so showing it never moves the card.
     private(set) var preview: ToastPreview?
     private(set) var isHovering = false
     private(set) var isPeeking = false
@@ -91,7 +91,7 @@ final class Toast: NSPanel, NSDraggingSource {
     private var overPreview = false
     private var thumbnailArea: NSTrackingArea?
     private var previewArea: NSTrackingArea?
-    /// The preview's frame, and the thumbnail-sized frame at its edge by the capsule that it grows from, relative to the toast's origin.
+    /// The preview's frame, and the thumbnail-sized frame at its edge by the card that it grows from, relative to the toast's origin.
     private var previewOffsets = (from: CGRect.zero, to: CGRect.zero)
     /// The toast's origin at the anchor, whether the stack grows down from it (the top right), and the visible screen it is on.
     private var anchor = NSPoint.zero
@@ -240,7 +240,7 @@ final class Toast: NSPanel, NSDraggingSource {
             return button
         }
         copyButton = button("doc.on.doc", "Copy")
-        saveButton = button("square.and.arrow.down", "Save As...")
+        saveButton = button("square.and.arrow.down", "Save As…")
         trashButton = button("trash", "Move to Trash")
         openButton = button(copiedText != nil ? "doc.text" : "arrow.up.forward.app", openTip)
         revealButton = button("folder", "Show in Finder")
@@ -270,7 +270,7 @@ final class Toast: NSPanel, NSDraggingSource {
         }
 
         // The size, fixed here: the text box is the wider of the resting text (the message up to 200 pt) and the actions, within 360 pt
-        // for the whole capsule. A warning or failure too long for one line wraps to two and makes the capsule taller.
+        // for the whole card. A warning or failure too long for one line wraps to two and makes the card taller.
         let margin = Toast.margin
         let messageWidth = min(message.frame.width, 200)
         let resting = messageWidth + (detail.isHidden ? 0 : 8 + detail.frame.width)
@@ -284,7 +284,7 @@ final class Toast: NSPanel, NSDraggingSource {
         let detailHeight = detail.cell!.cellSize(forBounds: CGRect(x: 0, y: 0, width: boxWidth - messageWidth - 8, height: 100)).height
         let size = CGSize(width: 6 + lead.frame.width + 10 + boxWidth + 12, height: max(40, (detailHeight + 12).rounded(.up)))
         card.wantsLayer = true
-        card.layer!.cornerRadius = 20
+        card.layer!.cornerRadius = 13
         card.layer!.borderWidth = 0.5
         NSApp.effectiveAppearance.performAsCurrentDrawingAppearance {
             card.layer!.backgroundColor = NSColor.chromeSurface.cgColor
@@ -323,7 +323,7 @@ final class Toast: NSPanel, NSDraggingSource {
         guard let image else { return }
 
         // The preview: the whole capture aspect-fit inside 240 x 160 pt (never enlarged), each side at least 72 pt with the image cropped
-        // as the thumbnail is. It starts at the thumbnail's left edge, kept on screen, a margin above the capsule (below it at the top right).
+        // as the thumbnail is. It starts at the thumbnail's left edge, kept on screen, a margin above the card (below it at the top right).
         let fit = min(1, 240 / image.size.width, 160 / image.size.height)
         let previewSize = CGSize(width: max(72, (image.size.width * fit).rounded()), height: max(72, (image.size.height * fit).rounded()))
         let thumbnail = lead.convert(lead.bounds, to: nil)
@@ -570,7 +570,7 @@ final class Toast: NSPanel, NSDraggingSource {
 
     override func mouseExited(with event: NSEvent) { track(event, inside: false) }
 
-    /// Follows the pointer over the capsule, the thumbnail and the preview: over the capsule or the preview the toast is hovered and
+    /// Follows the pointer over the card, the thumbnail and the preview: over the card or the preview the toast is hovered and
     /// stays; over the thumbnail or the preview the preview shows. Leaving settles after 0.15 s, so the pointer can cross the margin
     /// between the thumbnail and the preview without either closing.
     private func track(_ event: NSEvent, inside: Bool) {

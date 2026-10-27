@@ -644,14 +644,14 @@ extension DebugRun {
 
         let menu = SnugApp.makeMenu(defaults: defaults)
         let capture = menu.items[0]
-        require(menu.items.map(\.title) == ["Capture", "Capture Text", "", "Settings...", "Check for Updates...", "", "Quit Snug"], "menu items: \(menu.items.map(\.title))")
+        require(menu.items.map(\.title) == ["Capture", "Capture Text", "", "Settings…", "Check for Updates…", "", "Quit Snug"], "menu items: \(menu.items.map(\.title))")
         require(capture.keyEquivalent == " " && capture.keyEquivalentModifierMask == [.control, .shift], "Capture shows the shortcut as a key equivalent")
         require(menu.items[3].keyEquivalent == "," && menu.items[6].keyEquivalent == "q", "Settings and Quit carry their command keys")
         SnugApp.showRecording(true, in: menu)
         require(menu.items.filter { !$0.isHidden }.prefix(2).map(\.title) == ["Stop Recording", ""] && capture.keyEquivalent == " ",
                 "while recording, Stop Recording with the shortcut replaces Capture and Capture Text: \(menu.items.filter { !$0.isHidden }.map(\.title))")
         SnugApp.showRecording(false, in: menu)
-        require(menu.items.filter { !$0.isHidden }.map(\.title) == ["Capture", "Capture Text", "", "Settings...", "Check for Updates...", "", "Quit Snug"],
+        require(menu.items.filter { !$0.isHidden }.map(\.title) == ["Capture", "Capture Text", "", "Settings…", "Check for Updates…", "", "Quit Snug"],
                 "after the recording the menu is restored")
         require(Shortcut.label(from: defaults) == "\u{2303}\u{21E7}space", "the default shortcut displays as glyphs: \(Shortcut.label(from: defaults))")
         defaults.set(40, forKey: Pref.hotKeyCode)
@@ -713,6 +713,20 @@ extension DebugRun {
             let file = directory.appending(path: "settings-\(item.label.lowercased()).png")
             try rep.representation(using: .png, properties: [:])!.write(to: file)
             print(file.path, host.fittingSize)
+            if item.label == "Keys" {
+                // Prefixes ("Text:") and "/" are text beside the caps, and "hotkey" is the capture shortcut's caps.
+                let caps = descendants(of: host, KeyCap.self).map(\.text)
+                precondition(!caps.contains { $0.hasSuffix(":") || $0 == "/" || $0 == "hotkey" || $0.contains(" ") } && caps.contains("\u{2303}"),
+                             "the Keys tab draws one cap per key, never a prefix, \"/\" or \"hotkey\": \(caps)")
+                // The pane scrolled to its end, where the recording and menu keys sit.
+                let scroll = descendants(of: host, NSScrollView.self).first!
+                scroll.documentView!.scroll(CGPoint(x: 0, y: scroll.documentView!.isFlipped ? scroll.documentView!.bounds.maxY : 0))
+                host.layoutSubtreeIfNeeded()
+                host.cacheDisplay(in: host.bounds, to: rep)
+                let scrolled = directory.appending(path: "settings-keys-scrolled.png")
+                try rep.representation(using: .png, properties: [:])!.write(to: scrolled)
+                print(scrolled.path)
+            }
             if item.label == "General" {
                 // The pane scrolled to its end, where the Agent section sits.
                 let scroll = descendants(of: host, NSScrollView.self).first!
@@ -726,6 +740,16 @@ extension DebugRun {
             if item.label == "Appearance" {
                 // The checks below change these real settings; they are put back as they were.
                 let saved = [Pref.frameShadow, Pref.highlightColor, Pref.frameShadowColor].map { ($0, UserDefaults.standard.object(forKey: $0)) }
+                // The pane scrolled to the middle, where the Toast section sits.
+                do {
+                    let scroll = descendants(of: host, NSScrollView.self).first!
+                    scroll.documentView!.scroll(CGPoint(x: 0, y: scroll.documentView!.isFlipped ? 420 : scroll.documentView!.bounds.maxY - 420 - scroll.contentView.bounds.height))
+                    host.layoutSubtreeIfNeeded()
+                    host.cacheDisplay(in: host.bounds, to: rep)
+                    let middle = directory.appending(path: "settings-appearance-toast.png")
+                    try rep.representation(using: .png, properties: [:])!.write(to: middle)
+                    print(middle.path)
+                }
                 // The pane scrolled to its end, where the Frame section sits, with the default shadow and then a custom one.
                 for (suffix, shadow) in [("", "default"), ("-custom", "custom")] {
                     UserDefaults.standard.set(shadow, forKey: Pref.frameShadow)
@@ -782,8 +806,9 @@ extension DebugRun {
             let hotKeyCode = UserDefaults.standard.integer(forKey: Pref.hotKeyCode)
             field.keyDown(with: escape)
             precondition(!field.recording && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode, "Esc stops recording and keeps the shortcut")
-            descendants(of: field, NSButton.self).first!.performClick(nil)
-            precondition(field.recording && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode, "the clear button starts recording and writes nothing")
+            precondition(descendants(of: field, NSButton.self).isEmpty, "the field has no clear button; a click on it records")
+            field.beginRecording()
+            precondition(field.recording && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode, "recording again writes nothing")
             // Command alone and a shortcut macOS has turned on are refused: recording goes on, with the reason in place of the placeholder.
             func press(_ code: Int, _ flags: NSEvent.ModifierFlags) {
                 let character = Shortcut.keyNames[code]?.lowercased() ?? ""
@@ -809,7 +834,7 @@ extension DebugRun {
                          "\(Shortcut.label(code: systemCode, modifiers: Int(systemFlags.rawValue))), a macOS shortcut, is refused: \(shown())")
             print("shortcut field refuses Cmd-W and \(Shortcut.label(code: systemCode, modifiers: Int(systemFlags.rawValue))) (macOS)")
             offscreen.makeFirstResponder(nil)
-            precondition(!field.recording && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode, "clearing then leaving the field keeps the shortcut")
+            precondition(!field.recording && UserDefaults.standard.integer(forKey: Pref.hotKeyCode) == hotKeyCode, "recording then leaving the field keeps the shortcut")
         }
         precondition(tabs.tabViewItems.map(\.label) == ["General", "Appearance", "Keys"], "Settings tabs: \(tabs.tabViewItems.map(\.label))")
         let window = SettingsTabs.makeWindow()
@@ -844,8 +869,8 @@ extension DebugRun {
     }
 
     /// `--render-toasts DIR`: the toast in each state, in the light and the dark look, as `toast-<state>-<look>.png` on a backdrop of
-    /// that look; the preview states draw the preview panel where it sits by the capsule. Checks the sizes the design fixes: one line
-    /// is 40 pt tall, a long warning two lines, the capsule at most 360 pt wide; the preview of a very tall and a very wide capture
+    /// that look; the preview states draw the preview panel where it sits by the card. Checks the sizes the design fixes: one line
+    /// is 40 pt tall, a long warning two lines, the card at most 360 pt wide; the preview of a very tall and a very wide capture
     /// at 72 pt on their short side, cropped at the top and in the middle; hovering and the preview moving or resizing nothing. Then a stack
     /// of three toasts as `toast-stack-<look>.png`.
     static func renderToasts(into directory: URL, image: CGImage) async throws {
@@ -921,7 +946,7 @@ extension DebugRun {
                 func frames() -> [CGRect] { [toast.frame, toast.card.frame, toast.lead.frame, toast.textBox.frame, toast.actions.frame, toast.message.frame, toast.detail.frame] }
                 let rest = frames()
                 require(toast.card.frame.width <= 360 && toast.card.frame.height == (toast.detail.maximumNumberOfLines == 2 ? toast.card.frame.height : 40),
-                        "\(state.name): one line is 40 pt tall (only a warning or failure wraps), and no capsule is wider than 360 pt: \(toast.card.frame.size)")
+                        "\(state.name): one line is 40 pt tall (only a warning or failure wraps), and no card is wider than 360 pt: \(toast.card.frame.size)")
                 if state.hover {
                     toast.setHovering(true)
                     try await Task.sleep(for: .milliseconds(250))
@@ -961,7 +986,7 @@ extension DebugRun {
                     require(size == (state.name == "tall" ? CGSize(width: 72, height: 160) : CGSize(width: 240, height: 72)), "\(state.name): the preview is \(size)")
                 case "preview":
                     require(toast.preview!.frame.minY == toast.frame.maxY && toast.preview!.frame.minY - (toast.frame.minY + toast.card.frame.maxY) == 10,
-                            "the preview is 10 pt above the capsule")
+                            "the preview is 10 pt above the card")
                 default: break
                 }
                 if state.name == "tall" {

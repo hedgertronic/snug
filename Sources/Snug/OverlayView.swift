@@ -12,11 +12,17 @@ struct Highlight {
     /// Strength of the glow around the hovered rectangle, 0 (none)...1.
     var glow: CGFloat
 
-    /// The color choices, in order: the system accent ("" hex), then the macOS accent colors.
-    static let presets: [(name: String, hex: String)] = [
-        ("System accent", ""), ("Blue", "#007AFF"), ("Purple", "#A550A7"), ("Pink", "#F74F9E"), ("Red", "#FF5257"),
-        ("Orange", "#F7821B"), ("Yellow", "#FFC600"), ("Green", "#62BA46"), ("Graphite", "#8C8C8C")
+    /// The default color, Coral, the first of Snug's colors.
+    static let defaultHex = "#FF7A6B"
+    /// The color choices in two rows: Snug's colors, then the system accent ("" hex) and the macOS accent colors.
+    static let presetRows: [[(name: String, hex: String)]] = [
+        [("Coral", defaultHex), ("Plum", "#3A2340"), ("Cream", "#FFECEA"), ("Rose", "#E8667A"), ("Tangerine", "#FF8A3D"), ("Teal", "#2A9D8F"),
+         ("Sunflower", "#FFD43B")],
+        [("System accent", ""), ("Blue", "#007AFF"), ("Purple", "#A550A7"), ("Pink", "#F74F9E"), ("Red", "#FF5257"),
+         ("Orange", "#F7821B"), ("Yellow", "#FFC600"), ("Green", "#62BA46"), ("Graphite", "#8C8C8C")]
     ]
+    /// Every color choice, Snug's first.
+    static let presets = presetRows.flatMap { $0 }
 
     init(defaults: UserDefaults) {
         color = Self.color(hex: defaults.string(forKey: Pref.highlightColor)!)
@@ -202,7 +208,11 @@ final class OverlayView: NSView {
         event.modifierFlags.contains(.command) && controller?.handleKey(event) == true
     }
 
+    /// Sets the colors with implicit actions off, so opening in a highlight color other than the last one draws it at once.
     private func applyAccent() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
         effectiveAppearance.performAsCurrentDrawingAppearance {
             let accent = highlight?.color ?? .controlAccentColor
             guides.accent = accent

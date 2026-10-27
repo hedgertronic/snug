@@ -24,7 +24,7 @@ VERSION = "1.0.0"
 BUILD = "2"
 MINIMUM_SYSTEM = "26.0"
 # Where installed copies look for updates.
-FEED_URL = "https://raw.githubusercontent.com/hedgertronic/snug/main/appcast.xml"
+FEED_URL = "https://snugshot.app/appcast.xml"
 PUBLIC_ED_KEY = "ZEuRf2celsTZdW8b4sBNlKNOXeqiNkawPIPmQE4mgWg="
 NOTARY_PROFILE = "snug-notary"
 # The newest item goes right after the channel's title, the one place this line appears.
