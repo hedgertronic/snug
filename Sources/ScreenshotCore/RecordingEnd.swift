@@ -12,14 +12,21 @@ public enum RecordingEnd: Equatable, Sendable {
     case failed
 
     /// A finished output or a `userStopped` failure is complete. Any other failure with no frames written fails. After frames, a
-    /// failure is a cut-short file (`partial`) only when it is a write or encoder failure (`isWriteFailure`) while nothing was stopping
-    /// the recording; a failure while Snug stops it (`stopping`) or after the stream stopped, and any other code (an outside stop can
+    /// failure is a cut-short file (`partial`) only when it is a write or encoder failure (`isWriteFailure`) outside a deliberate
+    /// stop; a failure during a deliberate stop (`stopping`, see `isDeliberateStop`), and any other code (an outside stop can
     /// report codes other than `userStopped`), finishes it.
     public init(failed: Bool, userStopped: Bool, wroteFrames: Bool, stopping: Bool, writeFailure: Bool) {
         self = if !failed || userStopped { .finished }
             else if !wroteFrames { .failed }
             else if stopping || !writeFailure { .finished }
             else { .partial }
+    }
+
+    /// Whether a stop ends the recording on purpose, so a failure that follows it finishes the file: Snug's own stop, begun while the
+    /// stream ran, or the stream's stop for a reason other than a write failure (the system's screen-recording indicator). A stream that
+    /// stopped for insufficient storage is not one.
+    public static func isDeliberateStop(snugStopped: Bool, streamStopped: Bool, streamWriteFailure: Bool) -> Bool {
+        snugStopped || (streamStopped && !streamWriteFailure)
     }
 
     /// Whether `error`, or an error under it (`NSUnderlyingErrorKey`), is a failure to write or encode the file: ScreenCaptureKit's

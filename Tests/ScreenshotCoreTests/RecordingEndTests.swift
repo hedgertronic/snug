@@ -22,6 +22,21 @@ struct RecordingEndTests {
         #expect(RecordingEnd(failed: true, userStopped: false, wroteFrames: true, stopping: false, writeFailure: false) == .finished)
     }
 
+    /// The stream's stop and the output's failure arrive in either order; a stream stopped for insufficient storage is no deliberate stop.
+    @Test func aStreamStoppedForStorageStillCutsTheFileShort() {
+        func end(snugStopped: Bool, streamStopped: Bool, streamWriteFailure: Bool, outputWriteFailure: Bool) -> RecordingEnd {
+            RecordingEnd(failed: true, userStopped: false, wroteFrames: true,
+                         stopping: RecordingEnd.isDeliberateStop(snugStopped: snugStopped, streamStopped: streamStopped, streamWriteFailure: streamWriteFailure),
+                         writeFailure: streamWriteFailure || outputWriteFailure)
+        }
+        #expect(end(snugStopped: false, streamStopped: true, streamWriteFailure: true, outputWriteFailure: true) == .partial, "stream -3822, then output ENOSPC")
+        #expect(end(snugStopped: false, streamStopped: true, streamWriteFailure: true, outputWriteFailure: false) == .partial, "stream -3822, then output -3811")
+        #expect(end(snugStopped: true, streamStopped: false, streamWriteFailure: false, outputWriteFailure: true) == .finished, "Snug's stop, then output ENOSPC")
+        #expect(end(snugStopped: false, streamStopped: true, streamWriteFailure: false, outputWriteFailure: false) == .finished, "stream -3817 or -3821, then output -3811")
+        #expect(end(snugStopped: false, streamStopped: false, streamWriteFailure: false, outputWriteFailure: false) == .finished, "output -3811 before any stop")
+        #expect(end(snugStopped: false, streamStopped: false, streamWriteFailure: false, outputWriteFailure: true) == .partial, "output ENOSPC before any stop")
+    }
+
     @Test func writeFailuresAreStorageEncoderAndFileWriteErrors() {
         let writes = [NSError(domain: "com.apple.ScreenCaptureKit.SCStreamErrorDomain", code: -3822),
                       NSError(domain: "AVFoundationErrorDomain", code: -11807), NSError(domain: "AVFoundationErrorDomain", code: -11883),

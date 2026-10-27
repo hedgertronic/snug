@@ -68,7 +68,11 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     private let ended: AsyncStream<(any Error)?>
     private let end: AsyncStream<(any Error)?>.Continuation
     private var stopping = false
+    /// Whether Snug's own stop (the shortcut, the menu, Quit) began while the stream was still running.
+    private var snugStopped = false
     private var streamStopped = false
+    /// Whether the stream stopped with a write failure (`RecordingEnd.isWriteFailure`), as for insufficient storage.
+    private var streamWriteFailure = false
     /// Counts the reminder's time once a second until the recording stops.
     private var ticking: Task<Void, any Error>?
 
@@ -159,6 +163,7 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     /// to: `file`, or its next free numbered name when another recording or capture already has it.
     func stop() async throws -> URL {
         stopping = true
+        snugStopped = !streamStopped
         ticking?.cancel()
         panels.forEach { $0.orderOut(nil) }
         // A failed stop ends the wait with its error; a stop that never returns is caught by the timeout.
@@ -199,11 +204,15 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         }
     }
 
+    /// A stream that stops with a write failure after frames were written (insufficient storage), without Snug's own stop, keeps that
+    /// error in `warning`, so the delivered file is shown as cut short whether the output then fails or finishes.
     nonisolated func stream(_ stream: SCStream, didStopWithError error: any Error) {
         let failure = error as NSError
         Task { @MainActor in
-            recordingLog.notice("stream stopped, error \(failure.domain, privacy: .public) \(failure.code), stopping \(self.stopping)")
             streamStopped = true
+            streamWriteFailure = RecordingEnd.isWriteFailure(error)
+            if streamWriteFailure, !snugStopped, output.recordedDuration > .zero { warning = warning ?? error }
+            recordingLog.notice("stream stopped, error \(failure.domain, privacy: .public) \(failure.code), write failure \(self.streamWriteFailure), stopping \(self.stopping)")
             if !stopping { onStop() }
         }
     }
@@ -217,7 +226,8 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     }
 
     /// A stop from outside Snug (the system's screen-recording indicator) ends the output with `userStopped` or another code, which
-    /// delivers like `stop`, as does any failure while Snug is stopping or after the stream stopped. A write or encoder failure after
+    /// delivers like `stop`, as does any failure after Snug's own stop or after the stream stopped for a reason other than a write
+    /// failure (`RecordingEnd.isDeliberateStop`). A write or encoder failure, the output's or the stream's, after
     /// frames were written (`RecordingEnd.partial`: a full disk, an encoder error) also delivers the file, which holds what was written,
     /// with the error kept in `warning`. Only an output that fails with nothing written is a failure. The log gets the error's domain
     /// and code and those of the error under it.
@@ -226,12 +236,13 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         let underlying = failure.userInfo[NSUnderlyingErrorKey] as? NSError
         Task { @MainActor in
             let end = RecordingEnd(failed: true, userStopped: (error as? SCStreamError)?.code == .userStopped, wroteFrames: output.recordedDuration > .zero,
-                                   stopping: stopping || streamStopped, writeFailure: RecordingEnd.isWriteFailure(error))
+                                   stopping: RecordingEnd.isDeliberateStop(snugStopped: snugStopped, streamStopped: streamStopped, streamWriteFailure: streamWriteFailure),
+                                   writeFailure: streamWriteFailure || RecordingEnd.isWriteFailure(error))
             recordingLog.notice("""
                 output failed, error \(failure.domain, privacy: .public) \(failure.code), under it \(underlying?.domain ?? "none", privacy: .public) \
                 \(underlying?.code ?? 0), end \(String(describing: end), privacy: .public), stopping \(self.stopping), stream stopped \(self.streamStopped)
                 """)
-            if end == .partial { warning = error }
+            if end == .partial { warning = warning ?? error }
             finished(end == .failed ? error : nil)
         }
     }
