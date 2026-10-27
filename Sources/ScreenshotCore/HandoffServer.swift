@@ -96,22 +96,26 @@ public struct HandoffServer: Sendable {
             case "get_capture":
                 let manifest = try resolve(arguments["id"] as! String)
                 var png = try store.png(of: manifest)
+                let image = try image(from: png, manifest: manifest)
                 var structured = try JSONSerialization.jsonObject(with: manifest.json()) as! [String: Any]
                 var note: [[String: Any]] = []
                 let (width, height) = (manifest.image.width, manifest.image.height)
                 // Clients reject or shrink large images: past the limits the result is a smaller copy, and `zoom` gives full resolution.
                 if max(width, height) > Self.imageSide || png.count > Self.imageBytes {
-                    let image = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithData(png as CFData, nil)!, 0, nil)!
+                    let space = image.colorSpace.flatMap { $0.model == .rgb ? $0 : nil } ?? CGColorSpace(name: CGColorSpace.sRGB)!
                     var side = min(Self.imageSide, max(width, height))
                     var size = (width: 0, height: 0)
                     repeat {
                         let factor = Double(side) / Double(max(width, height))
                         size = (max(1, Int((Double(width) * factor).rounded())), max(1, Int((Double(height) * factor).rounded())))
-                        let context = CGContext(data: nil, width: size.width, height: size.height, bitsPerComponent: 8, bytesPerRow: 0,
-                                                space: image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+                        guard let context = CGContext(data: nil, width: size.width, height: size.height, bitsPerComponent: 8, bytesPerRow: 0,
+                                                      space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+                            throw CocoaError(.fileReadCorruptFile)
+                        }
                         context.interpolationQuality = .high
                         context.draw(image, in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
-                        png = Self.png(context.makeImage()!)
+                        guard let resized = context.makeImage() else { throw CocoaError(.fileReadCorruptFile) }
+                        png = try Self.png(resized)
                         side = side * 3 / 4
                     } while png.count > Self.imageBytes
                     let scale = Double(width) / Double(size.width)
@@ -127,14 +131,15 @@ public struct HandoffServer: Sendable {
                 let values = ["x", "y", "width", "height"].map { arguments[$0] as? Int }
                 let (width, height) = (manifest.image.width, manifest.image.height)
                 guard let x = values[0], let y = values[1], let w = values[2], let h = values[3], x >= 0, y >= 0, w > 0, h > 0,
+                      x <= width, y <= height,
                       w <= width - x, h <= height - y, max(w, h) <= Self.zoomLimit else {
                     throw ToolError(code: "invalid_rect", message: "The rect must be whole pixels inside the \(width) x \(height) image, "
                                     + "at most \(Self.zoomLimit) px a side.")
                 }
-                let source = CGImageSourceCreateWithData(try store.png(of: manifest) as CFData, nil)!
-                let crop = CGImageSourceCreateImageAtIndex(source, 0, nil)!.cropping(to: CGRect(x: x, y: y, width: w, height: h))!
+                let image = try image(from: store.png(of: manifest), manifest: manifest)
+                guard let crop = image.cropping(to: CGRect(x: x, y: y, width: w, height: h)) else { throw CocoaError(.fileReadCorruptFile) }
                 let offset: [String: Any] = ["capture_id": manifest.captureId, "offset": ["x": x, "y": y], "width": w, "height": h]
-                return ["content": [["type": "image", "data": Self.png(crop).base64EncodedString(), "mimeType": "image/png"],
+                return ["content": [["type": "image", "data": try Self.png(crop).base64EncodedString(), "mimeType": "image/png"],
                                     ["type": "text", "text": encode(offset)]],
                         "structuredContent": offset]
             default:
@@ -160,11 +165,20 @@ public struct HandoffServer: Sendable {
         String(decoding: try! JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes]), as: UTF8.self)
     }
 
-    private static func png(_ image: CGImage) -> Data {
+    private func image(from png: Data, manifest: HandoffManifest) throws -> CGImage {
+        guard let source = CGImageSourceCreateWithData(png as CFData, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+              image.width == manifest.image.width, image.height == manifest.image.height else {
+            throw ToolError(code: "capture_unreadable", message: "The stored image is damaged or does not match its manifest. Ask the user to copy it again.")
+        }
+        return image
+    }
+
+    private static func png(_ image: CGImage) throws -> Data {
         let data = NSMutableData()
-        let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil)!
+        guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else { throw CocoaError(.fileWriteUnknown) }
         CGImageDestinationAddImage(destination, image, nil)
-        precondition(CGImageDestinationFinalize(destination))
+        guard CGImageDestinationFinalize(destination) else { throw CocoaError(.fileWriteUnknown) }
         return data as Data
     }
 }
