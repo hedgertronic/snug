@@ -466,11 +466,21 @@
         this.reset(); hover(); this.render();
         for (const e of [this.scene.querySelector('.ovg'), this.chip, this.strip]) e.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
       };
+      // Each loop starts with Snug closed: the two windows plain and undimmed under an arrow pointer, held 1.2 s. The first loop closes
+      // it here; later loops are already closed from the copy, whose 4.6 s tail is split so the closed stretch is the same length.
       const loop = async () => {
         let first = true;
         for (;;) {
           const s = this.s;
-          if (first) { this.reset(); hover(); this.render(); first = false; } else reopen();
+          if (first) {
+            Object.assign(s, { open: false, drag: null, selr: null, path: [], target: null });
+            this.scene.dataset.cursor = 'arrow';
+            this.aim(this.ptr);
+            this.render();
+            await sleep(1200);
+            first = false;
+          } else await sleep(1200);
+          reopen();
           // The pointer glides from wherever the last run left it, so a new loop never jumps. The desktop tour hovers a message
           // bubble, the link preview and a diff line; the phone's, the bubble and the link preview.
           const c = this.cfg;
@@ -491,7 +501,7 @@
           await glide({ x: c.after[0], y: c.after[1] }, 500, () => {});
           await sleep(900);
           this.copy();
-          await sleep(4600);
+          await sleep(3400);
         }
       };
       loop().catch(g => { if (typeof g !== 'number') throw g; });
