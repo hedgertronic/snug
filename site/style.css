@@ -32,7 +32,7 @@
   --c-surface: rgba(246, 246, 248, .92); --c-surface-solid: #F6F6F8; --c-text: rgba(0, 0, 0, .86); --c-text2: rgba(0, 0, 0, .5); --c-hair: rgba(0, 0, 0, .12); --c-sh: .2;
   --cap-fill: #FFFFFF; --cap-edge: rgba(0, 0, 0, .18); --cap-sh: rgba(0, 0, 0, .22); --wash: 16%; --lit-text: color-mix(in srgb, var(--hl) 80%, #000);
   /* the toast's corner radius in app points (20 is the 40 pt capsule's), for the hero's toast and every card's; and a swatch's edge (Chrome.swift swatchEdge) */
-  --toast-r: 20px; --sw-edge: rgba(0, 0, 0, .3);
+  --toast-r: 13px; --sw-edge: rgba(0, 0, 0, .3);
 
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
