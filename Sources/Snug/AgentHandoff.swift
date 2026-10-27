@@ -66,7 +66,7 @@ extension OverlayController {
                 let json = try manifest.json()
                 let png = HandoffManifest.embedding(json, in: try await Output.png(image.cropping(to: crop)!))
                 let store = HandoffStore(defaults: defaults)
-                try await Task.detached { try store.write(png: png, manifest: manifest) }.value
+                _ = try await Task.detached { try store.write(png: png, manifest: manifest) }.value
                 let item = NSPasteboardItem()
                 guard item.setData(png, forType: .png), item.setString(manifest.reference, forType: .string), item.setData(json, forType: .snugCapture) else {
                     throw CocoaError(.fileWriteUnknown)

@@ -2,6 +2,7 @@ import AppKit
 import AVFoundation
 import ScreenCaptureKit
 import ScreenshotCore
+import Synchronization
 
 extension DebugRun {
     /// Part of `--verify-extras-ui`: V and the Record button arm recording of the selection or hovered element; the armed keys start,
@@ -204,9 +205,10 @@ extension DebugRun {
         open()
         select(CGRect(x: 600, y: 300, width: 400, height: 200))
         // Every path written to the handles and the accent outline while armed, through the count-in: each one is a frame that could show them.
-        var drawn: [String] = []
+        // Key-value observation may call from any thread, so the list is behind a lock.
+        let drawing = Mutex<[String]>([])
         let observers = [("handles", overlay.view.handlesLayer), ("outline", overlay.view.outlineLayer)].map { name, layer in
-            layer.observe(\.path) { layer, _ in if layer.path?.isEmpty == false { drawn.append(name) } }
+            layer.observe(\.path) { layer, _ in if layer.path?.isEmpty == false { drawing.withLock { $0.append(name) } } }
         }
         key(9, "v")
         require(strip().contains("3-second count") && overlay.chrome.countIn.lit, "the armed strip shows the count-in: \(strip())")
@@ -219,6 +221,7 @@ extension DebugRun {
         }
         let delay = requests.count > count ? pressed.duration(to: times.last!).milliseconds : .infinity
         observers.forEach { $0.invalidate() }
+        let drawn = drawing.withLock { $0 }
         require(drawn.isEmpty, "no handle or accent outline is drawn at arming, at any count-in tick or at any refresh between: \(drawn)")
         require(shown == ["3", "2", "1"] && (2900...3600).contains(delay) && overlayShown.last == false,
                 "the count-in shows 3, 2, 1 and records 3 s after Return with the overlay closed: \(shown) \(delay) ms \(overlayShown)")

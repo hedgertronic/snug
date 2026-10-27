@@ -2133,7 +2133,7 @@ extension DebugRun {
                     && abs(thumb.frame.height - thumb.frame.width * 900 / 1000) <= 1.5 * thumb.frame.width / 1000 + 1
                     && abs(markerLayer.frame.height / thumb.frame.height - 600.0 / 900) < 0.01 && markerLayer.frame.minY == 0,
                 "the minimap sits right of the area with the markerLayer over the bottom two thirds: \(minimap.frame) \(thumb.frame) \(markerLayer.frame) \(pageBox)")
-        require(minimap.window === overlay.window && overlay.window is CaptureExcluded && DisplayCapture.excludedWindowIDs().contains(CGWindowID(overlay.window.windowNumber)),
+        require(minimap.window === overlay.window && DisplayCapture.excludedWindowIDs().contains(CGWindowID(overlay.window.windowNumber)),
                 "the minimap is in the overlay window, which captures leave out: \(overlay.window.windowNumber) \(DisplayCapture.excludedWindowIDs().sorted())")
         offsets = [200]
         for _ in 0..<3000 where overlay.scrollHeight > 800 { try await Task.sleep(for: .milliseconds(10)) }

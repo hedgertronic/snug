@@ -492,7 +492,7 @@ extension DebugRun {
         }
 
         open()
-        try await overlay.detectionTask?.value
+        await overlay.detectionTask?.value
         overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, CGPoint(x: 422, y: 585))
         try snapshot("capture-hover")
@@ -507,7 +507,7 @@ extension DebugRun {
         // numbers, and Option flips it.
         open()
         try snapshot("capture-nothing-targeted")
-        try await overlay.detectionTask?.value
+        await overlay.detectionTask?.value
         let browser = CGRect(x: 100, y: 100, width: 1500, height: 1200)
         overlay.setWindows([browser], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, CGPoint(x: 422, y: 585))
