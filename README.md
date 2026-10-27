@@ -67,7 +67,7 @@ Use Xcode with the macOS 26 SDK and Swift 6.2 or later. Set your code-signing id
 SNUG_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" python3 scripts/build.py
 ```
 
-This builds `build/Snug.app` as a universal arm64 + x86_64 app, plus the developer lab and benchmark. Use a consistent signing identity to preserve macOS permission grants. Local builds are not notarized.
+This builds `build/Snug.app` as a universal arm64 + x86_64 app. Add `--lab` to also build the developer lab app and the benchmark. Use a consistent signing identity to preserve macOS permission grants. Local builds are not notarized.
 
 ## Privacy, license, and credit
 

@@ -17,6 +17,12 @@ class ArgumentTests(unittest.TestCase):
         self.assertTrue(build.parse_arguments(["--release"]).release)
         self.assertFalse(build.parse_arguments([]).release)
 
+    def test_lab_is_opt_in_and_never_part_of_a_release(self):
+        self.assertFalse(build.parse_arguments([]).lab)
+        self.assertTrue(build.parse_arguments(["--lab"]).lab)
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            build.parse_arguments(["--release", "--lab"])
+
 
 class FeedTests(unittest.TestCase):
     def feed_with(self, build_number: str, version: str) -> str:

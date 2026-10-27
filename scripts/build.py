@@ -1,4 +1,5 @@
-"""Build and package the local macOS prototype. Snug embeds Sparkle, its one third-party dependency, for updates.
+"""Build and package Snug.app, which embeds Sparkle, its one third-party dependency, for updates. With --lab, also the developer lab app
+(Smart Screenshot Lab), the ScreenshotBench benchmark and its generated fixtures.
 
 With --release, Snug is also timestamped, zipped, notarized with the snug-notary keychain profile, stapled and zipped again for
 download as build/release/Snug-VERSION.zip, and that zip, signed with the Sparkle EdDSA key in the login keychain, becomes the newest
@@ -38,7 +39,11 @@ root = Path(__file__).resolve().parents[1]
 def parse_arguments(arguments: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build build/Snug.app, or with --release a notarized download and its appcast item.")
     parser.add_argument("--release", action="store_true", help="notarize, zip and add the new version to appcast.xml")
-    return parser.parse_args(arguments)
+    parser.add_argument("--lab", action="store_true", help="also build the developer lab app, the benchmark and its fixtures")
+    options = parser.parse_args(arguments)
+    if options.release and options.lab:
+        parser.error("a release builds Snug alone; build the lab separately")
+    return options
 
 
 def check_feed(feed: str, version: str, build: str) -> None:
@@ -117,23 +122,8 @@ def install_binary(source: Path, destination: Path) -> None:
     os.replace(staging, destination)
 
 
-def main() -> None:
-    options = parse_arguments(sys.argv[1:])
-    release = options.release
-    # A fixed identity, bundle ID, and path keep the Screen Recording grant across rebuilds.
-    signing_identity = os.environ.get("SNUG_SIGNING_IDENTITY") or sys.exit("Set SNUG_SIGNING_IDENTITY to a code-signing identity")
-    env = os.environ.copy()
-    env["CLANG_MODULE_CACHE_PATH"] = str(root / ".build/clang-cache")
-    env["SWIFTPM_MODULECACHE_OVERRIDE"] = str(root / ".build/swift-cache")
-    appcast = root / "appcast.xml"
-    if release:
-        check_feed(read_feed(appcast), VERSION, BUILD)
-        check_release_tools(signing_identity, env)
-    # One universal binary for Apple silicon and Intel Macs.
-    command = ["swift", "build", "--disable-sandbox", "-c", "release", "--arch", "arm64", "--arch", "x86_64"]
-    subprocess.run(command, cwd=root, env=env, check=True)
-    result = subprocess.run(command + ["--show-bin-path"], cwd=root, env=env, check=True, text=True, capture_output=True)
-    binary_dir = Path(result.stdout.strip().splitlines()[-1])
+def build_lab(binary_dir: Path) -> None:
+    """The developer lab app at build/Smart Screenshot Lab.app, ad-hoc signed, and the benchmark at build/ScreenshotBench with its fixtures."""
     app = root / "build/Smart Screenshot Lab.app"
     contents = app / "Contents"
     (contents / "MacOS").mkdir(parents=True, exist_ok=True)
@@ -159,6 +149,27 @@ def main() -> None:
         plistlib.dump(info, stream)
     subprocess.run(["codesign", "--force", "--sign", "-", str(app)], check=True)
     subprocess.run(["codesign", "--verify", "--strict", str(app)], check=True)
+
+
+def main() -> None:
+    options = parse_arguments(sys.argv[1:])
+    release = options.release
+    # A fixed identity, bundle ID, and path keep the Screen Recording grant across rebuilds.
+    signing_identity = os.environ.get("SNUG_SIGNING_IDENTITY") or sys.exit("Set SNUG_SIGNING_IDENTITY to a code-signing identity")
+    env = os.environ.copy()
+    env["CLANG_MODULE_CACHE_PATH"] = str(root / ".build/clang-cache")
+    env["SWIFTPM_MODULECACHE_OVERRIDE"] = str(root / ".build/swift-cache")
+    appcast = root / "appcast.xml"
+    if release:
+        check_feed(read_feed(appcast), VERSION, BUILD)
+        check_release_tools(signing_identity, env)
+    # One universal binary for Apple silicon and Intel Macs.
+    command = ["swift", "build", "--disable-sandbox", "-c", "release", "--arch", "arm64", "--arch", "x86_64", *([] if options.lab else ["--product", "Snug"])]
+    subprocess.run(command, cwd=root, env=env, check=True)
+    result = subprocess.run(command + ["--show-bin-path"], cwd=root, env=env, check=True, text=True, capture_output=True)
+    binary_dir = Path(result.stdout.strip().splitlines()[-1])
+    if options.lab:
+        build_lab(binary_dir)
 
     # A release builds its own copy, so the everyday build/Snug.app keeps its signature and permissions.
     snug = root / ("build/release/Snug.app" if release else "build/Snug.app")
@@ -238,9 +249,10 @@ def main() -> None:
         shutil.rmtree(snug)
         print(f"Release: {archive}")
         print(f"Appcast: {appcast}")
-    print(f"Local app: {app}")
     print(f"Snug: {archive if release else snug}")
-    print(f"Benchmark: {root / 'build/ScreenshotBench'}")
+    if options.lab:
+        print(f"Lab: {root / 'build/Smart Screenshot Lab.app'}")
+        print(f"Benchmark: {root / 'build/ScreenshotBench'}")
 
 
 if __name__ == "__main__":
