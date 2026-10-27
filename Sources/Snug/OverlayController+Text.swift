@@ -490,32 +490,31 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         }
     }
 
-    /// Runs accurate OCR on the crop only, in 432 px bands read at once when it is taller than 648 px (`TextLayout.bands`); boxes come
-    /// back in full-image pixels, each line with its style measured from the image (`TextStyle`).
+    /// The most OCR bands read at once; a tall crop's other bands wait for one to finish.
+    static let ocrBandLimit = 4
+
+    /// Runs accurate OCR on the crop only, in 432 px bands, `ocrBandLimit` at a time, when it is taller than 648 px (`TextLayout.bands`);
+    /// boxes come back in full-image pixels, each line with its style measured from the image (`TextStyle`). A canceled read starts no
+    /// further band.
     @concurrent
     static func recognize(_ image: CGImage, crop: CGRect) async throws -> [TextLine] {
         let region = crop.integral
-        let reads = try await withThrowingTaskGroup(of: (band: CGRect, lines: [TextLine]).self) { group in
-            for band in TextLayout.bands(region, height: 432) {
-                group.addTask {
-                    let cropped = image.cropping(to: band)!
-                    let size = CGSize(width: cropped.width, height: cropped.height)
-                    var request = RecognizeTextRequest()
-                    request.recognitionLevel = .accurate
-                    request.usesLanguageCorrection = true
-                    request.automaticallyDetectsLanguage = true
-                    // Vision reads differently on the CPU and GPU (on the terminal fixture, a list item loses its "- " marker), so OCR
-                    // stays on the Neural Engine on every Mac that has one.
-                    for (stage, devices) in request.supportedComputeStageDevices {
-                        if let engine = devices.first(where: { if case .neuralEngine = $0 { true } else { false } }) { request.setComputeDevice(engine, for: stage) }
-                    }
-                    return (band, try await ImageRequestHandler(cropped).perform(request).map {
-                        TextLine(text: $0.topCandidates(1)[0].string,
-                                 bounds: $0.boundingBox.toImageCoordinates(size, origin: .upperLeft).offsetBy(dx: band.minX, dy: band.minY))
-                    })
-                }
+        let reads = try await BoundedConcurrency.map(TextLayout.bands(region, height: 432), limit: ocrBandLimit) { band -> (band: CGRect, lines: [TextLine]) in
+            guard let cropped = image.cropping(to: band) else { throw CocoaError(.fileReadCorruptFile) }
+            let size = CGSize(width: cropped.width, height: cropped.height)
+            var request = RecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = true
+            request.automaticallyDetectsLanguage = true
+            // Vision reads differently on the CPU and GPU (on the terminal fixture, a list item loses its "- " marker), so OCR
+            // stays on the Neural Engine on every Mac that has one.
+            for (stage, devices) in request.supportedComputeStageDevices {
+                if let engine = devices.first(where: { if case .neuralEngine = $0 { true } else { false } }) { request.setComputeDevice(engine, for: stage) }
             }
-            return try await group.reduce(into: []) { $0.append($1) }
+            return (band, try await ImageRequestHandler(cropped).perform(request).map {
+                TextLine(text: $0.topCandidates(1)[0].string,
+                         bounds: $0.boundingBox.toImageCoordinates(size, origin: .upperLeft).offsetBy(dx: band.minX, dy: band.minY))
+            })
         }
         return TextLayout.merge(reads, in: region).map { line in
             TextLine(text: line.text, bounds: line.bounds, style: TextStyle.measure(in: image, box: line.bounds))
