@@ -332,15 +332,14 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
    3 pt outside the area with a radius of 4 that pulses once at the start, and the stop reminder under it, the elapsed time and the
    capture shortcut. The chat window narrows and the header's avatars squeeze into slits with square corners, then it widens again.
    The base style is the narrow, squeezed frame, so reduced motion shows the bug. */
-.rv-in { fill: var(--d-in); }
 .rv-nm { font: 600 8.5px var(--sans); fill: var(--w-fg); }
 .rv-cov { fill: var(--bg2); }
-.rv-cap { fill: var(--w-bg); }
+.rv-cap { fill: var(--w-bg); filter: drop-shadow(1px 1px 1.5px rgba(0, 0, 0, .25)); }
 .rv-capl { fill: none; stroke: rgba(0, 0, 0, .2); stroke-width: .5; }
 .rv-win, .rv-cur { transform: translateX(-56px); animation: rvwin 6s infinite both; }
-.rv-cur { transform: translate(129px, 100px); animation-name: rvcur; }
+.rv-cur { transform: translate(130px, 86px); animation-name: rvcur; }
 @keyframes rvwin { 0%, 10% { transform: none; animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 32%, 62% { transform: translateX(-56px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 84%, 100% { transform: none; } }
-@keyframes rvcur { 0%, 10% { transform: translate(185px, 100px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 32%, 62% { transform: translate(129px, 100px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 84%, 100% { transform: translate(185px, 100px); } }
+@keyframes rvcur { 0%, 10% { transform: translate(185px, 86px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 32%, 62% { transform: translate(130px, 86px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 84%, 100% { transform: translate(185px, 86px); } }
 .avs { transform-box: fill-box; transform-origin: left; transform: translateX(calc(var(--n) * -9px)) scaleX(.45); animation: rvav 6s infinite both; }
 .avs.nm { transform: translateX(-27px); animation-name: rvnm; }
 @keyframes rvav { 0%, 10% { transform: none; animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 32%, 62% { transform: translateX(calc(var(--n) * -9px)) scaleX(.45); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 84%, 100% { transform: none; } }
@@ -349,6 +348,15 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .as { animation: rvas 6s infinite both; }
 @keyframes rvar { 0%, 19% { opacity: 1; } 23%, 71% { opacity: 0; } 75%, 100% { opacity: 1; } }
 @keyframes rvas { 0%, 19% { opacity: 0; } 23%, 71% { opacity: 1; } 75%, 100% { opacity: 0; } }
+.rv-rec { animation: rvrec 6s infinite both; }
+@keyframes rvrec { 0% { opacity: 0; } 3%, 85% { opacity: 1; } 89%, 100% { opacity: 0; } }
+.rv-toast { opacity: 0; animation: rvtoast 6s infinite both; }
+.rv-toast .pl { fill: var(--c-surface); stroke: var(--c-hair); stroke-width: .3; }
+.rv-toast { filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .25)); }
+@keyframes rvtoast { 0%, 87% { opacity: 0; transform: translateY(3px); } 91%, 96% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+.rv-th { fill: var(--w-bg); stroke: rgba(128, 128, 128, .35); stroke-width: .3; }
+.rv-tm { font: 600 6px var(--sans); fill: var(--c-text); }
+.rv-td { font: 400 5px var(--mono); fill: var(--c-text2); }
 .rv-dim { fill: rgba(0, 0, 0, .5); }
 .rv-out { fill: none; stroke: var(--rec); stroke-width: 2; animation: rvpulse 6s infinite both; }
 @keyframes rvpulse { 0% { opacity: 0; } 2.8% { opacity: 1; } 5.6% { opacity: .25; } 8.3%, 100% { opacity: 1; } }
@@ -431,7 +439,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .o-toast { transition: none; }
-  .pop, .q, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-win, .rv-cur, .avs, .ar, .as, .rv-out, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cc, .ag-bub, .card.flash .art { animation: none; }
+  .pop, .q, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-win, .rv-cur, .avs, .ar, .as, .rv-out, .rv-rec, .rv-toast, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cc, .ag-bub, .card.flash .art { animation: none; }
   .caps.hk .cap { transition: none; }
   .card .cap[data-hold], .bb .k[data-hold] { transition-duration: .01s; }
   .card .cap[data-hold].down, .bb .k[data-hold].down { transform: none; }
