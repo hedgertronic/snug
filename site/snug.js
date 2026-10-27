@@ -18,18 +18,18 @@
   const BOX = {
     screen: { n: 'Full screen', x: 0, y: 0, w: 640, h: 400, p: null, r: [0, 0, 0, 0] },
     menubar: { n: 'Menu bar', x: 0, y: 0, w: 640, h: 22, p: 'screen', r: [0, 0, 0, 0] },
-    // The review window, left of the chat window with a 16 px gap between them, as from each desktop edge; both start at the same top.
-    rv: { n: 'Review', x: 16, y: 58, w: 348, h: 328, p: 'screen', r: [12, 12, 12, 12] },
-    rvbar: { n: 'Toolbar', x: 16, y: 58, w: 348, h: 34, p: 'rv', r: [0, 0, 0, 0] },
-    rvfile: { n: 'Header.css', x: 30, y: 140, w: 320, h: 238, p: 'rv', r: [8, 8, 8, 8] },
-    rvhead: { n: 'File header', x: 30, y: 140, w: 320, h: 26, p: 'rvfile', r: [0, 0, 0, 0] },
-    l1: { n: 'Line 12', x: 30, y: 166, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
-    l2: { n: 'Line 13', x: 30, y: 184, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
-    l3: { n: 'Removed line 14', x: 30, y: 202, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
-    l4: { n: 'Added line 14', x: 30, y: 220, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
-    l5: { n: 'Added line 15', x: 30, y: 238, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
-    rvc: { n: 'Review comment', x: 46, y: 274, w: 288, h: 62, p: 'rvfile', r: [8, 8, 8, 8] },
-    l6: { n: 'Line 16', x: 30, y: 354, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
+    // The review window, left of the chat window with a 16 px gap between them, as from each desktop edge; it sits 24 px higher than the chat window.
+    rv: { n: 'Review', x: 16, y: 34, w: 348, h: 328, p: 'screen', r: [12, 12, 12, 12] },
+    rvbar: { n: 'Toolbar', x: 16, y: 34, w: 348, h: 34, p: 'rv', r: [0, 0, 0, 0] },
+    rvfile: { n: 'Header.css', x: 30, y: 116, w: 320, h: 238, p: 'rv', r: [8, 8, 8, 8] },
+    rvhead: { n: 'File header', x: 30, y: 116, w: 320, h: 26, p: 'rvfile', r: [0, 0, 0, 0] },
+    l1: { n: 'Line 12', x: 30, y: 142, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
+    l2: { n: 'Line 13', x: 30, y: 160, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
+    l3: { n: 'Removed line 14', x: 30, y: 178, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
+    l4: { n: 'Added line 14', x: 30, y: 196, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
+    l5: { n: 'Added line 15', x: 30, y: 214, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
+    rvc: { n: 'Review comment', x: 46, y: 250, w: 288, h: 62, p: 'rvfile', r: [8, 8, 8, 8] },
+    l6: { n: 'Line 16', x: 30, y: 330, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
     // The chat window, to its right.
     ch: { n: 'Chat', x: 380, y: 58, w: 244, h: 328, p: 'screen', r: [12, 12, 12, 12] },
     chbar: { n: 'Toolbar', x: 380, y: 58, w: 244, h: 34, p: 'ch', r: [0, 0, 0, 0] },
@@ -47,8 +47,8 @@
   /* The part of the scene on show, and the script that plays over it. tour: pointer stops [x, y, glide ms, hold ms]; the drag starts
      at `from`, ends at `to` and snaps on a pause; `after` is where the pointer rests before Return. The phone drags a rough box
      around the link preview. */
-  const DESK = { view: { x: 0, y: 0, w: W, h: H }, tour: [[480, 136, 800, 1100], [520, 262, 700, 1200], [205, 229, 850, 1200]],
-    from: [40, 268, 650], to: [340, 342, 1000], after: [240, 304] };
+  const DESK = { view: { x: 0, y: 0, w: W, h: H }, tour: [[480, 136, 800, 1100], [520, 262, 700, 1200], [205, 205, 850, 1200]],
+    from: [40, 244, 650], to: [340, 318, 1000], after: [240, 280] };
   const PHONE = { view: { x: 364, y: 40, w: 276, h: 396 }, tour: [[480, 136, 800, 1100], [520, 262, 700, 1200]],
     from: [440, 222, 600], to: [600, 280, 900], after: [556, 268] };
   const ZERO = [0, 0, 0, 0];
@@ -77,7 +77,7 @@
     <div class="b s-menubar" style="${at('menubar')}"><b>Chat</b><span>File</span><span>Edit</span><span>View</span><span>Window</span><span class="clock">Mon Oct 26 9:41</span></div>
     <div class="rvg"><div class="b s-win" style="${at('rv')}"></div>
     <div class="b s-toolbar" style="${at('rvbar')}">${lights}<span class="s-wt">Review</span></div>
-    <div class="b s-pr" style="left:32px;top:98px;width:316px">Round the chat avatars<small><span class="s-tag">Ready</span>#218 &middot; 1 file &middot; <ins>+2</ins> <del>&minus;1</del></small></div>
+    <div class="b s-pr" style="left:32px;top:74px;width:316px">Round the chat avatars<small><span class="s-tag">Ready</span>#218 &middot; 1 file &middot; <ins>+2</ins> <del>&minus;1</del></small></div>
     <div class="b s-file" style="${at('rvfile')}"></div>
     <div class="b s-fhead" style="${at('rvhead')}"><code>src/chat/Header.css</code><span><ins>+2</ins> <del>&minus;1</del></span></div>
     ${line('l1', 'ctx', 12, 12, '.avatar {')}${line('l2', 'ctx', 13, 13, '  width: 28px;')}${line('l3', 'del', 14, '', '  border-radius: 4px;')}
