@@ -332,21 +332,6 @@
       }, reduce ? 0 : 140, gen);
     }
 
-    // "Open Snug": the overlay closes, then opens fresh and hands control to the visitor, as if the pointer had just entered.
-    openFresh() {
-      clearTimeout(this.openT);
-      this.takeover();
-      this.gen++;
-      this.mode = 'user';
-      this.scene.dataset.auto = 'false';
-      this.toast.classList.remove('show');
-      Object.assign(this.s, { open: false, target: null, drag: null, selr: null, path: [] });
-      this.anim = null;
-      this.render();
-      const open = () => { this.reset(); this.s.target = hit(this.ptr); this.render(); this.resumeAfter(TOUCH_IDLE_MS * 2); };
-      if (reduce) open(); else this.openT = setTimeout(open, 180);
-    }
-
     // A strip tool: its button lights for a moment, and the page scrolls to the tool's card and rings it.
     go(key) {
       const card = document.getElementById(CARD[key]);
@@ -576,33 +561,22 @@
     }
   }
 
-  const demos = [...document.querySelectorAll('.demo')].map(el => new Demo(el));
+  for (const el of document.querySelectorAll('.demo')) new Demo(el);
 
-  /* ---------- the hero shortcut: ⌃⇧Space lights the caps and opens the hero demo ---------- */
-  const caps = document.querySelector('.caps.big');
-  if (caps && demos[0]) {
+  /* ---------- the header shortcut: a cap lights while its key (or a pointer on it) is down, and the ⌃⇧Space chord flashes all three ---------- */
+  const caps = document.querySelector('.caps.hk');
+  if (caps) {
     const cap = {};
     for (const b of caps.querySelectorAll('[data-k]')) cap[b.dataset.k] = b;
     const real = { ctrl: false, shift: false, space: false };
-    const latch = { ctrl: false, shift: false };
-    let latchT = 0, tapT = 0;
-    const paint = () => {
-      for (const k of ['ctrl', 'shift']) {
-        cap[k].classList.toggle('down', real[k] || latch[k]);
-        cap[k].setAttribute('aria-pressed', String(real[k] || latch[k]));
-      }
-      cap.space.classList.toggle('down', real.space || !!tapT);
-    };
-    const unlatch = () => { clearTimeout(latchT); latch.ctrl = latch.shift = false; paint(); };
+    // A pointer press holds its cap down while the pointer is down, and for at least a short beat so a quick tap still shows.
+    const tap = { ctrl: 0, shift: 0, space: 0 };
+    const MIN_TAP_MS = 140;
+    const paint = () => { for (const k in cap) cap[k].classList.toggle('down', real[k] || !!tap[k]); };
     const fire = () => {
-      unlatch();
-      const demo = demos[0].el, b = demo.getBoundingClientRect();
-      const seen = Math.max(0, Math.min(b.bottom, innerHeight) - Math.max(b.top, 0)) / b.height;
-      if (seen < 0.6) demo.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
-      for (const c of Object.values(cap)) { c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); }
+      for (const c of Object.values(cap)) c.classList.add('flash');
       clearTimeout(fire.t);
-      fire.t = setTimeout(() => { for (const c of Object.values(cap)) c.classList.remove('flash'); }, 700);
-      demos[0].openFresh();
+      fire.t = setTimeout(() => { for (const c of Object.values(cap)) c.classList.remove('flash'); }, 450);
     };
     const name = e => e.key === 'Control' ? 'ctrl' : e.key === 'Shift' ? 'shift' : (e.code === 'Space' || e.key === ' ') ? 'space' : '';
     addEventListener('keydown', e => {
@@ -617,20 +591,22 @@
     });
     addEventListener('keyup', e => { const k = name(e); if (k) { real[k] = false; paint(); } });
     addEventListener('blur', () => { real.ctrl = real.shift = real.space = false; paint(); });
-    caps.addEventListener('click', e => {
+    let held = null;
+    const release = () => {
+      if (!held) return;
+      const { k, t0 } = held;
+      held = null;
+      setTimeout(() => { tap[k] = 0; paint(); }, Math.max(0, MIN_TAP_MS - (performance.now() - t0)));
+    };
+    caps.addEventListener('pointerdown', e => {
       const b = e.target.closest('[data-k]');
-      if (!b) return;
-      const k = b.dataset.k;
-      if (k === 'space') {
-        clearTimeout(tapT); tapT = setTimeout(() => { tapT = 0; paint(); }, 160);
-        paint();
-        if (latch.ctrl && latch.shift) fire();
-        return;
-      }
-      latch[k] = !latch[k];
-      clearTimeout(latchT);
-      if (latch.ctrl || latch.shift) latchT = setTimeout(unlatch, 3000);
+      if (!b || e.button !== 0) return;
+      e.preventDefault();
+      release();
+      held = { k: b.dataset.k, t0: performance.now() };
+      tap[held.k] = 1;
       paint();
     });
+    for (const t of ['pointerup', 'pointercancel', 'pointerleave']) caps.addEventListener(t, release);
   }
 })();
