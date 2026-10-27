@@ -298,7 +298,7 @@ private struct MakerButton: View {
 /// The overlay's appearance, the highlight (live preview, color menu, fill, fade, glow), the toast, and the frame (live preview, padding, shadow).
 private struct AppearancePane: View {
     @AppStorage(Pref.overlayAppearance) private var overlayAppearance = "system"
-    @AppStorage(Pref.highlightColor) private var highlightColor = ""
+    @AppStorage(Pref.highlightColor) private var highlightColor = Highlight.defaultHex
     @AppStorage(Pref.highlightFill) private var highlightFill = 0.1
     @AppStorage(Pref.highlightFade) private var highlightFade = 0.5
     @AppStorage(Pref.highlightGlow) private var highlightGlow = 0.2
@@ -525,33 +525,46 @@ struct FramePreview: View {
     }
 }
 
-/// The highlight color as a row of circles, like the accent colors in System Settings: the system accent, the eight macOS accents, then
-/// a color wheel that opens the color panel and shows the picked color once it is the choice. The chosen circle has a ring; its name is above.
+/// The highlight color as two rows of circles: Snug's colors, then, like the accent colors in System Settings, the system accent, the
+/// eight macOS accents and a color wheel that opens the color panel and shows the picked color once it is the choice. The rows share
+/// columns, so Snug's row lines up over the first circles of the other. The chosen circle has a ring; its name is above.
 private struct ColorChoices: View {
     @Binding var hex: String
 
     var body: some View {
         let preset = Highlight.presets.first { $0.hex == hex }
+        // The longer row's circles and the wheel; the shorter row leaves the rest of its columns empty.
+        let columns = Highlight.presetRows.map(\.count).max()! + 1
         VStack(alignment: .leading, spacing: 10) {
             LabeledContent("Color") { Text(preset?.name ?? "Custom").foregroundStyle(.secondary) }
-            HStack(spacing: 0) {
-                ForEach(Highlight.presets, id: \.hex) { preset in
-                    Button { hex = preset.hex } label: {
-                        Circle().fill(Color(nsColor: Highlight.color(hex: preset.hex))).overlay(Circle().stroke(.black.opacity(0.15), lineWidth: 0.5))
+            ForEach(Highlight.presetRows.indices, id: \.self) { row in
+                let presets = Highlight.presetRows[row]
+                HStack(spacing: 0) {
+                    ForEach(presets, id: \.hex) { preset in
+                        Button { hex = preset.hex } label: {
+                            Circle().fill(Color(nsColor: Highlight.color(hex: preset.hex))).overlay(Circle().stroke(.black.opacity(0.15), lineWidth: 0.5))
+                        }
+                        .buttonStyle(.plain)
+                        .frame(width: 20, height: 20)
+                        .overlay(Circle().stroke(Color(nsColor: Highlight.color(hex: preset.hex)), lineWidth: 2).padding(-4).opacity(hex == preset.hex ? 1 : 0))
+                        .help(preset.name)
+                        .accessibilityLabel(preset.name)
+                        Spacer(minLength: 0)
                     }
-                    .buttonStyle(.plain)
-                    .frame(width: 20, height: 20)
-                    .overlay(Circle().stroke(Color(nsColor: Highlight.color(hex: preset.hex)), lineWidth: 2).padding(-4).opacity(hex == preset.hex ? 1 : 0))
-                    .help(preset.name)
-                    .accessibilityLabel(preset.name)
-                    Spacer(minLength: 0)
+                    if row == Highlight.presetRows.count - 1 {
+                        ColorSwatch(hex: $hex, wheel: preset != nil)
+                            .frame(width: 20, height: 20)
+                            .overlay(Circle().stroke(Color(nsColor: Highlight.color(hex: hex)), lineWidth: 2).padding(-4).opacity(preset == nil ? 1 : 0))
+                            .help("Custom")
+                    } else {
+                        ForEach(presets.count..<columns, id: \.self) { column in
+                            Color.clear.frame(width: 20, height: 20)
+                            if column < columns - 1 { Spacer(minLength: 0) }
+                        }
+                    }
                 }
-                ColorSwatch(hex: $hex, wheel: preset != nil)
-                    .frame(width: 20, height: 20)
-                    .overlay(Circle().stroke(Color(nsColor: Highlight.color(hex: hex)), lineWidth: 2).padding(-4).opacity(preset == nil ? 1 : 0))
-                    .help("Custom")
+                .padding(.horizontal, 4)
             }
-            .padding(.horizontal, 4)
         }
     }
 }

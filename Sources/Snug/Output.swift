@@ -44,7 +44,7 @@ enum Pref {
     /// Whether crops take the corner radius measured on screen (and their window's at shared corners); off, they are square unless
     /// edited with [ and ].
     static let roundCorners = "SnugRoundCorners"
-    /// The highlight: a hex color ("" is the system accent), fill and background fade as opacities, and the hover glow as an intensity from 0 to 1.
+    /// The highlight: a hex color (`Highlight.defaultHex` unless one is chosen; "" is the system accent), fill and background fade as opacities, and the hover glow as an intensity from 0 to 1.
     static let highlightColor = "SnugHighlightColor"
     static let highlightFill = "SnugHighlightFill"
     static let highlightFade = "SnugHighlightFade"
@@ -118,7 +118,7 @@ enum Pref {
             hotKeyCode: 49,
             hotKeyModifiers: Int(NSEvent.ModifierFlags([.control, .shift]).rawValue),
             colorFormat: ColorFormat.hex.rawValue,
-            highlightColor: "",
+            highlightColor: Highlight.defaultHex,
             highlightFill: 0.1,
             highlightFade: 0.5,
             highlightGlow: 0.2,
