@@ -1,12 +1,14 @@
 // The hero demo: a scripted Snug overlay over a mock desktop, drawn the way the app draws it (Sources/Snug/OverlayView.swift and
 // Chrome.swift). The script hovers elements, drags a loose box that snaps to the card under it on a pause, and copies. A visitor's
 // pointer takes over at once; the script picks up again shortly after the pointer leaves, or after a few idle seconds on touch.
+// Under 600 px wide the demo is watch-only: it crops to the chat window, plays its own short script and ignores input.
 (() => {
   'use strict';
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const W = 640, H = 400, MENU = 22;
   const LEAVE_MS = 1200, TOUCH_IDLE_MS = 4000;
   const NS = 'http://www.w3.org/2000/svg';
+  const phoneQ = matchMedia('(max-width: 599.98px)');
 
   /* Every box in scene px, parents before children. r is the element's own corner radii [top-left, top-right, bottom-right,
      bottom-left]; a square corner that sits on a corner of its parent takes the parent's radius, as the app gives a window's corner
@@ -37,6 +39,16 @@
     cm: { n: 'Message field', x: 390, y: 340, w: 224, h: 32, p: 'ch', r: [16, 16, 16, 16] },
   };
   const KEYS = Object.keys(BOX);
+  // The review window's boxes: out of the picture, and out of the snap and hit tests, on a phone.
+  const RV = ['rv', 'rvbar', 'rvfile', 'rvhead', 'l1', 'l2', 'l3', 'l4', 'l5', 'rvc', 'l6'];
+  let LIVE = KEYS;
+  /* The part of the scene on show, and the script that plays over it. tour: pointer stops [x, y, glide ms, hold ms]; the drag starts
+     at `from`, ends at `to` and snaps on a pause; `after` is where the pointer rests before Return. The phone drags a rough box
+     around the link preview. */
+  const DESK = { view: { x: 0, y: 0, w: W, h: H }, tour: [[480, 136, 800, 1100], [520, 262, 700, 1200], [205, 205, 850, 1200]],
+    from: [40, 240, 650], to: [366, 314, 1000], after: [250, 282] };
+  const PHONE = { view: { x: 372, y: 0, w: 260, h: 332 }, tour: [[480, 136, 800, 1100], [520, 262, 700, 1200]],
+    from: [440, 222, 600], to: [600, 280, 900], after: [556, 268] };
   const ZERO = [0, 0, 0, 0];
   // Corner points in r's order.
   const cornerAt = (b, i) => [[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.h], [b.x, b.y + b.h]][i];
@@ -61,7 +73,7 @@
   const CONTENT = `
     <div class="b s-screen" style="${at('screen')}"></div>
     <div class="b s-menubar" style="${at('menubar')}"><b>Chat</b><span>File</span><span>Edit</span><span>View</span><span>Window</span><span class="clock">Mon Oct 26 9:41</span></div>
-    <div class="b s-win" style="${at('rv')}"></div>
+    <div class="rvg"><div class="b s-win" style="${at('rv')}"></div>
     <div class="b s-toolbar" style="${at('rvbar')}">${lights}<span class="s-wt">Review</span></div>
     <div class="b s-pr" style="left:32px;top:74px;width:340px">Round the chat avatars<small><span class="s-tag">Ready</span>#218 &middot; 1 file &middot; <ins>+2</ins> <del>&minus;1</del></small></div>
     <div class="b s-file" style="${at('rvfile')}"></div>
@@ -69,7 +81,7 @@
     ${line('l1', 'ctx', 12, 12, '.avatar {')}${line('l2', 'ctx', 13, 13, '  width: 28px;')}${line('l3', 'del', 14, '', '  border-radius: 4px;')}
     ${line('l4', 'add', '', 14, '  border-radius: 50%;')}${line('l5', 'add', '', 15, '  object-fit: cover;')}
     <div class="b s-cmt" style="${at('rvc')}"><i class="av a2"></i><div><b>Rae</b> <small>on line 14</small><p>50% keeps it round at any size. Nice.</p><small class="act">Reply &middot; Resolve</small></div></div>
-    ${line('l6', 'ctx', 15, 16, '}')}
+    ${line('l6', 'ctx', 15, 16, '}')}</div>
     <div class="b s-win" style="${at('ch')}"></div>
     <div class="b s-toolbar" style="${at('chbar')}">${lights}<span class="s-wt"><i class="av a2"></i>Rae</span></div>
     <div class="b s-ts" style="left:380px;top:98px;width:244px">Today 9:38</div>
@@ -105,15 +117,15 @@
   const size = r => `${Math.round(r.w)} x ${Math.round(r.h)}`;
   const inside = (r, p) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
   // The innermost element under the point; the bare desktop is the full screen.
-  const hit = p => KEYS.filter(k => inside(BOX[k], p)).pop() || 'screen';
+  const hit = p => LIVE.filter(k => inside(BOX[k], p)).pop() || 'screen';
   const same = (a, b) => !!a && !!b && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
-  const keyOf = r => KEYS.find(k => same(BOX[k], r));
+  const keyOf = r => LIVE.find(k => same(BOX[k], r));
   // A rectangle's corner radii: the element's it lands on exactly, else square.
   const radiiFor = r => { const k = keyOf(r); return k ? BOX[k].radii : ZERO; };
-  const firstChild = k => KEYS.find(c => BOX[c].p === k);
+  const firstChild = k => LIVE.find(c => BOX[c].p === k);
   // Snap: each edge of a dragged box moves to the nearest element edge within 10 px beside it.
   function snapRect(r) {
-    const boxes = KEYS.map(k => BOX[k]);
+    const boxes = LIVE.map(k => BOX[k]);
     const to = (v, list) => { let best = v, d = 10.5; for (const c of list) if (Math.abs(c - v) < d) { d = Math.abs(c - v); best = c; } return best; };
     const xs = boxes.filter(b => b.y < r.y + r.h && b.y + b.h > r.y).flatMap(b => [b.x, b.x + b.w]);
     const ys = boxes.filter(b => b.x < r.x + r.w && b.x + b.w > r.x).flatMap(b => [b.y, b.y + b.h]);
@@ -147,9 +159,7 @@
       this.gen = 0;
       this.mode = 'auto';
       const id = ++uid;
-      el.tabIndex = 0;
-      el.setAttribute('role', 'group');
-      el.setAttribute('aria-label', 'Demo of the Snug overlay over two windows: a chat thread about rounding the avatars in a header, with a link to the change, and a code review of that change with an inline comment. Hover to select a message, the link preview, a diff line or the comment, or drag a box and pause to snap it. Return copies, Escape clears a selection, and G, V, K and U go to those features below.');
+      this.deskLabel = 'Demo of the Snug overlay over two windows: a chat thread about rounding the avatars in a header, with a link to the change, and a code review of that change with an inline comment. Hover to select a message, the link preview, a diff line or the comment, or drag a box and pause to snap it. Return copies, Escape clears a selection, and G, V, K and U go to those features below.';
       el.innerHTML = `<div class="scene" data-open="true" data-cursor="cross">
         <div class="content">${CONTENT}</div>
         <svg class="ovg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true">
@@ -180,11 +190,13 @@
       this.thumb = q('.thc');
       this.thumb.appendChild(q('.content').cloneNode(true));
       this.s = { open: true, target: 'b1', drag: null, selr: null, path: [] };
+      this.phone = false;
       this.ptr = { x: 480, y: 136 };
       this.chipKey = '';
       this.dimKey = null;
       new ResizeObserver(() => this.fit()).observe(el);
-      this.fit();
+      this.setPhone(phoneQ.matches);
+      phoneQ.addEventListener('change', () => { this.setPhone(phoneQ.matches); this.restart(); });
       this.bindUser();
       if (reduce) this.still();
       else {
@@ -198,17 +210,50 @@
 
     /* Scale: the scene scales to the demo's width. The chrome keeps the app's point sizes relative to each other, at a size per scene
        px (--pt) that stays readable on a phone. */
+    // Phone or desktop: the scene on show, the script, and whether the demo takes input at all.
+    setPhone(on) {
+      this.phone = on;
+      this.cfg = on ? PHONE : DESK;
+      this.view = this.cfg.view;
+      LIVE = on ? KEYS.filter(k => !RV.includes(k)) : KEYS;
+      const el = this.el;
+      if (on) { el.removeAttribute('tabindex'); el.setAttribute('role', 'img'); }
+      else { el.tabIndex = 0; el.setAttribute('role', 'group'); }
+      el.setAttribute('aria-label', on
+        ? 'Demo of the Snug overlay over a chat thread: it hovers a message and a link preview, drags a rough box around the link preview, which snaps to it, and copies it.'
+        : this.deskLabel);
+      this.fit();
+    }
+    // A change of layout (a rotation): start the right script from a clean overlay.
+    restart() {
+      clearTimeout(this.resumeT);
+      this.gen++;
+      this.grab = null;
+      this.mode = 'auto';
+      this.toast.classList.remove('show');
+      this.reset();
+      this.ptr = { x: 480, y: 136 };
+      this.aim(this.ptr);
+      this.s.target = hit(this.ptr);
+      if (reduce) this.still();
+      else if (this.visible) this.play();
+      else this.render();
+    }
     fit() {
-      const k = this.el.clientWidth / W;
+      const v = this.view, k = this.el.clientWidth / v.w;
       if (!k) return;
       this.k = k;
-      this.pt = Math.min(1.35, Math.max(0.72, 7.5 / (11 * k)));
-      this.scene.style.transform = `scale(${k})`;
+      this.pt = this.phone ? 1.05 / k : Math.min(1.35, Math.max(0.72, 7.5 / (11 * k)));
+      this.scene.style.transform = this.phone ? `scale(${k}) translate(${-v.x}px, ${-v.y}px)` : `scale(${k})`;
       this.scene.style.setProperty('--pt', this.pt);
+      // The toast sits at the bottom centre of what is on show.
+      this.scene.style.setProperty('--vx', `${v.x}px`);
+      this.scene.style.setProperty('--tl', `${v.x + v.w / 2}px`);
+      this.scene.style.setProperty('--tb', `${H - v.y - v.h}px`);
       this.g.blur.setAttribute('stdDeviation', (3.4 * this.pt).toFixed(2));
       // The tools group comes off when the strip would not fit the screen.
       this.strip.classList.remove('narrow');
-      if (this.strip.offsetWidth > W - 16 * this.pt) this.strip.classList.add('narrow');
+      if (this.strip.offsetWidth > v.w - 16 * this.pt) this.strip.classList.add('narrow');
       this.stripSize = { w: this.strip.offsetWidth, h: this.strip.offsetHeight };
       this.chipKey = '';
       this.render();
@@ -309,7 +354,7 @@
     /* OverlayController+Chrome.swift attach(to:): the strip 8 pt below the box (above it with no room, else inside its bottom), from
        the box's left edge; the chip row 8 pt above the box (inside its top when the menu bar is in the way), from the left edge too. */
     attach(b, strip) {
-      const P = this.pt, gap = 8 * P, top = MENU + gap, floor = H - gap;
+      const P = this.pt, v = this.view, gap = 8 * P, top = MENU + gap, floor = v.y + v.h - gap;
       let over = b.y - gap;
       if (strip) {
         const { w, h } = this.stripSize;
@@ -318,7 +363,7 @@
         if (below + h <= floor) y = below;
         else if (above >= top) { y = above; over = y - 6 * P; }
         else { y = b.y + b.h - gap - h; out = false; }
-        const x = Math.min(Math.max(b.x + (out ? 0 : gap), gap), W - w - gap);
+        const x = Math.min(Math.max(b.x + (out ? 0 : gap), v.x + gap), v.x + v.w - w - gap);
         this.move(this.strip, x, y);
         // The strip and the gap between it and the box: a pointer crossing it keeps the hover, so the buttons can be reached.
         const lo = y >= b.y + b.h ? b.y + b.h : y, hi = y + h <= b.y ? b.y : y + h;
@@ -327,7 +372,7 @@
       const { w, h, sw } = this.chipSize, row = w + (sw ? 6 * P + sw : 0);
       let y = over - h, inset = 0;
       if (y < top) { y = b.y + gap; inset = gap; }
-      const x = Math.min(Math.max(b.x + inset, gap), W - gap - row);
+      const x = Math.min(Math.max(b.x + inset, v.x + gap), v.x + v.w - gap - row);
       this.move(this.chip, x, y);
       if (sw) this.move(this.snapTag, x + w + 6 * P, y);
     }
@@ -413,21 +458,16 @@
         for (;;) {
           const s = this.s;
           if (first) { this.reset(); hover(); this.render(); first = false; } else reopen();
-          // Hover a message bubble, then the link preview inside the next one. The pointer glides from wherever the last run left
-          // it, so a new loop never jumps.
-          await glide({ x: 480, y: 136 }, 800, hover);
-          await sleep(1100);
-          await glide({ x: 520, y: 262 }, 700, hover);
-          await sleep(1200);
-          // Over to the review window: an added line of the diff.
-          await glide({ x: 205, y: 205 }, 850, hover);
-          await sleep(1200);
-          // Drag a loose box around the review comment, pause, and it snaps to the card.
-          await glide({ x: 40, y: 240 }, 650, hover);
+          // The pointer glides from wherever the last run left it, so a new loop never jumps. The desktop tour hovers a message
+          // bubble, the link preview and a diff line; the phone's, the bubble and the link preview.
+          const c = this.cfg;
+          for (const [x, y, ms, hold] of c.tour) { await glide({ x, y }, ms, hover); await sleep(hold); }
+          // Drag a loose box, pause, and it snaps to the card under it.
+          await glide({ x: c.from[0], y: c.from[1] }, c.from[2], hover);
           await sleep(200);
           const start = { ...this.ptr };
           s.drag = { raw: { x: start.x, y: start.y, w: 0, h: 0 }, snap: null };
-          await glide({ x: 366, y: 314 }, 1000, () => {
+          await glide({ x: c.to[0], y: c.to[1] }, c.to[2], () => {
             s.drag.raw = { x: start.x, y: start.y, w: this.ptr.x - start.x, h: this.ptr.y - start.y };
           });
           await sleep(180);
@@ -435,7 +475,7 @@
           this.spring(s.drag.raw);
           await sleep(1300);
           s.selr = { ...s.drag.snap, snapped: true }; s.drag = null; this.anim = null;
-          await glide({ x: 250, y: 282 }, 500, () => {});
+          await glide({ x: c.after[0], y: c.after[1] }, 500, () => {});
           await sleep(900);
           this.copy();
           await sleep(4600);
@@ -444,7 +484,8 @@
       loop().catch(g => { if (typeof g !== 'number') throw g; });
     }
     still() {
-      const raw = { x: 40, y: 240, w: 326, h: 74 };
+      const [fx, fy] = this.cfg.from, [tx, ty] = this.cfg.to;
+      const raw = { x: fx, y: fy, w: tx - fx, h: ty - fy };
       Object.assign(this.s, { open: true, selr: null, drag: { raw, snap: snapRect(raw) } });
       this.scene.dataset.auto = 'false';
       this.render();
@@ -483,8 +524,10 @@
         return true;
       };
       const onStrip = e => !!e.target.closest && !!e.target.closest('.o-strip');
-      el.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') this.over = true; });
-      el.addEventListener('pointermove', e => {
+      // On a phone the demo only plays: no input reaches it (the stylesheet also gives it no pointer events).
+      const on = (type, fn) => el.addEventListener(type, e => { if (!this.phone) fn(e); });
+      on('pointerenter', e => { if (e.pointerType === 'mouse') this.over = true; });
+      on('pointermove', e => {
         // A mouse over the demo takes over; touch only takes over with a press.
         if (e.pointerType !== 'mouse' && !this.grab) return;
         this.takeover();
@@ -514,11 +557,11 @@
         }, 80);
         this.render();
       });
-      el.addEventListener('pointerleave', e => {
+      on('pointerleave', e => {
         if (e.pointerType === 'mouse') this.over = false;
         if (!this.grab) away(e.pointerType === 'mouse' ? LEAVE_MS : TOUCH_IDLE_MS);
       });
-      el.addEventListener('pointerdown', e => {
+      on('pointerdown', e => {
         if (e.button !== 0) return;
         this.takeover();
         if (e.pointerType === 'mouse') e.preventDefault();
@@ -534,7 +577,7 @@
         this.grab = { start: p, moved: false };
         try { el.setPointerCapture(e.pointerId); } catch { /* a pointer the browser no longer tracks */ }
       });
-      el.addEventListener('pointerup', e => {
+      on('pointerup', e => {
         const g = this.grab;
         if (!g) return;
         this.grab = null;
@@ -550,13 +593,14 @@
         if (e.pointerType !== 'mouse') away(TOUCH_IDLE_MS);
         else if (out) away(LEAVE_MS);
       });
-      el.addEventListener('pointercancel', () => {
+      on('pointercancel', () => {
         this.grab = null; clearTimeout(snapT);
         s.drag = null; this.anim = null;
         away(TOUCH_IDLE_MS);
         this.render();
       });
       this.strip.addEventListener('click', e => {
+        if (this.phone) return;
         const b = e.target.closest('.bb');
         if (!b) return;
         if (b === this.copyBtn) this.copy();
@@ -565,7 +609,7 @@
       /* Keys act only while the demo is focused, or while the pointer is over it and nothing else on the page has focus, so the
          page's own keys are left alone. Arrows need focus, so hovering never takes over page scrolling. */
       document.addEventListener('keydown', e => {
-        if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+        if (this.phone || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
         const focused = document.activeElement === el;
         const idle = !document.activeElement || document.activeElement === document.body;
         if (!focused && !(this.over && idle)) return;
@@ -587,6 +631,7 @@
         this.render();
       });
       el.addEventListener('blur', () => {
+        if (this.phone) return;
         delete el.dataset.via;
         if (this.mode === 'user' && !el.matches(':hover')) this.resumeAfter(LEAVE_MS);
       });
