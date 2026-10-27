@@ -213,9 +213,10 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     /// at about half the tile's height in the middle and 53% from the top at the sides. At 2x the arch's round-capped dashes mirror around
     /// one centered on top; at 1x they are 2 px on top and 2 px down each leg with 1 px gaps, and the curve is a 1 px step.
     /// "p": "h" in three opacities, the tile solid, the blanket below the band's cut at 70% and the pillow, the part of the tile inside
-    /// the arch, at 40%. At 2x the pillow is the arch's centerline closed into a rounded rect; at 1x it is x 5-12, y 9-13. Template images keep
-    /// partial alpha, so the blanket and pillow show as lighter patches. At 2x the band sits where the app icon's does: its top 52% down the
-    /// tile in the middle and 59% at the sides; 1x keeps "h"'s whole-pixel step.
+    /// the arch, at 40%. At 2x the pillow is the arch's centerline closed into a rounded rect. Template images keep
+    /// partial alpha, so the blanket and pillow show as lighter patches. The band sits lower than the app icon's so the blanket takes less of
+    /// the glyph: at 2x its top is 56% down the tile in the middle and 63% at the sides; at 1x it is "h"'s step a pixel lower, with the
+    /// pillow, x 5-12, y 8-13, reaching it.
     /// "q", the default: "p" turned around to match macOS's monochrome app icons, where the tile is darkest and the marks brightest: the tile at
     /// 35%, the pillow at 60%, the blanket at 85%, and the arch's dashes and the band solid.
     static func menuBarIcon(_ variant: String) -> NSImage {
@@ -297,7 +298,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                         for y in 0..<18 {
                             let coverage = mask.colorAt(x: x, y: 17 - y)!.alphaComponent
                             guard coverage > 0 else { continue }
-                            let part = (5...12).contains(x) && (9...13).contains(y) ? pillowAlpha : y < ((4...13).contains(x) ? 8 : 7) ? blanketAlpha : tileAlpha
+                            let part = (5...12).contains(x) && (8...13).contains(y) ? pillowAlpha : y < ((4...13).contains(x) ? 7 : 6) ? blanketAlpha : tileAlpha
                             NSColor(white: 0, alpha: part * coverage).setFill()
                             CGRect(x: x, y: y, width: 1, height: 1).fill()
                         }
@@ -306,9 +307,9 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     NSColor.black.setFill()
                     for x: CGFloat in [5, 8, 11] { CGRect(x: x, y: 14, width: 2, height: 1).fill() }
                     for x: CGFloat in [4, 13] { CGRect(x: x, y: 11, width: 1, height: 2).fill() }
-                    CGRect(x: 1, y: 7, width: 3, height: 1).fill()
-                    CGRect(x: 4, y: 8, width: 10, height: 1).fill()
-                    CGRect(x: 14, y: 7, width: 3, height: 1).fill()
+                    CGRect(x: 1, y: 6, width: 3, height: 1).fill()
+                    CGRect(x: 4, y: 7, width: 10, height: 1).fill()
+                    CGRect(x: 14, y: 6, width: 3, height: 1).fill()
                 } else {
                     // The tile's alpha over the whole square, then the pillow and the blanket, then everything outside the tile cleared so its
                     // edge keeps the tile's coverage.
@@ -319,8 +320,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     NSBezierPath(roundedRect: CGRect(x: 4.75, y: 2, width: 8.5, height: 12.25), xRadius: 2.25, yRadius: 2.25).fill()
                     // The blanket below the band's cut, between the pillow and the tile.
                     let blanket = NSBezierPath()
-                    blanket.move(to: CGPoint(x: 0, y: 7.12))
-                    blanket.curve(to: CGPoint(x: 18, y: 7.12), controlPoint1: CGPoint(x: 5.4, y: 8.56), controlPoint2: CGPoint(x: 12.6, y: 8.56))
+                    blanket.move(to: CGPoint(x: 0, y: 6.5))
+                    blanket.curve(to: CGPoint(x: 18, y: 6.5), controlPoint1: CGPoint(x: 5.4, y: 7.94), controlPoint2: CGPoint(x: 12.6, y: 7.94))
                     blanket.line(to: CGPoint(x: 18, y: 0))
                     blanket.line(to: CGPoint(x: 0, y: 0))
                     blanket.close()
@@ -349,8 +350,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                         half.stroke()
                     }
                     let cut = NSBezierPath()
-                    cut.move(to: CGPoint(x: 0, y: 7.12))
-                    cut.curve(to: CGPoint(x: 18, y: 7.12), controlPoint1: CGPoint(x: 5.4, y: 8.56), controlPoint2: CGPoint(x: 12.6, y: 8.56))
+                    cut.move(to: CGPoint(x: 0, y: 6.5))
+                    cut.curve(to: CGPoint(x: 18, y: 6.5), controlPoint1: CGPoint(x: 5.4, y: 7.94), controlPoint2: CGPoint(x: 12.6, y: 7.94))
                     cut.lineWidth = 1
                     cut.stroke()
                 }
