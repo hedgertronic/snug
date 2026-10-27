@@ -906,10 +906,13 @@ struct ShortcutRecorder: NSViewRepresentable {
     }
 }
 
-/// General's Agent section on one card: the last capture, with Clear, then a Copy Setup menu with the command that adds Snug's MCP server to
+/// General's Agent section on one card: the last capture, with Clear (which also removes a capture that cannot be read, whose error shows
+/// in its place), then a Copy Setup menu with the command that adds Snug's MCP server to
 /// Claude Code or Codex, or the `mcpServers` JSON entry that Gemini CLI, Cursor and most other clients read. Snug adds itself nowhere.
 private struct AgentSection: View {
     @State private var captureId: String?
+    /// Why the last capture or Clear failed: a damaged manifest, or a folder Snug cannot read.
+    @State private var storeError: String?
     @State private var copied = false
     private let store = HandoffStore(defaults: .standard)
     private let executable = Bundle.main.executablePath!
@@ -925,11 +928,19 @@ private struct AgentSection: View {
             caption("Agent")
             Card {
                 LabeledContent("Last capture") {
-                    Text(captureId ?? "None").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
+                    if let storeError {
+                        Text("Unreadable").font(.system(size: 12)).foregroundStyle(.red).help(storeError)
+                    } else {
+                        Text(captureId ?? "None").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
+                    }
                     Button("Clear") {
-                        try! store.clear()
-                        load()
-                    }.disabled(captureId == nil)
+                        do {
+                            try store.clear()
+                            load()
+                        } catch {
+                            storeError = error.localizedDescription
+                        }
+                    }.disabled(captureId == nil && storeError == nil)
                 }
                 LabeledContent("MCP") {
                     Menu(copied ? "Copied" : "Copy Setup") {
@@ -957,6 +968,12 @@ private struct AgentSection: View {
     }
 
     private func load() {
-        captureId = try! store.current()?.captureId
+        do {
+            captureId = try store.current()?.captureId
+            storeError = nil
+        } catch {
+            captureId = nil
+            storeError = error.localizedDescription
+        }
     }
 }

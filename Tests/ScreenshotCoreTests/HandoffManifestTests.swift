@@ -242,6 +242,26 @@ struct HandoffStoreTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: store.root.path) == ["notes.txt"])
     }
 
+    @Test func aCorruptManifestFailsTheLookupAndClearStillRemovesIt() throws {
+        defer { try? FileManager.default.removeItem(at: store.root) }
+        try store.write(png: handoffPNG(), manifest: handoffManifest(id: "AAAAAAAA"))
+        try Data("{ not a manifest".utf8).write(to: store.root.appending(path: "AAAAAAAA/manifest.json"))
+        #expect(throws: (any Error).self) { try store.current() }
+        try store.clear()
+        #expect(try store.current() == nil)
+    }
+
+    @Test func anUnreadableStoreFailsTheLookupInsteadOfTrapping() throws {
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: store.root.path)
+            try? FileManager.default.removeItem(at: store.root)
+        }
+        try store.write(png: handoffPNG(), manifest: handoffManifest(id: "AAAAAAAA"))
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: store.root.path)
+        #expect(throws: (any Error).self) { try store.current() }
+        #expect(throws: (any Error).self) { try store.clear() }
+    }
+
     @Test func clearingLeavesNoCapture() throws {
         defer { try? FileManager.default.removeItem(at: store.root) }
         try store.clear()
