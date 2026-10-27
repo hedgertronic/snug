@@ -31,6 +31,8 @@
   /* the app's chrome surface, hairline, text and key caps (Chrome.swift NSColor.chrome*, capFill, capEdge) */
   --c-surface: rgba(246, 246, 248, .92); --c-surface-solid: #F6F6F8; --c-text: rgba(0, 0, 0, .86); --c-text2: rgba(0, 0, 0, .5); --c-hair: rgba(0, 0, 0, .12); --c-sh: .2;
   --cap-fill: #FFFFFF; --cap-edge: rgba(0, 0, 0, .18); --cap-sh: rgba(0, 0, 0, .22); --wash: 16%; --lit-text: color-mix(in srgb, var(--hl) 80%, #000);
+  /* the toast's corner radius in app points (20 is the 40 pt capsule's), for the hero's toast and every card's; and a swatch's edge (Chrome.swift swatchEdge) */
+  --toast-r: 20px; --sw-edge: rgba(0, 0, 0, .3);
 
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -50,7 +52,7 @@
     --d-add: rgba(63, 185, 80, .17); --d-addfg: #62CB78; --d-del: rgba(248, 81, 73, .17); --d-delfg: #FF7B72;
     --d-dim: rgba(0, 0, 0, .42); --d-chip: rgba(44, 44, 48, .94); --d-chipfg: #F5F5F7;
     --c-surface: rgba(48, 48, 53, .96); --c-surface-solid: #303035; --c-text: rgba(255, 255, 255, .92); --c-text2: rgba(255, 255, 255, .55); --c-hair: rgba(255, 255, 255, .22); --c-sh: .42;
-    --cap-fill: rgba(255, 255, 255, .16); --cap-edge: rgba(0, 0, 0, .45); --cap-sh: rgba(0, 0, 0, .55); --wash: 26%; --lit-text: color-mix(in srgb, var(--hl) 62%, #FFF);
+    --cap-fill: rgba(255, 255, 255, .16); --cap-edge: rgba(0, 0, 0, .45); --cap-sh: rgba(0, 0, 0, .55); --wash: 26%; --lit-text: color-mix(in srgb, var(--hl) 62%, #FFF); --sw-edge: rgba(255, 255, 255, .5);
     color-scheme: dark;
   }
 }
@@ -65,7 +67,7 @@
     --d-add: rgba(63, 185, 80, .17); --d-addfg: #62CB78; --d-del: rgba(248, 81, 73, .17); --d-delfg: #FF7B72;
   --d-dim: rgba(0, 0, 0, .42); --d-chip: rgba(44, 44, 48, .94); --d-chipfg: #F5F5F7;
   --c-surface: rgba(48, 48, 53, .96); --c-surface-solid: #303035; --c-text: rgba(255, 255, 255, .92); --c-text2: rgba(255, 255, 255, .55); --c-hair: rgba(255, 255, 255, .22); --c-sh: .42;
-  --cap-fill: rgba(255, 255, 255, .16); --cap-edge: rgba(0, 0, 0, .45); --cap-sh: rgba(0, 0, 0, .55); --wash: 26%; --lit-text: color-mix(in srgb, var(--hl) 62%, #FFF);
+  --cap-fill: rgba(255, 255, 255, .16); --cap-edge: rgba(0, 0, 0, .45); --cap-sh: rgba(0, 0, 0, .55); --wash: 26%; --lit-text: color-mix(in srgb, var(--hl) 62%, #FFF); --sw-edge: rgba(255, 255, 255, .5);
   color-scheme: dark;
 }
 
@@ -208,15 +210,20 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .bb.primary .k { background: rgba(255, 255, 255, .94); color: var(--hl); box-shadow: 0 calc(1px * var(--pt)) 0 var(--cap-sh); }
 .bb.primary.pressed .k { background: color-mix(in srgb, var(--hl) 60%, #000); color: #FFFFFF; box-shadow: inset 0 0 0 calc(1px * var(--pt)) rgba(255, 255, 255, .7); }
 
-/* The toast (Toast.swift): a 40 pt capsule, the capture's 44 x 28 pt thumbnail, "Copied" and the pixel size on one line. */
-.o-toast { left: var(--tl, 50%); top: auto; bottom: calc(var(--tb, 0px) + 24px * var(--pt)); display: flex; align-items: center; height: calc(40px * var(--pt)); padding: 0 calc(12px * var(--pt)) 0 calc(6px * var(--pt)); border-radius: calc(20px * var(--pt)); white-space: nowrap;
+/* The toast (Toast.swift): a 40 pt capsule, up to 360 pt wide, with a lead tile (the capture's 44 x 28 pt thumbnail, a 28 pt swatch or the
+   text glyph), the message and the detail on one line; the detail gives way first. --toast-gap is its distance from the bottom. */
+.o-toast { left: var(--tl, 50%); top: auto; bottom: calc(var(--tb, 0px) + var(--toast-gap, 24px) * var(--pt)); display: flex; align-items: center; height: calc(40px * var(--pt)); max-width: calc(360px * var(--pt)); padding: 0 calc(12px * var(--pt)) 0 calc(6px * var(--pt)); border-radius: calc(var(--toast-r) * var(--pt)); white-space: nowrap;
   background: var(--c-surface); color: var(--c-text); box-shadow: inset 0 0 0 calc(.5px * var(--pt)) var(--c-hair), 0 calc(10px * var(--pt)) calc(30px * var(--pt)) rgba(0, 0, 0, .28), 0 0 0 calc(.5px * var(--pt)) rgba(0, 0, 0, .12);
   opacity: 0; transform: translate(-50%, calc(6px * var(--pt))); transition: opacity .2s ease-out, transform .2s ease-out; }
 .o-toast.show { opacity: 1; transform: translate(-50%, 0); }
 .o-toast .th { position: relative; flex: none; width: calc(44px * var(--pt)); height: calc(28px * var(--pt)); margin-right: calc(10px * var(--pt)); border-radius: calc(7px * var(--pt)); overflow: hidden; outline: 1px solid rgba(128, 128, 128, .3); outline-offset: -1px; }
 .o-toast .thc { position: absolute; left: 0; top: 0; width: 640px; height: 400px; transform-origin: 0 0; }
-.o-toast b { font: 600 calc(13px * var(--pt))/1 var(--sans); margin-right: calc(8px * var(--pt)); }
-.o-toast em { font: 400 calc(12px * var(--pt))/1 var(--mono); font-style: normal; color: var(--c-text2); }
+.o-toast .sw, .o-toast .ti { flex: none; width: calc(28px * var(--pt)); height: calc(28px * var(--pt)); margin-right: calc(10px * var(--pt)); }
+.o-toast .sw { border-radius: calc(7px * var(--pt)); background: var(--sw); box-shadow: inset 0 0 0 1px var(--sw-edge); }
+.o-toast .ti rect { fill: var(--hl); }
+.o-toast .ti path { fill: #FFFFFF; }
+.o-toast b { flex: none; font: 600 calc(13px * var(--pt))/1 var(--sans); margin-right: calc(8px * var(--pt)); }
+.o-toast em { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 400 calc(12px * var(--pt))/1.2 var(--mono); font-style: normal; color: var(--c-text2); }
 
 /* The pointer: the system crosshair over the open overlay (OverlayView.cursor), the arrow once it closes. */
 .o-cursor { will-change: transform; }
@@ -302,29 +309,31 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .art .cb { fill: var(--d-chip); stroke: rgba(0, 0, 0, .15); stroke-width: .5; }
 .art .outline { fill: none; stroke: var(--hl); stroke-width: 1.5; }
 
+/* A card's Snug chrome: the hero's chip, strip and toast styles in HTML over the scene, sized by --pt (set in snug.js from the card's
+   width, at the hero's scale). Each card's keyframes run its toast in 0.25 s, hold it at least 2 s, and fade it in 0.25 s. */
+.cov { --pt: 1; --toast-gap: 16px; position: absolute; inset: 0; pointer-events: none; }
+.cov > * { position: absolute; }
+.cov .o-toast { opacity: 0; transition: none; max-width: calc(100% - 48px * var(--pt)); }
+
 /* T: the selection sweeps over two lines, the Text strip's Copy button (Chrome.swift textStrip) appears under it, its Return cap presses, and the toast follows */
-/* The toast is the hero's, sized by --pt from the card's width (set in snug.js); its icon is the t.square.fill symbol. */
-.tx-ov { --pt: 1; position: absolute; inset: 0; pointer-events: none; }
-.tx-ov .o-toast { position: absolute; top: 85%; bottom: auto; left: 50%; opacity: 0; transform: translate(-50%, -50%); transition: none; animation: txt 5s infinite both; }
-.tx-ov .ti { flex: none; width: calc(28px * var(--pt)); height: calc(28px * var(--pt)); margin-right: calc(10px * var(--pt)); }
-.tx-ov .ti rect { fill: var(--hl); }
-.tx-ov .ti path { fill: #FFFFFF; }
-@keyframes txt { 0%, 60% { opacity: 0; transform: translate(-50%, calc(-50% + 3px)); } 66%, 92% { opacity: 1; transform: translate(-50%, -50%); } 100% { opacity: 0; transform: translate(-50%, -50%); } }
-.tx-btn { animation: txbtn 5s infinite both; }
-@keyframes txbtn { 0%, 31% { opacity: 0; transform: translateY(2px); } 37%, 56% { opacity: 1; transform: none; } 61%, 100% { opacity: 0; } }
+/* A 6 s loop: the sweep takes 1.1 s, Copy shows 0.8 s before Return presses it, the selection goes with the overlay, and the toast holds 2.25 s. */
+.tx-ov .o-toast { animation: txt 6s infinite both; }
+@keyframes txt { 0%, 51.7% { opacity: 0; transform: translate(-50%, calc(6px * var(--pt))); animation-timing-function: ease-out; } 55.8%, 93.3% { opacity: 1; transform: translate(-50%, 0); animation-timing-function: ease-out; } 97.5%, 100% { opacity: 0; transform: translate(-50%, 0); } }
+.tx-btn { animation: txbtn 6s infinite both; }
+@keyframes txbtn { 0%, 28% { opacity: 0; transform: translateY(2px); } 32.5%, 50% { opacity: 1; transform: none; } 53.3%, 100% { opacity: 0; } }
 .tx-pill { fill: var(--c-surface); stroke: var(--c-hair); stroke-width: .3; filter: drop-shadow(0 1.5px 3px rgba(0, 0, 0, .25)); }
 .tx-bb { fill: var(--hl); }
 .tx-bt { font: 600 7.4px var(--sans); fill: #FFFFFF; }
 .tx-k { fill: rgba(255, 255, 255, .94); }
-.tx-kp { fill: color-mix(in srgb, var(--hl) 60%, #000); stroke: rgba(255, 255, 255, .7); stroke-width: .6; opacity: 0; animation: txkp 5s infinite both; }
-.tx-kt { font: 600 8px var(--sans); fill: var(--hl); animation: txkt 5s infinite both; }
-.tx-ktp { font: 600 8px var(--sans); fill: #FFFFFF; opacity: 0; animation: txkp 5s infinite both; }
-.tx-cap { animation: txcap 5s infinite both; }
-@keyframes txkp { 0%, 45% { opacity: 0; } 46%, 52% { opacity: 1; } 53%, 100% { opacity: 0; } }
-@keyframes txkt { 0%, 45% { opacity: 1; } 46%, 52% { opacity: 0; } 53%, 100% { opacity: 1; } }
-@keyframes txcap { 0%, 45% { transform: none; } 46%, 52% { transform: translateY(.6px); } 53%, 100% { transform: none; } }
-.tx-sel { fill: color-mix(in srgb, var(--hl) 55%, transparent); transform-box: fill-box; transform-origin: left; animation: sweep 5s infinite both; }
-@keyframes sweep { 0%, 6% { transform: scaleX(0); } 26%, 90% { transform: scaleX(1); } 100% { transform: scaleX(0); } }
+.tx-kp { fill: color-mix(in srgb, var(--hl) 60%, #000); stroke: rgba(255, 255, 255, .7); stroke-width: .6; opacity: 0; animation: txkp 6s infinite both; }
+.tx-kt { font: 600 8px var(--sans); fill: var(--hl); animation: txkt 6s infinite both; }
+.tx-ktp { font: 600 8px var(--sans); fill: #FFFFFF; opacity: 0; animation: txkp 6s infinite both; }
+.tx-cap { animation: txcap 6s infinite both; }
+@keyframes txkp { 0%, 43.3% { opacity: 0; } 43.4%, 48.3% { opacity: 1; } 48.4%, 100% { opacity: 0; } }
+@keyframes txkt { 0%, 43.3% { opacity: 1; } 43.4%, 48.3% { opacity: 0; } 48.4%, 100% { opacity: 1; } }
+@keyframes txcap { 0%, 43.3% { transform: none; } 43.4%, 48.3% { transform: translateY(.6px); } 48.4%, 100% { transform: none; } }
+.tx-sel { fill: color-mix(in srgb, var(--hl) 55%, transparent); transform-box: fill-box; transform-origin: left; animation: sweep 6s infinite both; }
+@keyframes sweep { 0%, 6.7% { transform: scaleX(0); opacity: 1; } 25%, 50% { transform: scaleX(1); opacity: 1; } 53.3%, 100% { transform: scaleX(1); opacity: 0; } }
 /* the scrolling page: a review's title, a diff, two comments and a link card, drawn once and used by both the window and the stitched preview */
 .art .t0 { font: 700 7px var(--sans); fill: var(--w-fg); }
 .art .t1 { font: 600 5.4px var(--sans); fill: var(--w-fg); }
@@ -401,14 +410,11 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 
 /* C: a sunset picture; the picker moves over it and the app's readout (Guides.swift: swatch, value, Copy, C) follows each stop; C at the last stop copies and the toast
    shows. The readout and toast use the hero's chip and toast styles, sized by --pt from the card's width. The base style is the last stop, so reduced motion shows it. */
-.cp-ov { --pt: 1; position: absolute; inset: 0; pointer-events: none; }
-.cp-ov > * { position: absolute; left: 50%; top: 80.6%; bottom: auto; transform: translate(-50%, -50%); }
-.cp-ov .sw { display: block; flex: none; width: calc(12px * var(--pt)); height: calc(12px * var(--pt)); border-radius: calc(3px * var(--pt)); background: var(--sw); box-shadow: inset 0 0 0 calc(.5px * var(--pt)) rgba(0, 0, 0, .3); }
+/* The readout row sits on the toast's centre line. */
+.cp-ov .o-chip { left: 50%; top: auto; bottom: calc((var(--toast-gap) + 7px) * var(--pt)); transform: translateX(-50%); }
+.cp-ov .o-chip .sw { display: block; flex: none; width: calc(12px * var(--pt)); height: calc(12px * var(--pt)); border-radius: calc(3px * var(--pt)); background: var(--sw); box-shadow: inset 0 0 0 calc(.5px * var(--pt)) var(--sw-edge); }
 .cp-ov .o-chip .t { font-weight: 500; }
-.cp-ov .o-toast { opacity: 0; transition: none; animation: cpt 8s infinite both; }
-.cp-ov .o-toast .sw { width: calc(28px * var(--pt)); height: calc(28px * var(--pt)); margin-right: calc(10px * var(--pt)); border-radius: calc(7px * var(--pt)); box-shadow: none; border: 1px solid rgba(0, 0, 0, .3); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .cp-ov .o-toast .sw { border-color: rgba(255, 255, 255, .5); } :root:not([data-theme="light"]) .cp-ov .sw { box-shadow: inset 0 0 0 calc(.5px * var(--pt)) rgba(255, 255, 255, .5); } }
-:root[data-theme="dark"] .cp-ov .o-toast .sw { border-color: rgba(255, 255, 255, .5); } :root[data-theme="dark"] .cp-ov .sw { box-shadow: inset 0 0 0 calc(.5px * var(--pt)) rgba(255, 255, 255, .5); }
+.cp-ov .o-toast { animation: cpt 8s infinite both; }
 .cp-ov .cp-ch { opacity: 0; }
 .cp-ov .cp-ch.cC0 { opacity: 1; }
 .cp-x { transform: translate(150px, 69px); animation: cpx 8s infinite both; }
@@ -421,7 +427,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 @keyframes cpb { 0% { opacity: 0; } 28.5% { opacity: 0; } 29.3% { opacity: 1; } 43.7% { opacity: 1; } 44.5% { opacity: 0; } 100% { opacity: 0; } }
 .cp-ov .cp-ch.cC0 { animation: cpc0 8s infinite both; }
 @keyframes cpc0 { 0% { opacity: 0; } 48% { opacity: 0; } 48.8% { opacity: 1; } 59.2% { opacity: 1; } 60% { opacity: 0; } 100% { opacity: 0; } }
-@keyframes cpt { 0%, 61% { opacity: 0; transform: translate(-50%, calc(-50% + 3px)); } 64%, 86% { opacity: 1; transform: translate(-50%, -50%); } 91%, 100% { opacity: 0; transform: translate(-50%, -50%); } }
+@keyframes cpt { 0%, 60% { opacity: 0; transform: translate(-50%, calc(6px * var(--pt))); animation-timing-function: ease-out; } 63%, 92% { opacity: 1; transform: translate(-50%, 0); animation-timing-function: ease-out; } 95%, 100% { opacity: 0; transform: translate(-50%, 0); } }
 
 /* agent art: a generic chat window. The reference is pasted in the input and sent, the tool call returns the capture's link card, and a one-line reply follows */
 .ag-m { font: 400 4.6px var(--mono); fill: #FFFFFF; }
@@ -481,7 +487,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
   /* the desktop runs on below the chat window, where the toast sits */
   .scene, .content { height: 440px; }
   .s-screen { height: 440px !important; }
-  .o-toast { bottom: calc(var(--tb) + 10px * var(--pt)); }
+  .scene .o-toast { --toast-gap: 10px; }
   .s-menubar { padding-left: calc(var(--vx, 0px) + 12px); }
   .s-menubar span:nth-child(4), .s-menubar span:nth-child(5) { display: none; }
 }

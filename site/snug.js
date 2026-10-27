@@ -773,13 +773,13 @@
   }
 })();
 
-// The color and text cards' readout and toast use the hero's chip and toast styles, which size everything by --pt (scene px per app
-// point); here 1 pt is 0.3% of the card's width (0.26% on the text card, whose toast is wider), so the 40 pt toast is 24 of the
-// card's 200 drawing units.
+// The feature cards' Snug chrome (.cov) uses the hero's chip, strip and toast styles, which size everything by --pt (scene px per app
+// point). One factor serves every card: 1 pt is 0.3% of the card's width, about the hero's own point at 1280 and at 390, so the 40 pt
+// toast is 24 of the card's 200 drawing units.
 (() => {
   if (!window.ResizeObserver) return;
-  for (const [sel, k] of [['.cp-ov', 0.003], ['.tx-ov', 0.0026]]) {
-    const ov = document.querySelector(sel), art = ov && ov.parentElement;
-    if (ov) new ResizeObserver(() => ov.style.setProperty('--pt', (art.clientWidth * k).toFixed(4))).observe(art);
+  for (const ov of document.querySelectorAll('.art .cov')) {
+    const art = ov.parentElement;
+    new ResizeObserver(() => ov.style.setProperty('--pt', (art.clientWidth * 0.003).toFixed(4))).observe(art);
   }
 })();
