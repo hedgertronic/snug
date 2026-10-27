@@ -101,8 +101,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 
 .hero { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0; padding: 30px 0 44px; }
 .hero h1 { font: 700 clamp(36px, 7vw, 58px)/1.04 var(--round); letter-spacing: -.005em; max-width: 15ch; }
-.hero p { margin-top: 14px; font-size: clamp(16.5px, 2.2vw, 18.5px); color: var(--bandfg2); max-width: 44ch; }
-.cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 28px; }
+.cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 32px; }
 .dl, .dl-gh { display: inline-flex; align-items: center; height: 54px; padding: 0 22px; border-radius: 999px; background: var(--coral); color: #2A1228; font-weight: 650; font-size: 15.5px; text-decoration: none; }
 .dl { flex-direction: column; justify-content: center; gap: 1px; line-height: 1.15; }
 .dl small { font-size: 11.5px; font-weight: 400; opacity: .72; letter-spacing: 0; }
@@ -363,8 +362,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 @media (max-width: 600px) {
   .band { padding-bottom: 36px; border-radius: 0 0 22px 22px; }
   .hero { padding: 18px 0 32px; }
-  .hero p { margin-top: 12px; }
-  .cta { margin-top: 24px; }
+  .cta { margin-top: 26px; }
   .demo { border-radius: 10px; }
   .feat { padding-top: 64px; padding-bottom: 52px; }
   .feat-h { margin-bottom: 24px; }
