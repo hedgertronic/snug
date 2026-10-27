@@ -25,14 +25,10 @@ extension ScreenTextReader {
             var result: CFTypeRef?
             return AXUIElementCopyParameterizedAttributeValue(element, name as CFString, argument, &result) == .success ? result : nil
         }
-        func unpack<T>(_ raw: CFTypeRef?, _ type: AXValueType, _ seed: T) -> T? {
-            var result = seed
-            return raw.map { AXValueGetValue($0 as! AXValue, type, &result) } == true ? result : nil
-        }
         func bounds(_ element: AXUIElement, _ range: NSRange) -> CGRect? {
             var range = CFRange(location: range.location, length: range.length)
             guard let argument = AXValueCreate(.cfRange, &range) else { return nil }
-            return unpack(parameter("AXBoundsForRange", element, argument), .cgRect, CGRect.zero)
+            return AXValues.rect(parameter("AXBoundsForRange", element, argument))
         }
         let names = [kAXRoleAttribute, kAXSubroleAttribute, kAXChildrenAttribute, kAXPositionAttribute, kAXSizeAttribute, kAXValueAttribute,
                      kAXTitleAttribute, kAXDescriptionAttribute, "AXVisibleCharacterRange"] as CFArray
@@ -43,19 +39,21 @@ extension ScreenTextReader {
         for window in windowList as? [AXUIElement] ?? [] {
             var fetched: CFArray?
             AXUIElementCopyMultipleAttributeValues(window, names, [], &fetched)
-            guard let fetched = fetched as? [CFTypeRef], let origin = unpack(fetched[3], .cgPoint, CGPoint.zero), let size = unpack(fetched[4], .cgSize, CGSize.zero) else { continue }
+            guard let fetched = fetched as? [CFTypeRef], fetched.count == 9, let origin = AXValues.point(fetched[3]), let size = AXValues.size(fetched[4]) else { continue }
             let windowFrame = CGRect(origin: origin, size: size)
             var sources: [ScreenText.Source] = []
             var elements = 0
 
             func lines(of element: AXUIElement, text: NSString, visible: CFRange?, elementFrame: CGRect, clip: CGRect) {
-                let visible = NSIntersectionRange(visible.map { NSRange(location: $0.location, length: $0.length) } ?? NSRange(location: 0, length: text.length), NSRange(location: 0, length: text.length))
+                // A visible range the app reports outside the text reads as all of it.
+                let visible = visible.flatMap { AXValues.range($0, within: text.length) } ?? NSRange(location: 0, length: text.length)
                 guard visible.length > 0 else { return }
                 var ranges = [visible]
-                if let first = parameter("AXLineForIndex", element, visible.location as CFNumber) as? Int,
-                   let last = parameter("AXLineForIndex", element, visible.location + visible.length - 1 as CFNumber) as? Int, last > first {
+                if let first = AXValues.index(parameter("AXLineForIndex", element, visible.location as CFNumber)),
+                   let last = AXValues.index(parameter("AXLineForIndex", element, visible.location + visible.length - 1 as CFNumber)), last > first {
                     ranges = (first...min(last, first + nativeMaxLines)).compactMap { line in
-                        unpack(parameter("AXRangeForLine", element, line as CFNumber), .cfRange, CFRange()).map { NSIntersectionRange(NSRange(location: $0.location, length: $0.length), visible) }
+                        AXValues.range(parameter("AXRangeForLine", element, line as CFNumber)).flatMap { AXValues.range($0, within: text.length) }
+                            .map { NSIntersectionRange($0, visible) }
                     }
                 }
                 for var range in ranges {
@@ -77,7 +75,7 @@ extension ScreenTextReader {
                 guard let role = fetched[0] as? String, role != "AXWebArea" else { return }
                 var clip = clip
                 var elementFrame: CGRect?
-                if let origin = unpack(fetched[3], .cgPoint, CGPoint.zero), let size = unpack(fetched[4], .cgSize, CGSize.zero) {
+                if let origin = AXValues.point(fetched[3]), let size = AXValues.size(fetched[4]) {
                     elementFrame = CGRect(origin: origin, size: size)
                     guard elementFrame!.intersects(clip) else { return }
                     if role == kAXScrollAreaRole { clip = clip.intersection(elementFrame!) }
@@ -85,7 +83,7 @@ extension ScreenTextReader {
                 if role == kAXStaticTextRole || role == kAXTextFieldRole || role == kAXTextAreaRole {
                     if fetched[1] as? String != "AXSecureTextField", let elementFrame,
                        let text = [fetched[5], fetched[6], fetched[7]].lazy.compactMap({ $0 as? String }).first(where: { !$0.isEmpty }) {
-                        lines(of: element, text: text as NSString, visible: unpack(fetched[8], .cfRange, CFRange()), elementFrame: elementFrame, clip: clip)
+                        lines(of: element, text: text as NSString, visible: AXValues.range(fetched[8]), elementFrame: elementFrame, clip: clip)
                     }
                     return
                 }
@@ -94,7 +92,7 @@ extension ScreenTextReader {
                     elements += 1
                     var childFetched: CFArray?
                     AXUIElementCopyMultipleAttributeValues(child, names, [], &childFetched)
-                    if let childFetched = childFetched as? [CFTypeRef] { walk(child, childFetched, depth: depth + 1, clip: clip) }
+                    if let childFetched = childFetched as? [CFTypeRef], childFetched.count == 9 { walk(child, childFetched, depth: depth + 1, clip: clip) }
                 }
             }
             walk(window, fetched, depth: 0, clip: windowFrame)

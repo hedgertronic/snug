@@ -25,8 +25,8 @@ extension ScreenTextReader {
         let application = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(application, Accessibility.messagingTimeout)
         func frame(of element: AXUIElement) -> CGRect? {
-            guard let position = Accessibility.value(kAXPositionAttribute, of: element, type: .cgPoint, as: CGPoint.zero),
-                  let size = Accessibility.value(kAXSizeAttribute, of: element, type: .cgSize, as: CGSize.zero) else { return nil }
+            guard let position = AXValues.point(Accessibility.attribute(kAXPositionAttribute, of: element)),
+                  let size = AXValues.size(Accessibility.attribute(kAXSizeAttribute, of: element)) else { return nil }
             return CGRect(origin: position, size: size)
         }
         var areas: [(element: AXUIElement, visible: CGRect, offset: CGSize)] = []
@@ -78,9 +78,7 @@ extension ScreenTextReader {
         var offscreen = 0
         for _ in 0..<maxWebLines where ContinuousClock.now < deadline && offscreen < maxOffscreenLines {
             let start = AXTextMarkerRangeCopyStartMarker(range as! AXTextMarkerRange)
-            var box = CGRect.zero
-            if let value = markerAttribute("AXBoundsForTextMarkerRange", of: area, range), AXValueGetValue(value as! AXValue, .cgRect, &box),
-               box.width > 0, box.height > 0, visible.contains(CGPoint(x: box.midX, y: box.midY)) {
+            if let box = AXValues.rect(markerAttribute("AXBoundsForTextMarkerRange", of: area, range)), box.width > 0, box.height > 0, visible.contains(CGPoint(x: box.midX, y: box.midY)) {
                 offscreen = 0
                 if let text = markerAttribute("AXStringForTextMarkerRange", of: area, range) as? String { lines.append((text, box, start)) }
             } else {
@@ -109,10 +107,9 @@ extension ScreenTextReader {
         var marker: CFTypeRef = start
         var read = 0
         while read < length {
-            var box = CGRect.zero
             guard let range = markerAttribute("AXRightWordTextMarkerRangeForTextMarker", of: area, marker),
                   let text = markerAttribute("AXStringForTextMarkerRange", of: area, range) as? String, !text.isEmpty,
-                  let value = markerAttribute("AXBoundsForTextMarkerRange", of: area, range), AXValueGetValue(value as! AXValue, .cgRect, &box) else { return nil }
+                  let box = AXValues.rect(markerAttribute("AXBoundsForTextMarkerRange", of: area, range)) else { return nil }
             pieces.append((text, box))
             read += text.count
             marker = AXTextMarkerRangeCopyEndMarker(range as! AXTextMarkerRange)

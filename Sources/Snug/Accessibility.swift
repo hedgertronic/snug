@@ -171,8 +171,8 @@ enum Accessibility {
 
     private static func frame(of element: AXUIElement) -> AXFrame? {
         AXUIElementSetMessagingTimeout(element, messagingTimeout)
-        guard let position = value(kAXPositionAttribute, of: element, type: .cgPoint, as: CGPoint.zero),
-              let size = value(kAXSizeAttribute, of: element, type: .cgSize, as: CGSize.zero) else { return nil }
+        guard let position = AXValues.point(attribute(kAXPositionAttribute, of: element)),
+              let size = AXValues.size(attribute(kAXSizeAttribute, of: element)) else { return nil }
         var description: CFTypeRef?
         AXUIElementCopyAttributeValue(element, kAXRoleDescriptionAttribute as CFString, &description)
         var role: CFTypeRef?
@@ -209,8 +209,8 @@ enum Accessibility {
             var role: CFTypeRef?
             AXUIElementCopyAttributeValue(child, kAXRoleAttribute as CFString, &role)
             guard role as? String == kAXListRole,
-                  let position = value(kAXPositionAttribute, of: child, type: .cgPoint, as: CGPoint.zero),
-                  let size = value(kAXSizeAttribute, of: child, type: .cgSize, as: CGSize.zero) else { return nil }
+                  let position = AXValues.point(attribute(kAXPositionAttribute, of: child)),
+                  let size = AXValues.size(attribute(kAXSizeAttribute, of: child)) else { return nil }
             return CGRect(origin: position, size: size)
         }
     }
@@ -266,25 +266,22 @@ enum Accessibility {
             var raw: CFTypeRef?
             guard let frame = frame(of: area)?.rect, AXUIElementCopyAttributeValue(area, kAXValueAttribute as CFString, &raw) == .success,
                   let value = raw as? String as NSString?, value.length > 0,
-                  let last = parameter("AXLineForIndex", area, value.length - 1 as CFNumber) as? Int else { return nil }
+                  let last = AXValues.index(parameter("AXLineForIndex", area, value.length - 1 as CFNumber)) else { return nil }
             var rows: [(text: String, box: CGRect)] = []
             for line in 0...last {
-                var range = CFRange()
-                var box = CGRect.zero
-                guard let lineRange = parameter("AXRangeForLine", area, line as CFNumber), AXValueGetValue(lineRange as! AXValue, .cfRange, &range),
-                      range.location + range.length <= value.length,
-                      let bounds = parameter("AXBoundsForRange", area, lineRange), AXValueGetValue(bounds as! AXValue, .cgRect, &box) else { return nil }
-                rows.append((value.substring(with: NSRange(location: range.location, length: range.length)), box))
+                guard let lineRange = parameter("AXRangeForLine", area, line as CFNumber),
+                      let range = AXValues.range(lineRange).flatMap({ AXValues.range($0, within: value.length) }),
+                      let box = AXValues.rect(parameter("AXBoundsForRange", area, lineRange)) else { return nil }
+                rows.append((value.substring(with: range), box))
             }
             return (frame, rows)
         }
     }
 
-    static func value<T>(_ attribute: String, of element: AXUIElement, type: AXValueType, as seed: T) -> T? {
+    /// The element's raw value for `name`, nil when it does not answer; `AXValues` reads it as a point, size, rect or range.
+    static func attribute(_ name: String, of element: AXUIElement) -> CFTypeRef? {
         var raw: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &raw) == .success, let raw else { return nil }
-        var result = seed
-        return AXValueGetValue(raw as! AXValue, type, &result) ? result : nil
+        return AXUIElementCopyAttributeValue(element, name as CFString, &raw) == .success ? raw : nil
     }
 
     /// Shows the system's Accessibility prompt. Call only from a user click in a live (non-headless) overlay.
