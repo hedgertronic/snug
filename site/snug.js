@@ -325,7 +325,8 @@
         this.closedAt = performance.now();
         this.scene.dataset.cursor = 'arrow';
         this.render();
-        this.later(() => this.toast.classList.remove('show'), 2600, gen);
+        // As long as the app's default toast lifetime, 4 s.
+        this.later(() => this.toast.classList.remove('show'), 4000, gen);
       }, reduce ? 0 : 140, gen);
     }
 
@@ -404,7 +405,7 @@
           await glide({ x: 470, y: 205 }, 500, () => {});
           await sleep(900);
           this.copy();
-          await sleep(3000);
+          await sleep(4600);
         }
       };
       loop().catch(g => { if (typeof g !== 'number') throw g; });
