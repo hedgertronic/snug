@@ -72,16 +72,17 @@ enum Pref {
     /// `defaults write com.hedgertronic.snug SnugMenuBarIcon a` switches the icon live.
     static let menuBarIcon = "SnugMenuBarIcon"
 
+    /// Appends `line` to the diagnostic log `name` when `key` is on. Logging is best effort: a line that cannot be written is dropped.
     static func logHoverLine(_ line: String, key: String = logHover, file name: String = "hover.log") {
         guard UserDefaults.standard.bool(forKey: key) else { return }
         let folder = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Logs/Snug")
-        try! FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let file = folder.appending(path: name)
         if !FileManager.default.fileExists(atPath: file.path) { FileManager.default.createFile(atPath: file.path, contents: nil) }
-        let handle = try! FileHandle(forWritingTo: file)
-        defer { try! handle.close() }
-        try! handle.seekToEnd()
-        try! handle.write(contentsOf: Data((line + "\n").utf8))
+        guard let handle = try? FileHandle(forWritingTo: file) else { return }
+        defer { try? handle.close() }
+        _ = try? handle.seekToEnd()
+        try? handle.write(contentsOf: Data((line + "\n").utf8))
     }
 
     /// The custom shadow when `frameShadow` is "custom"; nil for the default shadows.
