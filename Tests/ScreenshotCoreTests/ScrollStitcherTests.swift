@@ -116,6 +116,16 @@ struct ScrollStitcherTests {
         #expect(pixels[0] == 200 && pixels[(small.height - 1) * small.width * 4] == 60)
     }
 
+    /// A full-width capture of a 3,024 px wide Retina display keeps the whole height limit; a 6,000 px wide one is capped by the budget.
+    @Test func theDefaultBudgetFitsAFullWidthBuiltInDisplay() {
+        func blank(width: Int) -> CGImage {
+            CGContext(data: nil, width: width, height: 4, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!.makeImage()!
+        }
+        #expect(ScrollStitcher(first: blank(width: 3024)).heightLimit == ScrollStitcher.maximumHeight)
+        #expect(ScrollStitcher(first: blank(width: 6000)).heightLimit == ScrollStitcher.maximumPixels / 6000)
+    }
+
     /// The pixel budget caps a wide area's height below `maximumHeight`: here 600 rows of 160 px. Scrolling past it stops growing the
     /// image and reports it full; the image is the page as stitched when it filled, its footer included.
     @Test func thePixelBudgetStopsTheImageAndSaysItIsFull() async {
