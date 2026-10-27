@@ -228,7 +228,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 
 /* ---------- features ---------- */
 .feat { max-width: 1072px; margin: 0 auto; padding: 96px max(16px, env(safe-area-inset-left, 0px)) 72px; }
-.feat-h { font: 700 clamp(28px, 3.4vw, 36px)/1.1 var(--round); letter-spacing: -.005em; margin-bottom: 28px; }
+.feat-h { font: 700 clamp(28px, 3.4vw, 36px)/1.1 var(--round); letter-spacing: -.005em; margin-bottom: 28px; text-align: center; }
 .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 36px 28px; }
 .card { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .card-head { display: flex; align-items: center; gap: 14px; }
