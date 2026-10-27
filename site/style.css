@@ -415,9 +415,9 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .cp-ov .o-chip .t { font-weight: 500; }
 .cp-ov .cp-ch { opacity: 0; }
 .cp-ov .cp-ch.cC0 { opacity: 1; }
-.cp-x { transform: translate(150px, 69px); animation: cpx 8s infinite both; }
+.cp-x { transform: translate(161px, 78px); animation: cpx 8s infinite both; }
 .cp-xh { animation: cpxo 8s infinite both; }
-@keyframes cpx { 0%, 24% { transform: translate(100px, 46px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 29%, 44% { transform: translate(50px, 58px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 49%, 100% { transform: translate(150px, 69px); } }
+@keyframes cpx { 0%, 24% { transform: translate(100px, 50px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 29%, 44% { transform: translate(39px, 64px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 49%, 100% { transform: translate(161px, 78px); } }
 @keyframes cpxo { 0% { opacity: 0; } 1.5% { opacity: 1; } 93% { opacity: 1; } 96% { opacity: 0; } 100% { opacity: 0; } }
 .cp-ov .cp-ch.cA { animation: cpa 8s infinite both; }
 @keyframes cpa { 0% { opacity: 0; } 2.5% { opacity: 0; } 3.3% { opacity: 1; } 23.7% { opacity: 1; } 24.5% { opacity: 0; } 100% { opacity: 0; } }
