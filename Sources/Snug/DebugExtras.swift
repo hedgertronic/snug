@@ -803,7 +803,7 @@ extension DebugRun {
             for key in [Pref.highlightColor, Pref.candidates, Pref.loupe, Pref.rulers, Pref.crosshair] { defaults.removeObject(forKey: key) }
         }
 
-        // The toast: one capsule with the thumbnail, its size, position, and lifetime, and the preview in its own panel.
+        // The toast: one card with the thumbnail, its size, position, and lifetime, and the preview in its own panel.
         let capture = try await Output.png(image.cropping(to: CGRect(x: 0, y: 0, width: 1200, height: 400))!)
         func toast(_ setup: (UserDefaults) -> Void = { _ in }) -> Toast {
             let toastDefaults = UserDefaults(suiteName: FileManager.default.temporaryDirectory.appending(path: "snug-toast-\(UUID().uuidString)").path)!
@@ -814,12 +814,12 @@ extension DebugRun {
         let plain = toast()
         let card = plain.card, preview = plain.preview!
         let thumbnail = plain.lead.convert(plain.lead.bounds, to: nil)
-        require(card.frame.height == 40 && card.frame.width <= 360 && card.layer!.cornerRadius == 20 && plain.lead.frame.size == CGSize(width: 44, height: 28)
+        require(card.frame.height == 40 && card.frame.width <= 360 && card.layer!.cornerRadius == 13 && plain.lead.frame.size == CGSize(width: 44, height: 28)
                     && plain.lead.frame.minX == 6 && plain.lead.layer!.contents != nil,
-                "the toast is one 40 pt capsule up to 360 pt wide, led by a 44 x 28 pt thumbnail: \(card.frame) \(plain.lead.frame)")
+                "the toast is one 40 pt card with 13 pt corners up to 360 pt wide, led by a 44 x 28 pt thumbnail: \(card.frame) \(plain.lead.frame)")
         require(preview.frame.width == 240 && abs(preview.frame.width / preview.frame.height - 3) < 0.02, "the preview is the capture aspect-fit within 240 x 160: \(preview.frame.size)")
         require(preview.frame.minY == plain.frame.maxY && preview.frame.minY - (plain.frame.minY + card.frame.maxY) == 10 && preview.frame.minX == plain.frame.minX + thumbnail.minX,
-                "the preview sits 10 pt above the capsule at the thumbnail's left edge: \(preview.frame) \(plain.frame)")
+                "the preview sits 10 pt above the card at the thumbnail's left edge: \(preview.frame) \(plain.frame)")
         require(DisplayCapture.excludedWindowIDs().contains(CGWindowID(preview.windowNumber)) && preview.styleMask.contains(.nonactivatingPanel) && !preview.canBecomeKey, "the preview panel is left out of captures and takes no keys")
         let quick = toast { $0.set(2, forKey: Pref.toastLifetime) }, slow = toast { $0.set(10, forKey: Pref.toastLifetime) }
         require(plain.lifetime == .seconds(4) && quick.lifetime == .seconds(2) && slow.lifetime == .seconds(10),
@@ -836,12 +836,12 @@ extension DebugRun {
         require(bottomLeft.frame.minX < plain.frame.minX && bottomLeft.frame.minY == plain.frame.minY && topLeft.frame.minX == bottomLeft.frame.minX
                 && topCenter.frame.minX == plain.frame.minX && topLeft.frame.minY == topRight.frame.minY && topCenter.frame.minY == topRight.frame.minY,
                 "the six positions are the corners and the middle of the top and bottom: \(topLeft.frame) \(topCenter.frame) \(bottomLeft.frame)")
-        require(topLeft.preview!.frame.maxY == topLeft.frame.minY && topCenter.preview!.frame.maxY == topCenter.frame.minY, "the preview is below the capsule at every top position")
+        require(topLeft.preview!.frame.maxY == topLeft.frame.minY && topCenter.preview!.frame.maxY == topCenter.frame.minY, "the preview is below the card at every top position")
         require(topRight.preview!.frame.maxY == topRight.frame.minY && bottomRight.preview!.frame.minY == bottomRight.frame.maxY,
-                "the preview is below the capsule at the top right and above it elsewhere: \(topRight.preview!.frame) \(topRight.frame)")
+                "the preview is below the card at the top right and above it elsewhere: \(topRight.preview!.frame) \(topRight.frame)")
         let screenArea = (NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main!).visibleFrame
         require(bottomRight.preview!.frame.maxX <= screenArea.maxX - 20, "the preview stays on screen at the bottom right: \(bottomRight.preview!.frame) \(screenArea)")
-        // The capsule is clear at its square corners and filled in its middle, and the margin is transparent.
+        // The card is clear at its square corners and filled in its middle, and the margin is transparent.
         do {
             let root = plain.contentView!
             let rep = root.bitmapImageRepForCachingDisplay(in: root.bounds)!
@@ -851,7 +851,7 @@ extension DebugRun {
             let (left, right, top, bottom) = (Int(piece.minX * density) + 1, Int(piece.maxX * density) - 2, Int((root.bounds.height - piece.maxY) * density) + 1, Int((root.bounds.height - piece.minY) * density) - 2)
             require([(left, top), (right, top), (left, bottom), (right, bottom)].allSatisfy { rep.colorAt(x: $0, y: $1)!.alphaComponent == 0 }
                         && rep.colorAt(x: (left + right) / 2, y: (top + bottom) / 2)!.alphaComponent > 0.5,
-                    "a render of the toast is clear at the capsule's four square corners and filled in its middle: \(piece)")
+                    "a render of the toast is clear at the card's four square corners and filled in its middle: \(piece)")
             require(rep.colorAt(x: 1, y: 1)!.alphaComponent == 0 && rep.colorAt(x: rep.pixelsWide - 2, y: rep.pixelsHigh - 2)!.alphaComponent == 0, "a render of the toast is transparent in the margin")
         }
         require(!plain.isOpaque && plain.backgroundColor == .clear && plain.hasShadow, "the toast window is transparent with a shadow")
@@ -873,10 +873,10 @@ extension DebugRun {
                     && abs(plain.message.frame.minX - (plain.textBox.bounds.width - plain.detail.frame.maxX)) <= 1,
                 "the actions and the text are both centered in the text box: \(plain.actions.frame) \(plain.textBox.frame)")
         plain.setPeeking(true)
-        require(plain.isPeeking && frames(plain) == rest && !preview.isVisible, "the preview leaves the capsule where it is, and a toast off screen keeps it off screen")
+        require(plain.isPeeking && frames(plain) == rest && !preview.isVisible, "the preview leaves the card where it is, and a toast off screen keeps it off screen")
         plain.setPeeking(false)
         let corner = plain.closeButton.frame
-        require(corner.midX < card.frame.minX + 12 && corner.midY > card.frame.maxY - 12, "the close button sits on the capsule's top-left corner: \(corner) \(card.frame)")
+        require(corner.midX < card.frame.minX + 12 && corner.midY > card.frame.maxY - 12, "the close button sits on the card's top-left corner: \(corner) \(card.frame)")
         plain.mouseExited(with: hoverEvent)
         require(!plain.closeButton.isHidden && plain.textBox.isHidden, "leaving waits 0.15 s before letting go")
         try await Task.sleep(for: .milliseconds(450))
@@ -2506,7 +2506,7 @@ extension DebugRun {
         require(imageBoard.data(forType: .png) == capture && imageBoard.string(forType: .string) == nil, "Copy puts the capture on the pasteboard again")
 
         // A click on the thumbnail opens the capture as Open does (suppressed here, so nothing opens and the toast stays up); a click
-        // elsewhere on the capsule closes it.
+        // elsewhere on the card closes it.
         Toast.isSuppressed = true
         let clicked = Toast(png: capture, message: "Copied", detail: "1200 x 400", file: nil, color: nil, defaults: trashDefaults,
                             pasteboard: NSPasteboard(name: NSPasteboard.Name("snug-toast-click-\(UUID().uuidString)")))

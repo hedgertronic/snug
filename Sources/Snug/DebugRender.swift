@@ -844,8 +844,8 @@ extension DebugRun {
     }
 
     /// `--render-toasts DIR`: the toast in each state, in the light and the dark look, as `toast-<state>-<look>.png` on a backdrop of
-    /// that look; the preview states draw the preview panel where it sits by the capsule. Checks the sizes the design fixes: one line
-    /// is 40 pt tall, a long warning two lines, the capsule at most 360 pt wide; the preview of a very tall and a very wide capture
+    /// that look; the preview states draw the preview panel where it sits by the card. Checks the sizes the design fixes: one line
+    /// is 40 pt tall, a long warning two lines, the card at most 360 pt wide; the preview of a very tall and a very wide capture
     /// at 72 pt on their short side, cropped at the top and in the middle; hovering and the preview moving or resizing nothing. Then a stack
     /// of three toasts as `toast-stack-<look>.png`.
     static func renderToasts(into directory: URL, image: CGImage) async throws {
@@ -921,7 +921,7 @@ extension DebugRun {
                 func frames() -> [CGRect] { [toast.frame, toast.card.frame, toast.lead.frame, toast.textBox.frame, toast.actions.frame, toast.message.frame, toast.detail.frame] }
                 let rest = frames()
                 require(toast.card.frame.width <= 360 && toast.card.frame.height == (toast.detail.maximumNumberOfLines == 2 ? toast.card.frame.height : 40),
-                        "\(state.name): one line is 40 pt tall (only a warning or failure wraps), and no capsule is wider than 360 pt: \(toast.card.frame.size)")
+                        "\(state.name): one line is 40 pt tall (only a warning or failure wraps), and no card is wider than 360 pt: \(toast.card.frame.size)")
                 if state.hover {
                     toast.setHovering(true)
                     try await Task.sleep(for: .milliseconds(250))
@@ -961,7 +961,7 @@ extension DebugRun {
                     require(size == (state.name == "tall" ? CGSize(width: 72, height: 160) : CGSize(width: 240, height: 72)), "\(state.name): the preview is \(size)")
                 case "preview":
                     require(toast.preview!.frame.minY == toast.frame.maxY && toast.preview!.frame.minY - (toast.frame.minY + toast.card.frame.maxY) == 10,
-                            "the preview is 10 pt above the capsule")
+                            "the preview is 10 pt above the card")
                 default: break
                 }
                 if state.name == "tall" {
