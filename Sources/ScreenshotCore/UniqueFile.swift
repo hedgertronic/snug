@@ -5,11 +5,12 @@ public enum UniqueFile {
     /// Writes `data` to `file`, or, when that name is taken, to the name with " 2", " 3", and so on before the extension. The data is
     /// written whole to a temporary file beside the target, then moved (a rename within the folder) to the first free name; the move
     /// refuses an existing name, and needs no hard links, which USB and network volumes may lack. A failed write never leaves a partial
-    /// file at the name. Returns the file written.
+    /// file at the name, and the temporary file is removed on every path, a partly written one included; a removal that fails is
+    /// ignored, so the write's own error is the one thrown. Returns the file written.
     public static func write(_ data: Data, to file: URL) throws -> URL {
         let temporary = file.deletingLastPathComponent().appending(path: ".snug-\(UUID().uuidString).tmp")
+        defer { try? FileManager.default.removeItem(at: temporary) }
         try data.write(to: temporary)
-        defer { if FileManager.default.fileExists(atPath: temporary.path) { try! FileManager.default.removeItem(at: temporary) } }
         return try move(temporary, to: file)
     }
 
