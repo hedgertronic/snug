@@ -16,6 +16,10 @@ public struct HandoffServer: Sendable {
     /// limit once base64 grows them by a third.
     public static let imageSide = 1568
     public static let imageBytes = 3_750_000
+    /// The longest request line read, in bytes; a longer one is answered with an Invalid Request error and dropped.
+    public static let requestBytes = 1_048_576
+    /// The most pixels a stored capture may declare before the server decodes it: 100 megapixels, larger than any display's capture.
+    public static let imagePixels = 100_000_000
 
     public init(store: HandoffStore, version: String) {
         self.store = store
@@ -59,12 +63,25 @@ public struct HandoffServer: Sendable {
                          "required": ["id", "x", "y", "width", "height"]]]
     ] }
 
-    /// The response line to `line`, or nil for a notification.
+    /// The response to a request line longer than `requestBytes`, which is not parsed.
+    public func respondToOverlongRequest() -> String {
+        encode(["jsonrpc": "2.0", "id": NSNull(), "error": ["code": -32600, "message": "Invalid Request: longer than \(Self.requestBytes) bytes"]])
+    }
+
+    /// The response line to `line`, or nil for a notification. A message that is not a JSON-RPC 2.0 request (no "jsonrpc": "2.0", a
+    /// method that is not a string, an id that is not a string, number or null, params that are not an object) is an Invalid Request.
     public func respond(to line: String) -> String? {
-        guard let message = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else {
+        guard let parsed = try? JSONSerialization.jsonObject(with: Data(line.utf8), options: .fragmentsAllowed) else {
             return encode(["jsonrpc": "2.0", "id": NSNull(), "error": ["code": -32700, "message": "Parse error"]])
         }
-        guard let id = message["id"] else { return nil }
+        let message = parsed as? [String: Any]
+        let id = message?["id"]
+        let validId = id.map { $0 is String || $0 is NSNull || ($0 as? NSNumber).map { CFGetTypeID($0) == CFNumberGetTypeID() } == true } ?? true
+        guard let message, message["jsonrpc"] as? String == "2.0", message["method"] is String, validId,
+              message["params"] == nil || message["params"] is [String: Any] else {
+            return encode(["jsonrpc": "2.0", "id": validId ? id ?? NSNull() : NSNull(), "error": ["code": -32600, "message": "Invalid Request"]])
+        }
+        guard let id else { return nil }
         let params = message["params"] as? [String: Any] ?? [:]
         do {
             let result: [String: Any] = switch message["method"] as? String {
@@ -166,6 +183,10 @@ public struct HandoffServer: Sendable {
     }
 
     private func image(from png: Data, manifest: HandoffManifest) throws -> CGImage {
+        let (pixels, overflow) = manifest.image.width.multipliedReportingOverflow(by: manifest.image.height)
+        guard !overflow, pixels <= Self.imagePixels else {
+            throw ToolError(code: "capture_too_large", message: "The stored image is larger than \(Self.imagePixels / 1_000_000) megapixels.")
+        }
         guard let source = CGImageSourceCreateWithData(png as CFData, nil),
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
               image.width == manifest.image.width, image.height == manifest.image.height else {

@@ -16,14 +16,20 @@ extension HandoffStore {
 
 /// `Snug --mcp`: the read-only MCP server for agent handoffs, one JSON-RPC message per line on stdin and stdout (see `HandoffServer`).
 /// `main` starts it before the app, so it never shows the menu bar item, takes focus, or registers the capture shortcut. It serves
-/// `Pref.agentFolder`, which `-SnugAgentFolder DIR` on the command line overrides. Only protocol messages go to stdout.
+/// `Pref.agentFolder`, which `-SnugAgentFolder DIR` on the command line overrides. Only protocol messages go to stdout. A request line
+/// over `HandoffServer.requestBytes` is never held whole: it is answered with an Invalid Request error and skipped.
 enum MCPServer {
     static func run() -> Never {
         let store = HandoffStore(defaults: .standard)
         let server = HandoffServer(store: store, version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")
         FileHandle.standardError.write(Data("Snug MCP server for \(store.root.path)\n".utf8))
-        while let line = readLine() {
-            guard let response = server.respond(to: line) else { continue }
+        let reader = LineReader(descriptor: FileHandle.standardInput.fileDescriptor, limit: HandoffServer.requestBytes)
+        while let line = reader.next() {
+            let response = switch line {
+            case .text(let text): server.respond(to: text)
+            case .tooLong: server.respondToOverlongRequest()
+            }
+            guard let response else { continue }
             FileHandle.standardOutput.write(Data((response + "\n").utf8))
         }
         exit(EXIT_SUCCESS)

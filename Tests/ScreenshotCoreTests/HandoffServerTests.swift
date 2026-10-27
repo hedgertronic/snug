@@ -177,3 +177,64 @@ final class HandoffServerTests {
         #expect((noId["error"] as! [String: Any])["code"] as? Int == -32602)
     }
 }
+
+/// Requests that are not JSON-RPC 2.0, and stored captures whose manifest points outside its bundle or is too large to decode.
+final class HandoffServerValidationTests {
+    let server = HandoffServer(store: HandoffStore(root: FileManager.default.temporaryDirectory.appending(path: "snug-mcp-\(UUID().uuidString)")), version: "test")
+
+    deinit {
+        try? FileManager.default.removeItem(at: server.store.root)
+    }
+
+    func errorCode(_ line: String) throws -> (code: Int?, id: Any?) {
+        let response = try JSONSerialization.jsonObject(with: Data(try #require(server.respond(to: line)).utf8)) as! [String: Any]
+        return ((response["error"] as? [String: Any])?["code"] as? Int, response["id"])
+    }
+
+    @Test func malformedRequestsAreInvalidAndNotificationsStaySilent() throws {
+        for line in [#"{"id":1,"method":"ping"}"#, #"{"jsonrpc":"1.0","id":1,"method":"ping"}"#, #"{"jsonrpc":"2.0","id":1,"method":5}"#,
+                     #"{"jsonrpc":"2.0","id":{"a":1},"method":"ping"}"#, #"{"jsonrpc":"2.0","id":true,"method":"ping"}"#,
+                     #"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":[1]}"#, #"[{"jsonrpc":"2.0","id":1,"method":"ping"}]"#, "42"] {
+            #expect(try errorCode(line).code == -32600, "\(line)")
+        }
+        #expect(try errorCode(#"{"jsonrpc":"2.0","id":{"a":1},"method":"ping"}"#).id is NSNull, "an invalid id is answered with null")
+        #expect(try errorCode(#"{"jsonrpc":"2.0","id":"x","method":5}"#).id as? String == "x", "a valid id is kept")
+        #expect(server.respond(to: #"{"jsonrpc":"2.0","method":"notifications/initialized"}"#) == nil)
+        #expect(try errorCode(#"{"jsonrpc":"2.0","id":null,"method":"ping"}"#).code == nil, "a null id is a request")
+        let overlong = try JSONSerialization.jsonObject(with: Data(server.respondToOverlongRequest().utf8)) as! [String: Any]
+        #expect((overlong["error"] as? [String: Any])?["code"] as? Int == -32600)
+    }
+
+    @Test func aManifestNamingAFileOutsideItsBundleIsRefused() throws {
+        var manifest = handoffManifest(id: "AAAAAAAA")
+        for file in ["../manifest.json", "../../escape.png", ".hidden.png", "a/b.png", "capture.txt"] {
+            manifest.image.file = file
+            #expect(throws: CocoaError.self) { try self.server.store.write(png: handoffPNG(), manifest: manifest) }
+            #expect(throws: CocoaError.self) { try self.server.store.png(of: manifest) }
+        }
+    }
+
+    @Test func aManifestWhoseIdIsNotItsFolderIsDamaged() throws {
+        try server.store.write(png: handoffPNG(), manifest: handoffManifest(id: "AAAAAAAA"))
+        let moved = server.store.root.appending(path: "BBBBBBBB")
+        try FileManager.default.moveItem(at: server.store.root.appending(path: "AAAAAAAA"), to: moved)
+        #expect(throws: CocoaError.self) { try self.server.store.current() }
+    }
+
+    @Test func theStoreIsPrivateToTheUser() throws {
+        let bundle = try server.store.write(png: handoffPNG(), manifest: handoffManifest(id: "AAAAAAAA"))
+        func permissions(_ url: URL) throws -> Int { try FileManager.default.attributesOfItem(atPath: url.path)[.posixPermissions] as! Int }
+        #expect(try permissions(server.store.root) == 0o700 && permissions(bundle) == 0o700)
+        #expect(try permissions(bundle.appending(path: "capture.png")) == 0o600 && permissions(bundle.appending(path: "manifest.json")) == 0o600)
+    }
+
+    @Test func aCaptureDeclaringTooManyPixelsIsNotDecoded() throws {
+        var manifest = handoffManifest(id: "AAAAAAAA")
+        manifest.image = .init(width: 20_000, height: 20_000, scale: 1)
+        try server.store.write(png: handoffPNG(), manifest: manifest)
+        let response = try JSONSerialization.jsonObject(with: Data(try #require(server.respond(
+            to: #"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_capture","arguments":{"id":"latest"}}}"#)).utf8)) as! [String: Any]
+        let result = response["result"] as! [String: Any]
+        #expect(result["isError"] as? Bool == true && (result["structuredContent"] as! [String: Any])["code"] as? String == "capture_too_large")
+    }
+}
