@@ -136,6 +136,19 @@ extension DebugRun {
         mouse(.mouseMoved, text)
         overlay.flash(KeyCap.event(for: "C"))
         require(readoutCap[0].pressed, "C flashes the readout's C cap")
+        // Each key lights the caps that name it, as the system types it: Space as " ", Shift-Tab still as tab, Shift-[ as "{".
+        func pressed(_ code: UInt16, _ characters: String, _ flags: NSEvent.ModifierFlags) -> Set<String> {
+            KeyCap.pressed(by: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil,
+                                                characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)!)
+        }
+        let presses: [(UInt16, String, NSEvent.ModifierFlags, String)] = [
+            (49, " ", [], "space"), (48, "\t", [], "tab"), (48, "\u{19}", [.shift], "tab"), (33, "[", [], "["), (33, "{", [.shift], "["), (30, "}", [.shift], "]"),
+            (24, "=", [], "="), (44, "?", [.shift], "?"), (35, "P", [.shift], "\u{21E7}P"), (1, "S", [.shift, .command], "\u{21E7}\u{2318}S"),
+            (36, "\r", [.command], "\u{2318}\u{21A9}"), (53, "\u{1B}", [], "esc"), (126, "\u{F700}", [.shift], "\u{2191}"), (8, "C", [.shift], "\u{21E7}C")
+        ]
+        for (code, characters, flags, cap) in presses {
+            require(pressed(code, characters, flags).contains(cap), "key code \(code) with \(flags.rawValue) lights the \(cap) cap: \(pressed(code, characters, flags))")
+        }
         // The swatch's ring is the chrome's swatch edge in both looks, so a white pixel reads in light mode.
         let swatchView = readout.subviews.first { $0.frame.size == CGSize(width: 12, height: 12) }!
         let readoutLook = readout.appearance

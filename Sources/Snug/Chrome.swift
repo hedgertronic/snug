@@ -217,25 +217,28 @@ final class KeyCap: NSView {
                                 context: nil, characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)!
     }
 
-    /// The cap texts a key press lights: its modifiers then its key ("⌘S", "⇧↩", "P"), and for an arrow or a symbol key, whose caps
-    /// carry no modifiers, the key alone.
+    /// The cap texts a key press lights: its modifiers then its key ("⌘S", "⇧↩", "P"), and for an arrow, tab or a symbol key, whose
+    /// caps carry no modifiers, the key alone. Shift-[ and Shift-] (typed as "{" and "}", which the overlay takes as [ and ]) light
+    /// the [ and ] caps.
     static func pressed(by event: NSEvent) -> Set<String> {
         let named: String? = switch event.keyCode {
         case 36, 76: "\u{21A9}"
         case 53: "esc"
         case 48: "tab"
+        case 49: "space"
         case 123: "\u{2190}"
         case 124: "\u{2192}"
         case 125: "\u{2193}"
         case 126: "\u{2191}"
         default: nil
         }
-        let key = named ?? (event.charactersIgnoringModifiers ?? "").uppercased()
+        let typed = (event.charactersIgnoringModifiers ?? "").uppercased()
+        let key = named ?? ["{": "[", "}": "]"][typed] ?? typed
         let letter = key.count == 1 && key.first!.isLetter
         // Shift is part of a letter's or named key's cap; a symbol's character already shows it ("?", "+").
         let held = modifiers.filter { event.modifierFlags.contains($0.flag) && ($0.glyph != "\u{21E7}" || letter || named != nil) }
-        let arrow = (123...126).contains(event.keyCode)
-        return Set([String(held.map(\.glyph)) + key] + (arrow || !letter && named == nil ? [key] : []))
+        let bare = (123...126).contains(event.keyCode) || event.keyCode == 48
+        return Set([String(held.map(\.glyph)) + key] + (bare || !letter && named == nil ? [key] : []))
     }
 }
 
