@@ -84,21 +84,20 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .top-links { display: flex; align-items: center; gap: 18px; font-size: 14.5px; font-weight: 500; }
 .top-links a { text-decoration: none; color: var(--bandfg2); display: inline-flex; align-items: center; gap: 7px; }
 .top-links a:hover { color: var(--bandfg); }
-/* the maker credit: a quiet pill on the plum, the same height as the Download pill */
+/* the maker credit: a quiet pill on the plum */
 .top-links .maker { gap: 6px; height: 32px; padding: 0 12px 0 8px; border-radius: 999px; font-size: 13px; font-weight: 500;
   background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); transition: background-color .15s, box-shadow .15s, color .15s; }
 .top-links .maker:hover { background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24); }
 .top-links .maker img { width: 18px; height: 18px; border-radius: 50%; }
-.top-links .dl-sm { color: var(--bandfg); height: 32px; padding: 0 14px; border-radius: 999px; box-shadow: inset 0 0 0 1.5px var(--coral); }
-.top-links .dl-sm:hover { background: color-mix(in srgb, var(--coral) 18%, transparent); }
 
 .hero { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px; padding: 30px 0 36px; }
 .hero h1 { font: 700 clamp(36px, 7vw, 58px)/1.04 var(--round); letter-spacing: -.005em; max-width: 15ch; }
 .hero p { font-size: clamp(16.5px, 2.2vw, 18.5px); color: var(--bandfg2); max-width: 44ch; }
-.dl { display: inline-flex; align-items: center; height: 44px; padding: 0 22px; margin-top: 4px; border-radius: 999px; background: var(--coral); color: #2A1228; font-weight: 650; font-size: 15.5px; text-decoration: none; }
+.cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 4px; }
+.dl, .dl-gh { display: inline-flex; align-items: center; height: 44px; padding: 0 22px; border-radius: 999px; background: var(--coral); color: #2A1228; font-weight: 650; font-size: 15.5px; text-decoration: none; }
 .dl:hover { background: #FF8E81; }
-.req { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 0; font-size: 13.5px; color: var(--bandfg2); }
-.req span + span::before { content: "\00B7"; padding: 0 8px; }
+.dl-gh { gap: 8px; background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); color: var(--bandfg); font-weight: 600; font-size: 15.5px; text-decoration: none; transition: background-color .15s, box-shadow .15s; }
+.dl-gh:hover { background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24); }
 
 .demo-wrap { max-width: 880px; margin: 0 auto; }
 a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
@@ -300,7 +299,6 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
   .feat { padding-top: 52px; padding-bottom: 52px; }
   .grid { grid-template-columns: minmax(0, 1fr); gap: 40px; }
   .top-links { gap: 14px; }
-  .top-links .gh span { display: none; }
   .foot { justify-content: center; text-align: center; }
 }
 @media (max-width: 400px) {
@@ -308,7 +306,6 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
   .top .wm { font-size: 20px; gap: 7px; }
   .top .wm img { width: 26px; height: 26px; }
   .top-links { gap: 10px; }
-  .top-links .dl-sm { padding: 0 12px; }
   .top-links .maker { gap: 5px; padding: 0 10px 0 6px; font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
