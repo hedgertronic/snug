@@ -304,6 +304,21 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .q.on { opacity: 1; }
 .tx-sel { fill: color-mix(in srgb, var(--hl) 55%, transparent); transform-box: fill-box; transform-origin: left; animation: sweep 4s infinite both; }
 @keyframes sweep { 0%, 12% { transform: scaleX(0); } 36%, 90% { transform: scaleX(1); } 100% { transform: scaleX(0); } }
+/* the scrolling page: a review's title, a diff, two comments and a link card, drawn once and used by both the window and the stitched preview */
+.art .t0 { font: 700 7px var(--sans); fill: var(--w-fg); }
+.art .t1 { font: 600 5.4px var(--sans); fill: var(--w-fg); }
+.art .t2 { font: 400 5px var(--sans); fill: var(--w-fg2); }
+.art .t2b { font: 400 5.2px var(--sans); fill: var(--w-fg); }
+.art .t3 { font: 600 4.6px var(--sans); fill: var(--d-acc); }
+.art .tm { font: 400 4.9px var(--mono); fill: var(--d-code); }
+.art .tm.tb { fill: var(--w-fg2); }
+.art .g-card { fill: var(--d-card); stroke: var(--w-line); stroke-width: .4; }
+.art .g-row { fill: var(--d-row); }
+.art .g-add { fill: var(--d-add); }
+.art .g-del { fill: var(--d-del); }
+.art .g-tag { fill: color-mix(in srgb, var(--d-acc) 18%, transparent); }
+.art .gm-a, .art .gm-a.t3 { fill: var(--d-addfg); font-weight: 700; }
+.art .gm-d { fill: var(--d-delfg); font-weight: 700; }
 .sc-scroll { transform: translateY(-102px); animation: scroll 4s infinite both; }
 @keyframes scroll { 0%, 8% { transform: none; } 80%, 99% { transform: translateY(-102px); } 100% { transform: none; } }
 .sc-cover { fill: var(--d-chip); transform-box: fill-box; transform-origin: bottom; transform: scaleY(0); animation: cover 4s infinite both; }
