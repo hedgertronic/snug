@@ -21,7 +21,8 @@ release = sys.argv[1:] == ["--release"]
 env = os.environ.copy()
 env["CLANG_MODULE_CACHE_PATH"] = str(root / ".build/clang-cache")
 env["SWIFTPM_MODULECACHE_OVERRIDE"] = str(root / ".build/swift-cache")
-command = ["swift", "build", "--disable-sandbox", "-c", "release"]
+# One universal binary for Apple silicon and Intel Macs.
+command = ["swift", "build", "--disable-sandbox", "-c", "release", "--arch", "arm64", "--arch", "x86_64"]
 subprocess.run(command, cwd=root, env=env, check=True)
 result = subprocess.run(command + ["--show-bin-path"], cwd=root, env=env, check=True, text=True, capture_output=True)
 binary_dir = Path(result.stdout.strip().splitlines()[-1])
