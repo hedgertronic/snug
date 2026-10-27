@@ -28,8 +28,9 @@
     l3: { n: 'Removed line 14', x: 30, y: 178, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
     l4: { n: 'Added line 14', x: 30, y: 196, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
     l5: { n: 'Added line 15', x: 30, y: 214, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
-    rvc: { n: 'Review comment', x: 46, y: 250, w: 288, h: 62, p: 'rvfile', r: [8, 8, 8, 8] },
-    l6: { n: 'Line 16', x: 30, y: 330, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
+    rvc: { n: 'Review comment', x: 46, y: 240, w: 288, h: 62, p: 'rvfile', r: [8, 8, 8, 8] },
+    l6: { n: 'Line 16', x: 30, y: 310, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
+    l7: { n: 'Line 17', x: 30, y: 328, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
     // The chat window, to its right.
     ch: { n: 'Chat', x: 380, y: 58, w: 244, h: 328, p: 'screen', r: [12, 12, 12, 12] },
     chbar: { n: 'Toolbar', x: 380, y: 58, w: 244, h: 34, p: 'ch', r: [0, 0, 0, 0] },
@@ -42,13 +43,13 @@
   };
   const KEYS = Object.keys(BOX);
   // The review window's boxes: out of the picture, and out of the snap and hit tests, on a phone.
-  const RV = ['rv', 'rvbar', 'rvfile', 'rvhead', 'l1', 'l2', 'l3', 'l4', 'l5', 'rvc', 'l6'];
+  const RV = ['rv', 'rvbar', 'rvfile', 'rvhead', 'l1', 'l2', 'l3', 'l4', 'l5', 'rvc', 'l6', 'l7'];
   let LIVE = KEYS;
   /* The part of the scene on show, and the script that plays over it. tour: pointer stops [x, y, glide ms, hold ms]; the drag starts
      at `from`, ends at `to` and snaps on a pause; `after` is where the pointer rests before Return. The phone drags a rough box
      around the link preview. */
   const DESK = { view: { x: 0, y: 0, w: W, h: H }, tour: [[480, 136, 800, 1100], [520, 262, 700, 1200], [205, 205, 850, 1200]],
-    from: [40, 244, 650], to: [340, 318, 1000], after: [240, 280] };
+    from: [40, 238, 650], to: [340, 300, 1000], after: [240, 270] };
   const PHONE = { view: { x: 364, y: 40, w: 276, h: 396 }, tour: [[480, 136, 800, 1100], [520, 262, 700, 1200]],
     from: [440, 222, 600], to: [600, 280, 900], after: [556, 268] };
   const ZERO = [0, 0, 0, 0];
@@ -83,7 +84,7 @@
     ${line('l1', 'ctx', 12, 12, '.avatar {')}${line('l2', 'ctx', 13, 13, '  width: 28px;')}${line('l3', 'del', 14, '', '  border-radius: 4px;')}
     ${line('l4', 'add', '', 14, '  border-radius: 50%;')}${line('l5', 'add', '', 15, '  object-fit: cover;')}
     <div class="b s-cmt" style="${at('rvc')}"><i class="av a2"></i><div><b>Rae</b> <small>on line 14</small><p>50% keeps it round at any size. Nice.</p><small class="act">Reply &middot; Resolve</small></div></div>
-    ${line('l6', 'ctx', 15, 16, '}')}</div>
+    ${line('l6', 'ctx', 15, 16, '}')}${line('l7', 'ctx', 16, 17, '')}</div>
     <div class="b s-win" style="${at('ch')}"></div>
     <div class="b s-toolbar" style="${at('chbar')}">${lights}<span class="s-wt"><i class="av a2"></i>Rae</span></div>
     <div class="b s-ts" style="left:380px;top:98px;width:244px">Today 9:38</div>
