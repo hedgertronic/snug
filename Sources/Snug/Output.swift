@@ -131,7 +131,7 @@ enum Pref {
             recordCountIn: 3,
             recordCursor: true
         ])
-        PreferenceRules.sanitize(defaults, rules: rules)
+        PreferenceRules.sanitize(defaults, domain: defaults == .standard ? Bundle.main.bundleIdentifier : nil, rules: rules)
     }
 
     /// The values each constrained preference may hold; `register` removes any other stored value, so its default answers instead.

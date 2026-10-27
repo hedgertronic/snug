@@ -23,7 +23,7 @@ struct PreferenceRulesTests {
         defaults.set(-1, forKey: "modifiers")
         defaults.set(true, forKey: "countIn")
         defaults.set("", forKey: "folder")
-        #expect(PreferenceRules.sanitize(defaults, rules: rules) == rules.keys.sorted())
+        #expect(PreferenceRules.sanitize(defaults, domain: suite, rules: rules) == rules.keys.sorted())
         #expect(defaults.string(forKey: "icon") == "q" && defaults.integer(forKey: "padding") == 24 && defaults.double(forKey: "fade") == 0.5)
         #expect(defaults.string(forKey: "color") == "" && defaults.string(forKey: "shadow") == "#000000" && defaults.integer(forKey: "code") == 49)
         #expect(defaults.integer(forKey: "modifiers") == 393_216 && defaults.integer(forKey: "countIn") == 3 && defaults.string(forKey: "folder") == "/Users/me/Desktop")
@@ -39,12 +39,24 @@ struct PreferenceRulesTests {
         defaults.set(0x1E0000, forKey: "modifiers")
         let rules: [String: PreferenceRule] = ["icon": .oneOf(["q", "a"]), "padding": .integer(0...64), "color": .hexColor(emptyAllowed: false),
                                                "code": .integerIn([-1, 49]), "modifiers": .flags(mask: 0x1E0000), "unset": .number(0...1)]
-        #expect(PreferenceRules.sanitize(defaults, rules: rules).isEmpty)
+        #expect(PreferenceRules.sanitize(defaults, domain: suite, rules: rules).isEmpty)
         #expect(defaults.string(forKey: "icon") == "a" && defaults.integer(forKey: "padding") == 64 && defaults.integer(forKey: "modifiers") == 0x1E0000)
     }
 
-    @Test func numbersAreNotStringsAndWholeNumbersAreWhole() {
-        #expect(!PreferenceRule.integer(0...64).accepts("24") && !PreferenceRule.integer(0...64).accepts(2.5) && PreferenceRule.integer(0...64).accepts(24.0))
-        #expect(!PreferenceRule.number(0...1).accepts("0.5") && PreferenceRule.number(0...1).accepts(1))
+    @Test func numbersWrittenAsStringsCountAndWholeNumbersAreWhole() {
+        // `defaults write ... SnugFramePadding 30` without -int stores the string "30", which UserDefaults reads as 30.
+        #expect(PreferenceRule.integer(0...64).accepts("24") && PreferenceRule.integer(0...64).accepts(24.0) && PreferenceRule.flags(mask: 0xF).accepts("3"))
+        #expect(!PreferenceRule.integer(0...64).accepts(2.5) && !PreferenceRule.integer(0...64).accepts("abc") && !PreferenceRule.integer(0...64).accepts("99"))
+        #expect(PreferenceRule.number(0...1).accepts("0.5") && PreferenceRule.number(0...1).accepts(1) && !PreferenceRule.number(0...1).accepts("nan"))
+    }
+
+    @Test func aValueOnlyInAnotherDomainIsLeftAlone() throws {
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("a", forKey: "icon")
+        // With the app's domain named, only saved values count: an empty domain has nothing to remove.
+        #expect(PreferenceRules.sanitize(defaults, domain: "snug-no-such-domain-\(UUID().uuidString)", rules: ["icon": .oneOf(["q"])]).isEmpty)
+        #expect(defaults.string(forKey: "icon") == "a")
+        #expect(PreferenceRules.sanitize(defaults, domain: nil, rules: ["icon": .oneOf(["q"])]) == ["icon"])
     }
 }

@@ -25,7 +25,7 @@ public enum PreferenceRule: Sendable {
         case .integerIn(let allowed): return Self.integer(value).map(allowed.contains) ?? false
         case .integer(let range): return Self.integer(value).map(range.contains) ?? false
         case .number(let range):
-            guard !(value is String), let number = (value as? NSNumber)?.doubleValue else { return false }
+            guard let number = Self.number(value) else { return false }
             return number.isFinite && range.contains(number)
         case .hexColor(let emptyAllowed):
             guard let text = value as? String else { return false }
@@ -36,20 +36,28 @@ public enum PreferenceRule: Sendable {
         }
     }
 
+    /// A number, or a string that reads as one: `defaults write` without a type stores "30", which UserDefaults reads as 30.
+    private static func number(_ value: Any) -> Double? {
+        if let text = value as? String { return Double(text.trimmingCharacters(in: .whitespaces)) }
+        return (value as? NSNumber)?.doubleValue
+    }
+
     private static func integer(_ value: Any) -> Int? {
-        guard !(value is String), let number = value as? NSNumber, let whole = Int(exactly: number.doubleValue) else { return nil }
-        return whole
+        number(value).flatMap { Int(exactly: $0) }
     }
 }
 
 public enum PreferenceRules {
-    /// Removes every value stored in `defaults` (its own domain) that its rule does not accept, so the registered default answers in its
-    /// place, as after an upgrade that dropped a choice or a manual `defaults write`. Returns the keys removed, sorted.
+    /// Removes every value saved in `domain` (the app's own defaults) that its rule does not accept, so the registered default answers in
+    /// its place, as after an upgrade that dropped a choice or a manual `defaults write`. A value given only as a launch argument is not
+    /// saved and is left alone. With no domain (a binary without a bundle identifier) the value `defaults` answers with is checked.
+    /// Returns the keys removed, sorted.
     @discardableResult
-    public static func sanitize(_ defaults: UserDefaults, rules: [String: PreferenceRule]) -> [String] {
+    public static func sanitize(_ defaults: UserDefaults, domain: String?, rules: [String: PreferenceRule]) -> [String] {
+        let saved = domain.map { defaults.persistentDomain(forName: $0) ?? [:] }
         var removed: [String] = []
         for (key, rule) in rules {
-            guard let value = defaults.object(forKey: key), !rule.accepts(value) else { continue }
+            guard let value = saved.map({ $0[key] }) ?? defaults.object(forKey: key), !rule.accepts(value) else { continue }
             defaults.removeObject(forKey: key)
             removed.append(key)
         }
