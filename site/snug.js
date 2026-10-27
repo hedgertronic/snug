@@ -704,6 +704,8 @@
     addEventListener('keydown', e => {
       const k = name(e);
       if (!k || typing(e.target)) return;
+      // Command can be let go while the page has no focus; a key without it means it is up.
+      if (!e.metaKey) held.delete('meta');
       held.add(k);
       paint();
     });
@@ -711,8 +713,8 @@
       const k = name(e);
       if (!k) return;
       held.delete(k);
-      // macOS sends no keyup for a letter released while Command is down, so letting go of Command lets go of every letter.
-      if (k === 'meta') for (const l of LETTERS) held.delete(l);
+      // macOS sends no keyup for a key released while Command is down, so letting go of Command lets go of every letter and Return.
+      if (k === 'meta') { for (const l of LETTERS) held.delete(l); held.delete('enter'); }
       paint();
     });
     addEventListener('blur', () => { held.clear(); paint(); });
