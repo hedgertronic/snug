@@ -67,11 +67,12 @@
   };
   const cap = (t, cls = '') => `<span class="k${cls}">${t}</span>`;
   const btn = (title, keys, cls = '') => `<span class="bb${cls}">${title ? `<span class="t">${title}</span>` : ''}${keys.map(k => cap(k)).join('')}</span>`;
-  const tool = (icon, key) => `<span class="bb sym"><svg viewBox="0 0 16 16" aria-hidden="true">${ICON[icon]}</svg>${cap(key)}</span>`;
-  // The capture strip (OverlayController+Chrome.swift captureStrip): Edit, then Copy (primary) and Save, then the tools.
-  const STRIP = `<span class="pill">${btn('Edit', ['E'], ' edit')}</span>`
-    + `<span class="pill">${btn('Copy', ['&#8617;'], ' primary copy')}${btn('Save', ['&#8984;', 'S'])}</span>`
+  const tool = (icon, key) => `<span class="bb sym tool" data-key="${key.toLowerCase()}"><svg viewBox="0 0 16 16" aria-hidden="true">${ICON[icon]}</svg>${cap(key)}</span>`;
+  // The capture strip, after OverlayController+Chrome.swift captureStrip: Copy (primary), then the tools. Each tool here scrolls to
+  // its feature card below; the eyedropper (U in the app) goes to the color card.
+  const STRIP = `<span class="pill">${btn('Copy', ['&#8617;'], ' primary copy')}</span>`
     + `<span class="pill tools">${tool('scroll', 'G')}${tool('record', 'V')}${tool('subject', 'K')}${tool('colors', 'U')}</span>`;
+  const CARD = { g: 'key-g', v: 'key-v', k: 'key-k', u: 'key-c' };
 
   const CURSOR = `
     <svg class="c-arrow" viewBox="-2 -2 17 24" width="17" height="24" aria-hidden="true"><path d="M0 0v16.4l3.9-3.7 2.6 6 2.9-1.2-2.6-5.9h5.4z" fill="#000" stroke="#fff" stroke-width="1.25" stroke-linejoin="round" paint-order="stroke"/></svg>
@@ -124,7 +125,7 @@
       const id = ++uid;
       el.tabIndex = 0;
       el.setAttribute('role', 'application');
-      el.setAttribute('aria-label', 'Demo of the Snug overlay. Hover to pick an element, or drag a box and pause to snap it; Return copies.');
+      el.setAttribute('aria-label', 'Demo of the Snug overlay. Hover to select an element, or drag a box and pause to snap it. Return copies, Escape clears a selection, and G, V, K and U go to those features below.');
       el.innerHTML = `<div class="scene" data-open="true" data-cursor="cross">
         <div class="content">${CONTENT}</div>
         <svg class="ovg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true">
@@ -150,7 +151,7 @@
       for (const k of ['old', 'now', 'hint', 'ring', 'glow', 'hov', 'ghost', 'outl', 'handles']) this.g[k] = q(`.${k}`);
       this.g.mask = q('mask .m');
       this.g.blur = q('feGaussianBlur');
-      Object.assign(this, { chip: q('.o-chip'), snapTag: q('.o-snap'), strip: q('.o-strip'), toast: q('.o-toast'), cursor: q('.o-cursor'), copyBtn: q('.o-strip .copy'), editBtn: q('.o-strip .edit') });
+      Object.assign(this, { chip: q('.o-chip'), snapTag: q('.o-snap'), strip: q('.o-strip'), toast: q('.o-toast'), cursor: q('.o-cursor'), copyBtn: q('.o-strip .copy') });
       // The toast's thumbnail is the scene's own content, scaled and cropped to the copied area.
       this.thumb = q('.thc');
       this.thumb.appendChild(q('.content').cloneNode(true));
@@ -237,11 +238,12 @@
       this.set(g.now, dim);
 
       // The hover: a 1.5 pt line on the element's edge, a 3 pt ring just outside it, a soft glow outside, and a faint fill.
-      const hovD = hb ? pathD(hb, hb.radii, 0.75 * P) : '';
-      this.set(g.hov, hovD);
-      this.set(g.glow, hb ? pathD(hb, hb.radii) : '');
-      this.set(g.mask, hb ? pathD(hb, hb.radii) : '');
-      this.set(g.ring, hb ? pathD(hb, hb.radii, 3 * P, 2.25 * P) : '');
+      // The whole screen gets no line, ring or glow: it would only trace the demo's frame.
+      const lit = hb && hoverK !== 'screen' ? hb : null;
+      this.set(g.hov, lit ? pathD(lit, lit.radii, 0.75 * P) : '');
+      this.set(g.glow, lit ? pathD(lit, lit.radii) : '');
+      this.set(g.mask, lit ? pathD(lit, lit.radii) : '');
+      this.set(g.ring, lit ? pathD(lit, lit.radii, 3 * P, 2.25 * P) : '');
       // Faint dashed outlines of what Up and Down would pick: the parent (not the screen) and the first child.
       let hint = '';
       if (hb) {
@@ -277,7 +279,6 @@
       }
       this.chip.hidden = !cr;
       this.strip.hidden = !(cr && !s.drag);
-      this.editBtn.classList.toggle('lit', !!sel);
       if (cr) this.attach(sel ? sel : s.drag ? (s.drag.snap || ghost) : hb, !this.strip.hidden);
     }
 
@@ -293,7 +294,11 @@
         if (below + h <= floor) y = below;
         else if (above >= top) { y = above; over = y - 6 * P; }
         else { y = b.y + b.h - gap - h; out = false; }
-        this.move(this.strip, Math.min(Math.max(b.x + (out ? 0 : gap), gap), W - w - gap), y);
+        const x = Math.min(Math.max(b.x + (out ? 0 : gap), gap), W - w - gap);
+        this.move(this.strip, x, y);
+        // The strip and the gap between it and the box: a pointer crossing it keeps the hover, so the buttons can be reached.
+        const lo = y >= b.y + b.h ? b.y + b.h : y, hi = y + h <= b.y ? b.y : y + h;
+        this.reach = { x, y: lo, w, h: hi - lo };
       }
       const { w, h, sw } = this.chipSize, row = w + (sw ? 6 * P + sw : 0);
       let y = over - h, inset = 0;
@@ -322,6 +327,20 @@
         this.render();
         this.later(() => this.toast.classList.remove('show'), 2600, gen);
       }, reduce ? 0 : 140, gen);
+    }
+
+    // A strip tool: its button lights for a moment, and the page scrolls to the tool's card and rings it.
+    go(key) {
+      const card = document.getElementById(CARD[key]);
+      const b = this.strip.querySelector(`.tool[data-key="${key}"]`);
+      if (b) { b.classList.add('lit'); clearTimeout(b.litT); b.litT = setTimeout(() => b.classList.remove('lit'), 220); }
+      if (!card) return;
+      card.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+      card.classList.remove('flash');
+      void card.offsetWidth;
+      card.classList.add('flash');
+      clearTimeout(card.flashT);
+      card.flashT = setTimeout(() => card.classList.remove('flash'), 2400);
     }
 
     // A timer owned by the current run: a takeover or a restart of the script cancels it.
@@ -429,15 +448,22 @@
         this.reset(); s.target = hit(p); this.render();
         return true;
       };
+      const onStrip = e => !!e.target.closest && !!e.target.closest('.o-strip');
+      el.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') this.over = true; });
       el.addEventListener('pointermove', e => {
         // A mouse over the demo takes over; touch only takes over with a press.
         if (e.pointerType !== 'mouse' && !this.grab) return;
         this.takeover();
+        // Over the strip the target holds still, so its buttons stay under the pointer.
+        if (!this.grab && onStrip(e)) return;
         const p = toScene(e);
         this.ptr = p;
         if (!s.open) { reopen(p); return; }
         const g = this.grab;
-        if (!g) { if (!s.selr) { s.target = hit(p); this.render(); } return; }
+        if (!g) {
+          if (!s.selr && !(this.reach && !this.strip.hidden && inside(this.reach, p))) { s.target = hit(p); this.render(); }
+          return;
+        }
         if (!g.moved && Math.hypot(p.x - g.start.x, p.y - g.start.y) < 4) return;
         g.moved = true; s.selr = null;
         const raw = { x: Math.min(g.start.x, p.x), y: Math.min(g.start.y, p.y), w: Math.abs(p.x - g.start.x), h: Math.abs(p.y - g.start.y) };
@@ -454,12 +480,19 @@
         }, 80);
         this.render();
       });
-      el.addEventListener('pointerleave', e => { if (!this.grab) away(e.pointerType === 'mouse' ? LEAVE_MS : TOUCH_IDLE_MS); });
+      el.addEventListener('pointerleave', e => {
+        if (e.pointerType === 'mouse') this.over = false;
+        if (!this.grab) away(e.pointerType === 'mouse' ? LEAVE_MS : TOUCH_IDLE_MS);
+      });
       el.addEventListener('pointerdown', e => {
         if (e.button !== 0) return;
         this.takeover();
         if (e.pointerType === 'mouse') e.preventDefault();
+        // A pointer focus is marked so the stylesheet draws no ring for it.
+        el.dataset.via = 'pointer';
         el.focus({ preventScroll: true });
+        // The strip's buttons act on click, below.
+        if (onStrip(e)) return;
         const p = toScene(e);
         this.ptr = p;
         if (!s.open) { if (!reopen(p)) { this.reset(); s.target = hit(p); this.render(); } return; }
@@ -489,19 +522,40 @@
         away(TOUCH_IDLE_MS);
         this.render();
       });
-      el.addEventListener('keydown', e => {
-        if (!['Enter', 'Escape', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+      this.strip.addEventListener('click', e => {
+        const b = e.target.closest('.bb');
+        if (!b) return;
+        if (b === this.copyBtn) this.copy();
+        else if (b.dataset.key) this.go(b.dataset.key);
+      });
+      /* Keys act only while the demo is focused, or while the pointer is over it and nothing else on the page has focus, so the
+         page's own keys are left alone. Arrows need focus, so hovering never takes over page scrolling. */
+      document.addEventListener('keydown', e => {
+        if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+        const focused = document.activeElement === el;
+        const idle = !document.activeElement || document.activeElement === document.body;
+        if (!focused && !(this.over && idle)) return;
+        const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+        if (CARD[key]) { e.preventDefault(); this.go(key); return; }
+        if (!['Enter', 'Escape'].concat(focused ? ['ArrowUp', 'ArrowDown'] : []).includes(e.key)) return;
         e.preventDefault();
         this.takeover();
         this.resumeAfter(TOUCH_IDLE_MS * 2);
         if (!s.open) { if (e.key === 'Enter') { this.reset(); s.target = s.target || 'win'; this.render(); } return; }
         if (e.key === 'Enter') this.copy();
-        else if (e.key === 'Escape') { if (s.selr) s.selr = null; else s.open = false; this.closedAt = performance.now(); }
+        // Esc drops a selection back to hovering what is under the pointer, else closes the overlay (OverlayController keyDown).
+        else if (e.key === 'Escape') {
+          if (s.selr) { s.selr = null; s.target = hit(this.ptr); }
+          else { s.open = false; this.closedAt = performance.now(); }
+        }
         else if (e.key === 'ArrowUp' && !s.selr && s.target && BOX[s.target].p) { s.path.push(s.target); s.target = BOX[s.target].p; }
         else if (e.key === 'ArrowDown' && !s.selr && s.path.length) s.target = s.path.pop();
         this.render();
       });
-      el.addEventListener('blur', () => { if (this.mode === 'user' && !el.matches(':hover')) this.resumeAfter(LEAVE_MS); });
+      el.addEventListener('blur', () => {
+        delete el.dataset.via;
+        if (this.mode === 'user' && !el.matches(':hover')) this.resumeAfter(LEAVE_MS);
+      });
     }
   }
 

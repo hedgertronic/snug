@@ -69,7 +69,7 @@ html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
 h1, h2, h3, p { margin: 0; }
 h1, h2, h3 { text-wrap: balance; }
-a { color: inherit; }
+a { color: inherit; cursor: pointer; }
 .nw { white-space: nowrap; }
 
 /* small inline keycap */
@@ -84,14 +84,16 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .top-links { display: flex; align-items: center; gap: 18px; font-size: 14.5px; font-weight: 500; }
 .top-links a { text-decoration: none; color: var(--bandfg2); display: inline-flex; align-items: center; gap: 7px; }
 .top-links a:hover { color: var(--bandfg); }
-.top-links .maker { gap: 5px; font-size: 13px; font-weight: 500; }
-.top-links .maker img { width: 16px; height: 16px; }
+/* the maker credit: a quiet pill on the plum, the same height as the Download pill */
+.top-links .maker { gap: 6px; height: 32px; padding: 0 12px 0 8px; border-radius: 999px; font-size: 13px; font-weight: 500;
+  background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); transition: background-color .15s, box-shadow .15s, color .15s; }
+.top-links .maker:hover { background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24); }
+.top-links .maker img { width: 18px; height: 18px; border-radius: 50%; }
 .top-links .dl-sm { color: var(--bandfg); height: 32px; padding: 0 14px; border-radius: 999px; box-shadow: inset 0 0 0 1.5px var(--coral); }
 .top-links .dl-sm:hover { background: color-mix(in srgb, var(--coral) 18%, transparent); }
 
 .hero { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px; padding: 30px 0 36px; }
 .hero h1 { font: 700 clamp(36px, 7vw, 58px)/1.04 var(--round); letter-spacing: -.005em; max-width: 15ch; }
-.hero h1 em { font-style: normal; color: var(--coral); white-space: nowrap; }
 .hero p { font-size: clamp(16.5px, 2.2vw, 18.5px); color: var(--bandfg2); max-width: 44ch; }
 .dl { display: inline-flex; align-items: center; height: 44px; padding: 0 22px; margin-top: 4px; border-radius: 999px; background: var(--coral); color: #2A1228; font-weight: 650; font-size: 15.5px; text-decoration: none; }
 .dl:hover { background: #FF8E81; }
@@ -99,7 +101,9 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .req span + span::before { content: "\00B7"; padding: 0 8px; }
 
 .demo-wrap { max-width: 880px; margin: 0 auto; }
-a:focus-visible, .demo:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
+a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
+/* The demo takes focus for its keys. A pointer focus draws nothing; a keyboard focus draws a faint white ring, never coral. */
+.demo:focus-visible:not([data-via="pointer"]) { outline: 1.5px solid rgba(255, 255, 255, .35); outline-offset: 3px; }
 
 /* ---------- the demo ---------- */
 .demo { position: relative; width: 100%; aspect-ratio: 16 / 10; border-radius: 14px; overflow: hidden; outline: none; touch-action: pan-y;
@@ -151,7 +155,8 @@ a:focus-visible, .demo:focus-visible { outline: 2px solid var(--coral); outline-
 .o-chip { display: inline-flex; align-items: center; gap: calc(8px * var(--pt)); height: calc(26px * var(--pt)); padding: 0 calc(8px * var(--pt)); border-radius: calc(8px * var(--pt)); white-space: nowrap; font: 600 calc(12px * var(--pt))/1 var(--sans); }
 .ov .mono { font: 400 calc(12px * var(--pt))/1 var(--mono); }
 .ov .dim2 { opacity: .65; }
-.o-strip { display: flex; gap: calc(8px * var(--pt)); }
+.o-strip { display: flex; gap: calc(8px * var(--pt)); pointer-events: auto; cursor: default; }
+.o-strip .copy, .o-strip .tool { cursor: pointer; }
 .o-strip.narrow .tools { display: none; }
 .o-strip .pill { display: flex; align-items: center; gap: calc(2px * var(--pt)); height: calc(32px * var(--pt)); padding: 0 calc(3px * var(--pt)); border-radius: calc(11px * var(--pt)); }
 .bb { display: inline-flex; align-items: center; gap: calc(7px * var(--pt)); height: calc(26px * var(--pt)); padding: 0 calc(7px * var(--pt)); border-radius: calc(8px * var(--pt)); white-space: nowrap; color: var(--c-text); font: 500 calc(12px * var(--pt))/1 var(--sans); }
@@ -264,24 +269,26 @@ a:focus-visible, .demo:focus-visible { outline: 2px solid var(--coral); outline-
 .cc { transform: translateX(122px); animation: pick 4s infinite both; }
 @keyframes pick { 0% { transform: translateX(34px); opacity: 0; } 3%, 18% { transform: translateX(34px); opacity: 1; } 25%, 43% { transform: translateX(78px); } 50%, 68% { transform: translateX(122px); } 75%, 94% { transform: translateX(166px); opacity: 1; } 98% { transform: translateX(166px); opacity: 0; } 100% { transform: translateX(34px); opacity: 0; } }
 
-/* agent art: a pasted reference line and the agent's reply */
+/* agent art: a pasted reference line */
 .art.ag { display: flex; flex-direction: column; justify-content: center; padding: 0 16px; }
-.ag-bub { margin-bottom: 12px; align-self: flex-end; max-width: 94%; padding: 9px 11px; border-radius: 12px 12px 4px 12px; background: var(--d-win); color: var(--d-fg); box-shadow: 0 2px 8px rgba(0, 0, 0, .12); animation: in 6s -1s infinite both; }
-.ag-bub small { display: block; font-size: 11px; font-weight: 600; color: var(--d-fg2); }
+.ag-bub { align-self: flex-end; max-width: 94%; padding: 9px 11px; border-radius: 12px 12px 4px 12px; background: var(--d-win); color: var(--d-fg); box-shadow: 0 2px 8px rgba(0, 0, 0, .12); animation: in 6s -1s infinite both; }
 .ag-bub code { display: block; font: 11.5px/1.4 var(--mono); overflow-wrap: anywhere; }
-.ag-rep { padding: 0 2px; font-size: 13.5px; color: var(--fg); animation: in2 6s -1s infinite both; }
-.ag-rep code { font: 600 12.5px var(--mono); color: var(--coral-ink); }
 @keyframes in { 0%, 8% { opacity: 0; transform: translateY(6px); } 16%, 92% { opacity: 1; transform: none; } 100% { opacity: 0; } }
-@keyframes in2 { 0%, 40% { opacity: 0; } 48%, 92% { opacity: 1; } 100% { opacity: 0; } }
 
 /* ---------- footer ---------- */
 .foot { background: var(--band); color: var(--bandfg2); padding: 26px max(16px, env(safe-area-inset-left, 0px), (100% - 1040px) / 2) calc(26px + env(safe-area-inset-bottom, 0px)); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 24px; font-size: 14px; border-radius: 28px 28px 0 0; }
 .foot .wm { color: var(--bandfg); font-size: 19px; }
 .foot .wm img { width: 24px; height: 24px; }
-/* the Ko-fi link, as the app's SupportButton (SettingsView.swift): a sunflower-yellow capsule, 24 pt tall, dark ink in either look */
-.seeds { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: 999px; background: rgb(255, 212, 59); color: #24221C; font: 600 12px/1 var(--sans); text-decoration: none; white-space: nowrap; }
-.seeds svg { width: 11px; height: 11px; fill: currentColor; flex: none; }
-.seeds:hover { background: rgb(255, 221, 99); }
+/* the Ko-fi link: a quiet pill like the header's, with the flower in sunflower yellow as its only color */
+.seeds { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px 0 11px; border-radius: 999px; color: var(--bandfg2); font: 500 13px/1 var(--sans); text-decoration: none; white-space: nowrap;
+  background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); transition: background-color .15s, box-shadow .15s, color .15s; }
+.seeds svg { width: 14px; height: 14px; color: rgb(255, 212, 59); fill: currentColor; flex: none; }
+.seeds:hover { color: var(--bandfg); background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24); }
+
+/* a strip tool's card, briefly ringed after the demo scrolls to it */
+.card { scroll-margin: 24px; }
+.card.flash .art { box-shadow: 0 0 0 1px var(--line), 0 0 0 4px color-mix(in srgb, var(--hl) 70%, transparent); animation: flash 2.2s ease-out both; }
+@keyframes flash { 0%, 50% { box-shadow: 0 0 0 1px var(--line), 0 0 0 4px color-mix(in srgb, var(--hl) 70%, transparent); } 100% { box-shadow: 0 0 0 1px var(--line), 0 0 0 4px transparent; } }
 
 @media (max-width: 900px) {
   .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -294,18 +301,17 @@ a:focus-visible, .demo:focus-visible { outline: 2px solid var(--coral); outline-
   .grid { grid-template-columns: minmax(0, 1fr); gap: 40px; }
   .top-links { gap: 14px; }
   .top-links .gh span { display: none; }
-  .req span:nth-child(3) { flex-basis: 100%; }
-  .req span:nth-child(3)::before { content: none; }
   .foot { justify-content: center; text-align: center; }
 }
 @media (max-width: 400px) {
   .top { gap: 8px; }
   .top .wm { font-size: 20px; gap: 7px; }
   .top .wm img { width: 26px; height: 26px; }
-  .top-links { gap: 12px; }
+  .top-links { gap: 10px; }
   .top-links .dl-sm { padding: 0 12px; }
+  .top-links .maker { gap: 5px; padding: 0 10px 0 6px; font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .o-toast { transition: none; }
-  .pop, .q, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-btn, .rv-prog, .rv-busy, .rv-done, .rv-cur, .rv-out, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cc, .ag-bub, .ag-rep { animation: none; }
+  .pop, .q, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-btn, .rv-prog, .rv-busy, .rv-done, .rv-cur, .rv-out, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cc, .ag-bub, .card.flash .art { animation: none; }
 }

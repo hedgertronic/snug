@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Snug - Screenshots that fit</title>
-<meta name="description" content="Snug is a free screenshot app for the Mac. Hover to pick any window or element, or drag a loose box and pause, and its edges snap to what's under it.">
+<title>Snug - A screenshot app for the Mac</title>
+<meta name="description" content="A screenshot app for the Mac. Hover over anything to select it, or drag a rough box and Snug snaps it to the edges underneath.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
@@ -23,10 +23,10 @@
   </header>
 
   <section class="hero">
-    <h1>A screenshot app that finds <em>the edges</em> for you</h1>
-    <p>Hover over any window or element to pick it. If you'd rather drag, a loose box is fine: pause, and its edges move onto whatever is underneath.</p>
+    <h1>A screenshot app for the Mac</h1>
+    <p>Hover over anything to select it, or drag a rough box and Snug snaps it to the edges underneath.</p>
     <a href="#" class="dl">Download for Mac</a>
-    <div class="req"><span>Free and open source</span><span>Apple Silicon</span><span>macOS 26 or later</span></div>
+    <div class="req"><span>Free and open source</span><span>macOS 26 or later</span></div>
   </section>
 
   <div class="demo-wrap">
@@ -37,7 +37,7 @@
 <main class="feat" aria-label="Keys">
   <div class="grid">
 
-    <article class="card">
+    <article class="card" id="key-t">
       <div class="art">
         <svg viewBox="0 0 200 124" aria-hidden="true">
           <rect x="14" y="12" width="172" height="76" rx="8" fill="#1B1B1F"/>
@@ -52,10 +52,10 @@
           <g class="pop"><rect class="cb" x="58" y="97" width="84" height="19" rx="6"/><text class="ct" x="100" y="110" text-anchor="middle">Copied 2 lines</text></g>
         </svg>
       </div>
-      <div class="card-head"><kbd class="cap">T</kbd><h3>Copy the text</h3></div>
+      <div class="card-head"><kbd class="cap">T</kbd><h3>Copy text</h3></div>
     </article>
 
-    <article class="card">
+    <article class="card" id="key-v">
       <div class="art">
         <svg viewBox="0 0 200 124" aria-hidden="true">
           <rect class="win" x="14" y="8" width="172" height="124" rx="8"/>
@@ -81,10 +81,10 @@
           </g>
         </svg>
       </div>
-      <div class="card-head"><kbd class="cap">V</kbd><h3>Record just that part</h3></div>
+      <div class="card-head"><kbd class="cap">V</kbd><h3>Record a region</h3></div>
     </article>
 
-    <article class="card">
+    <article class="card" id="key-g">
       <div class="art">
         <svg viewBox="0 0 200 124" aria-hidden="true">
           <defs>
@@ -113,10 +113,10 @@
           <rect class="outline sc-view" x="142" y="18" width="40" height="33" rx="1"/></g>
         </svg>
       </div>
-      <div class="card-head"><kbd class="cap">G</kbd><h3>Capture past the fold</h3></div>
+      <div class="card-head"><kbd class="cap">G</kbd><h3>Scrolling capture</h3></div>
     </article>
 
-    <article class="card">
+    <article class="card" id="key-k">
       <div class="art vk">
         <svg viewBox="0 0 320 198" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
           <g class="vk-bg">
@@ -140,10 +140,10 @@
           <use class="vk-sh" href="#vk-plant"/><use class="vk-subj" href="#vk-plant"/>
         </svg>
       </div>
-      <div class="card-head"><kbd class="cap">K</kbd><h3>Cut out the subject</h3></div>
+      <div class="card-head"><kbd class="cap">K</kbd><h3>Remove background</h3></div>
     </article>
 
-    <article class="card">
+    <article class="card" id="key-c">
       <div class="art">
         <svg viewBox="0 0 200 124" aria-hidden="true">
           <defs><linearGradient id="cg"><stop offset=".125" stop-color="#3A2340"/><stop offset=".375" stop-color="#7B3F61"/><stop offset=".625" stop-color="#FF7A6B"/><stop offset=".875" stop-color="#FFB38A"/></linearGradient></defs>
@@ -157,15 +157,14 @@
           </g>
         </svg>
       </div>
-      <div class="card-head"><kbd class="cap">C</kbd><h3>Copy a color</h3></div>
+      <div class="card-head"><kbd class="cap">C</kbd><h3>Pick a color</h3></div>
     </article>
 
     <article class="card">
       <div class="art ag">
-        <div class="ag-bub"><small>You paste</small><code>[Snug capture 7K2M9QXA: Safari, group "Conditions", 252 x 134 pt. Use the snug MCP tool get_capture to see it.]</code></div>
-        <div class="ag-rep">Your agent calls <code>get_capture</code> to see it.</div>
+        <div class="ag-bub"><code>[Snug capture 7K2M9QXA: Safari, group "Conditions", 252 x 134 pt. Use the snug MCP tool get_capture to see it.]</code></div>
       </div>
-      <div class="card-head"><span class="caps"><kbd class="cap">&#8984;</kbd><kbd class="cap">&#8617;</kbd></span><h3>Hand it to your agent</h3></div>
+      <div class="card-head"><span class="caps"><kbd class="cap">&#8984;</kbd><kbd class="cap">&#8617;</kbd></span><h3>Send to an agent</h3></div>
     </article>
 
   </div>
