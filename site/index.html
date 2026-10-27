@@ -42,14 +42,15 @@
     <article class="card" id="key-t">
       <div class="art">
         <svg viewBox="0 0 200 124" aria-hidden="true">
-          <rect x="14" y="12" width="172" height="76" rx="8" fill="#1B1B1F"/>
-          <rect class="tx-sel" x="21" y="40" width="148" height="13" rx="2"/>
-          <rect class="tx-sel" style="animation-delay: .35s" x="21" y="55" width="104" height="13" rx="2"/>
+          <rect class="win term" x="14" y="12" width="172" height="78" rx="8"/>
+          <g class="lights" transform="translate(14 12)"><circle cx="9" cy="7" r="2.4"/><circle cx="16.5" cy="7" r="2.4"/><circle cx="24" cy="7" r="2.4"/></g>
+          <rect class="tx-sel" x="21" y="44" width="148" height="12.5" rx="2"/>
+          <rect class="tx-sel" style="animation-delay: .35s" x="21" y="58" width="104" height="12.5" rx="2"/>
           <g class="mono" fill="#E6E6EA">
-            <text x="23" y="31"><tspan fill="#7FD48C">$</tspan> swift test</text>
-            <text x="23" y="50"><tspan fill="#FF7A6B" font-weight="700">error:</tspan> no 'feedRows'</text>
-            <text x="23" y="65">FeedView.swift:42</text>
-            <text x="23" y="80" fill="#8B8B93">Test run failed.</text>
+            <text x="23" y="38"><tspan fill="#7FD48C">$</tspan> swift test</text>
+            <text x="23" y="53"><tspan fill="#FF7A6B" font-weight="700">error:</tspan> no 'feedRows'</text>
+            <text x="23" y="67">FeedView.swift:42</text>
+            <text x="23" y="81" fill="#8B8B93">Test run failed.</text>
           </g>
           <g class="tx-btn"><rect class="tx-pill" x="21" y="74" width="46" height="20" rx="6.8"/><rect class="tx-bb" x="22.9" y="75.9" width="42.2" height="16.1" rx="5"/><text class="tx-bt" x="27.2" y="86.6">Copy</text><g class="tx-cap"><rect class="tx-k" x="50.6" y="77.95" width="12.4" height="12.4" rx="3.1"/><rect class="tx-kp" x="50.6" y="77.95" width="12.4" height="12.4" rx="3.1"/><text class="tx-kt" x="56.8" y="87.2" text-anchor="middle">&#8617;</text><text class="tx-ktp" x="56.8" y="87.2" text-anchor="middle">&#8617;</text></g></g>
         </svg>
@@ -63,12 +64,8 @@
     <article class="card" id="key-v">
       <div class="art">
         <svg viewBox="0 0 200 124" aria-hidden="true">
-          <defs>
-            <linearGradient id="rv-wg" x1=".2" y1="0" x2=".8" y2="1"><stop offset="0" class="rw0"/><stop offset=".5" class="rw1"/><stop offset="1" class="rw2"/></linearGradient>
-          </defs>
-          <rect width="200" height="124" fill="url(#rv-wg)"/>
           <g transform="translate(0 9)">
-          <rect class="win rv-card" x="30" y="14" width="140" height="56" rx="8"/>
+          <rect class="win" x="30" y="14" width="140" height="56" rx="8"/>
           <text class="rv-nm" x="40" y="32">Appearance</text>
           <path class="line" d="M40 40H110" stroke-width=".5"/>
           <text class="ui2 rv-dm" x="40" y="58">Dark mode</text>
@@ -104,7 +101,7 @@
       <div class="art">
         <svg viewBox="0 0 200 124" aria-hidden="true">
           <defs>
-            <clipPath id="sc-clip"><rect x="16" y="30" width="112" height="82"/></clipPath>
+            <clipPath id="sc-clip"><rect x="16" y="26" width="112" height="86"/></clipPath>
             <g id="sc-rows">
               <text class="t0" x="24" y="44">Round the chat avatars</text>
               <rect class="g-tag" x="24" y="48.2" width="22" height="7.4" rx="3.7"/><text class="t3" x="35" y="53.5" text-anchor="middle">Ready</text>
@@ -125,10 +122,10 @@
             </g>
           </defs>
           <rect class="win" x="16" y="12" width="112" height="100" rx="8"/>
-          <path class="wbar" d="M16 20a8 8 0 0 1 8-8h96a8 8 0 0 1 8 8v10H16z"/>
-          <circle cx="25" cy="21" r="2.5" fill="#FF5F57"/><circle cx="33" cy="21" r="2.5" fill="#FEBC2E"/><circle cx="41" cy="21" r="2.5" fill="#28C840"/>
+          <path class="wbar" d="M16 20a8 8 0 0 1 8-8h96a8 8 0 0 1 8 8v6H16z"/>
+          <g class="lights" transform="translate(16 12)"><circle cx="9" cy="7" r="2.4"/><circle cx="16.5" cy="7" r="2.4"/><circle cx="24" cy="7" r="2.4"/></g>
           <g class="seam"><g clip-path="url(#sc-clip)"><use class="sc-scroll" href="#sc-rows"/></g>
-          <rect class="outline" x="16.75" y="30" width="110.5" height="81.25" rx="1"/>
+          <rect class="outline" x="16.75" y="26" width="110.5" height="85.25" rx="1"/>
           <rect class="cb" x="140" y="12" width="44" height="100" rx="5"/>
           <g transform="translate(142 6) scale(.4) translate(-20 0)"><use href="#sc-rows"/></g>
           <rect class="sc-cover" x="141" y="51" width="42" height="41"/>
@@ -169,6 +166,7 @@
       <div class="art cp">
         <svg viewBox="0 0 200 124" aria-hidden="true">
           <defs><linearGradient id="cp-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6C4AA0"/><stop offset=".6" stop-color="#F4796B"/><stop offset="1" stop-color="#FFB27A"/></linearGradient><clipPath id="cp-clip"><rect x="25" y="12" width="150" height="70" rx="6"/></clipPath></defs>
+          <rect class="pic" x="25" y="12" width="150" height="70" rx="6"/>
           <g clip-path="url(#cp-clip)">
             <g transform="translate(25 12)">
               <rect width="150" height="50" fill="url(#cp-sky)"/>
@@ -194,17 +192,17 @@
     <article class="card">
       <div class="art">
         <svg viewBox="0 0 200 124" aria-hidden="true">
-          <rect class="win" x="6" y="6" width="188" height="112" rx="6"/>
-          <path class="wbar" d="M6 12a6 6 0 0 1 6-6H188a6 6 0 0 1 6 6v3H6z"/>
-          <circle cx="12" cy="10.5" r="1.3" fill="#FF5F57"/><circle cx="16.6" cy="10.5" r="1.3" fill="#FEBC2E"/><circle cx="21.2" cy="10.5" r="1.3" fill="#28C840"/>
-          <g class="ag-u"><rect x="44" y="18" width="144" height="23" rx="5" fill="var(--d-out)"/>
-            <text class="ag-m" x="49" y="25"><tspan x="49">[Snug capture 7K2M9QXA: Chat, group "Round the</tspan><tspan x="49" dy="6">chat avatars", 172 x 70 pt. Use the snug MCP</tspan><tspan x="49" dy="6">tool get_capture to see it.]</tspan></text></g>
-          <g class="ag-t"><rect class="g-row" x="12" y="45" width="50" height="9" rx="4.5"/><path class="ag-ck" d="M16 49.6l1.6 1.6l3-3.4" fill="none" stroke="var(--d-addfg)" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/><text class="ag-tn" x="24" y="51.3">get_capture</text></g>
-          <g class="ag-th"><rect class="g-card" x="12" y="58" width="96" height="24" rx="4"/><path d="M16 58h22v24H16a4 4 0 0 1-4-4V62a4 4 0 0 1 4-4z" fill="#EBD9F2"/><rect x="18" y="64" width="3" height="12" fill="#FF7A6B"/><rect x="23.5" y="64" width="3" height="12" fill="#6C8CF5"/><rect x="29" y="64" width="3" height="12" fill="#4FB286"/><text class="t1" x="43" y="67.5">Round the chat avatars</text><text class="t2" x="43" y="74.5">review.example &#183; #218</text></g>
-          <text class="ag-r" x="12" y="94">That's the link card for #218. The avatars look round now.</text>
-          <rect class="g-row" x="12" y="101" width="176" height="12" rx="6"/>
-          <text class="ag-i" x="17.5" y="108.4">[Snug capture 7K2M9QXA: Chat, group "Round the chat av&#8230;</text>
-          <circle class="ag-sd" cx="181.5" cy="107" r="3.6"/><path d="M181.5 109V105.2M179.9 106.7l1.6-1.6l1.6 1.6" fill="none" stroke="#fff" stroke-width=".8" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect class="win" x="8" y="8" width="184" height="108" rx="8"/>
+          <path class="wbar" d="M8 16a8 8 0 0 1 8-8H184a8 8 0 0 1 8 8v6H8z"/>
+          <g class="lights" transform="translate(8 8)"><circle cx="9" cy="7" r="2.4"/><circle cx="16.5" cy="7" r="2.4"/><circle cx="24" cy="7" r="2.4"/></g>
+          <g class="ag-u"><rect x="42" y="26" width="144" height="23" rx="5" fill="var(--d-out)"/>
+            <text class="ag-m" x="47" y="33"><tspan x="47">[Snug capture 7K2M9QXA: Chat, group "Round the</tspan><tspan x="47" dy="6">chat avatars", 172 x 70 pt. Use the snug MCP</tspan><tspan x="47" dy="6">tool get_capture to see it.]</tspan></text></g>
+          <g class="ag-t"><rect class="g-row" x="14" y="53" width="50" height="9" rx="4.5"/><path class="ag-ck" d="M18 57.6l1.6 1.6l3-3.4" fill="none" stroke="var(--d-addfg)" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/><text class="ag-tn" x="26" y="59.3">get_capture</text></g>
+          <g class="ag-th"><rect class="g-card" x="14" y="65" width="96" height="22" rx="4"/><path d="M18 65h22v22H18a4 4 0 0 1-4-4V69a4 4 0 0 1 4-4z" fill="#EBD9F2"/><rect x="20" y="70" width="3" height="12" fill="#FF7A6B"/><rect x="25.5" y="70" width="3" height="12" fill="#6C8CF5"/><rect x="31" y="70" width="3" height="12" fill="#4FB286"/><text class="t1" x="45" y="73.5">Round the chat avatars</text><text class="t2" x="45" y="80.5">review.example &#183; #218</text></g>
+          <text class="ag-r" x="14" y="95">That's the link card for #218. The avatars look round now.</text>
+          <rect class="g-row" x="14" y="100" width="172" height="12" rx="6"/>
+          <text class="ag-i" x="19.5" y="107.4">[Snug capture 7K2M9QXA: Chat, group "Round the chat av&#8230;</text>
+          <circle class="ag-sd" cx="179.5" cy="106" r="3.6"/><path d="M179.5 108V104.2M177.9 105.7l1.6-1.6l1.6 1.6" fill="none" stroke="#fff" stroke-width=".8" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </div>
       <div class="card-head"><span class="caps"><kbd class="cap" data-hold="meta">&#8984;</kbd><kbd class="cap" data-hold="enter">&#8617;</kbd></span><h3>Send to an agent</h3></div>

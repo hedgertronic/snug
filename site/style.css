@@ -22,7 +22,7 @@
   --keyedge: #D6C4D2;
 
   /* demo desktop and overlay chrome */
-  --d-wall: linear-gradient(155deg, #E6D3E4 0%, #F4C6BC 48%, #FBE5D2 100%); --d-w0: #E6D3E4; --d-w1: #F4C6BC; --d-w2: #FBE5D2;
+  --d-wall: linear-gradient(155deg, #E6D3E4 0%, #F4C6BC 48%, #FBE5D2 100%);
   --d-win: #FFFFFF; --d-bar: #F4F4F6; --d-fg: #1D1D1F; --d-fg2: #8A8A90; --d-line: rgba(0, 0, 0, .1); --d-row: rgba(0, 0, 0, .06);
   --d-page: #FCFBF8; --d-card: #FFFFFF; --d-mb: rgba(255, 255, 255, .55);
   --d-in: #E9E9EB; --d-infg: #1D1D1F; --d-out: #2F7CF6; --d-acc: #2F7CF6; --d-code: #24292F;
@@ -43,7 +43,7 @@
     --bg: #1A1020; --bg2: #26182C; --fg: #F8EDF2; --fg2: #B79FB9; --line: rgba(255, 255, 255, .12);
     --band: #2A1830; --bandfg2: #C9AFCB; --hl: #FF8A7C; --coral-ink: #FF8A7C; --rec: #FF453A;
     --key: #3A2843; --keyfg: #FBF1F6; --keyline: rgba(255, 255, 255, .22); --keyedge: #0C0610;
-    --d-wall: linear-gradient(155deg, #23152A 0%, #4A2A40 52%, #6E3B3B 100%); --d-w0: #23152A; --d-w1: #4A2A40; --d-w2: #6E3B3B;
+    --d-wall: linear-gradient(155deg, #23152A 0%, #4A2A40 52%, #6E3B3B 100%);
     --d-win: #1E1E20; --d-bar: #2A2A2D; --d-fg: #ECECEE; --d-fg2: #8E8E93; --d-line: rgba(255, 255, 255, .1); --d-row: rgba(255, 255, 255, .08);
     --d-page: #18191A; --d-card: #222325; --d-mb: rgba(20, 14, 24, .5);
     --d-in: #3A3A3C; --d-infg: #F2F2F4; --d-out: #2C6FE0; --d-acc: #5B9BFF; --d-code: #E6E6EA;
@@ -58,7 +58,7 @@
   --bg: #1A1020; --bg2: #26182C; --fg: #F8EDF2; --fg2: #B79FB9; --line: rgba(255, 255, 255, .12);
   --band: #2A1830; --bandfg2: #C9AFCB; --hl: #FF8A7C; --coral-ink: #FF8A7C; --rec: #FF453A;
   --key: #3A2843; --keyfg: #FBF1F6; --keyline: rgba(255, 255, 255, .22); --keyedge: #0C0610;
-  --d-wall: linear-gradient(155deg, #23152A 0%, #4A2A40 52%, #6E3B3B 100%); --d-w0: #23152A; --d-w1: #4A2A40; --d-w2: #6E3B3B;
+  --d-wall: linear-gradient(155deg, #23152A 0%, #4A2A40 52%, #6E3B3B 100%);
   --d-win: #1E1E20; --d-bar: #2A2A2D; --d-fg: #ECECEE; --d-fg2: #8E8E93; --d-line: rgba(255, 255, 255, .1); --d-row: rgba(255, 255, 255, .08);
   --d-page: #18191A; --d-card: #222325; --d-mb: rgba(20, 14, 24, .5);
     --d-in: #3A3A3C; --d-infg: #F2F2F4; --d-out: #2C6FE0; --d-acc: #5B9BFF; --d-code: #E6E6EA;
@@ -282,10 +282,16 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 @keyframes hk-ring { 0% { transform: scale(1); opacity: .85; } 100% { transform: scale(1.7, 2); opacity: 0; } }
 
 /* feature art: the finished state is each piece's base style, so reduced motion shows a still frame */
-.art { position: relative; aspect-ratio: 200 / 124; border-radius: 16px; overflow: hidden; background: var(--bg2); box-shadow: 0 0 0 1px var(--line);
+/* Each card is a small desktop, as the hero's: its wallpaper behind every scene, and every window (or picture) on it drawn alike: radius 8,
+   a 14-unit title bar with the hero's three lights, a hairline and one drop shadow. */
+.art { position: relative; aspect-ratio: 200 / 124; border-radius: 16px; overflow: hidden; background: var(--d-wall); box-shadow: 0 0 0 1px var(--line);
   --w-bg: var(--d-win); --w-bar: var(--d-bar); --w-fg: var(--d-fg); --w-fg2: var(--d-fg2); --w-line: var(--d-line); }
 .art svg { display: block; width: 100%; height: 100%; }
-.art .win { fill: var(--w-bg); stroke: rgba(0, 0, 0, .2); stroke-width: .5; }
+.art .win, .art .pic { fill: var(--w-bg); stroke: rgba(0, 0, 0, .2); stroke-width: .5; filter: drop-shadow(0 2px 4px rgba(30, 10, 30, .22)); }
+.art .win.term { fill: #1B1B1F; stroke: rgba(255, 255, 255, .12); }
+.art .lights circle:nth-child(1) { fill: #FF5F57; }
+.art .lights circle:nth-child(2) { fill: #FEBC2E; }
+.art .lights circle:nth-child(3) { fill: #28C840; }
 .art .wbar { fill: var(--w-bar); }
 .art .ink { fill: var(--w-fg); opacity: .75; }
 .art .ink2 { fill: var(--w-fg2); opacity: .45; }
@@ -347,9 +353,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
    3 pt outside the area with a radius of 4 that pulses once at the start, and the stop reminder under it, the elapsed time and the
    capture shortcut. The pointer clicks the Dark mode switch and the preview tile fades to dark, then it clicks again and the tile
    fades back, then the recording fades out and in again. The base style is the switch on at 0:03, so reduced motion shows it. */
-.rw0 { stop-color: var(--d-w0); } .rw1 { stop-color: var(--d-w1); } .rw2 { stop-color: var(--d-w2); }
 .rv-nm { font: 600 8.5px var(--sans); fill: var(--w-fg); }
-.rv-card { filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .2)); }
 .rv-dm { font-size: 8px; fill: var(--w-fg); }
 .rv-off { fill: color-mix(in srgb, var(--w-fg2) 45%, transparent); }
 .rv-on { fill: var(--d-acc); animation: rvon 6s infinite both; }
