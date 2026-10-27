@@ -503,5 +503,4 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 :root[data-theme="dark"] .band { --bl-fill: #F2645A; --bl-rim: #FFE3DF; }
 .blanket { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: clamp(46px, 5.3vw, 68px); display: block; pointer-events: none; }
 .bl-fill { fill: var(--bl-fill); }
-.bl-rim { fill: none; stroke: var(--bl-rim); stroke-width: 3; vector-effect: non-scaling-stroke; }
-@media (max-width: 600px) { .bl-rim { stroke-width: 2; } }
+.bl-rim { fill: var(--bl-rim); }
