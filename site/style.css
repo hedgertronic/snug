@@ -294,12 +294,16 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .art .ui2 { font: 500 7.5px var(--sans); fill: var(--w-fg2); }
 .art .mono { font: 9.5px var(--mono); }
 .art .cb { fill: var(--d-chip); stroke: rgba(0, 0, 0, .15); stroke-width: .5; }
-.art .ct { font: 600 9px var(--sans); fill: var(--d-chipfg); }
 .art .outline { fill: none; stroke: var(--hl); stroke-width: 1.5; }
 
 /* T: the selection sweeps over two lines, the Text strip's Copy button (Chrome.swift textStrip) appears under it, its Return cap presses, and the toast follows */
-@keyframes pop { 0%, 60% { opacity: 0; transform: translateY(4px); } 66%, 92% { opacity: 1; transform: none; } 100% { opacity: 0; } }
-.pop { opacity: 0; animation: pop 5s infinite both; }
+/* The toast is the hero's, sized by --pt from the card's width (set in snug.js); its icon is the t.square.fill symbol. */
+.tx-ov { --pt: 1; position: absolute; inset: 0; pointer-events: none; }
+.tx-ov .o-toast { position: absolute; top: 85%; bottom: auto; left: 50%; opacity: 0; transform: translate(-50%, -50%); transition: none; animation: txt 5s infinite both; }
+.tx-ov .ti { flex: none; width: calc(28px * var(--pt)); height: calc(28px * var(--pt)); margin-right: calc(10px * var(--pt)); }
+.tx-ov .ti rect { fill: var(--hl); }
+.tx-ov .ti path { fill: #FFFFFF; }
+@keyframes txt { 0%, 60% { opacity: 0; transform: translate(-50%, calc(-50% + 3px)); } 66%, 92% { opacity: 1; transform: translate(-50%, -50%); } 100% { opacity: 0; transform: translate(-50%, -50%); } }
 .tx-btn { animation: txbtn 5s infinite both; }
 @keyframes txbtn { 0%, 31% { opacity: 0; transform: translateY(2px); } 37%, 56% { opacity: 1; transform: none; } 61%, 100% { opacity: 0; } }
 .tx-pill { fill: var(--c-surface); stroke: var(--c-hair); stroke-width: .3; filter: drop-shadow(0 1.5px 3px rgba(0, 0, 0, .25)); }
@@ -486,7 +490,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .o-toast { transition: none; }
-  .pop, .tx-btn, .tx-kp, .tx-kt, .tx-ktp, .tx-cap, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-on, .rv-kn, .rv-tdk, .rv-tlt, .rv-cur, .rv-out, .rv-rec, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cp-x, .cp-xh, .cp-ov .cp-ch, .cp-ov .cp-ch.cA, .cp-ov .cp-ch.cB, .cp-ov .cp-ch.cC0, .cp-ov .o-toast, .ag-u, .ag-t, .ag-th, .ag-r, .ag-ck, .ag-i, .ag-sd, .card.flash .art { animation: none; }
+  .tx-ov .o-toast, .tx-btn, .tx-kp, .tx-kt, .tx-ktp, .tx-cap, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-on, .rv-kn, .rv-tdk, .rv-tlt, .rv-cur, .rv-out, .rv-rec, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cp-x, .cp-xh, .cp-ov .cp-ch, .cp-ov .cp-ch.cA, .cp-ov .cp-ch.cB, .cp-ov .cp-ch.cC0, .cp-ov .o-toast, .ag-u, .ag-t, .ag-th, .ag-r, .ag-ck, .ag-i, .ag-sd, .card.flash .art { animation: none; }
   .caps.hk .cap { transition: none; }
   .card .cap[data-hold], .bb .k[data-hold] { transition-duration: .01s; }
   .card .cap[data-hold].down, .bb .k[data-hold].down { transform: none; }
