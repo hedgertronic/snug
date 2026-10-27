@@ -259,6 +259,7 @@ private struct SupportButton: View {
             .background(Capsule().fill(Color(red: 1, green: 0.83, blue: 0.23)))
         }
         .buttonStyle(.plain)
+        .pointerStyle(.link)
         .help("Support Snug on Ko-fi")
     }
 }
@@ -274,6 +275,7 @@ private struct MakerButton: View {
             .foregroundStyle(.secondary)
         }
         .buttonStyle(.plain)
+        .pointerStyle(.link)
         .help("Visit hedgertronic.com")
     }
 }
@@ -907,16 +909,14 @@ private struct AgentSection: View {
         VStack(alignment: .leading, spacing: 14) {
             caption("Agent")
             Card {
-                LabeledContent {
+                LabeledContent("Last capture") {
+                    Text(captureId ?? "None").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
                     Button("Clear") {
                         try! store.clear()
                         load()
                     }.disabled(captureId == nil)
-                } label: {
-                    detailed("Last capture", captureId ?? "None")
                 }
-                .padding(.vertical, 4)
-                LabeledContent {
+                LabeledContent("MCP") {
                     Menu(copied ? "Copied" : "Copy Setup") {
                         Button("Claude Code Command") { copy("claude mcp add snug -- \(quoted) --mcp") }
                         Button("Codex Command") { copy("codex mcp add snug -- \(quoted) --mcp") }
@@ -925,10 +925,7 @@ private struct AgentSection: View {
                     }
                     .fixedSize()
                     .help("Gemini CLI, Cursor and most other agents read the JSON entry")
-                } label: {
-                    detailed("Connect an agent", "Lets it read what \u{2318}\u{21A9} copies")
                 }
-                .padding(.vertical, 4)
             }
         }
         .onAppear(perform: load)
