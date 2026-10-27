@@ -321,12 +321,14 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     /// Once per newly built binary, runs this binary with `--warm-vision` as a child process at utility priority, so Vision compiles the
     /// accurate OCR and barcode models that Tab and Shift-Return use into the on-disk cache (35-90 s) before their first use, and the
     /// 50-90 MiB the requests leave behind goes away when the child exits. `defaults` keeps the binary's modification date once the child
-    /// exits with status 0. Returns the child, or nil when this binary is already warmed, its date cannot be read, or the child cannot
-    /// start (then OCR compiles its models on first use instead).
+    /// exits with status 0, or under `Pref.visionWarmUpGaveUpBuild` once it runs past `warmUpTimeout`. Returns the child, or nil when
+    /// this binary is already warmed or its warm-up timed out before, its date cannot be read, or the child cannot start (then OCR
+    /// compiles its models on first use instead).
     static func warmVisionInChild(defaults: UserDefaults) -> Process? {
         guard let executable = Bundle.main.executableURL,
               let built = try? executable.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
-              defaults.object(forKey: Pref.visionWarmedBuild) as? Date != built else { return nil }
+              defaults.object(forKey: Pref.visionWarmedBuild) as? Date != built,
+              defaults.object(forKey: Pref.visionWarmUpGaveUpBuild) as? Date != built else { return nil }
         let child = Process()
         child.executableURL = executable
         child.arguments = ["--warm-vision"]
@@ -344,7 +346,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
             textLog.error("vision warm-up did not start: \(error.localizedDescription, privacy: .public)")
             return nil
         }
-        watchWarmUp(child)
+        watchWarmUp(child) { defaults.set(built, forKey: Pref.visionWarmUpGaveUpBuild) }
         return child
     }
 
@@ -356,12 +358,13 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     static let warmUpTimeout = Duration.seconds(180)
 
     /// Tracks `child` as Vision's warm-up until it exits, checking every 250 ms (`ProcessWatch`). A child still running after
-    /// `warmUpTimeout` is stopped and reaped, and the warm-up ends either way, so queued OCR runs directly; its date is not stored, so
-    /// the next launch tries again.
-    static func watchWarmUp(_ child: Process) {
+    /// `warmUpTimeout` is stopped and reaped, and `timedOut` runs (launch records the binary so later launches skip the warm-up); the
+    /// warm-up ends either way, so queued OCR runs directly.
+    static func watchWarmUp(_ child: Process, timedOut: @escaping @MainActor () -> Void = {}) {
         visionWarmUp = Task {
             let end = await ProcessWatch.wait(for: child, timeout: warmUpTimeout)
             if end != .exited { textLog.error("vision warm-up child stopped: \(String(describing: end), privacy: .public)") }
+            if end == .timedOut { timedOut() }
             visionWarmUp = nil
         }
     }

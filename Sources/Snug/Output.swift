@@ -68,6 +68,9 @@ enum Pref {
     static let logScroll = "SnugLogScroll"
     /// The modification date of the Snug binary whose `--warm-vision` child process warmed Vision's accurate OCR models.
     static let visionWarmedBuild = "SnugVisionWarmedBuild"
+    /// The modification date of the Snug binary whose `--warm-vision` child ran past `OverlayController.warmUpTimeout` and was stopped;
+    /// launches of that binary start no warm-up, and OCR compiles its models on first use.
+    static let visionWarmUpGaveUpBuild = "SnugVisionWarmUpGaveUpBuild"
     /// The menu bar icon variant, "q", "p", "h" or "a" (see `SnugApp.menuBarIcon`). The status item redraws as soon as it changes, so
     /// `defaults write com.hedgertronic.snug SnugMenuBarIcon a` switches the icon live.
     static let menuBarIcon = "SnugMenuBarIcon"
