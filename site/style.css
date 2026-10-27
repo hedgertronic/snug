@@ -92,11 +92,11 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .top .top-links { justify-self: end; }
 .top-links { display: flex; align-items: center; gap: 18px; font-size: 14.5px; font-weight: 500; }
 .top-links a { text-decoration: none; color: var(--bandfg2); display: inline-flex; align-items: center; gap: 7px; }
-.top-links a:hover { color: var(--bandfg); }
+@media (hover: hover) and (pointer: fine) { .top-links a:hover { color: var(--bandfg); } }
 /* the maker credit: a quiet pill on the plum */
 .top-links .maker { gap: 6px; height: 32px; padding: 0 12px 0 8px; border-radius: 999px; font-size: 13px; font-weight: 500;
   background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); transition: background-color .15s, box-shadow .15s, color .15s; }
-.top-links .maker:hover { background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24); }
+@media (hover: hover) and (pointer: fine) { .top-links .maker:hover { background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24); } }
 .top-links .maker img { width: 18px; height: 18px; border-radius: 50%; }
 
 .hero { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0; padding: 30px 0 44px; }
@@ -105,9 +105,9 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .dl, .dl-gh { display: inline-flex; align-items: center; height: 54px; padding: 0 22px; border-radius: 999px; background: var(--coral); color: #2A1228; font-weight: 650; font-size: 15.5px; text-decoration: none; }
 .dl { flex-direction: column; justify-content: center; gap: 1px; line-height: 1.15; }
 .dl small { font-size: 11.5px; font-weight: 400; opacity: .72; letter-spacing: 0; }
-.dl:hover { background: #FF8E81; }
+@media (hover: hover) and (pointer: fine) { .dl:hover { background: #FF8E81; } }
 .dl-gh { gap: 8px; background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); color: var(--bandfg); font-weight: 600; font-size: 15.5px; text-decoration: none; transition: background-color .15s, box-shadow .15s; }
-.dl-gh:hover { background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24); }
+@media (hover: hover) and (pointer: fine) { .dl-gh:hover { background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24); } }
 
 .demo-wrap { max-width: 880px; margin: 0 auto; }
 a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
@@ -441,7 +441,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .seeds { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px 0 11px; border-radius: 999px; color: var(--bandfg2); font: 500 13px/1 var(--sans); text-decoration: none; white-space: nowrap;
   background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); transition: background-color .15s, box-shadow .15s, color .15s; }
 .seeds svg { width: 14px; height: 14px; color: rgb(255, 212, 59); fill: currentColor; flex: none; }
-.seeds:hover { color: var(--bandfg); background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24); }
+@media (hover: hover) and (pointer: fine) { .seeds:hover { color: var(--bandfg); background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24); } }
 
 /* a strip tool's card, briefly ringed after the demo scrolls to it */
 .card { scroll-margin: 24px; }

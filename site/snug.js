@@ -688,7 +688,8 @@
     let held = null;
     const release = () => {
       if (!held) return;
-      const { k, t0 } = held;
+      const { k, t0, safety } = held;
+      clearTimeout(safety);
       held = null;
       setTimeout(() => { tap[k] = 0; paint(); }, Math.max(0, MIN_TAP_MS - (performance.now() - t0)));
     };
@@ -700,8 +701,17 @@
       held = { k: b.dataset.k, t0: performance.now() };
       tap[held.k] = 1;
       paint();
+      // A touch or pen press always lets go within 600 ms: iOS can turn a tap into a scroll and send no pointerup to the cap.
+      clearTimeout(held.safety);
+      if (e.pointerType !== 'mouse') held.safety = setTimeout(release, 600);
     });
-    for (const t of ['pointerup', 'pointercancel', 'pointerleave']) caps.addEventListener(t, release);
+    // Any end of a press, on the cap or anywhere else on the page, lets it go.
+    for (const t of ['pointerup', 'pointercancel', 'touchend', 'touchcancel']) addEventListener(t, release, true);
+    caps.addEventListener('pointerleave', release);
+    for (const t of ['blur', 'pagehide']) addEventListener(t, release);
+    document.addEventListener('visibilitychange', release);
+    // A touch is never a keyboard: a Control, Shift or Space left over from a key whose keyup was missed does not stay lit under it.
+    addEventListener('pointerdown', e => { if (e.pointerType === 'touch') { real.ctrl = real.shift = real.space = false; paint(); } }, true);
   }
   /* ---------- real keys light the matching caps on the feature cards and in the demo strip; a pointer press on a card cap is a short tap ---------- */
   {
@@ -732,7 +742,8 @@
     let down = null;
     const lift = () => {
       if (!down) return;
-      const { c, t0 } = down;
+      const { c, t0, safety } = down;
+      clearTimeout(safety);
       down = null;
       setTimeout(() => { tapped.delete(c); paint(); }, Math.max(0, MIN_TAP_MS - (performance.now() - t0)));
     };
@@ -743,8 +754,12 @@
       down = { c, t0: performance.now() };
       tapped.add(c);
       paint();
+      // A touch or pen press always lets go within 600 ms (iOS may send no pointerup when a tap becomes a scroll).
+      if (e.pointerType !== 'mouse') down.safety = setTimeout(lift, 600);
     });
-    for (const t of ['pointerup', 'pointercancel']) addEventListener(t, lift);
+    for (const t of ['pointerup', 'pointercancel', 'touchend', 'touchcancel', 'blur', 'pagehide']) addEventListener(t, lift, true);
+    document.addEventListener('visibilitychange', lift);
+    addEventListener('pointerdown', e => { if (e.pointerType === 'touch') { held.clear(); paint(); } }, true);
   }
 })();
 
