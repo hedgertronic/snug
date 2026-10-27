@@ -342,7 +342,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 /* V: a 6 s recording of a settings card as the app shows one (Recording.swift): the rest of the screen dimmed, a 2 pt red border
    3 pt outside the area with a radius of 4 that pulses once at the start, and the stop reminder under it, the elapsed time and the
    capture shortcut. The pointer clicks the Dark mode switch and the preview tile fades to dark, then it clicks again and the tile
-   fades back; the recording stops and the toast shows. The base style is the switch on at 0:03, so reduced motion shows it. */
+   fades back, then the recording fades out and in again. The base style is the switch on at 0:03, so reduced motion shows it. */
 .rw0 { stop-color: var(--d-w0); } .rw1 { stop-color: var(--d-w1); } .rw2 { stop-color: var(--d-w2); }
 .rv-nm { font: 600 8.5px var(--sans); fill: var(--w-fg); }
 .rv-card { filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .2)); }
@@ -369,15 +369,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
   100% { transform: translate(138px, 66px); }
 }
 .rv-rec { animation: rvrec 6s infinite both; }
-@keyframes rvrec { 0% { opacity: 0; } 3%, 80% { opacity: 1; } 85%, 100% { opacity: 0; } }
-.rv-toast { opacity: 0; animation: rvtoast 6s infinite both; }
-.rv-toast .pl { fill: var(--c-surface); stroke: var(--c-hair); stroke-width: .3; }
-.rv-toast { filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .25)); }
-@keyframes rvtoast { 0%, 86% { opacity: 0; transform: translateY(3px); } 90%, 95% { opacity: 1; transform: none; } 99%, 100% { opacity: 0; } }
-.rv-ts { fill: var(--w-fg2); opacity: .3; }
-.rv-th { fill: var(--w-bg); stroke: rgba(128, 128, 128, .35); stroke-width: .3; }
-.rv-tm { font: 600 6px var(--sans); fill: var(--c-text); }
-.rv-td { font: 400 5px var(--mono); fill: var(--c-text2); }
+@keyframes rvrec { 0% { opacity: 0; } 3%, 93% { opacity: 1; } 97%, 100% { opacity: 0; } }
 .rv-dim { fill: rgba(0, 0, 0, .5); }
 .rv-out { fill: none; stroke: var(--rec); stroke-width: 2; animation: rvpulse 6s infinite both; }
 @keyframes rvpulse { 0% { opacity: 0; } 2.8% { opacity: 1; } 5.6% { opacity: .25; } 8.3%, 100% { opacity: 1; } }
@@ -401,15 +393,9 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 
 /* C: the picker moves over a small piece of the story and its readout follows each stop; C copies and the toast shows (Toast.swift), then Shift-C steps the
    readout through the app's formats (ColorFormat: hex, rgb, hsl, swift). The base style is the last stop with its hex value, so reduced motion shows it. */
-.cp-pn { fill: #FFFFFF; stroke: rgba(0, 0, 0, .14); stroke-width: .5; }
-.cp-hd { fill: #F4F4F6; }
-.cp-nm { font: 600 7.4px var(--sans); fill: #1D1D1F; }
-.cp-sb { font: 400 5.6px var(--sans); fill: #8A8A90; }
-.cp-bt { font: 500 6.4px var(--sans); fill: #FFFFFF; }
-.cp-df { font: 400 5.8px var(--mono); fill: #1B6B35; }
-.cp-x { transform: translate(172px, 75px); animation: cpx 10s infinite both; }
+.cp-x { transform: translate(178px, 103px); animation: cpx 10s infinite both; }
 .cp-xh { animation: cpxo 10s infinite both; }
-@keyframes cpx { 0%, 19% { transform: translate(22px, 17px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 23.5%, 36% { transform: translate(174px, 49px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 40.5%, 100% { transform: translate(172px, 75px); } }
+@keyframes cpx { 0%, 19% { transform: translate(100px, 54px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 23.5%, 36% { transform: translate(30px, 84px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 40.5%, 100% { transform: translate(178px, 103px); } }
 .cp-chip, .cp-toast, .cp-key { opacity: 0; }
 .cp-chip.cC0 { opacity: 1; }
 .cp-v { font: 500 7px var(--mono); fill: var(--d-chipfg); }
@@ -515,7 +501,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .o-toast { transition: none; }
-  .pop, .tx-btn, .tx-kp, .tx-kt, .tx-ktp, .tx-cap, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-on, .rv-kn, .rv-tdk, .rv-tlt, .rv-cur, .rv-out, .rv-rec, .rv-toast, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cp-x, .cp-xh, .cp-chip, .cp-toast, .cp-key, .cp-kp, .ag-u, .ag-t, .ag-th, .ag-r, .ag-ck, .ag-i, .ag-sd, .card.flash .art { animation: none; }
+  .pop, .tx-btn, .tx-kp, .tx-kt, .tx-ktp, .tx-cap, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-on, .rv-kn, .rv-tdk, .rv-tlt, .rv-cur, .rv-out, .rv-rec, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cp-x, .cp-xh, .cp-chip, .cp-toast, .cp-key, .cp-kp, .ag-u, .ag-t, .ag-th, .ag-r, .ag-ck, .ag-i, .ag-sd, .card.flash .art { animation: none; }
   .caps.hk .cap { transition: none; }
   .card .cap[data-hold], .bb .k[data-hold] { transition-duration: .01s; }
   .card .cap[data-hold].down, .bb .k[data-hold].down { transform: none; }
