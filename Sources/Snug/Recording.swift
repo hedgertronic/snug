@@ -58,8 +58,8 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     /// Called on the main actor when the stream stops without `stop`, as when the system's screen-recording indicator in the menu bar
     /// stops it, or when the recording output finishes or fails after it wrote frames without `stop`; `stop` then returns on that end.
     var onStop: () -> Void = {}
-    /// The recording output's failure after it wrote frames, as on a full disk: `stop` still returns the file, which holds what was
-    /// written, and the delivery shows this as a warning.
+    /// The recording output's write or encoder failure after it wrote frames, as on a full disk (`RecordingEnd.partial`): `stop` still
+    /// returns the file, which holds what was written, and the delivery shows this as a warning.
     private(set) var warning: (any Error)?
     private var stream: SCStream!
     private var output: SCRecordingOutput!
@@ -216,15 +216,21 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         }
     }
 
-    /// A stop from outside Snug (the system's screen-recording indicator) may end the output with `userStopped`, which delivers like
-    /// `stop`. Any other failure after frames were written (`RecordingEnd.partial`: a full disk, an encoder error, or an outside stop that
-    /// reports another code) also delivers the file, which holds what was written, with the error kept in `warning`. Only an output that
-    /// fails with nothing written is a failure.
+    /// A stop from outside Snug (the system's screen-recording indicator) ends the output with `userStopped` or another code, which
+    /// delivers like `stop`, as does any failure while Snug is stopping or after the stream stopped. A write or encoder failure after
+    /// frames were written (`RecordingEnd.partial`: a full disk, an encoder error) also delivers the file, which holds what was written,
+    /// with the error kept in `warning`. Only an output that fails with nothing written is a failure. The log gets the error's domain
+    /// and code and those of the error under it.
     nonisolated func recordingOutput(_ recordingOutput: SCRecordingOutput, didFailWithError error: any Error) {
         let failure = error as NSError
+        let underlying = failure.userInfo[NSUnderlyingErrorKey] as? NSError
         Task { @MainActor in
-            let end = RecordingEnd(failed: true, userStopped: (error as? SCStreamError)?.code == .userStopped, wroteFrames: output.recordedDuration > .zero)
-            recordingLog.notice("output failed, error \(failure.domain, privacy: .public) \(failure.code), end \(String(describing: end), privacy: .public), stopping \(self.stopping)")
+            let end = RecordingEnd(failed: true, userStopped: (error as? SCStreamError)?.code == .userStopped, wroteFrames: output.recordedDuration > .zero,
+                                   stopping: stopping || streamStopped, writeFailure: RecordingEnd.isWriteFailure(error))
+            recordingLog.notice("""
+                output failed, error \(failure.domain, privacy: .public) \(failure.code), under it \(underlying?.domain ?? "none", privacy: .public) \
+                \(underlying?.code ?? 0), end \(String(describing: end), privacy: .public), stopping \(self.stopping), stream stopped \(self.streamStopped)
+                """)
             if end == .partial { warning = error }
             finished(end == .failed ? error : nil)
         }
