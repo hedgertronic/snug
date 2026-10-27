@@ -8,7 +8,7 @@ extension ScreenTextReader {
     static let webKitApps: Set<String> = ["com.apple.Safari", "com.apple.SafariTechnologyPreview", "com.apple.mail"]
     /// One app's budget once its web areas are found: its lines take at most `webLineBudget`, then word boxes are added until
     /// `webWordBudget`. Finding the areas has a budget of its own, `webFindBudget` and `webFindElements`, so a slow window walk (every
-    /// app is read at once) still leaves time for lines and the whole read stays bounded.
+    /// app is read at once) still leaves time for lines and the whole read stays bounded; the walk does not go into tables or outlines.
     private static let webLineBudget = Duration.milliseconds(90)
     private static let webWordBudget = Duration.milliseconds(140)
     private static let webFindBudget = Duration.milliseconds(150)
@@ -49,7 +49,8 @@ extension ScreenTextReader {
                       !visible.offsetBy(dx: offset.width, dy: offset.height).intersection(window).isEmpty else { return }
                 return areas.append((element, visible, offset))
             }
-            guard depth < Accessibility.maxDepth else { return }
+            // A table's or outline's rows (Mail's message list) hold no web area, and a long list would spend the whole budget.
+            guard depth < Accessibility.maxDepth, ![kAXTableRole, kAXOutlineRole].contains(role as? String) else { return }
             let scroll = role as? String == kAXScrollAreaRole ? element : scroll
             for child in Accessibility.children(of: element, kAXChildrenAttribute) ?? [] { walk(child, depth: depth + 1, window: window, scroll: scroll) }
         }
