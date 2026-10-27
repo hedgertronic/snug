@@ -297,13 +297,27 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .art .ct { font: 600 9px var(--sans); fill: var(--d-chipfg); }
 .art .outline { fill: none; stroke: var(--hl); stroke-width: 1.5; }
 
-@keyframes pop { 0%, 50% { opacity: 0; transform: translateY(4px); } 58%, 90% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+/* T: the selection sweeps over two lines, the Text strip's Copy button (Chrome.swift textStrip) appears under it, its Return cap presses, and the toast follows */
+@keyframes pop { 0%, 60% { opacity: 0; transform: translateY(4px); } 66%, 92% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 @keyframes q { 0%, 24.9% { opacity: 1; } 25%, 100% { opacity: 0; } }
-.pop { animation: pop 4s infinite both; }
+.pop { opacity: 0; animation: pop 5s infinite both; }
 .q { opacity: 0; animation: q 4s infinite both; }
 .q.on { opacity: 1; }
-.tx-sel { fill: color-mix(in srgb, var(--hl) 55%, transparent); transform-box: fill-box; transform-origin: left; animation: sweep 4s infinite both; }
-@keyframes sweep { 0%, 12% { transform: scaleX(0); } 36%, 90% { transform: scaleX(1); } 100% { transform: scaleX(0); } }
+.tx-btn { animation: txbtn 5s infinite both; }
+@keyframes txbtn { 0%, 31% { opacity: 0; transform: translateY(2px); } 37%, 56% { opacity: 1; transform: none; } 61%, 100% { opacity: 0; } }
+.tx-pill { fill: var(--c-surface); stroke: var(--c-hair); stroke-width: .3; filter: drop-shadow(0 1.5px 3px rgba(0, 0, 0, .25)); }
+.tx-bb { fill: var(--hl); }
+.tx-bt { font: 600 7.4px var(--sans); fill: #FFFFFF; }
+.tx-k { fill: rgba(255, 255, 255, .94); }
+.tx-kp { fill: color-mix(in srgb, var(--hl) 60%, #000); stroke: rgba(255, 255, 255, .7); stroke-width: .6; opacity: 0; animation: txkp 5s infinite both; }
+.tx-kt { font: 600 8px var(--sans); fill: var(--hl); animation: txkt 5s infinite both; }
+.tx-ktp { font: 600 8px var(--sans); fill: #FFFFFF; opacity: 0; animation: txkp 5s infinite both; }
+.tx-cap { animation: txcap 5s infinite both; }
+@keyframes txkp { 0%, 45% { opacity: 0; } 46%, 52% { opacity: 1; } 53%, 100% { opacity: 0; } }
+@keyframes txkt { 0%, 45% { opacity: 1; } 46%, 52% { opacity: 0; } 53%, 100% { opacity: 1; } }
+@keyframes txcap { 0%, 45% { transform: none; } 46%, 52% { transform: translateY(.6px); } 53%, 100% { transform: none; } }
+.tx-sel { fill: color-mix(in srgb, var(--hl) 55%, transparent); transform-box: fill-box; transform-origin: left; animation: sweep 5s infinite both; }
+@keyframes sweep { 0%, 6% { transform: scaleX(0); } 26%, 90% { transform: scaleX(1); } 100% { transform: scaleX(0); } }
 /* the scrolling page: a review's title, a diff, two comments and a link card, drawn once and used by both the window and the stitched preview */
 .art .t0 { font: 700 7px var(--sans); fill: var(--w-fg); }
 .art .t1 { font: 600 5.4px var(--sans); fill: var(--w-fg); }
@@ -439,7 +453,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .o-toast { transition: none; }
-  .pop, .q, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-win, .rv-cur, .avs, .ar, .as, .rv-out, .rv-rec, .rv-toast, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cc, .ag-bub, .card.flash .art { animation: none; }
+  .pop, .q, .tx-btn, .tx-kp, .tx-kt, .tx-ktp, .tx-cap, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-win, .rv-cur, .avs, .ar, .as, .rv-out, .rv-rec, .rv-toast, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cc, .ag-bub, .card.flash .art { animation: none; }
   .caps.hk .cap { transition: none; }
   .card .cap[data-hold], .bb .k[data-hold] { transition-duration: .01s; }
   .card .cap[data-hold].down, .bb .k[data-hold].down { transform: none; }
