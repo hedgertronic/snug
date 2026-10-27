@@ -243,40 +243,55 @@ private struct GeneralPane: View {
     }
 }
 
-/// The Ko-fi link: a sunflower and the line on a sunflower-yellow capsule, dark ink in either appearance.
-private struct SupportButton: View {
-    private static let ink = Color(red: 0x24 / 255, green: 0x22 / 255, blue: 0x1C / 255)
+/// A link as a quiet capsule, as on the website: a faint fill and hairline that brighten under the pointer, secondary text that turns primary.
+private struct PillLink<Label: View>: View {
+    let url: URL
+    let help: String
+    @ViewBuilder let label: Label
+    @State private var hovered = false
 
     var body: some View {
-        Link(destination: URL(string: "https://ko-fi.com/hedgertronic")!) {
-            HStack(spacing: 5) {
-                Image(systemName: "camera.macro").font(.system(size: 11, weight: .semibold))
-                Text("Buy me a bag of sunflower seeds").font(.system(size: 12, weight: .semibold))
-            }
-            .foregroundStyle(Self.ink)
-            .padding(.horizontal, 10)
-            .frame(height: 24)
-            .background(Capsule().fill(Color(red: 1, green: 0.83, blue: 0.23)))
+        Link(destination: url) {
+            label
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(hovered ? .primary : .secondary)
+                .fixedSize()
         }
         .buttonStyle(.plain)
+        .padding(.leading, 7)
+        .padding(.trailing, 10)
+        .frame(height: 24)
+        .background(Capsule().fill(.primary.opacity(hovered ? 0.1 : 0.05)))
+        .overlay(Capsule().strokeBorder(.primary.opacity(hovered ? 0.22 : 0.12), lineWidth: 1))
+        .contentShape(Capsule())
         .pointerStyle(.link)
-        .help("Support Snug on Ko-fi")
+        .onHover { hovered = $0 }
+        .animation(.easeOut(duration: 0.15), value: hovered)
+        .help(help)
     }
 }
 
-/// The developer's credit: the hedgertronic camera and the site's name, linking to it.
+/// The Ko-fi link: the line led by a flower in sunflower yellow, its only color.
+private struct SupportButton: View {
+    var body: some View {
+        PillLink(url: URL(string: "https://ko-fi.com/hedgertronic")!, help: "Support Snug on Ko-fi") {
+            HStack(spacing: 5) {
+                Image(systemName: "camera.macro").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color(red: 1, green: 0.83, blue: 0.23))
+                Text("Buy me a bag of sunflower seeds")
+            }
+        }
+    }
+}
+
+/// The developer's credit: the round hedgertronic camera and the site's name, linking to it.
 private struct MakerButton: View {
     var body: some View {
-        Link(destination: URL(string: "https://hedgertronic.com/")!) {
+        PillLink(url: URL(string: "https://hedgertronic.com/")!, help: "Visit hedgertronic.com") {
             HStack(spacing: 5) {
-                Image(nsImage: NSImage(data: makerCameraPNG)!).resizable().interpolation(.high).frame(width: 14, height: 14)
-                Text("hedgertronic.com").font(.system(size: 12, weight: .medium))
+                Image(nsImage: NSImage(data: makerCameraPNG)!).resizable().interpolation(.high).frame(width: 15, height: 15).clipShape(Circle())
+                Text("hedgertronic.com")
             }
-            .foregroundStyle(.secondary)
         }
-        .buttonStyle(.plain)
-        .pointerStyle(.link)
-        .help("Visit hedgertronic.com")
     }
 }
 

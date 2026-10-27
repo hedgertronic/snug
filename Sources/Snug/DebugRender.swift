@@ -1008,8 +1008,8 @@ extension DebugRun {
         for (row, variant) in variants.enumerated() {
             let top = CGFloat(sheet.pixelsHigh - 348 * row)
             variant.draw(at: CGPoint(x: 14, y: top - 30), withAttributes: [.font: NSFont.boldSystemFont(ofSize: 18)])
-            let icon = SnugApp.menuBarIcon(variant)
             for (column, cell) in cells.enumerated() {
+                let icon = SnugApp.menuBarIcon(variant, dark: cell.dark)
                 let pixels = 18 * cell.scale
                 let small = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels, bitsPerSample: 8, samplesPerPixel: 4,
                                              hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
@@ -1067,11 +1067,11 @@ extension DebugRun {
         for variant in variants.reversed() {
             let writer = try Process.run(URL(fileURLWithPath: "/usr/bin/defaults"), arguments: ["write", suite, Pref.menuBarIcon, variant])
             writer.waitUntilExit()
-            let expected = SnugApp.menuBarIcon(variant).tiffRepresentation
+            let expected = SnugApp.menuBarIcon(variant, dark: SnugApp.isDark(button)).tiffRepresentation
             for _ in 0..<500 where button.image?.tiffRepresentation != expected { try await Task.sleep(for: .milliseconds(10)) }
             precondition(button.image?.tiffRepresentation == expected, "`defaults write \(Pref.menuBarIcon) \(variant)` from another process switches the icon")
             print("defaults write \(Pref.menuBarIcon) \(variant): the status item shows variant \(variant)")
         }
-        observation.invalidate()
+        observation.forEach { $0.invalidate() }
     }
 }

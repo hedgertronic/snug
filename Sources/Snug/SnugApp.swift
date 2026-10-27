@@ -20,7 +20,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     private var recording: Task<ScreenRecording, any Error>? {
         didSet { statusItem.map { Self.showRecording(recording != nil, in: $0.menu!) } }
     }
-    private var iconObservation: NSKeyValueObservation?
+    private var iconObservations: [NSKeyValueObservation] = []
     /// Sparkle's updater, made only when Snug launches for real, so debug runs never check for updates or ask about automatic checks.
     private var updater: SPUStandardUpdaterController?
 
@@ -188,7 +188,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     private func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        iconObservation = Self.observeMenuBarIcon(on: item.button!, defaults: .standard)
+        iconObservations = Self.observeMenuBarIcon(on: item.button!, defaults: .standard)
         let menu = Self.makeMenu(defaults: .standard)
         captureItem = menu.items[0]
         // The updater enables Check for Updates while it can check.
@@ -197,13 +197,16 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         statusItem = item
     }
 
-    /// Keeps `button` showing the icon variant in `SnugMenuBarIcon`, redrawn as soon as the default changes, including from `defaults write`
-    /// in another process.
-    static func observeMenuBarIcon(on button: NSButton, defaults: UserDefaults) -> NSKeyValueObservation {
-        defaults.observe(\.SnugMenuBarIcon, options: [.initial]) { defaults, _ in
-            let variant = defaults.string(forKey: Pref.menuBarIcon)!
-            Task { @MainActor in button.image = menuBarIcon(variant) }
-        }
+    /// Keeps `button` showing the icon variant in `SnugMenuBarIcon` for the menu bar's light or dark appearance, redrawn as soon as the
+    /// default changes, including from `defaults write` in another process, or the menu bar turns light or dark.
+    static func observeMenuBarIcon(on button: NSButton, defaults: UserDefaults) -> [NSKeyValueObservation] {
+        let update = { @MainActor in button.image = menuBarIcon(defaults.string(forKey: Pref.menuBarIcon)!, dark: isDark(button)) }
+        return [defaults.observe(\.SnugMenuBarIcon, options: [.initial]) { _, _ in Task { @MainActor in update() } },
+                button.observe(\.effectiveAppearance) { _, _ in Task { @MainActor in update() } }]
+    }
+
+    static func isDark(_ view: NSView) -> Bool {
+        view.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
     }
 
     /// The menu bar logo as a template image, drawn in an 18 pt space into a 1x and a 2x bitmap so each display scale gets pixels placed for it.
@@ -217,9 +220,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     /// partial alpha, so the blanket and pillow show as lighter patches. The band sits lower than the app icon's so the blanket takes less of
     /// the glyph: at 2x its top is 56% down the tile in the middle and 63% at the sides; at 1x it is "h"'s step a pixel lower, with the
     /// pillow, x 5-12, y 8-13, reaching it.
-    /// "q", the default: "p" turned around to match macOS's monochrome app icons, where the tile is darkest and the marks brightest: the tile at
-    /// 35%, the pillow at 60%, the blanket at 85%, and the arch's dashes and the band solid.
-    static func menuBarIcon(_ variant: String) -> NSImage {
+    /// "q", the default: drawn to look like macOS's monochrome app icons on either menu bar, a mid-gray tile, a lighter pillow, a lighter
+    /// blanket still, and the brightest arch dashes and band. On a `dark` menu bar the template's white is the light: the tile at 35%, the
+    /// pillow at 60%, the blanket at 85%, and the dashes and band solid. On a light one its black is the dark: the tile at 56%, the pillow at
+    /// 33%, the blanket at 10%, and the dashes and band cut out.
+    static func menuBarIcon(_ variant: String, dark: Bool = false) -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18))
         for scale in [1, 2] {
             let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 18 * scale, pixelsHigh: 18 * scale, bitsPerSample: 8, samplesPerPixel: 4,
@@ -280,9 +285,10 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     cut.stroke()
                 }
             case "p", "q":
-                // "q" turns "p" around: the arch's dashes and the band solid instead of cut out, over a faint tile.
-                let marked = variant == "q"
-                let (tileAlpha, pillowAlpha, blanketAlpha): (CGFloat, CGFloat, CGFloat) = marked ? (0.35, 0.6, 0.85) : (1, 0.4, 0.7)
+                // "q" on a dark menu bar draws the arch's dashes and the band solid instead of cutting them out, over a faint tile.
+                let marked = variant == "q" && dark
+                let (tileAlpha, pillowAlpha, blanketAlpha): (CGFloat, CGFloat, CGFloat) =
+                    variant == "p" ? (1, 0.4, 0.7) : marked ? (0.35, 0.6, 0.85) : (0.56, 0.33, 0.1)
                 let tile = NSBezierPath(roundedRect: CGRect(x: 1, y: 1, width: 16, height: 16), xRadius: 4, yRadius: 4)
                 let context = NSGraphicsContext.current!
                 if scale == 1 {
