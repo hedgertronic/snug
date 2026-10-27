@@ -130,8 +130,8 @@ private func caption(_ text: String) -> some View {
     Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 4)
 }
 
-/// The app icon and name once; About the developer: the headshot, name, a link to hedgertronic.com, a short bio, and the Ko-fi button; then
-/// under General the shortcut, save folder, open at login, sounds, the Text mode switch, the permissions, and the agent's last capture and command.
+/// The app icon and name once, then the developer's card: the headshot, name, a link to hedgertronic.com, a short bio, and the Ko-fi button; then
+/// under General the shortcut, save folder, open at login, sounds, the Text mode switch, the permissions, and the Agent card.
 private struct GeneralPane: View {
     @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
@@ -152,7 +152,6 @@ private struct GeneralPane: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                caption("About the developer")
                 Card {
                     // The 200 px headshot drawn at 44 pt stays sharp at 2x.
                     HStack(alignment: .top, spacing: 12) {
@@ -890,24 +889,18 @@ struct ShortcutRecorder: NSViewRepresentable {
     }
 }
 
-/// General's Agent section on one card: the last capture, with Clear, then a client picker and the command or config entry that adds Snug's
-/// MCP server to it. Claude Code and Codex take a command; Other is the `mcpServers` JSON that Gemini CLI, Cursor and most other clients read.
-/// Snug adds itself nowhere.
+/// General's Agent section on one card: the last capture, with Clear, then a Copy Setup menu with the command that adds Snug's MCP server to
+/// Claude Code or Codex, or the `mcpServers` JSON entry that Gemini CLI, Cursor and most other clients read. Snug adds itself nowhere.
 private struct AgentSection: View {
     @State private var captureId: String?
-    @State private var client = "claude"
+    @State private var copied = false
     private let store = HandoffStore(defaults: .standard)
     private let executable = Bundle.main.executablePath!
 
-    private var setup: String {
-        let quoted = executable.contains(" ") ? "'\(executable)'" : executable
-        switch client {
-        case "claude": return "claude mcp add snug -- \(quoted) --mcp"
-        case "codex": return "codex mcp add snug -- \(quoted) --mcp"
-        default:
-            let entry = ["mcpServers": ["snug": ["command": executable, "args": ["--mcp"]]]]
-            return String(data: try! JSONSerialization.data(withJSONObject: entry, options: [.sortedKeys, .withoutEscapingSlashes]), encoding: .utf8)!
-        }
+    private var quoted: String { executable.contains(" ") ? "'\(executable)'" : executable }
+    private var json: String {
+        let entry = ["mcpServers": ["snug": ["command": executable, "args": ["--mcp"]]]]
+        return String(data: try! JSONSerialization.data(withJSONObject: entry, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]), encoding: .utf8)!
     }
 
     var body: some View {
@@ -923,25 +916,32 @@ private struct AgentSection: View {
                     detailed("Last capture", captureId ?? "None")
                 }
                 .padding(.vertical, 4)
-                Picker("Add to", selection: $client) {
-                    Text("Claude Code").tag("claude")
-                    Text("Codex").tag("codex")
-                    Text("Other").tag("other")
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .help("The agent to add Snug's MCP server to; Other is the JSON entry for Gemini CLI, Cursor and most other clients")
-                HStack(spacing: 8) {
-                    Text(setup).font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
-                    Spacer(minLength: 0)
-                    Button("Copy") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(setup, forType: .string)
+                LabeledContent {
+                    Menu(copied ? "Copied" : "Copy Setup") {
+                        Button("Claude Code Command") { copy("claude mcp add snug -- \(quoted) --mcp") }
+                        Button("Codex Command") { copy("codex mcp add snug -- \(quoted) --mcp") }
+                        Divider()
+                        Button("JSON for Other Agents") { copy(json) }
                     }
+                    .fixedSize()
+                    .help("Gemini CLI, Cursor and most other agents read the JSON entry")
+                } label: {
+                    detailed("Connect an agent", "Lets it read what \u{2318}\u{21A9} copies")
                 }
+                .padding(.vertical, 4)
             }
         }
         .onAppear(perform: load)
+    }
+
+    private func copy(_ setup: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(setup, forType: .string)
+        copied = true
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            copied = false
+        }
     }
 
     private func load() {

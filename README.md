@@ -59,7 +59,7 @@ codex mcp add snug -- /path/to/Snug.app/Contents/MacOS/Snug --mcp
 
 Other clients, such as Gemini CLI and Cursor, take an `mcpServers` entry with `"command": "/path/to/Snug.app/Contents/MacOS/Snug"` and `"args": ["--mcp"]`.
 
-The Agent section at the bottom of Settings > General shows each of these with the real path and a Copy button. The server is read-only and has two tools, `get_capture` and `zoom`. Snug never captures for an agent; it only serves what you copied. Only the last capture is kept. Clear next to Last capture removes it. Captures are stored in `~/Library/Application Support/Snug/Agent/`.
+The Agent section at the bottom of Settings > General has a Copy Setup menu that copies each of these with the real path. The server is read-only and has two tools, `get_capture` and `zoom`. Snug never captures for an agent; it only serves what you copied. Only the last capture is kept. Clear next to Last capture removes it. Captures are stored in `~/Library/Application Support/Snug/Agent/`.
 
 ## Settings
 

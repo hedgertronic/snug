@@ -212,9 +212,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     /// "h": the app tile, solid, in the logo's proportions, with its dashed arch and the band's curve cut out; the band's top sits
     /// at about half the tile's height in the middle and 53% from the top at the sides. At 2x the arch's round-capped dashes mirror around
     /// one centered on top; at 1x they are 2 px on top and 2 px down each leg with 1 px gaps, and the curve is a 1 px step.
-    /// "p", the default: "h" in three opacities, the tile solid, the blanket below the band's cut at 70% and the pillow, the part of the tile inside
+    /// "p": "h" in three opacities, the tile solid, the blanket below the band's cut at 70% and the pillow, the part of the tile inside
     /// the arch, at 40%. At 2x the pillow is the arch's centerline closed into a rounded rect; at 1x it is x 5-12, y 9-13. Template images keep
     /// partial alpha, so the blanket and pillow show as lighter patches.
+    /// "q", the default: "p" turned around to match macOS's monochrome app icons, where the tile is darkest and the marks brightest: the tile at
+    /// 35%, the pillow at 60%, the blanket at 85%, and the arch's dashes and the band solid.
     static func menuBarIcon(_ variant: String) -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18))
         for scale in [1, 2] {
@@ -275,8 +277,10 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     cut.lineWidth = 1
                     cut.stroke()
                 }
-            case "p":
-                let (pillowAlpha, blanketAlpha): (CGFloat, CGFloat) = (0.4, 0.7)
+            case "p", "q":
+                // "q" turns "p" around: the arch's dashes and the band solid instead of cut out, over a faint tile.
+                let marked = variant == "q"
+                let (tileAlpha, pillowAlpha, blanketAlpha): (CGFloat, CGFloat, CGFloat) = marked ? (0.35, 0.6, 0.85) : (1, 0.4, 0.7)
                 let tile = NSBezierPath(roundedRect: CGRect(x: 1, y: 1, width: 16, height: 16), xRadius: 4, yRadius: 4)
                 let context = NSGraphicsContext.current!
                 if scale == 1 {
@@ -292,22 +296,23 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                         for y in 0..<18 {
                             let coverage = mask.colorAt(x: x, y: 17 - y)!.alphaComponent
                             guard coverage > 0 else { continue }
-                            let part = (5...12).contains(x) && (9...13).contains(y) ? pillowAlpha : y < ((4...13).contains(x) ? 8 : 7) ? blanketAlpha : 1
+                            let part = (5...12).contains(x) && (9...13).contains(y) ? pillowAlpha : y < ((4...13).contains(x) ? 8 : 7) ? blanketAlpha : tileAlpha
                             NSColor(white: 0, alpha: part * coverage).setFill()
                             CGRect(x: x, y: y, width: 1, height: 1).fill()
                         }
                     }
-                    context.compositingOperation = .clear
+                    context.compositingOperation = marked ? .copy : .clear
+                    NSColor.black.setFill()
                     for x: CGFloat in [5, 8, 11] { CGRect(x: x, y: 14, width: 2, height: 1).fill() }
                     for x: CGFloat in [4, 13] { CGRect(x: x, y: 11, width: 1, height: 2).fill() }
                     CGRect(x: 1, y: 7, width: 3, height: 1).fill()
                     CGRect(x: 4, y: 8, width: 10, height: 1).fill()
                     CGRect(x: 14, y: 7, width: 3, height: 1).fill()
                 } else {
-                    // Solid over the whole square, the pillow at half opacity, then everything outside the tile cleared so its edge keeps the
-                    // solid tile's coverage.
+                    // The tile's alpha over the whole square, then the pillow and the blanket, then everything outside the tile cleared so its
+                    // edge keeps the tile's coverage.
                     context.compositingOperation = .copy
-                    NSColor.black.setFill()
+                    NSColor(white: 0, alpha: tileAlpha).setFill()
                     CGRect(x: 0, y: 0, width: 18, height: 18).fill()
                     NSColor(white: 0, alpha: pillowAlpha).setFill()
                     NSBezierPath(roundedRect: CGRect(x: 4.75, y: 2, width: 8.5, height: 12.25), xRadius: 2.25, yRadius: 2.25).fill()
@@ -325,6 +330,12 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     outside.windingRule = .evenOdd
                     context.compositingOperation = .clear
                     outside.fill()
+                    if marked {
+                        // Drawn over, inside the tile, where the band would otherwise run past its sides.
+                        context.compositingOperation = .sourceOver
+                        NSColor.black.setStroke()
+                        tile.addClip()
+                    }
                     for side: CGFloat in [-1, 1] {
                         let half = NSBezierPath()
                         half.move(to: CGPoint(x: 9, y: 14.25))
@@ -343,7 +354,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     cut.stroke()
                 }
             default:
-                preconditionFailure("SnugMenuBarIcon is a, h or p: \(variant)")
+                preconditionFailure("SnugMenuBarIcon is a, h, p or q: \(variant)")
             }
             NSGraphicsContext.restoreGraphicsState()
             image.addRepresentation(rep)
