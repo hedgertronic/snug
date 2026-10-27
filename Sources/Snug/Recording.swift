@@ -90,6 +90,8 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         let requested = ContinuousClock.now
         func mark(_ step: String) { recordingLog.notice("start: \(step, privacy: .public) at \(Int(requested.duration(to: .now).milliseconds)) ms, app active \(NSApp.isActive)") }
         mark("requested")
+        // The display can be disconnected between choosing the area and the count-in's end.
+        guard DisplayCapture.screen(for: displayID) != nil else { throw CaptureError.displayUnavailable }
         // Ordered in while transparent, so the window server lists them for the filter that leaves them out.
         let dim = showsPanels ? makeDim(around: area, on: displayID, defaults: defaults) : nil
         let outline = showsPanels ? makeOutline(around: area, on: displayID) : nil
@@ -105,7 +107,7 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
             mark("content fetched")
-            let filter = DisplayCapture.filter(for: displayID, in: content, excluding: DisplayCapture.excludedWindowIDs())
+            let filter = try DisplayCapture.filter(for: displayID, in: content, excluding: DisplayCapture.excludedWindowIDs())
             let scale = CGFloat(SCShareableContent.info(for: filter).pointPixelScale)
             let configuration = SCStreamConfiguration()
             configuration.sourceRect = area
@@ -299,9 +301,11 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
             pair.addSubview(pill)
         }
         pair.appearance = Chrome.appearance(defaults)
-        let screen = NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value == displayID }!
-        let visible = CGRect(x: screen.visibleFrame.minX - screen.frame.minX, y: screen.frame.maxY - screen.visibleFrame.maxY,
-                             width: screen.visibleFrame.width, height: screen.visibleFrame.height)
+        // A display that is gone has no visible frame; the whole display stands in, so the reminder still has a place.
+        let visible = DisplayCapture.screen(for: displayID).map { screen in
+            CGRect(x: screen.visibleFrame.minX - screen.frame.minX, y: screen.frame.maxY - screen.visibleFrame.maxY,
+                   width: screen.visibleFrame.width, height: screen.visibleFrame.height)
+        } ?? CGRect(origin: .zero, size: CGDisplayBounds(displayID).size)
         let panel = RecordingPanel(frame: screenFrame(reminderFrame(size: pair.frame.size, around: area, within: visible), on: displayID))
         panel.hasShadow = true
         panel.contentView = pair

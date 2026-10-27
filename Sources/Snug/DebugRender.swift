@@ -684,7 +684,7 @@ extension DebugRun {
         print("excluded \(excluded.sorted()): overlay \(overlayID) in, settings \(settingsID) out")
         if CGPreflightScreenCaptureAccess() {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-            let included = Set(DisplayCapture.filter(for: CGMainDisplayID(), in: content, excluding: excluded).includedWindows.map(\.windowID))
+            let included = Set(try DisplayCapture.filter(for: CGMainDisplayID(), in: content, excluding: excluded).includedWindows.map(\.windowID))
             precondition(included.contains(settingsID), "the capture filter includes the Settings window \(settingsID)")
             precondition(!included.contains(overlayID), "the capture filter leaves out the overlay window \(overlayID)")
             print("capture filter: settings included, overlay excluded, \(included.count) windows included")

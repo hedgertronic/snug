@@ -402,16 +402,20 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     // MARK: Capture
 
-    private func screenUnderPointer() -> (screen: NSScreen, id: CGDirectDisplayID) {
-        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) }!
-        return (screen, CGDirectDisplayID((screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value))
+    /// The display under the pointer, nil while the pointer is on none (as while displays are rearranged).
+    private func displayUnderPointer() -> CGDirectDisplayID? {
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }),
+              let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return nil }
+        return CGDirectDisplayID(number.uint32Value)
     }
 
     private func capture(text: Bool = false) {
         if recording != nil { return stopRecording(via: "shortcut") }
         guard !overlay.window.isVisible else { return }
         guard CGPreflightScreenCaptureAccess() else { return showFirstRun() }
-        let (screen, id) = screenUnderPointer()
+        guard let id = displayUnderPointer() else {
+            return Toast.show(message: "Capture failed", detail: CaptureError.noDisplayUnderPointer.localizedDescription, color: .systemRed)
+        }
         let clock = ContinuousClock()
         let pressed = clock.now
         captureTask?.cancel()
@@ -424,7 +428,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 signposter.endInterval("capture", capturing)
                 let captured = clock.now
                 try Task.checkCancellation()
-                overlay.present(image: image, frame: screen.frame, displayID: id)
+                // The display may have been disconnected, moved or rescaled while it was captured: the overlay takes its frame now, and an
+                // image whose shape no longer fits that frame is stale.
+                guard let current = DisplayCapture.screen(for: id),
+                      abs(CGFloat(image.width) / current.frame.width - CGFloat(image.height) / current.frame.height) < 0.05 else { throw CaptureError.displayUnavailable }
+                overlay.present(image: image, frame: current.frame, displayID: id)
                 let presented = clock.now
                 if text { overlay.setMode(.text) }
                 let scale = overlay.scale
@@ -442,7 +450,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     Pref.logHoverLine("dock union \(union) scale \(scale) image \(image.width)x\(image.height)")
                     // Live item frames are magnified, so the tiles come from the frozen pixels, off main while the Dock's titles are read;
                     // titles label them when the counts match.
-                    let pid = (CGWindowListCopyWindowInfo([.optionIncludingWindow], windows[index].id) as! [[String: Any]])[0][kCGWindowOwnerPID as String] as! Int32
+                    guard let pid = (CGWindowListCopyWindowInfo([.optionIncludingWindow], windows[index].id) as? [[String: Any]])?.first?[kCGWindowOwnerPID as String] as? Int32 else { continue }
                     let docking = clock.now
                     async let reading = (Accessibility.dockItemTitles(pid: pid), clock.now)
                     let (panel, tiles, tiled) = await Task.detached {
