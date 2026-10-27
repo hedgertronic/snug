@@ -11,8 +11,11 @@ enum Accessibility {
     /// The longest a walk down from the window by frames takes; a slow app gets the depth it reached.
     private static let walkBudget = Duration.milliseconds(100)
     /// The whole lookup at a point: the parent chain, the walk down and the sidebar check share it (`AXBudget`), whatever each
-    /// message's own timeout; peers have `peerBudget` besides. Once it is spent, the lookup keeps what it read.
-    private static let lookupBudget = Duration.milliseconds(250)
+    /// message's own timeout; peers have `peerBudget` besides. Once it is spent, the lookup keeps what it read. An Electron or Chromium
+    /// app can take the whole `messagingTimeout` (100 ms) for each of its first answers while its tree wakes, so 400 ms leaves the walk
+    /// down its `walkBudget` and Copy for Agent its context after a few slow answers in the parent chain. The budget is checked between
+    /// elements, so a lookup can run past it by the element being read (its messages each bounded by `messagingTimeout`).
+    private static let lookupBudget = Duration.milliseconds(400)
     private static let lookupElements = 400
     /// The Dock's lists and titles, and a terminal's text areas and rows, each read within one budget.
     private static let listBudget = Duration.milliseconds(300)
