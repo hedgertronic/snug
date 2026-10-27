@@ -69,18 +69,12 @@ framework = snug_contents / "Frameworks/Sparkle.framework"
 if framework.exists():
     shutil.rmtree(framework)
 subprocess.run(["ditto", str(binary_dir / "Sparkle.framework"), str(framework)], check=True)
-# Every icon size is scaled down from the 1024 master.
-master = root / "brand/snug-icon-plum-coral-1024.png"
+# actool compiles the Icon Composer icon into Assets.car, which macOS 26 draws in every icon style (default, dark, clear, tinted), and a
+# Snug.icns for anything that reads CFBundleIconFile.
 with tempfile.TemporaryDirectory() as scratch:
-    iconset = Path(scratch) / "Snug.iconset"
-    iconset.mkdir()
-    for points in (16, 32, 128, 256, 512):
-        for factor in (1, 2):
-            pixels = points * factor
-            name = f"icon_{points}x{points}{'@2x' if factor == 2 else ''}.png"
-            subprocess.run(["sips", "-z", str(pixels), str(pixels), str(master), "--out", str(iconset / name)],
-                           check=True, capture_output=True)
-    subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(snug_contents / "Resources/Snug.icns")], check=True)
+    subprocess.run(["xcrun", "actool", str(root / "brand/Snug.icon"), "--compile", str(snug_contents / "Resources"), "--platform", "macosx",
+                    "--minimum-deployment-target", "26.0", "--app-icon", "Snug", "--output-partial-info-plist", str(Path(scratch) / "icon.plist")],
+                   check=True, capture_output=True)
 # macOS loads the fonts in ATSApplicationFontsPath for the app alone: the wordmark's Fredoka Bold and its license.
 (snug_contents / "Resources/Fonts").mkdir(exist_ok=True)
 for name in ("Fredoka-Bold.ttf", "OFL.txt"):
@@ -91,6 +85,7 @@ snug_info = {
     "CFBundleName": "Snug",
     "CFBundleDisplayName": "Snug",
     "CFBundleIconFile": "Snug",
+    "CFBundleIconName": "Snug",
     "ATSApplicationFontsPath": "Fonts",
     "CFBundlePackageType": "APPL",
     "CFBundleShortVersionString": "0.1.0",
