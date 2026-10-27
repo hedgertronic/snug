@@ -340,7 +340,7 @@ extension DebugRun {
             textDrag(from: CGPoint(x: 250, y: 81), to: CGPoint(x: 1455, y: 224))
             let transcript = liveText.text
             let selected = liveText.selectedRanges
-            for marker in ["Decisions for you", "Menu bar icon", "sharper version", "loose dots", "next snap", "almost never", "capture animation", "Cleanup"] {
+            for marker in ["Decisions for you", "Theme setting", "cleaner version", "loose dots", "Hint label", "almost never", "intro animation", "Cleanup"] {
                 let line = transcript.lineRange(for: transcript.range(of: marker)!)
                 let words = transcript[line].trimmingCharacters(in: .whitespacesAndNewlines)
                 let inner = transcript.range(of: words, range: line)!
@@ -352,7 +352,7 @@ extension DebugRun {
             for endX in [900.0, 1455] {
                 textDrag(from: CGPoint(x: 250, y: 101), to: CGPoint(x: endX, y: 183))
                 let text = liveText.selectedText
-                require(text.hasPrefix("1. Menu bar icon") && text.contains("which is almost never.") && !text.contains("3. A capture"),
+                require(text.hasPrefix("1. Theme setting") && text.contains("which is almost never.") && !text.contains("3. An intro"),
                         "a drag that ends at x \(Int(endX)), right of the short row, selects through it: \(text.debugDescription)")
             }
             // Return copies the list with each item and sub-bullet on its own line and the wrapped item joined into one.
@@ -360,8 +360,8 @@ extension DebugRun {
             pasteboard.clearContents()
             key(returnKey, "\r")
             let list = (await copied() ?? "").split(separator: "\n")
-            require(["1. Menu bar icon", "- A is the sharper", "- D at 1x", "2. Tab", "3. A capture", "4. Cleanup"].allSatisfy { start in list.filter { $0.hasPrefix(start) }.count == 1 }
-                    && list.contains { $0.hasPrefix("2. Tab") && $0.hasSuffix("real alternative, which is almost never.") } && !overlay.window.isVisible,
+            require(["1. Theme setting", "- A is the cleaner", "- D at 1x", "2. Hint", "3. An intro", "4. Cleanup"].allSatisfy { start in list.filter { $0.hasPrefix(start) }.count == 1 }
+                    && list.contains { $0.hasPrefix("2. Hint") && $0.hasSuffix("real alternative, which is almost never.") } && !overlay.window.isVisible,
                     "Return on the list copies one line per item and sub-bullet, the wrapped item joined: \(list)")
         }
         // The rest runs with presses reaching Live Text at once: a held press in the found-items fixture started a drag session that waits
@@ -374,8 +374,8 @@ extension DebugRun {
         // the selection's ends take OCR's text, not Live Text's, which drops a marker too), copy each item and sub-item on its own line
         // with its marker.
         let terminal = fixtureImage("Tests/Fixtures/terminal-list-blurred.png")
-        let listItems = ["shadow opacity", "shadow size (blur)", "corner radius of the card", "padding around the content", "Default: medium padding",
-                         "Small keeps the card", "Large leaves room", "Custom: the four values", "does the shadow follow", "should the padding scale", "is a color picker"]
+        let listItems = ["watering interval", "sun exposure (hours)", "pot size of the plant", "soil mix for the pot", "Default: medium pot",
+                         "Small keeps the plant", "Large leaves room", "Custom: the four values", "does the soil mix follow", "should the pot scale", "is a moisture sensor"]
         func unmarked(_ copied: String?) -> [String] {
             listItems.filter { item in !(copied ?? "").split(separator: "\n").contains { $0.hasPrefix("- " + item) } }
         }

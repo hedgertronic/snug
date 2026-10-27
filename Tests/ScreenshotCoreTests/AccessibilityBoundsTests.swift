@@ -234,7 +234,7 @@ struct DockRectTests {
 
     @Test func theUsersLeftDockBesideSafariComesFromItsRim() throws {
         // The user's left Dock with Safari 12 pt to its right: their 2000 px wide screenshot resampled to the display's 3024 px (2x) and cut
-        // to its left 400 px, with four third-party tiles covered by copies of Apple tiles. The panel's rims in those pixels run x 9 to 145 and y 139 to 1891. The union is this Dock's live one (hover.log).
+        // to its left 400 px, with four third-party tiles covered by copies of Apple tiles. The panel's rims in those pixels run x 9 to 145 and y 139 to 1891. The union is this Dock's live one (hover trace).
         let url = try #require(Bundle.module.url(forResource: "LeftDockBesideSafari", withExtension: "png", subdirectory: "Fixtures"))
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
@@ -268,7 +268,7 @@ struct DockRectTests {
     }
 }
 
-/// Hover over system surfaces, with frames and rectangles from the user's hover.log (a 2x display, 1512 x 982 pt).
+/// Hover over system surfaces, with frames and rectangles from the user's hover trace (a 2x display, 1512 x 982 pt).
 struct SystemSurfaceHoverTests {
     let extent = CGRect(x: 0, y: 0, width: 3024, height: 1964)
 
@@ -297,7 +297,7 @@ struct SystemSurfaceHoverTests {
     }
 
     @Test func theLeftVerticalMagnifiedDockHoversItsPanelNeverItsList() async throws {
-        // hover.log: a lookup over Safari with magnification on, and the panel read from the frozen image's rim.
+        // hover trace: a lookup over Safari with magnification on, and the panel read from the frozen image's rim.
         try await expectPanelHover(item: CGRect(x: 5, y: 155.9, width: 115, height: 99), list: CGRect(x: 10, y: -20, width: 67, height: 1058),
                                    panel: CGRect(x: 8, y: 140, width: 138, height: 1750), tile: CGRect(x: 29, y: 316, width: 96, height: 96), gap: CGPoint(x: 77, y: 430))
     }
@@ -313,7 +313,7 @@ struct SystemSurfaceHoverTests {
     }
 
     @Test func stageManagerHoversTheThumbnailAndNeverItsFullScreenGroup() async throws {
-        // hover.log: a lookup over the "-zsh" thumbnail in the Stage Manager strip on the right.
+        // hover trace: a lookup over the "-zsh" thumbnail in the Stage Manager strip on the right.
         let frames = [AXFrame(roleDescription: "button", rect: CGRect(x: 1294.71, y: 342.27, width: 201.29, height: 150.23), role: "AXButton", title: "-zsh"),
                       AXFrame(roleDescription: "list", rect: CGRect(x: 1294.71, y: 162.03, width: 201.29, height: 690.94), role: "AXList"),
                       AXFrame(roleDescription: "group", rect: CGRect(x: 0, y: 0, width: 1512, height: 982), role: "AXGroup"),
@@ -330,7 +330,7 @@ struct SystemSurfaceHoverTests {
     }
 
     @Test func stageManagerThumbnailsAreTheirVisiblePicturesNotTheirPaddedButtons() async throws {
-        // A synthetic capture of the strip's list (2586, 378, 406, 1274 px, where the user's was logged in hover.log), put back where it
+        // A synthetic capture of the strip's list (2586, 378, 406, 1274 px, where the user's was logged in hover trace), put back where it
         // was on a 2x display, and the lookups' button frames: the window on stage ends at x 66, then wallpaper with thin streaks, then
         // each tilted picture's straight left edge at x 146 in the capture; the frames start at x 3.
         let url = try #require(Bundle.module.url(forResource: "StageManagerThumbnails", withExtension: "png", subdirectory: "Fixtures"))

@@ -44,7 +44,7 @@ struct SafariWebAreaHoverTests {
 
     private static let window = CGRect(x: 84, y: 44, width: 1242, height: 927)
 
-    /// A chain of the user's ko-fi log (hover.log, 10-18) above the page: `inner` frames, then the web area and the scroll area as logged,
+    /// A chain of the user's ko-fi log (hover trace, 10-18) above the page: `inner` frames, then the web area and the scroll area as logged,
     /// then the wrappers and window at `window` ((84, 44, 1242, 927) unless the window was moved).
     private static func kofiChain(inner: [AXFrame], webArea: CGRect, window: CGRect = window) -> [AXFrame] {
         inner + [AXFrame(roleDescription: "HTML content", rect: webArea, role: "AXWebArea"),
@@ -53,7 +53,7 @@ struct SafariWebAreaHoverTests {
             + [AXFrame(roleDescription: "standard window", rect: window, role: "AXWindow", subrole: "AXStandardWindow")]
     }
 
-    /// The same window moved to (111, 251) (hover.log lines 106-204). The scroll area is still logged at (0, 1072, 1242, 837), which now
+    /// The same window moved to (111, 251) (hover trace lines 106-204). The scroll area is still logged at (0, 1072, 1242, 837), which now
     /// overlaps the window (y 251-1178), but its parent does not contain it: moved to meet its parent's bottom and right it is
     /// (111, 341, 1242, 837), under the tab bar at y 303 + 38.
     private static let movedWindow = CGRect(x: 111, y: 251, width: 1242, height: 927)

@@ -3,13 +3,13 @@ import ScreenshotCore
 import Testing
 
 struct WebTextTests {
-    /// Safari's pieces for "pulse@examplefieldhouse.com": word ranges split at the "@".
-    let email: [(text: String, box: CGRect)] = [("pulse", CGRect(x: 144, y: 262, width: 34, height: 16)), ("@", CGRect(x: 176, y: 262, width: 13, height: 16)),
-                                                ("examplefieldhouse.com", CGRect(x: 187, y: 262, width: 133, height: 16))]
+    /// Safari's pieces for "hello@exampledomainname.com": word ranges split at the "@".
+    let email: [(text: String, box: CGRect)] = [("hello", CGRect(x: 144, y: 262, width: 34, height: 16)), ("@", CGRect(x: 176, y: 262, width: 13, height: 16)),
+                                                ("exampledomainname.com", CGRect(x: 187, y: 262, width: 133, height: 16))]
 
     @Test func significantLengthStopsBeforeTheNewlineSpacesAndAttachments() {
         #expect(WebText.significantLength(of: "INTERDAY DATA\n\u{FFFC}") == 13)
-        #expect(WebText.significantLength(of: "RIVER, ") == 6)
+        #expect(WebText.significantLength(of: "SMITH, ") == 6)
         #expect(WebText.significantLength(of: "\n\u{FFFC}") == 0)
         #expect(WebText.significantLength(of: "39") == 2)
     }
@@ -31,8 +31,8 @@ struct WebTextTests {
     }
 
     @Test func piecesJoinIntoOneWordPerRunOfNonSpaces() throws {
-        let source = try #require(WebText.source(line: "pulse@examplefieldhouse.com\n", box: CGRect(x: 144, y: 262, width: 176, height: 17), pieces: email))
-        #expect(source.text == "pulse@examplefieldhouse.com")
+        let source = try #require(WebText.source(line: "hello@exampledomainname.com\n", box: CGRect(x: 144, y: 262, width: 176, height: 17), pieces: email))
+        #expect(source.text == "hello@exampledomainname.com")
         #expect(source.words == [CGRect(x: 144, y: 262, width: 176, height: 16)])
         #expect(source.box == CGRect(x: 144, y: 262, width: 176, height: 17))
     }
@@ -68,19 +68,19 @@ struct WebTextTests {
     }
 
     @Test func piecesThatDoNotReproduceTheLineGiveNoWords() throws {
-        // A wrapped line's word walk ran into the next line ("RIVER, " then "ANN").
-        let wrapped: [(text: String, box: CGRect)] = [("RIVER", CGRect(x: 445, y: 197, width: 34, height: 11)), (",", CGRect(x: 476, y: 197, width: 6, height: 11)),
-                                                      ("ANN", CGRect(x: 445, y: 208, width: 20, height: 12))]
+        // A wrapped line's word walk ran into the next line ("SMITH, " then "JON").
+        let wrapped: [(text: String, box: CGRect)] = [("SMITH", CGRect(x: 445, y: 197, width: 34, height: 11)), (",", CGRect(x: 476, y: 197, width: 6, height: 11)),
+                                                      ("JON", CGRect(x: 445, y: 208, width: 20, height: 12))]
         let box = CGRect(x: 445, y: 197, width: 36, height: 12)
-        #expect(WebText.source(line: "RIVER, ", box: box, pieces: wrapped)?.words == nil)
-        #expect(WebText.source(line: "RIVER, ", box: box, pieces: Array(wrapped.prefix(2)))?.words?.count == 1)
-        #expect(WebText.source(line: "RIVER, ", box: box, pieces: [])?.words == nil)
+        #expect(WebText.source(line: "SMITH, ", box: box, pieces: wrapped)?.words == nil)
+        #expect(WebText.source(line: "SMITH, ", box: box, pieces: Array(wrapped.prefix(2)))?.words?.count == 1)
+        #expect(WebText.source(line: "SMITH, ", box: box, pieces: [])?.words == nil)
     }
 
     @Test func theSourceMakesAScreenTextWhoseCaretsFollowTheWordBoxes() throws {
-        let source = try #require(WebText.source(line: "pulse@examplefieldhouse.com\n", box: CGRect(x: 144, y: 262, width: 176, height: 17), pieces: email))
+        let source = try #require(WebText.source(line: "hello@exampledomainname.com\n", box: CGRect(x: 144, y: 262, width: 176, height: 17), pieces: email))
         let text = ScreenText(lines: [source], frame: CGRect(x: 100, y: 200, width: 400, height: 200), window: 0)
-        #expect(text.lines.map(\.text) == ["pulse@examplefieldhouse.com"])
+        #expect(text.lines.map(\.text) == ["hello@exampledomainname.com"])
         #expect(text.highlight(from: .init(line: 0, column: 0), to: .init(line: 0, column: 27)) == [CGRect(x: 144, y: 262, width: 176, height: 17)])
     }
 }
