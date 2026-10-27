@@ -114,7 +114,7 @@ public struct SmartSnap {
         for item in ranked where item.confidence >= 0.48 {
             let bounds = item.rect.integral
             let sourceBounds = bounds.offsetBy(dx: cropRect.minX, dy: cropRect.minY)
-            guard !output.contains(where: { snapOverlap($0.bounds, sourceBounds) > 0.94 }) else { continue }
+            guard !output.contains(where: { Detection.overlap($0.bounds, sourceBounds) > 0.94 }) else { continue }
             output.append(SnapSuggestion(bounds: sourceBounds, confidence: item.confidence,
                                          reason: "Four nearby sides show continuous pixel boundaries"))
             if output.count == 4 { break }
@@ -282,11 +282,4 @@ private func snapEdgeStrength(_ raster: SnapRaster, vertical: Bool, position: In
     let across = vertical ? snapColorDistance(raster, position - 1, along, position, along)
                           : snapColorDistance(raster, along, position - 1, along, position)
     return max(Double(across), Double(max(before, after)) * 0.72)
-}
-
-func snapOverlap(_ a: CGRect, _ b: CGRect) -> Double {
-    let intersection = a.intersection(b)
-    guard !intersection.isNull else { return 0 }
-    let union = a.width * a.height + b.width * b.height - intersection.width * intersection.height
-    return union > 0 ? intersection.width * intersection.height / union : 0
 }

@@ -177,8 +177,7 @@ public enum AccessibilityBounds {
             let pixels = pixels(of: frame.rect, displayOrigin: displayOrigin, scale: scale, extent: extent)
             guard !pixels.isNull, pixels.width >= 8, pixels.height >= 8, pixels != extent else { continue }
             let tolerance = paddingTolerance * scale
-            if let inner, abs(pixels.minX - inner.minX) <= tolerance, abs(pixels.minY - inner.minY) <= tolerance,
-               abs(pixels.maxX - inner.maxX) <= tolerance, abs(pixels.maxY - inner.maxY) <= tolerance { continue }
+            if let inner, pixels.isNear(inner, within: tolerance) { continue }
             inner = pixels
             // Named by its role description ("Text Field").
             let label = frame.roleDescription.isEmpty ? "Element" : frame.roleDescription.capitalized

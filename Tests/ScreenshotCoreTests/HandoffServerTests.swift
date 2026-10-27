@@ -113,6 +113,48 @@ final class HandoffServerTests {
         }
     }
 
+    @Test(arguments: [40, 3000]) func damagedImagesReturnAToolError(width: Int) throws {
+        var manifest = handoffManifest(id: "CCCCCCCC", capturedAt: .now)
+        manifest.image = .init(width: width, height: 20, scale: 2)
+        try server.store.write(png: Data("damaged PNG".utf8), manifest: manifest)
+        #expect(errorCode(try call("get_capture", #"{"id":"latest"}"#)) == "capture_unreadable")
+        #expect(errorCode(try call("zoom", #"{"id":"latest","x":0,"y":0,"width":1,"height":1}"#)) == "capture_unreadable")
+        #expect((try send(#"{"jsonrpc":"2.0","id":8,"method":"ping"}"#)["result"] as! [String: Any]).isEmpty)
+    }
+
+    @Test func anImageThatDoesNotMatchItsManifestIsAnError() throws {
+        var manifest = handoffManifest(id: "CCCCCCCC", capturedAt: .now)
+        manifest.image = .init(width: 40, height: 20, scale: 2)
+        try server.store.write(png: handoffPNG(width: 1, height: 1), manifest: manifest)
+        #expect(errorCode(try call("get_capture", #"{"id":"latest"}"#)) == "capture_unreadable")
+        #expect(errorCode(try call("zoom", #"{"id":"latest","x":10,"y":5,"width":20,"height":10}"#)) == "capture_unreadable")
+    }
+
+    @Test func negativeManifestDimensionsCannotOverflowZoomValidation() throws {
+        var manifest = handoffManifest(id: "CCCCCCCC", capturedAt: .now)
+        manifest.image = .init(width: Int.min, height: 20, scale: 2)
+        try server.store.write(png: handoffPNG(), manifest: manifest)
+        #expect(errorCode(try call("zoom", #"{"id":"latest","x":1,"y":0,"width":1,"height":1}"#)) == "invalid_rect")
+    }
+
+    @Test func aLargeGrayscaleCaptureCanBeDownscaled() throws {
+        let context = try #require(CGContext(data: nil, width: 3000, height: 200, bitsPerComponent: 8, bytesPerRow: 0,
+                                           space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue))
+        context.setFillColor(gray: 0.5, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: 3000, height: 200))
+        let data = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(data, "public.png" as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, try #require(context.makeImage()), nil)
+        #expect(CGImageDestinationFinalize(destination))
+        var manifest = handoffManifest(id: "CCCCCCCC", capturedAt: .now)
+        manifest.image = .init(width: 3000, height: 200, scale: 2)
+        try server.store.write(png: data as Data, manifest: manifest)
+        let result = try call("get_capture", #"{"id":"latest"}"#)
+        #expect(errorCode(result) == nil)
+        let resized = try image((result["content"] as! [[String: Any]])[0])
+        #expect((resized.width, resized.height) == (1568, 105))
+    }
+
     @Test func zoomCropsTheStoredPixelsWithTheirOffset() throws {
         let zoom = try call("zoom", #"{"id":"BBBBBBBB","x":10,"y":5,"width":20,"height":10}"#)
         let png = try image((zoom["content"] as! [[String: Any]])[0])

@@ -20,6 +20,13 @@ struct DownsampleTests {
         #expect(Detection.downsampled(source, by: 1) === source)
     }
 
+    @Test func thinImagesKeepAtLeastOnePixelOnEachSide() {
+        for (width, height, expectedWidth, expectedHeight) in [(1, 4000, 1, 1000), (4000, 1, 1000, 1), (1, 1, 1, 1)] {
+            let small = Detection.downsampled(image(width: width, height: height), by: 4)
+            #expect(small.width == expectedWidth && small.height == expectedHeight)
+        }
+    }
+
     @Test func scalingACandidateMapsBoundsAndHitRegions() {
         let candidate = Candidate(id: "a", label: "Text block", bounds: CGRect(x: 10, y: 20, width: 30, height: 40), score: 0.7,
                                   kind: .text, hitRegions: [CGRect(x: 10, y: 20, width: 30, height: 10)])

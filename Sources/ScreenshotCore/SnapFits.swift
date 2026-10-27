@@ -15,15 +15,15 @@ public enum SnapFits {
         for frame in frames.sorted(by: { offset($0) < offset($1) })
         where abs(frame.minX - drag.minX) <= bandX && abs(frame.maxX - drag.maxX) <= bandX
             && abs(frame.minY - drag.minY) <= bandY && abs(frame.maxY - drag.maxY) <= bandY
-            && !fits.contains(where: { snapOverlap($0, frame) > 0.94 }) {
+            && !fits.contains(where: { Detection.overlap($0, frame) > 0.94 }) {
             fits.append(frame)
             if fits.count == 3 { break }
         }
-        if let best = pixel.first, !fits.contains(where: { snapOverlap($0, best) > 0.94 }),
+        if let best = pixel.first, !fits.contains(where: { Detection.overlap($0, best) > 0.94 }),
            let index = fits.firstIndex(where: { offset($0) > offset(best) }) {
             fits.insert(best, at: index)
         }
-        return fits + pixel.filter { candidate in !fits.contains { snapOverlap($0, candidate) > 0.94 } }
+        return fits + pixel.filter { candidate in !fits.contains { Detection.overlap($0, candidate) > 0.94 } }
     }
 
     /// The edge position nearest `value` and within `band` of it, from the sides of accessibility `frames` (preferred on
