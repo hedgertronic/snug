@@ -45,14 +45,14 @@ extension ScreenTextReader {
             var elements = 0
 
             func lines(of element: AXUIElement, text: NSString, visible: CFRange?, elementFrame: CGRect, clip: CGRect) {
-                // A visible range the app reports outside the text reads as all of it.
-                let visible = visible.flatMap { AXValues.range($0, within: text.length) } ?? NSRange(location: 0, length: text.length)
+                // A visible range past the end is clamped to the text; a negative or overflowing one reads as all of it.
+                let visible = visible.flatMap { AXValues.range($0, clampedTo: text.length) } ?? NSRange(location: 0, length: text.length)
                 guard visible.length > 0 else { return }
                 var ranges = [visible]
                 if let first = AXValues.index(parameter("AXLineForIndex", element, visible.location as CFNumber)),
                    let last = AXValues.index(parameter("AXLineForIndex", element, visible.location + visible.length - 1 as CFNumber)), last > first {
                     ranges = (first...min(last, first + nativeMaxLines)).compactMap { line in
-                        AXValues.range(parameter("AXRangeForLine", element, line as CFNumber)).flatMap { AXValues.range($0, within: text.length) }
+                        AXValues.range(parameter("AXRangeForLine", element, line as CFNumber)).flatMap { AXValues.range($0, clampedTo: text.length) }
                             .map { NSIntersectionRange($0, visible) }
                     }
                 }

@@ -38,6 +38,15 @@ struct AXValuesTests {
         for range in outside { #expect(AXValues.range(range, within: 5) == nil, "\(range.location), \(range.length)") }
     }
 
+    @Test func clampedRangesKeepThePartInsideTheText() {
+        #expect(AXValues.range(CFRange(location: 2, length: 3), clampedTo: 5) == NSRange(location: 2, length: 3))
+        #expect(AXValues.range(CFRange(location: 3, length: 4), clampedTo: 5) == NSRange(location: 3, length: 2), "a range past the end keeps its last line")
+        #expect(AXValues.range(CFRange(location: 0, length: 9), clampedTo: 5) == NSRange(location: 0, length: 5))
+        #expect(AXValues.range(CFRange(location: 7, length: 2), clampedTo: 5)?.length == 0, "a range wholly past the end is empty")
+        let invalid = [CFRange(location: -1, length: 2), CFRange(location: 0, length: -1), CFRange(location: 1, length: Int.max), CFRange(location: Int.max, length: Int.max)]
+        for range in invalid { #expect(AXValues.range(range, clampedTo: 5) == nil, "\(range.location), \(range.length)") }
+    }
+
     @Test func elementsMustBeElements() {
         #expect(AXValues.element(AXUIElementCreateApplication(getpid())) != nil)
         #expect(AXValues.element("AXWindow" as CFString) == nil && AXValues.element(wrapped(CGPoint.zero, .cgPoint)) == nil && AXValues.element(nil) == nil)

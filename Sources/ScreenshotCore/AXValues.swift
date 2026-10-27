@@ -37,6 +37,13 @@ public enum AXValues {
         return NSRange(location: range.location, length: range.length)
     }
 
+    /// `range` as an `NSRange` clamped to a string of `length` UTF-16 units (its intersection with `0..<length`, empty when they do
+    /// not meet), nil for a negative location or length or an end past `Int.max`.
+    public static func range(_ range: CFRange, clampedTo length: Int) -> NSRange? {
+        guard range.location >= 0, range.length >= 0, range.length <= Int.max - range.location else { return nil }
+        return NSIntersectionRange(NSRange(location: range.location, length: range.length), NSRange(location: 0, length: max(0, length)))
+    }
+
     /// A nonnegative whole number answer, as `AXLineForIndex` gives.
     public static func index(_ raw: CFTypeRef?) -> Int? {
         guard let raw, CFGetTypeID(raw) == CFNumberGetTypeID(), let number = (raw as? NSNumber)?.intValue, number >= 0 else { return nil }
