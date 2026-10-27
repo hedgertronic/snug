@@ -49,7 +49,7 @@ extension ScreenTextReader {
                       !visible.offsetBy(dx: offset.width, dy: offset.height).intersection(window).isEmpty else { return }
                 return areas.append((element, visible, offset))
             }
-            // A table's or outline's rows (Mail's message list) hold no web area, and a long list would spend the whole budget.
+            // A table's or outline's rows hold no web area in the apps read here, and a long one (a message list) would spend the whole budget.
             guard depth < Accessibility.maxDepth, ![kAXTableRole, kAXOutlineRole].contains(role as? String) else { return }
             let scroll = role as? String == kAXScrollAreaRole ? element : scroll
             for child in Accessibility.children(of: element, kAXChildrenAttribute) ?? [] { walk(child, depth: depth + 1, window: window, scroll: scroll) }
