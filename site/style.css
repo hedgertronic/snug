@@ -110,7 +110,6 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .dl-gh:hover { background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24); }
 
 .demo-wrap { max-width: 880px; margin: 0 auto; }
-.demo-note { display: none; }
 a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 /* The demo takes focus for its keys. A pointer focus draws nothing; a keyboard focus draws a faint white ring, never coral. */
 .demo:focus-visible:not([data-via="pointer"]) { outline: 1.5px solid rgba(255, 255, 255, .35); outline-offset: 3px; }
@@ -365,7 +364,6 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
   .rvg { display: none; }
   .s-menubar { padding-left: calc(var(--vx, 0px) + 12px); }
   .s-menubar span:nth-child(4), .s-menubar span:nth-child(5) { display: none; }
-  .demo-note { display: block; margin-top: 16px; text-align: center; font-size: 13px; line-height: 1.4; color: var(--bandfg2); opacity: .85; }
 }
 @media (max-width: 400px) {
   .top { gap: 8px; }
