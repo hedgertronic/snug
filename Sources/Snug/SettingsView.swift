@@ -208,9 +208,12 @@ private struct GeneralPane: View {
                 }
                 caption("Text mode")
                 Card {
-                    LabeledContent("Chrome and Electron apps") {
+                    LabeledContent {
                         Toggle("Chrome and Electron apps", isOn: $chromiumText).labelsHidden().toggleStyle(.switch)
+                    } label: {
+                        detailed("Chrome and Electron apps", "Reads text in Chrome, Slack, VS Code and similar apps by turning on their accessibility until they quit.")
                     }
+                    .padding(.vertical, 4)
                     .help("Reads text in Chrome, Edge, Arc, Slack, VS Code and other Chromium apps by turning on the app's accessibility until it quits.")
                 }
                 caption("Permissions")
@@ -223,7 +226,9 @@ private struct GeneralPane: View {
                         }
                     }
                     TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        permission("Accessibility", granted: AXIsProcessTrusted()) { Accessibility.requestTrust() }
+                        permission("Accessibility", detail: "Finds windows and buttons under the pointer and reads their text.", granted: AXIsProcessTrusted()) {
+                            Accessibility.requestTrust()
+                        }
                     }
                 }
                 AgentSection()
@@ -232,14 +237,18 @@ private struct GeneralPane: View {
         .frame(width: SettingsTabs.width, height: SettingsTabs.tallHeight)
     }
 
-    private func permission(_ name: String, granted: Bool, allow: @escaping () -> Void) -> some View {
-        LabeledContent(name) {
+    /// A permission's row, with `detail` under its name when given.
+    private func permission(_ name: String, detail: String? = nil, granted: Bool, allow: @escaping () -> Void) -> some View {
+        LabeledContent {
             if granted {
                 Label("On", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
             } else {
                 Button("Allow", action: allow).buttonStyle(.borderedProminent)
             }
+        } label: {
+            if let detail { detailed(name, detail) } else { Text(name) }
         }
+        .padding(.vertical, detail == nil ? 0 : 4)
     }
 }
 
@@ -955,7 +964,7 @@ private struct AgentSection: View {
                         }
                     }.disabled(captureId == nil && storeError == nil)
                 }
-                LabeledContent("MCP") {
+                LabeledContent {
                     Menu(copied ? "Copied" : "Copy Setup") {
                         Button("Claude Code Command") { copy("claude mcp add snug -- \(quoted) --mcp") }
                         Button("Codex Command") { copy("codex mcp add snug -- \(quoted) --mcp") }
@@ -964,7 +973,10 @@ private struct AgentSection: View {
                     }
                     .fixedSize()
                     .help("Gemini CLI, Cursor and most other agents read the JSON entry")
+                } label: {
+                    detailed("MCP", "Copy the setup into your agent, then press \u{2318}\u{21A9} on anything to hand it over.")
                 }
+                .padding(.vertical, 4)
             }
         }
         .onAppear(perform: load)
