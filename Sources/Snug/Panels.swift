@@ -36,7 +36,7 @@ final class CandidateList: NSVisualEffectView {
         footer.sizeToFit()
         var bottom: CGFloat = 10
         let allow = onAllowAccessibility.map { action in
-            let button = ActionButton(title: "Allow Accessibility for app elements", action: action)
+            let button = ActionButton(title: "Allow Accessibility for App Elements", action: action)
             button.font = .systemFont(ofSize: 11)
             button.bezelStyle = .inline
             button.sizeToFit()

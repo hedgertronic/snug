@@ -501,7 +501,7 @@ final class Chrome {
     let countIn = BarButton("Count-in", key: "I")
     let start = BarButton("Start", key: "\u{21A9}")
     let subject = BarButton("Subject", key: "tab")
-    let crop = BarButton("Snap to subject", key: "S")
+    let crop = BarButton("Snap to Subject", key: "S")
     /// The chip row above the object: the hovered element's name and size, or the size; Snap; then on a selection the ratio and radius.
     let hover = Pill.chip()
     let size = Pill.chip()
@@ -514,7 +514,7 @@ final class Chrome {
     let ratio = Pill(radius: 8, insets: NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0), spacing: 0)
     let ratioButton = BarButton("", key: "P")
     let ratioDivider = NSTextField("|", size: 12, color: NSColor.chromeText.withAlphaComponent(0.5))
-    let lock = BarButton("lock", key: "\u{21E7}P")
+    let lock = BarButton("Lock", key: "\u{21E7}P")
     let ratioMenu = RatioMenu()
     /// U's menu under the Colors button: the selection's average color and its five main colors.
     let colorMenu = RatioMenu()

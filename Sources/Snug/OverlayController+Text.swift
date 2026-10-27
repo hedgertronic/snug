@@ -612,7 +612,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         view.liveText.selectableItemsHighlighted = true
         // Switching away from text selection drops Live Text's focus to the window, where keys would no longer reach the overlay.
         window.makeFirstResponder(view)
-        text.notice = "\(items[picked].text)    \u{21A9} copy\(items[picked].url == nil ? "" : "    \u{2318}\u{21A9} open")"
+        text.notice = "\(items[picked].text)    \u{21A9} Copy\(items[picked].url == nil ? "" : "    \u{2318}\u{21A9} Open")"
     }
 
     /// Accurate OCR's links, email addresses and phone numbers (boxed to the matched characters) and barcode payloads, in reading order.

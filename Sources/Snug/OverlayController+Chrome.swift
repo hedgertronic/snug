@@ -110,12 +110,12 @@ extension OverlayController {
     /// without Option (Command-arrow is unbound). Control matters only with Option, and Shift not with Control.
     private var arrowLegend: (keys: [String], label: String)? {
         switch (optionHeld, controlHeld, commandHeld) {
-        case (true, true, false): (["\u{2303}\u{2325}"], "edge out")
-        case (true, true, true): (["\u{2303}\u{2325}\u{2318}"], "edge in")
-        case (true, false, false): shiftHeld ? (["\u{2325}\u{21E7}"], "grow 10 px") : (["\u{2325}"], "grow")
-        case (true, false, true): shiftHeld ? (["\u{2325}\u{21E7}\u{2318}"], "shrink 10 px") : (["\u{2325}\u{2318}"], "shrink")
+        case (true, true, false): (["\u{2303}\u{2325}"], "Edge Out")
+        case (true, true, true): (["\u{2303}\u{2325}\u{2318}"], "Edge In")
+        case (true, false, false): shiftHeld ? (["\u{2325}\u{21E7}"], "Grow 10 px") : (["\u{2325}"], "Grow")
+        case (true, false, true): shiftHeld ? (["\u{2325}\u{21E7}\u{2318}"], "Shrink 10 px") : (["\u{2325}\u{2318}"], "Shrink")
         case (false, _, true): nil
-        case (false, _, false): shiftHeld ? (["\u{21E7}"], "move 10 px") : ([], "move")
+        case (false, _, false): shiftHeld ? (["\u{21E7}"], "Move 10 px") : ([], "Move")
         }
     }
 
@@ -297,7 +297,7 @@ extension OverlayController {
             c.save.setKeys("\u{2318}S")
             for button in [c.copy, c.save] { button.isEnabled = true }
             c.strip.show([subjects + [c.crop], [c.save, c.copy]])
-            attachment = (view.viewRect(cutout.frame), true, [sizeChip(cutout.frame)] + statusChip(["K", "esc"], "back"), [])
+            attachment = (view.viewRect(cutout.frame), true, [sizeChip(cutout.frame)] + statusChip(["K", "esc"], "Back"), [])
         } else if let scrollArea {
             let limit = stitcher?.heightLimit ?? ScrollStitcher.maximumHeight
             let height = scrollHeight >= limit ? "\(limit) px, the limit" : "\(scrollHeight) px"
@@ -495,8 +495,8 @@ extension OverlayController {
             let range = points.min()! == points.max()! ? "\(points[0])" : "\(points.min()!)-\(points.max()!)"
             cornerChip.setTitle((focusedCorner.map { names[$0]! } ?? "All corners") + "  r " + range)
             c.cornerKeys.show(focusedCorner == nil ? "all corners" : "one corner") {
-                [Pill.hint(["[", "]"], "radius"), Pill.hint(["tab"], focusedCorner == nil ? "one corner" : "next corner")]
-                    + (focusedCorner == nil ? [] : [Pill.hint(["esc"], "all corners")])
+                [Pill.hint(["[", "]"], "Radius"), Pill.hint(["tab"], focusedCorner == nil ? "One Corner" : "Next Corner")]
+                    + (focusedCorner == nil ? [] : [Pill.hint(["esc"], "All Corners")])
             }
             let box = view.viewRect(rect), chip = cornerChip.frame.size, keys = c.cornerKeys.frame.size
             let y = corner.movesTop ? box.maxY - chip.height : box.minY

@@ -892,10 +892,10 @@ extension DebugRun {
                 "the outline is a thin ring outside the subject: \(ringPixels) of \(ring.width * ring.height) pixels, center clear")
         require(overlay.selection == nil && texts(in: overlay.chrome.topBar).last == "?" && !texts(in: overlay.chrome.topBar).contains("Capture") && overlay.view.overlays.selection == iconRect
                 && !overlay.view.overlays.showsHandles, "while previewing, the top bar has no modes, the handles stay hidden and the area stays outlined")
-        require(texts(in: overlay.chrome.strip) == ["Snap to subject", "S", "Save", "\u{2318}", "S", "Copy", "\u{21A9}"] && !overlay.chrome.crop.lit
-                    && texts(in: overlay.chrome.status) == ["back", "K", "esc"] && overlay.chrome.status.frame.minY == overlay.chrome.size.frame.minY
+        require(texts(in: overlay.chrome.strip) == ["Snap to Subject", "S", "Save", "\u{2318}", "S", "Copy", "\u{21A9}"] && !overlay.chrome.crop.lit
+                    && texts(in: overlay.chrome.status) == ["Back", "K", "esc"] && overlay.chrome.status.frame.minY == overlay.chrome.size.frame.minY
                     && overlay.chrome.status.frame.minX == overlay.chrome.size.frame.maxX + 6,
-                "the strip has the preview's controls, Snap to subject plain, and a status chip after the size chip says K back: \(texts(in: overlay.chrome.strip)) \(texts(in: overlay.chrome.status))")
+                "the strip has the preview's controls, Snap to Subject plain, and a status chip after the size chip says Back with K and esc: \(texts(in: overlay.chrome.strip)) \(texts(in: overlay.chrome.status))")
         let (previewPixels, previewWidth) = pixels(preview!.subjects[0].image)
         require(previewPixels[3] == 0 && previewPixels[(previewWidth / 2 + previewWidth * previewWidth / 2) * 4 + 3] == 255, "the preview is transparent at the corner and opaque at the center")
         // The press is near the area's top, off the strip, which this small view lays across its middle.
@@ -910,7 +910,7 @@ extension DebugRun {
         require(!overlay.defaults.bool(forKey: Pref.snap), "S in the preview leaves Snap off")
         require(overlay.cutout?.cropped == true && overlay.defaults.bool(forKey: Pref.cutoutCrop) && overlay.view.overlays.selection == box
                 && overlay.cutout!.view.checker.frame == overlay.view.viewRect(box) && overlay.cutout!.view.ghost.frame == overlay.view.viewRect(box) && overlay.chrome.crop.lit,
-                "S crops to the subject's box \(box) and lights Snap to subject: outlined \(String(describing: overlay.view.overlays.selection))")
+                "S crops to the subject's box \(box) and lights Snap to Subject: outlined \(String(describing: overlay.view.overlays.selection))")
         key(kKey, "k")
         require(overlay.cutout == nil && preview!.view.superview == nil && preview!.view.content.superlayer == nil && overlay.selection?.rect == iconRect && texts(in: overlay.chrome.strip).contains("Edit"),
                 "K again goes back to the selection: preview \(overlay.cutout != nil), view in overlay \(preview!.view.superview != nil), selection \(String(describing: overlay.selection?.rect)), strip \(texts(in: overlay.chrome.strip))")

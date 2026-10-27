@@ -1182,7 +1182,7 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: 422, y: 585))
         require(overlay.accessibilityTask == nil && overlay.accessibilityStarted == nil, "a headless run never starts an accessibility lookup")
         require(!overlay.session!.candidates.contains { $0.kind == .element }, "no accessibility candidates in a headless run")
-        require(!texts(in: overlay.chrome.list).contains("Allow Accessibility for app elements"), "the Allow Accessibility button never shows in a headless run")
+        require(!texts(in: overlay.chrome.list).contains("Allow Accessibility for App Elements"), "the Allow Accessibility button never shows in a headless run")
         let dock = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first!.processIdentifier
         let axFrames = await Accessibility.frames(at: .zero, pid: dock)
         require(AXIsProcessTrusted() || axFrames.isEmpty, "without Accessibility permission the lookup is empty and silent (trusted: \(AXIsProcessTrusted()))")
@@ -1482,7 +1482,7 @@ extension DebugRun {
         require(row.allSatisfy { !$0.isHidden && $0.frame.minY == chrome.size.frame.minY } && chrome.size.frame.minX == roughBox.minX && chrome.size.frame.minY == roughBox.maxY + 8
                     && zip(row, row.dropFirst()).allSatisfy { $1.frame.minX >= $0.frame.maxX + 5.99 } && chrome.radius.frame.maxX >= roughBox.maxX - 0.5,
                 "the chip row sits on the selection's top edge: \(row.map(\.frame)) \(roughBox)")
-        require(texts(in: chrome.ratio) == [overlay.ratioReadout, "P", "|", "lock", "\u{21E7}", "P"] && chrome.lock.lit == lockedBefore
+        require(texts(in: chrome.ratio) == [overlay.ratioReadout, "P", "|", "Lock", "\u{21E7}", "P"] && chrome.lock.lit == lockedBefore
                     && chrome.ratioButton.layer!.backgroundColor == nil && chrome.lock.layer!.backgroundColor == nil,
                 "the ratio chip shows the readout with P, then lock with Shift-P, with no fill of their own: \(texts(in: chrome.ratio))")
         require(texts(in: chrome.radius).count == 3 && texts(in: chrome.radius)[0].hasPrefix("r ") && texts(in: chrome.radius).suffix(2) == ["[", "]"],
@@ -1556,7 +1556,7 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: 40, y: 40))
         require(sides.allSatisfy(\.isHidden) && chrome.legend.isHidden, "with the pointer outside the selection no edge keys show")
         mouse(.mouseMoved, insideSelection)
-        require(sides.map { texts(in: $0) } == [["\u{2190}"], ["\u{2192}"], ["\u{2191}"], ["\u{2193}"]] && sides.allSatisfy { !$0.isHidden } && texts(in: chrome.legend) == ["move"],
+        require(sides.map { texts(in: $0) } == [["\u{2190}"], ["\u{2192}"], ["\u{2191}"], ["\u{2193}"]] && sides.allSatisfy { !$0.isHidden } && texts(in: chrome.legend) == ["Move"],
                 "with the pointer inside the selection the side arrows show and the legend reads move: \(sides.map(\.isHidden)) \(texts(in: chrome.legend))")
         key(124, "")
         require(keyCaps("\u{2192}", in: sides[1]).allSatisfy(\.pressed) && keyCaps("\u{2190}", in: sides[0]).allSatisfy { !$0.pressed }, "the Right arrow cap flashes when Right is pressed")
@@ -1571,7 +1571,7 @@ extension DebugRun {
             ["\u{2303}", "\u{2325}", "\u{2318}", "\u{21E7}"].allSatisfy { glyph in keyCaps(glyph, in: view).allSatisfy { $0.pressed == glyphs.contains(glyph) } }
         }
         require(keyCaps("\u{2325}", in: chrome.copy).count == 1 && lit(["\u{2325}"], chrome.strip) && lit(["\u{2325}"], chrome.legend)
-                    && texts(in: chrome.legend) == ["grow", "\u{2325}"],
+                    && texts(in: chrome.legend) == ["Grow", "\u{2325}"],
                 "holding Option lights the Option caps on the strip (Translate) and the legend, which reads grow with its cap: \(texts(in: chrome.legend))")
         // The arrow caps are a D-pad around the legend: the group centered in the selection when it fits, else wholly outside it (this
         // one is 35 pt tall, so the group is taller than it), clear of the chips.
@@ -1588,35 +1588,35 @@ extension DebugRun {
         }
         dpad("holding Option")
         flags([.option, .shift])
-        require(lit(["\u{2325}", "\u{21E7}"], chrome.legend) && texts(in: chrome.legend) == ["grow 10 px", "\u{2325}", "\u{21E7}"], "holding Option-Shift the legend reads grow 10 px with both caps: \(texts(in: chrome.legend))")
+        require(lit(["\u{2325}", "\u{21E7}"], chrome.legend) && texts(in: chrome.legend) == ["Grow 10 px", "\u{2325}", "\u{21E7}"], "holding Option-Shift the legend reads grow 10 px with both caps: \(texts(in: chrome.legend))")
         dpad("holding Option-Shift")
         flags([.option, .shift, .command])
-        require(lit(["\u{2325}", "\u{21E7}", "\u{2318}"], chrome.legend) && texts(in: chrome.legend) == ["shrink 10 px", "\u{2325}", "\u{21E7}", "\u{2318}"], "holding Option-Shift-Command the legend reads shrink 10 px: \(texts(in: chrome.legend))")
+        require(lit(["\u{2325}", "\u{21E7}", "\u{2318}"], chrome.legend) && texts(in: chrome.legend) == ["Shrink 10 px", "\u{2325}", "\u{21E7}", "\u{2318}"], "holding Option-Shift-Command the legend reads shrink 10 px: \(texts(in: chrome.legend))")
         dpad("holding Option-Shift-Command")
         flags(.option)
         flags([.option, .command])
         require(lit(["\u{2325}", "\u{2318}"], chrome.strip) && lit(["\u{2325}", "\u{2318}"], chrome.legend)
-                    && texts(in: chrome.legend) == ["shrink", "\u{2325}", "\u{2318}"] && sides.allSatisfy { !$0.isHidden },
+                    && texts(in: chrome.legend) == ["Shrink", "\u{2325}", "\u{2318}"] && sides.allSatisfy { !$0.isHidden },
                 "holding Option-Command lights every Option and Command cap, the legend reads shrink, and the side arrows stay: \(texts(in: chrome.legend))")
         flags([.control, .option])
-        require(lit(["\u{2303}", "\u{2325}"], chrome.legend) && texts(in: chrome.legend) == ["edge out", "\u{2303}", "\u{2325}"] && sides.allSatisfy { !$0.isHidden },
+        require(lit(["\u{2303}", "\u{2325}"], chrome.legend) && texts(in: chrome.legend) == ["Edge Out", "\u{2303}", "\u{2325}"] && sides.allSatisfy { !$0.isHidden },
                 "holding Control-Option the legend reads edge out with both caps lit: \(texts(in: chrome.legend))")
         dpad("holding Control-Option")
         flags([.control, .option, .shift])
-        require(texts(in: chrome.legend) == ["edge out", "\u{2303}", "\u{2325}"], "Shift changes nothing with Control: \(texts(in: chrome.legend))")
+        require(texts(in: chrome.legend) == ["Edge Out", "\u{2303}", "\u{2325}"], "Shift changes nothing with Control: \(texts(in: chrome.legend))")
         flags([.control, .option, .command])
-        require(lit(["\u{2303}", "\u{2325}", "\u{2318}"], chrome.legend) && texts(in: chrome.legend) == ["edge in", "\u{2303}", "\u{2325}", "\u{2318}"],
+        require(lit(["\u{2303}", "\u{2325}", "\u{2318}"], chrome.legend) && texts(in: chrome.legend) == ["Edge In", "\u{2303}", "\u{2325}", "\u{2318}"],
                 "holding Control-Option-Command the legend reads edge in: \(texts(in: chrome.legend))")
         dpad("holding Control-Option-Command")
         flags([.control, .option, .command, .shift])
-        require(texts(in: chrome.legend) == ["edge in", "\u{2303}", "\u{2325}", "\u{2318}"], "Shift changes nothing with Control-Option-Command: \(texts(in: chrome.legend))")
+        require(texts(in: chrome.legend) == ["Edge In", "\u{2303}", "\u{2325}", "\u{2318}"], "Shift changes nothing with Control-Option-Command: \(texts(in: chrome.legend))")
         flags(.command)
         require(lit(["\u{2318}"], chrome.strip) && sides.allSatisfy(\.isHidden) && chrome.legend.isHidden,
                 "holding Command alone lights the strip's Command caps and shows no edge keys, since Command-arrow is unbound")
         flags(.control)
         require(sides.allSatisfy(\.isHidden) && chrome.legend.isHidden, "Control alone with the pointer outside shows no edge keys")
         mouse(.mouseMoved, insideSelection, .control)
-        require(overlay.controlHeld && texts(in: chrome.legend) == ["move"] && sides.allSatisfy { !$0.isHidden },
+        require(overlay.controlHeld && texts(in: chrome.legend) == ["Move"] && sides.allSatisfy { !$0.isHidden },
                 "Control alone with the pointer inside shows nothing new: the legend reads move")
         flags(.command)
         require(sides.allSatisfy(\.isHidden) && chrome.legend.isHidden, "Command with the pointer inside hides the edge keys")
@@ -1631,7 +1631,7 @@ extension DebugRun {
         // goes back, and from all corners picks bottom-left. The focused corner lights its dot, the chip names it with its radius, and
         // [ ] change only it. Only Esc returns to all corners. Undo covers the edit.
         let radius = 12 * overlay.scale
-        let focusedKeys = ["radius", "[", "]", "next corner", "tab", "all corners", "esc"], allKeys = ["radius", "[", "]", "one corner", "tab"]
+        let focusedKeys = ["Radius", "[", "]", "Next Corner", "tab", "All Corners", "esc"], allKeys = ["Radius", "[", "]", "One Corner", "tab"]
         var focus: [Handle?] = []
         for _ in 0..<5 { key(48, "\t"); focus.append(overlay.focusedCorner) }
         require(focus == [.topLeft, .topRight, .bottomRight, .bottomLeft, .topLeft] && overlay.selection?.rect == snapped.rect, "Tab cycles the corners TL, TR, BR, BL, TL: \(focus)")
@@ -1877,7 +1877,7 @@ extension DebugRun {
             for corner in [Handle.topLeft, .topRight, .bottomRight, .bottomLeft] {
                 overlay.focusedCorner = corner
                 overlay.refresh()
-                require(!overlay.cornerChip.isHidden && texts(in: chrome.cornerKeys) == ["radius", "[", "]", "next corner", "tab", "all corners", "esc"],
+                require(!overlay.cornerChip.isHidden && texts(in: chrome.cornerKeys) == ["Radius", "[", "]", "Next Corner", "tab", "All Corners", "esc"],
                         "the \(name) selection's focused \(corner) corner shows its chip and keys: \(overlay.cornerChip.isHidden) \(texts(in: chrome.cornerKeys)); box \(overlay.view.viewRect(rect)) \(([("bar", chrome.topBar), ("strip", chrome.strip), ("size", chrome.size), ("snap", chrome.snap), ("ratio", chrome.ratio), ("radius", chrome.radius), ("chip", overlay.cornerChip), ("keys", chrome.cornerKeys)] as [(String, NSView)]).map { "\($0.0) \($0.1.isHidden ? "hidden" : "\($0.1.frame)")" })")
                 chromeClear("the \(name) selection's focused \(corner) corner, set directly")
             }
