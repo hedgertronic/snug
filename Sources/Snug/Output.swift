@@ -52,7 +52,7 @@ enum Pref {
     /// The overlay chrome's look: "system" follows macOS, "light" and "dark" force one.
     static let overlayAppearance = "SnugOverlayAppearance"
     /// Where the toast sits (topLeft, topCenter, topRight, bottomLeft, bottomCenter, or bottomRight), and how many seconds it stays while the pointer is elsewhere
-    /// (one of `Toast.lifetimes`: 0 shows no toast but failures, -1 keeps it until closed).
+    /// (one of `Toast.lifetimes`: 0 shows no toast but failures and warnings, -1 keeps it until closed).
     static let toastPosition = "SnugToastPosition"
     static let toastLifetime = "SnugToastLifetime"
     /// Whether Snug plays its sounds on a capture and a recording's start and stop (Settings > General). Failures beep either way.

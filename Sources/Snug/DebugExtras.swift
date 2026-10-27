@@ -827,7 +827,7 @@ extension DebugRun {
         let forever = toast { $0.set(-1, forKey: Pref.toastLifetime) }, off = toast { $0.set(0, forKey: Pref.toastLifetime) }
         forever.scheduleDismissal()
         require(forever.lifetime == nil && forever.dismissal == nil && off.lifetime == .seconds(4),
-                "Forever starts no dismissal timer, and with 0 a failure toast (the only kind 0 shows) lasts 4 s")
+                "Forever starts no dismissal timer, and with 0 a failure or warning toast (the only kinds 0 shows) lasts 4 s")
         let bottomRight = toast { $0.set("bottomRight", forKey: Pref.toastPosition) }, topRight = toast { $0.set("topRight", forKey: Pref.toastPosition) }
         require(bottomRight.frame.minX > plain.frame.minX && bottomRight.frame.minY == plain.frame.minY && topRight.frame.minX == bottomRight.frame.minX && topRight.frame.minY > bottomRight.frame.minY,
                 "the position setting moves the toast: \(plain.frame) \(bottomRight.frame) \(topRight.frame)")

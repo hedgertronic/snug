@@ -14,8 +14,8 @@ import UniformTypeIdentifiers
 /// Pointing at the thumbnail grows the capture out of it in its own panel, a margin above the capsule (below it at the top right); the
 /// pointer can cross to it without either closing. Drag the thumbnail or the preview to drop the image, or click either to open it as
 /// Open does; a click elsewhere closes the toast. It goes away after the lifetime setting (4 s unless changed) while the pointer is elsewhere, and
-/// stays while it is over the toast or its preview; leaving starts the full lifetime again. A lifetime of 0 shows only failure toasts
-/// (red), for 4 s; Forever keeps the toast until it is closed or drops off the stack.
+/// stays while it is over the toast or its preview; leaving starts the full lifetime again. A lifetime of 0 shows only failure (red) and
+/// warning (orange) toasts, for 4 s; Forever keeps the toast until it is closed or drops off the stack.
 /// Toasts stack, each on its own timer: the newest at the anchor and the older ones a gap further from it (up from a bottom anchor, down
 /// from the top right). Closing one settles the ones past it back toward the anchor; a new one that makes the stack taller than a third of
 /// the screen's visible height closes the oldest.
@@ -41,7 +41,7 @@ final class Toast: NSPanel, NSDraggingSource {
     }
     /// Transparent margin around the capsule, so the close button can hang off a corner; it is also the gap to the preview.
     private static let margin: CGFloat = 10
-    /// The lifetime setting's choices, in seconds: 0 is no toast but failures, and -1 is Forever.
+    /// The lifetime setting's choices, in seconds: 0 is no toast but failures and warnings, and -1 is Forever.
     static let lifetimes = [0, 1, 2, 3, 4, 5, 6, 8, 10, 15, 20, 30, -1]
     /// The index in `lifetimes` of the stop nearest `seconds`, Forever being a stop of its own; a stored value off the list snaps to a neighbor.
     static func lifetimeIndex(_ seconds: Int) -> Int {
@@ -106,7 +106,7 @@ final class Toast: NSPanel, NSDraggingSource {
     /// toast its value to copy again. `pasteboard` is where Copy writes and Trash looks for the capture. A failure beeps.
     static func show(png: Data? = nil, message: String, detail: String = "", file: URL? = nil, color: NSColor? = nil, text: String? = nil,
                      defaults: UserDefaults = .standard, pasteboard: NSPasteboard = .general) {
-        guard !isSuppressed, defaults.integer(forKey: Pref.toastLifetime) != 0 || color == .systemRed else { return }
+        guard !isSuppressed, defaults.integer(forKey: Pref.toastLifetime) != 0 || color == .systemRed || color == .systemOrange else { return }
         if color == .systemRed { NSSound.beep() }
         let toast = Toast(png: png, message: message, detail: detail, file: file, color: color, text: text, defaults: defaults, pasteboard: pasteboard)
         stack(toast)

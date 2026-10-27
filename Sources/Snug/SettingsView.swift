@@ -339,7 +339,7 @@ private struct AppearancePane: View {
                 caption("Toast")
                 ToastPositionPicker(tag: $toastPosition)
                 Card {
-                    // The lifetimes as evenly spaced stops, ticked at Off, 5, 10, 30 and Forever; 0 shows only failure toasts.
+                    // The lifetimes as evenly spaced stops, ticked at Off, 5, 10, 30 and Forever; 0 shows only failure and warning toasts.
                     LabeledContent("Duration") {
                         HStack(spacing: 10) {
                             Slider(value: Binding { Double(Toast.lifetimeIndex(toastLifetime)) } set: { toastLifetime = Toast.lifetimes[Int($0.rounded())] },
