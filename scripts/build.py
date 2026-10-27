@@ -19,8 +19,8 @@ import sys
 import tempfile
 
 # Sparkle compares CFBundleVersion, so each release needs a BUILD greater than every one already in appcast.xml.
-VERSION = "0.1.0"
-BUILD = "1"
+VERSION = "1.0.0"
+BUILD = "2"
 MINIMUM_SYSTEM = "26.0"
 # Where installed copies look for updates.
 FEED_URL = "https://raw.githubusercontent.com/hedgertronic/snug/main/appcast.xml"
