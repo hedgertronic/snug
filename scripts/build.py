@@ -194,6 +194,12 @@ def main() -> None:
     (snug_contents / "Resources/Fonts").mkdir(exist_ok=True)
     for name in ("Fredoka-Bold.ttf", "OFL.txt"):
         shutil.copy2(root / "brand/fonts" / name, snug_contents / "Resources/Fonts" / name)
+    # The license notices: Snug's own, Sparkle's (with the notices of the code it bundles) from its SwiftPM artifact, and the font's.
+    licenses = snug_contents / "Resources/Licenses"
+    licenses.mkdir(exist_ok=True)
+    for source, name in ((root / "LICENSE", "Snug.txt"), (sparkle_tool("sign_update").parents[1] / "LICENSE", "Sparkle.txt"),
+                         (root / "brand/fonts/OFL.txt", "Fredoka.txt")):
+        shutil.copy2(source, licenses / name)
     snug_info = {
         "CFBundleExecutable": "Snug",
         "CFBundleIdentifier": "com.hedgertronic.snug",

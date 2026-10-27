@@ -73,4 +73,4 @@ This builds `build/Snug.app` as a universal arm64 + x86_64 app. Add `--lab` to a
 
 Capture processing, OCR, and subject cutouts run on-device. Snug does not upload captures. It uses Sparkle to check for and download updates. If you connect an agent, that agent can read your latest handoff and handles it under its own data policies.
 
-[MIT licensed](LICENSE). Made by [Josh Hejka](https://hedgertronic.com/), with [Sparkle](https://sparkle-project.org/) for updates and [Fredoka](brand/fonts/OFL.txt) for the wordmark.
+[MIT licensed](LICENSE). Made by [Josh Hejka](https://hedgertronic.com/), with [Sparkle](https://sparkle-project.org/) for updates and [Fredoka](brand/fonts/OFL.txt) for the wordmark. Their license notices ship inside the app, in `Snug.app/Contents/Resources/Licenses`.
