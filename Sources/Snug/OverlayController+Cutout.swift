@@ -153,8 +153,8 @@ extension OverlayController {
             do {
                 let output = try await Output.encodeCutout(subject.image, bounds: bounds, cornerRadii: radii, framed: framed, scale: scale,
                                                              shadow: shadow, padding: padding)
-                Output.publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save,
-                               pasteboard: pasteboard, defaults: defaults)
+                await Output.publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save,
+                                     pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
             }

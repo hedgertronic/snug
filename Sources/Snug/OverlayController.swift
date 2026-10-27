@@ -1000,8 +1000,8 @@ final class OverlayController {
                 } else {
                     (png: try await Output.png(image), width: image.width, height: image.height)
                 }
-                Output.publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save, destination: destination,
-                               pasteboard: pasteboard, defaults: defaults)
+                await Output.publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save, destination: destination,
+                                     pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
             }

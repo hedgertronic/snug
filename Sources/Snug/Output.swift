@@ -168,8 +168,8 @@ enum Output {
         let id = signposter.beginInterval("encode")
         let output = try await encode(image, crop: crop, padding: padding, scale: scale, cornerRadii: cornerRadii, shadow: shadow)
         signposter.endInterval("encode", id)
-        publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save, destination: destination,
-                warning: warning, pasteboard: pasteboard, defaults: defaults)
+        await publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save, destination: destination,
+                      warning: warning, pasteboard: pasteboard, defaults: defaults)
     }
 
     /// The usual file for a saved capture: the save folder and a timestamped name.
@@ -183,11 +183,11 @@ enum Output {
     /// pixel size line, saved or not. A save goes to `destination` (Save As, which the panel already confirmed) or the usual file, which takes a
     /// numbered name when its own is taken. A write that fails (the pasteboard refusing the image, an unwritable folder) shows a red toast
     /// with its reason and keeps the capture in it: "Copy failed" or "Save failed"; a capture that lands plays the capture sound. Otherwise a `warning` (a capture that may be wrong)
-    /// takes the detail line and an orange mark.
+    /// takes the detail line and an orange mark. The file is written off the main thread; the pasteboard and the toast stay on it.
     @MainActor
     @discardableResult
     static func publish(png: Data, detail: String, copy: Bool, save: Bool, destination: URL? = nil, warning: String? = nil, pasteboard: NSPasteboard,
-                        defaults: UserDefaults) -> (message: String, detail: String) {
+                        defaults: UserDefaults) async -> (message: String, detail: String) {
         var copied = !copy
         if copy {
             let id = signposter.beginInterval("pasteboard")
@@ -199,12 +199,7 @@ enum Output {
         var saveError: (any Error)?
         if save {
             do {
-                if let destination {
-                    try png.write(to: destination, options: .atomic)
-                    file = destination
-                } else {
-                    file = try UniqueFile.write(png, to: defaultFile(defaults: defaults))
-                }
+                file = try await write(png, to: destination ?? defaultFile(defaults: defaults), unique: destination == nil)
             } catch {
                 saveError = error
             }
@@ -218,6 +213,15 @@ enum Output {
                    defaults: defaults, pasteboard: pasteboard)
         if !failed { Sound.capture.play(defaults: defaults) }
         return (message, detail)
+    }
+
+    /// Writes `png` to `file` off the main thread: a unique name (`UniqueFile`) for the usual file, or in place, atomically, for a Save
+    /// As destination the panel already confirmed. Returns the file written.
+    @concurrent
+    private static func write(_ png: Data, to file: URL, unique: Bool) async throws -> URL {
+        if unique { return try UniqueFile.write(png, to: file) }
+        try png.write(to: file, options: .atomic)
+        return file
     }
 
     /// The toast's message for what was asked (`copy`, `save`) and what worked (`copied`, `saved`). Only a recording, already saved, is
