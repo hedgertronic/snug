@@ -131,27 +131,41 @@
 
     <article class="card" id="key-k">
       <div class="art vk">
-        <svg viewBox="0 0 320 198" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-          <g class="vk-bg">
-            <rect width="320" height="220" fill="#E9DCCB"/>
-            <rect x="190" y="14" width="104" height="110" rx="6" fill="#CFE3EE"/>
-            <path d="M242 14v110M190 69h104" stroke="#FFFFFF" stroke-width="6"/>
-            <rect x="0" y="160" width="320" height="60" fill="#B58A62"/>
-            <rect x="0" y="156" width="320" height="8" fill="#9C7450"/>
-            <rect x="30" y="114" width="16" height="44" rx="2" fill="#5C7FA8"/>
-            <rect x="48" y="120" width="14" height="38" rx="2" fill="#D9825B"/>
-            <rect x="64" y="108" width="18" height="50" rx="2" fill="#7D9C6B"/>
+        <svg viewBox="0 0 200 124" aria-hidden="true">
+          <defs>
+            <g id="vk-plant">
+              <path d="M150 104c-14-30-40-36-52-30 12 4 26 16 34 34z" fill="#4E8A55"/>
+              <path d="M158 102c-4-40 16-62 30-64-4 14-14 36-18 62z" fill="#5FA163"/>
+              <path d="M164 106c18-26 42-28 54-20-14 2-30 10-44 26z" fill="#4E8A55"/>
+              <path d="M154 100c-20-14-24-40-16-52 2 14 8 32 22 46z" fill="#6DB26E"/>
+              <path d="M128 104h64l-8 54h-48z" fill="#E07A5F"/>
+              <rect x="124" y="98" width="72" height="12" rx="3" fill="#C9654C"/>
+            </g>
+            <clipPath id="vk-clip"><rect x="25" y="12" width="150" height="70" rx="6"/></clipPath>
+            <pattern id="vk-chk" width="9.6" height="9.6" patternUnits="userSpaceOnUse"><rect width="9.6" height="9.6" fill="#FFFFFF"/><path d="M0 0h4.8v4.8H0zM4.8 4.8h4.8v4.8H4.8z" fill="#D9D9D9"/></pattern>
+            <filter id="vk-ring" x="-10%" y="-10%" width="120%" height="120%"><feMorphology in="SourceAlpha" operator="dilate" radius="2.5" result="d"/><feFlood class="vk-fl"/><feComposite in2="d" operator="in"/></filter>
+          </defs>
+          <rect class="pic" x="25" y="12" width="150" height="70" rx="6"/>
+          <g clip-path="url(#vk-clip)">
+            <rect x="25" y="12" width="150" height="70" fill="url(#vk-chk)"/>
+            <svg x="25" y="12" width="150" height="70" viewBox="0 0 320 198" preserveAspectRatio="xMidYMid slice">
+              <g class="vk-bg">
+                <rect width="320" height="220" fill="#E9DCCB"/>
+                <rect x="190" y="14" width="104" height="110" rx="6" fill="#CFE3EE"/>
+                <path d="M242 14v110M190 69h104" stroke="#FFFFFF" stroke-width="6"/>
+                <rect x="0" y="160" width="320" height="60" fill="#B58A62"/>
+                <rect x="0" y="156" width="320" height="8" fill="#9C7450"/>
+                <rect x="30" y="114" width="16" height="44" rx="2" fill="#5C7FA8"/>
+                <rect x="48" y="120" width="14" height="38" rx="2" fill="#D9825B"/>
+                <rect x="64" y="108" width="18" height="50" rx="2" fill="#7D9C6B"/>
+              </g>
+              <use class="vk-ring" href="#vk-plant" filter="url(#vk-ring)"/><use href="#vk-plant"/>
+            </svg>
           </g>
-          <defs><g id="vk-plant">
-            <path d="M150 104c-14-30-40-36-52-30 12 4 26 16 34 34z" fill="#4E8A55"/>
-            <path d="M158 102c-4-40 16-62 30-64-4 14-14 36-18 62z" fill="#5FA163"/>
-            <path d="M164 106c18-26 42-28 54-20-14 2-30 10-44 26z" fill="#4E8A55"/>
-            <path d="M154 100c-20-14-24-40-16-52 2 14 8 32 22 46z" fill="#6DB26E"/>
-            <path d="M128 104h64l-8 54h-48z" fill="#E07A5F"/>
-            <rect x="124" y="98" width="72" height="12" rx="3" fill="#C9654C"/>
-          </g></defs>
-          <use class="vk-sh" href="#vk-plant"/><use class="vk-subj" href="#vk-plant"/>
         </svg>
+        <div class="cov vk-ov">
+          <div class="o-toast"><span class="th"><svg viewBox="98 38 120 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#vk-plant"/></svg></span><b>Copied</b><em>480 x 480</em></div>
+        </div>
       </div>
       <div class="card-head"><kbd class="cap" data-hold="k">K</kbd><h3>Remove background</h3></div>
     </article>
