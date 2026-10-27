@@ -14,6 +14,15 @@ struct ScreenPickTests {
         }
     }
 
+    @Test func aPointOnASharedEdgeIsOnTheDisplayStartingThere() {
+        let point = CGPoint(x: 3024, y: 1200)
+        #expect(ScreenPick.index(of: point, in: [builtIn, external]) == 1)
+        #expect(ScreenPick.index(of: point, in: [external, builtIn]) == 0)
+        // A display above the built-in one shares its top edge.
+        let above = CGRect(x: 0, y: 1964, width: 1920, height: 1080)
+        #expect(ScreenPick.index(of: CGPoint(x: 500, y: 1964), in: [builtIn, above]) == 1)
+    }
+
     @Test func aPointBetweenDisplaysTakesTheNearestOne() {
         let frames = [builtIn, external]
         #expect(ScreenPick.index(of: CGPoint(x: 3500, y: 1964), in: frames) == 1, "the top edge of the external display")
