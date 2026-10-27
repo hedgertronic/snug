@@ -223,7 +223,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     /// "q", the default: drawn to look like macOS's monochrome app icons on either menu bar, a mid-gray tile, a lighter pillow, a lighter
     /// blanket still, and the brightest arch dashes and band. On a `dark` menu bar the template's white is the light: the tile at 35%, the
     /// pillow at 60%, the blanket at 85%, and the dashes and band solid. On a light one its black is the dark: the tile at 56%, the pillow at
-    /// 33%, the blanket at 10%, and the dashes and band cut out.
+    /// 33%, the blanket at 16%, and the dashes and band cut out.
     static func menuBarIcon(_ variant: String, dark: Bool = false) -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18))
         for scale in [1, 2] {
@@ -288,7 +288,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 // "q" on a dark menu bar draws the arch's dashes and the band solid instead of cutting them out, over a faint tile.
                 let marked = variant == "q" && dark
                 let (tileAlpha, pillowAlpha, blanketAlpha): (CGFloat, CGFloat, CGFloat) =
-                    variant == "p" ? (1, 0.4, 0.7) : marked ? (0.35, 0.6, 0.85) : (0.56, 0.33, 0.1)
+                    variant == "p" ? (1, 0.4, 0.7) : marked ? (0.35, 0.6, 0.85) : (0.56, 0.33, 0.16)
                 let tile = NSBezierPath(roundedRect: CGRect(x: 1, y: 1, width: 16, height: 16), xRadius: 4, yRadius: 4)
                 let context = NSGraphicsContext.current!
                 if scale == 1 {
