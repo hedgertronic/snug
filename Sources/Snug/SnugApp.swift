@@ -402,9 +402,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     // MARK: Capture
 
-    /// The display under the pointer, nil while the pointer is on none (as while displays are rearranged).
+    /// The display under the pointer (`ScreenPick`: edges included, else the nearest display), or the main one; nil only with no
+    /// display at all, as while displays are rearranged.
     private func displayUnderPointer() -> CGDirectDisplayID? {
-        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }),
+        let screens = NSScreen.screens
+        guard let screen = ScreenPick.index(of: NSEvent.mouseLocation, in: screens.map(\.frame)).map({ screens[$0] }) ?? NSScreen.main,
               let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return nil }
         return CGDirectDisplayID(number.uint32Value)
     }
