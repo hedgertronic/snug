@@ -145,7 +145,7 @@ enum Accessibility {
         var path = [window]
         let began = ContinuousClock.now
         while path.count < maxDepth, began.duration(to: .now) < walkBudget, budget.visit(), let children = children(of: path.last!.element, kAXChildrenAttribute),
-              let smallest = children.compactMap({ child in frame(of: child).map { (element: child, frame: $0) } })
+              let smallest = children.compactMap({ child in budget.visit() ? frame(of: child).map { (element: child, frame: $0) } : nil })
                   .filter({ $0.frame.rect.contains(point) }).min(by: { $0.frame.rect.width * $0.frame.rect.height < $1.frame.rect.width * $1.frame.rect.height }) {
             path.append(smallest)
         }
@@ -172,7 +172,8 @@ enum Accessibility {
             guard let frame = frame(of: sibling)?.translated(by: shift) else { continue }
             var down = [frame]
             var element = sibling
-            while let only = children(of: element, kAXChildrenAttribute), only.count == 1, let child = self.frame(of: only[0])?.translated(by: shift),
+            // At most `maxDepth` levels, so a tree whose element lists itself as its only child ends.
+            while down.count < maxDepth, let only = children(of: element, kAXChildrenAttribute), only.count == 1, let child = self.frame(of: only[0])?.translated(by: shift),
                   child.rect.isNear(down.last!.rect, within: AccessibilityBounds.paddingTolerance) {
                 down.append(child)
                 element = only[0]
