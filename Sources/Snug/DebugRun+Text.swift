@@ -61,7 +61,7 @@ extension DebugRun {
         let email = CGRect(x: 326, y: 800, width: 660, height: 70)
 
         func fixtureImage(_ path: String) -> CGImage {
-            let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../\(path)").standardized
+            let url = DebugRun.sourceFile(path)
             return CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(url as CFURL, nil)!, 0, nil)!
         }
         func textView(in view: NSView) -> NSView? {

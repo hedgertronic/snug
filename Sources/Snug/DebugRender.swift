@@ -350,7 +350,7 @@ extension DebugRun {
         // Finder's sidebar (a synthetic 920 x 436 pt Finder window at 2x) with Documents hovered: Up outlines the sidebar, Down the
         // icon, and Left and Right outline nothing. The frames are the live AX tree's (FinderSidebarHoverTests), in window points; the
         // icon's is its glyph's pixel box in the fixture, as the AX tree read has no icon frame.
-        let finderURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../Tests/Fixtures/finder-window.png").standardized
+        let finderURL = DebugRun.sourceFile("Tests/Fixtures/finder-window.png")
         let finder = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(finderURL as CFURL, nil)!, 0, nil)!
         overlay.present(image: finder, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(finder.width) / 2, height: CGFloat(finder.height) / 2), displayID: nil)
         overlay.detectionTask?.cancel()
@@ -465,7 +465,7 @@ extension DebugRun {
             await OverlayController.visionWarmUp?.value
 
             // The cut-out preview of one icon, then of the second of three subjects, at 1 pt per pixel so the chrome leaves room.
-            let fixtures = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../Tests/Fixtures/cutout").standardized
+            let fixtures = DebugRun.sourceFile("Tests/Fixtures/cutout")
             let spike = ["icon-flat-composite.png", "dock-tile-composite.png", "badge-real.png"].map {
                 CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(fixtures.appending(path: $0) as CFURL, nil)!, 0, nil)!
             }

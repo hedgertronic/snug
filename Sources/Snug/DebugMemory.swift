@@ -10,7 +10,7 @@ extension DebugRun {
         let vision = !CommandLine.arguments.contains("--no-vision")
         let pid = ProcessInfo.processInfo.processIdentifier
         var index = 0
-        let script = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../scripts/memory-inspect.sh").standardized
+        let script = DebugRun.sourceFile("scripts/memory-inspect.sh")
 
         func record(_ label: String, settle: Duration = .seconds(2)) async throws {
             try await Task.sleep(for: settle)
