@@ -908,11 +908,11 @@ extension DebugRun {
         let saving = toast { $0.set(saveFolder.path, forKey: Pref.saveFolder) }
         require(saving.file == nil, "an unsaved capture has no file")
         saving.openButton.performClick(nil)
-        let previewFile = try Data(contentsOf: saving.file!)
-        require(previewFile == capture && Toast.opened! == (saving.file!, Bundle(url: NSWorkspace.shared.urlForApplication(toOpen: .png)!)!.bundleIdentifier!),
-                "Open writes the capture to a temporary PNG and opens it in the default app for PNGs: \(Toast.opened!)")
+        let previewFile = try Data(contentsOf: Toast.opened!.file)
+        require(previewFile == capture && Toast.opened!.app == Bundle(url: NSWorkspace.shared.urlForApplication(toOpen: .png)!)!.bundleIdentifier! && saving.file == nil,
+                "Open writes the capture to a temporary PNG, opens it in the default app for PNGs, and leaves the capture unsaved: \(Toast.opened!)")
         saving.shareButton.performClick(nil)
-        require(saving.file != nil, "Share has a file to share")
+        require(saving.message.stringValue == "Copied", "Share has a file to share: \(saving.message.stringValue)")
         let chosen = saveFolder.appending(path: "Chosen.png")
         for answer in [nil, chosen] {
             let asking = toast { $0.set(saveFolder.path, forKey: Pref.saveFolder) }
