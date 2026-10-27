@@ -321,7 +321,8 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 
 /* T: the selection sweeps over two lines, the Text strip's Copy button (Chrome.swift textStrip) appears under it, its Return cap presses, and the toast follows */
 /* A 6 s loop: the sweep takes 1.1 s, Copy shows 0.8 s before Return presses it, the selection goes with the overlay, and the toast holds 2.25 s. */
-.tx-ov .o-toast { animation: txt 6s infinite both; }
+/* The terminal ends 34 units above the art's bottom edge (a toast is 40 pt = 24 units), so the toast centres in that band: 5 units, 8.33 pt, either side. */
+.tx-ov .o-toast { --toast-gap: 8.33px; animation: txt 6s infinite both; }
 @keyframes txt { 0%, 51.7% { opacity: 0; transform: translate(-50%, calc(6px * var(--pt))); animation-timing-function: ease-out; } 55.8%, 93.3% { opacity: 1; transform: translate(-50%, 0); animation-timing-function: ease-out; } 97.5%, 100% { opacity: 0; transform: translate(-50%, 0); } }
 /* The text strip's Copy (Chrome.swift textStrip), 8 pt under the selection from its left edge; Return presses its cap as the hero's does. */
 .tx-ov .tx-btn { left: 10.5%; top: calc(56.85% + 8px * var(--pt)); animation: txbtn 6s infinite both; }
