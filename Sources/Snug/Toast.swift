@@ -14,8 +14,8 @@ import UniformTypeIdentifiers
 /// Pointing at the thumbnail grows the capture out of it in its own panel, a margin above the capsule (below it at the top right); the
 /// pointer can cross to it without either closing. Drag the thumbnail or the preview to drop the image, or click either to open it as
 /// Open does; a click elsewhere closes the toast. It goes away after the lifetime setting (4 s unless changed) while the pointer is elsewhere, and
-/// stays while it is over the toast or its preview; leaving starts the full lifetime again. A lifetime of 0 shows only failure toasts
-/// (red), for 4 s; Forever keeps the toast until it is closed or drops off the stack.
+/// stays while it is over the toast or its preview; leaving starts the full lifetime again. A lifetime of 0 shows only failure (red) and
+/// warning (orange) toasts, for 4 s; Forever keeps the toast until it is closed or drops off the stack.
 /// Toasts stack, each on its own timer: the newest at the anchor and the older ones a gap further from it (up from a bottom anchor, down
 /// from the top right). Closing one settles the ones past it back toward the anchor; a new one that makes the stack taller than a third of
 /// the screen's visible height closes the oldest.
@@ -41,7 +41,7 @@ final class Toast: NSPanel, NSDraggingSource {
     }
     /// Transparent margin around the capsule, so the close button can hang off a corner; it is also the gap to the preview.
     private static let margin: CGFloat = 10
-    /// The lifetime setting's choices, in seconds: 0 is no toast but failures, and -1 is Forever.
+    /// The lifetime setting's choices, in seconds: 0 is no toast but failures and warnings, and -1 is Forever.
     static let lifetimes = [0, 1, 2, 3, 4, 5, 6, 8, 10, 15, 20, 30, -1]
     /// The index in `lifetimes` of the stop nearest `seconds`, Forever being a stop of its own; a stored value off the list snaps to a neighbor.
     static func lifetimeIndex(_ seconds: Int) -> Int {
@@ -52,7 +52,10 @@ final class Toast: NSPanel, NSDraggingSource {
     private static let warningText = NSColor.look(dark: NSColor(srgbRed: 1, green: 0.7, blue: 0.25, alpha: 1), light: NSColor(srgbRed: 0.64, green: 0.32, blue: 0, alpha: 1))
     private static let failureText = NSColor.look(dark: NSColor(srgbRed: 1, green: 0.41, blue: 0.38, alpha: 1), light: NSColor(srgbRed: 0.77, green: 0.13, blue: 0.1, alpha: 1))
     private(set) var png: Data?
+    /// The saved file, if any: Trash, Show in Finder and Copy for a recording act on it.
     private(set) var file: URL?
+    /// The capture or copied text written to a file of its own for Open, Share and drag, when there is no saved file.
+    private var scratchFile: URL?
     /// What Copy puts on the pasteboard for a toast without a capture: the copied text or color value.
     private let text: String?
     private(set) var dismissal: Task<Void, any Error>?
@@ -103,7 +106,7 @@ final class Toast: NSPanel, NSDraggingSource {
     /// toast its value to copy again. `pasteboard` is where Copy writes and Trash looks for the capture. A failure beeps.
     static func show(png: Data? = nil, message: String, detail: String = "", file: URL? = nil, color: NSColor? = nil, text: String? = nil,
                      defaults: UserDefaults = .standard, pasteboard: NSPasteboard = .general) {
-        guard !isSuppressed, defaults.integer(forKey: Pref.toastLifetime) != 0 || color == .systemRed else { return }
+        guard !isSuppressed, defaults.integer(forKey: Pref.toastLifetime) != 0 || color == .systemRed || color == .systemOrange else { return }
         if color == .systemRed { NSSound.beep() }
         let toast = Toast(png: png, message: message, detail: detail, file: file, color: color, text: text, defaults: defaults, pasteboard: pasteboard)
         stack(toast)
@@ -225,7 +228,7 @@ final class Toast: NSPanel, NSDraggingSource {
         closeButton.toolTip = "Close"
         closeButton.isHidden = true
         // Open names the default app for plain text, or for the file's type (a PNG until the capture is saved).
-        let openTip = "Open in \(Toast.appName(toOpen: copiedText != nil ? .plainText : file.map { UTType(filenameExtension: $0.pathExtension)! } ?? .png))"
+        let openTip = "Open in \(Toast.appName(toOpen: copiedText != nil ? .plainText : file.flatMap { UTType(filenameExtension: $0.pathExtension) } ?? .png))"
         func button(_ symbol: String, _ tip: String) -> NSButton {
             let button = NSButton(image: NSImage(systemSymbolName: symbol, accessibilityDescription: tip)!, target: nil, action: nil)
             button.isBordered = false
@@ -302,7 +305,8 @@ final class Toast: NSPanel, NSDraggingSource {
         root.addSubview(card)
         root.addSubview(closeButton)
         contentView = root
-        screenArea = (NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main!).visibleFrame
+        let screens = NSScreen.screens
+        screenArea = (ScreenPick.index(of: NSEvent.mouseLocation, in: screens.map(\.frame)).map { screens[$0] } ?? NSScreen.main)?.visibleFrame ?? .zero
         let position = defaults.string(forKey: Pref.toastPosition)!
         let origin = switch position {
         case "topLeft": NSPoint(x: screenArea.minX + 20, y: screenArea.maxY - size.height - 20)
@@ -367,10 +371,13 @@ final class Toast: NSPanel, NSDraggingSource {
         thumbnailArea = thumbnailRect
     }
 
-    /// The name of the default app for files of `type`, from its bundle.
+    /// The name of the default app for files of `type`, from its bundle; "Default App" when Launch Services names no app or its bundle has no name.
     static func appName(toOpen type: UTType) -> String {
-        let app = Bundle(url: NSWorkspace.shared.urlForApplication(toOpen: type)!)!
-        return (app.object(forInfoDictionaryKey: "CFBundleDisplayName") ?? app.object(forInfoDictionaryKey: "CFBundleName")) as! String
+        guard let url = NSWorkspace.shared.urlForApplication(toOpen: type), let app = Bundle(url: url),
+              let name = (app.object(forInfoDictionaryKey: "CFBundleDisplayName") ?? app.object(forInfoDictionaryKey: "CFBundleName")) as? String else {
+            return "Default App"
+        }
+        return name
     }
 
     /// The part of an image of `size` that fills `box`: a tall image keeps its top, a wide one its middle.
@@ -443,19 +450,23 @@ final class Toast: NSPanel, NSDraggingSource {
 
     @objc private func closeClicked() { dismiss() }
 
-    /// The saved file, or the capture written to a temporary one, or the copied text written as UTF-8 to a temporary file of its own.
-    private func fileOnDisk() -> URL {
-        if file == nil, let png {
-            file = FileManager.default.temporaryDirectory.appending(path: "Snug.png")
-            try! png.write(to: file!)
-        } else if file == nil {
-            let folder = FileManager.default.temporaryDirectory.appending(path: "Snug")
-            try! FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    /// The saved file, or else this toast's own temporary file, written once: the capture as Snug.png, or the copied text as UTF-8. Each
+    /// toast's file is in a folder of its own, so another toast's capture never replaces it while an app has it open. The files stay
+    /// after the toast closes, since a drag's receiver may read its file later.
+    private func fileOnDisk() throws -> URL {
+        if let file { return file }
+        if let scratchFile { return scratchFile }
+        let folder = FileManager.default.temporaryDirectory.appending(path: "Snug")
+        let written: URL
+        if let png {
+            written = try UniqueFile.scratch(png, named: "Snug.png", under: folder)
+        } else {
             let format = DateFormatter()
             format.dateFormat = "yyyy-MM-dd HH.mm.ss"
-            file = try! UniqueFile.write(Data(text!.utf8), to: folder.appending(path: "Snug Text \(format.string(from: .now)).txt"))
+            written = try UniqueFile.scratch(Data((text ?? "").utf8), named: "Snug Text \(format.string(from: .now)).txt", under: folder)
         }
-        return file!
+        scratchFile = written
+        return written
     }
 
     /// Puts the capture on the pasteboard again (a recording as its file, as delivered), or the copied text or color value, and closes.
@@ -473,9 +484,10 @@ final class Toast: NSPanel, NSDraggingSource {
 
     /// Opens the file (the capture, the recording, or the copied text's temporary file) in its default app and closes the toast.
     @objc private func openClicked() {
-        let url = fileOnDisk()
+        let url: URL
+        do { url = try fileOnDisk() } catch { return showFailure("Open failed", error) }
         guard !Toast.isSuppressed else {
-            Toast.opened = (url, Bundle(url: NSWorkspace.shared.urlForApplication(toOpen: url)!)!.bundleIdentifier!)
+            Toast.opened = (url, NSWorkspace.shared.urlForApplication(toOpen: url).flatMap { Bundle(url: $0)?.bundleIdentifier } ?? "")
             return
         }
         NSWorkspace.shared.open(url)
@@ -495,7 +507,8 @@ final class Toast: NSPanel, NSDraggingSource {
     /// Shows the share menu from the button for the capture's file or the copied text. The toast stays up while it is open, and closes once
     /// a service is chosen.
     @objc private func shareClicked() {
-        let item: Any = png == nil ? text! : fileOnDisk()
+        let item: Any
+        do { item = png == nil ? text! : try fileOnDisk() } catch { return showFailure("Share failed", error) }
         guard !Toast.isSuppressed else { return }
         holding = true
         dismissal?.cancel()
@@ -504,11 +517,17 @@ final class Toast: NSPanel, NSDraggingSource {
         picker.show(relativeTo: shareButton.bounds, of: shareButton, preferredEdge: .minY)
     }
 
-    /// Moves the saved file to the Trash, clears the pasteboard if it still holds this capture, and closes the toast.
+    /// Moves the saved file to the Trash, then clears the pasteboard if it still holds this capture, and closes the toast. A file that
+    /// cannot be trashed (already gone, a read-only folder) shows why in the toast and leaves the pasteboard as it is.
     @objc private func trashClicked() {
+        guard let file else { return }
         let holdsCapture = pasteboard.data(forType: .png) == png || (pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL])?.first == file
+        do {
+            try FileManager.default.trashItem(at: file, resultingItemURL: nil)
+        } catch {
+            return showFailure("Move to Trash failed", error)
+        }
         if holdsCapture { pasteboard.clearContents() }
-        try! FileManager.default.trashItem(at: file!, resultingItemURL: nil)
         dismiss()
     }
 
@@ -529,18 +548,22 @@ final class Toast: NSPanel, NSDraggingSource {
         do {
             try png!.write(to: chosen, options: .atomic)
         } catch {
-            message.stringValue = "Save failed"
-            detail.stringValue = (error as NSError).localizedFailureReason ?? error.localizedDescription
-            detail.font = .systemFont(ofSize: 12)
-            detail.textColor = Toast.failureText
-            detail.lineBreakMode = .byTruncatingTail
-            detail.toolTip = detail.stringValue
-            detail.isHidden = false
-            layoutText()
-            scheduleDismissal()
-            return
+            return showFailure("Save failed", error)
         }
         dismiss()
+    }
+
+    /// Shows `title` and the error's reason in the toast, in red, and restarts its timer; the toast and its buttons stay.
+    private func showFailure(_ title: String, _ error: any Error) {
+        message.stringValue = title
+        detail.stringValue = (error as NSError).localizedFailureReason ?? error.localizedDescription
+        detail.font = .systemFont(ofSize: 12)
+        detail.textColor = Toast.failureText
+        detail.lineBreakMode = .byTruncatingTail
+        detail.toolTip = detail.stringValue
+        detail.isHidden = false
+        layoutText()
+        scheduleDismissal()
     }
 
     override func mouseEntered(with event: NSEvent) { track(event, inside: true) }
@@ -592,7 +615,9 @@ final class Toast: NSPanel, NSDraggingSource {
         dragStart = nil
         dismissal?.cancel()
         let view = event.window!.contentView!
-        let item = NSDraggingItem(pasteboardWriter: fileOnDisk() as NSURL)
+        let url: URL
+        do { url = try fileOnDisk() } catch { return showFailure("Drag failed", error) }
+        let item = NSDraggingItem(pasteboardWriter: url as NSURL)
         item.setDraggingFrame(event.window === preview ? view.bounds : view.convert(lead.bounds, from: lead), contents: NSImage(data: png))
         view.beginDraggingSession(with: [item], event: event, source: self)
     }

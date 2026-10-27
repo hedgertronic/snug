@@ -626,23 +626,23 @@ extension DebugRun {
         let taken = Output.defaultFile(defaults: defaults)
         try Data("taken".utf8).write(to: taken)
         for text in ["first", "second", "third"] {
-            Output.publish(png: Data(text.utf8), detail: "", copy: false, save: true, pasteboard: pasteboard, defaults: defaults)
+            await Output.publish(png: Data(text.utf8), detail: "", copy: false, save: true, pasteboard: pasteboard, defaults: defaults)
         }
         let saved = try FileManager.default.contentsOfDirectory(atPath: outputFolder.path)
         let contents = try Set(saved.map { try String(contentsOf: outputFolder.appending(path: $0), encoding: .utf8) })
         require(saved.count == 4 && contents == ["taken", "first", "second", "third"], "saves in one second keep every capture: \(saved)")
         require(saved.contains { $0.hasSuffix(" 2.png") }, "a taken default name gets \" 2\" before the extension: \(saved)")
-        let savedToast = Output.publish(png: Data("fourth".utf8), detail: "1 x 1", copy: false, save: true, pasteboard: pasteboard, defaults: defaults)
+        let savedToast = await Output.publish(png: Data("fourth".utf8), detail: "1 x 1", copy: false, save: true, pasteboard: pasteboard, defaults: defaults)
         require(savedToast.detail == "1 x 1", "a saved capture's toast keeps the pixel size as its detail, not the file name: \(savedToast)")
 
         let blocked = folder.appending(path: "blocked")
         try FileManager.default.createDirectory(at: blocked, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o500])
         defaults.set(blocked.path, forKey: Pref.saveFolder)
         pasteboard.clearContents()
-        let saveOnly = Output.publish(png: Data("kept".utf8), detail: "1 x 1", copy: false, save: true, pasteboard: pasteboard, defaults: defaults)
+        let saveOnly = await Output.publish(png: Data("kept".utf8), detail: "1 x 1", copy: false, save: true, pasteboard: pasteboard, defaults: defaults)
         require(saveOnly.message == "Save failed" && !saveOnly.detail.isEmpty && pasteboard.data(forType: .png) == nil,
                 "Save on an unwritable folder copies nothing and reports \"Save failed\" with a reason: \(saveOnly)")
-        let copyOnly = Output.publish(png: Data("kept".utf8), detail: "1 x 1", copy: true, save: false, pasteboard: pasteboard, defaults: defaults)
+        let copyOnly = await Output.publish(png: Data("kept".utf8), detail: "1 x 1", copy: true, save: false, pasteboard: pasteboard, defaults: defaults)
         require(copyOnly.message == "Copied" && copyOnly.detail == "1 x 1", "a plain copy still says Copied: \(copyOnly)")
         let messages = [(true, true, true, true), (true, true, false, true), (true, false, true, true), (true, false, false, true), (false, true, true, true), (false, true, true, false)]
             .map { Output.message(copy: $0.0, save: $0.1, copied: $0.2, saved: $0.3, folder: "F") }

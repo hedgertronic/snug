@@ -350,7 +350,7 @@ extension DebugRun {
         // Finder's sidebar (a synthetic 920 x 436 pt Finder window at 2x) with Documents hovered: Up outlines the sidebar, Down the
         // icon, and Left and Right outline nothing. The frames are the live AX tree's (FinderSidebarHoverTests), in window points; the
         // icon's is its glyph's pixel box in the fixture, as the AX tree read has no icon frame.
-        let finderURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../Tests/Fixtures/finder-window.png").standardized
+        let finderURL = DebugRun.sourceFile("Tests/Fixtures/finder-window.png")
         let finder = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(finderURL as CFURL, nil)!, 0, nil)!
         overlay.present(image: finder, frame: CGRect(x: frame.minX, y: frame.minY, width: CGFloat(finder.width) / 2, height: CGFloat(finder.height) / 2), displayID: nil)
         overlay.detectionTask?.cancel()
@@ -465,7 +465,7 @@ extension DebugRun {
             await OverlayController.visionWarmUp?.value
 
             // The cut-out preview of one icon, then of the second of three subjects, at 1 pt per pixel so the chrome leaves room.
-            let fixtures = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../Tests/Fixtures/cutout").standardized
+            let fixtures = DebugRun.sourceFile("Tests/Fixtures/cutout")
             let spike = ["icon-flat-composite.png", "dock-tile-composite.png", "badge-real.png"].map {
                 CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(fixtures.appending(path: $0) as CFURL, nil)!, 0, nil)!
             }
@@ -492,7 +492,7 @@ extension DebugRun {
         }
 
         open()
-        try await overlay.detectionTask?.value
+        await overlay.detectionTask?.value
         overlay.setWindows([CGRect(x: 100, y: 100, width: 1500, height: 1200)], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, CGPoint(x: 422, y: 585))
         try snapshot("capture-hover")
@@ -507,7 +507,7 @@ extension DebugRun {
         // numbers, and Option flips it.
         open()
         try snapshot("capture-nothing-targeted")
-        try await overlay.detectionTask?.value
+        await overlay.detectionTask?.value
         let browser = CGRect(x: 100, y: 100, width: 1500, height: 1200)
         overlay.setWindows([browser], names: ["Form test - Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         mouse(.mouseMoved, CGPoint(x: 422, y: 585))
@@ -684,7 +684,7 @@ extension DebugRun {
         print("excluded \(excluded.sorted()): overlay \(overlayID) in, settings \(settingsID) out")
         if CGPreflightScreenCaptureAccess() {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-            let included = Set(DisplayCapture.filter(for: CGMainDisplayID(), in: content, excluding: excluded).includedWindows.map(\.windowID))
+            let included = Set(try DisplayCapture.filter(for: CGMainDisplayID(), in: content, excluding: excluded).includedWindows.map(\.windowID))
             precondition(included.contains(settingsID), "the capture filter includes the Settings window \(settingsID)")
             precondition(!included.contains(overlayID), "the capture filter leaves out the overlay window \(overlayID)")
             print("capture filter: settings included, overlay excluded, \(included.count) windows included")

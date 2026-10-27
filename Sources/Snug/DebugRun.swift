@@ -6,6 +6,18 @@ import ScreenshotCore
 /// Headless checks driven by `--image PATH`: `--verify-area-ui` and `--measure`.
 @MainActor
 enum DebugRun {
+    /// `path` (relative to the checkout, as "Tests/Fixtures/x.png") in the source checkout that debug runs read fixtures and scripts
+    /// from: the nearest folder above the executable (`.build/debug/Snug`, or a `build/` app) holding Package.swift, else the current
+    /// folder. Found at run time, so the binary carries no source path of the machine that built it.
+    nonisolated static func sourceFile(_ path: String) -> URL {
+        var folder = Bundle.main.executableURL?.deletingLastPathComponent()
+        while let current = folder, current.path != "/" {
+            if FileManager.default.fileExists(atPath: current.appending(path: "Package.swift").path) { return current.appending(path: path) }
+            folder = current.deletingLastPathComponent()
+        }
+        return URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appending(path: path)
+    }
+
     static func privateSetup(_ overlay: OverlayController, timeout: Duration = .seconds(120)) -> URL {
         overlay.isHeadless = true
         overlay.animates = false

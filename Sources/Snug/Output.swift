@@ -52,7 +52,7 @@ enum Pref {
     /// The overlay chrome's look: "system" follows macOS, "light" and "dark" force one.
     static let overlayAppearance = "SnugOverlayAppearance"
     /// Where the toast sits (topLeft, topCenter, topRight, bottomLeft, bottomCenter, or bottomRight), and how many seconds it stays while the pointer is elsewhere
-    /// (one of `Toast.lifetimes`: 0 shows no toast but failures, -1 keeps it until closed).
+    /// (one of `Toast.lifetimes`: 0 shows no toast but failures and warnings, -1 keeps it until closed).
     static let toastPosition = "SnugToastPosition"
     static let toastLifetime = "SnugToastLifetime"
     /// Whether Snug plays its sounds on a capture and a recording's start and stop (Settings > General). Failures beep either way.
@@ -68,20 +68,24 @@ enum Pref {
     static let logScroll = "SnugLogScroll"
     /// The modification date of the Snug binary whose `--warm-vision` child process warmed Vision's accurate OCR models.
     static let visionWarmedBuild = "SnugVisionWarmedBuild"
+    /// The modification date of the Snug binary whose `--warm-vision` child ran past `OverlayController.warmUpTimeout` and was stopped;
+    /// launches of that binary start no warm-up, and OCR compiles its models on first use.
+    static let visionWarmUpGaveUpBuild = "SnugVisionWarmUpGaveUpBuild"
     /// The menu bar icon variant, "q", "p", "h" or "a" (see `SnugApp.menuBarIcon`). The status item redraws as soon as it changes, so
     /// `defaults write com.hedgertronic.snug SnugMenuBarIcon a` switches the icon live.
     static let menuBarIcon = "SnugMenuBarIcon"
 
+    /// Appends `line` to the diagnostic log `name` when `key` is on. Logging is best effort: a line that cannot be written is dropped.
     static func logHoverLine(_ line: String, key: String = logHover, file name: String = "hover.log") {
         guard UserDefaults.standard.bool(forKey: key) else { return }
         let folder = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Logs/Snug")
-        try! FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let file = folder.appending(path: name)
         if !FileManager.default.fileExists(atPath: file.path) { FileManager.default.createFile(atPath: file.path, contents: nil) }
-        let handle = try! FileHandle(forWritingTo: file)
-        defer { try! handle.close() }
-        try! handle.seekToEnd()
-        try! handle.write(contentsOf: Data((line + "\n").utf8))
+        guard let handle = try? FileHandle(forWritingTo: file) else { return }
+        defer { try? handle.close() }
+        _ = try? handle.seekToEnd()
+        try? handle.write(contentsOf: Data((line + "\n").utf8))
     }
 
     /// The custom shadow when `frameShadow` is "custom"; nil for the default shadows.
@@ -130,7 +134,36 @@ enum Pref {
             recordCountIn: 3,
             recordCursor: true
         ])
+        PreferenceRules.sanitize(defaults, domain: defaults == .standard ? Bundle.main.bundleIdentifier : nil, rules: rules)
     }
+
+    /// The values each constrained preference may hold; `register` removes any other stored value, so its default answers instead.
+    static var rules: [String: PreferenceRule] { [
+        menuBarIcon: .oneOf(menuBarIcons),
+        colorFormat: .oneOf(Set(ColorFormat.allCases.map(\.rawValue))),
+        guidesAnimation: .oneOf(["fade", "slide", "none"]),
+        overlayAppearance: .oneOf(["system", "light", "dark"]),
+        toastPosition: .oneOf(["topLeft", "topCenter", "topRight", "bottomLeft", "bottomCenter", "bottomRight"]),
+        toastLifetime: .integer(-1...86_400),
+        frameShadow: .oneOf(["default", "custom"]),
+        frameShadowColor: .hexColor(emptyAllowed: false),
+        frameShadowOpacity: .number(0...1),
+        frameShadowBlur: .number(0...100),
+        frameShadowDistance: .number(0...64),
+        frameShadowAngle: .number(0...360),
+        framePadding: .integer(0...64),
+        highlightColor: .hexColor(emptyAllowed: true),
+        highlightFill: .number(0...1),
+        highlightFade: .number(0...1),
+        highlightGlow: .number(0...1),
+        recordCountIn: .integerIn([0, 3, 5]),
+        hotKeyCode: .integerIn(Set([-1] + Array(Shortcut.keyNames.keys) + Array(Shortcut.functionKeys.keys))),
+        hotKeyModifiers: .flags(mask: Int(NSEvent.ModifierFlags([.control, .option, .command, .shift]).rawValue)),
+        saveFolder: .nonEmptyString,
+    ] }
+
+    /// The menu bar icon variants `SnugApp.menuBarIcon` draws.
+    static let menuBarIcons: Set<String> = ["q", "p", "h", "a"]
 }
 
 /// Crops, styles, encodes, and delivers captures.
@@ -168,8 +201,8 @@ enum Output {
         let id = signposter.beginInterval("encode")
         let output = try await encode(image, crop: crop, padding: padding, scale: scale, cornerRadii: cornerRadii, shadow: shadow)
         signposter.endInterval("encode", id)
-        publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save, destination: destination,
-                warning: warning, pasteboard: pasteboard, defaults: defaults)
+        await publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save, destination: destination,
+                      warning: warning, pasteboard: pasteboard, defaults: defaults)
     }
 
     /// The usual file for a saved capture: the save folder and a timestamped name.
@@ -183,11 +216,11 @@ enum Output {
     /// pixel size line, saved or not. A save goes to `destination` (Save As, which the panel already confirmed) or the usual file, which takes a
     /// numbered name when its own is taken. A write that fails (the pasteboard refusing the image, an unwritable folder) shows a red toast
     /// with its reason and keeps the capture in it: "Copy failed" or "Save failed"; a capture that lands plays the capture sound. Otherwise a `warning` (a capture that may be wrong)
-    /// takes the detail line and an orange mark.
+    /// takes the detail line and an orange mark. The file is written off the main thread; the pasteboard and the toast stay on it.
     @MainActor
     @discardableResult
     static func publish(png: Data, detail: String, copy: Bool, save: Bool, destination: URL? = nil, warning: String? = nil, pasteboard: NSPasteboard,
-                        defaults: UserDefaults) -> (message: String, detail: String) {
+                        defaults: UserDefaults) async -> (message: String, detail: String) {
         var copied = !copy
         if copy {
             let id = signposter.beginInterval("pasteboard")
@@ -199,12 +232,7 @@ enum Output {
         var saveError: (any Error)?
         if save {
             do {
-                if let destination {
-                    try png.write(to: destination, options: .atomic)
-                    file = destination
-                } else {
-                    file = try UniqueFile.write(png, to: defaultFile(defaults: defaults))
-                }
+                file = try await write(png, to: destination ?? defaultFile(defaults: defaults), unique: destination == nil)
             } catch {
                 saveError = error
             }
@@ -218,6 +246,15 @@ enum Output {
                    defaults: defaults, pasteboard: pasteboard)
         if !failed { Sound.capture.play(defaults: defaults) }
         return (message, detail)
+    }
+
+    /// Writes `png` to `file` off the main thread: a unique name (`UniqueFile`) for the usual file, or in place, atomically, for a Save
+    /// As destination the panel already confirmed. Returns the file written.
+    @concurrent
+    private static func write(_ png: Data, to file: URL, unique: Bool) async throws -> URL {
+        if unique { return try UniqueFile.write(png, to: file) }
+        try png.write(to: file, options: .atomic)
+        return file
     }
 
     /// The toast's message for what was asked (`copy`, `save`) and what worked (`copied`, `saved`). Only a recording, already saved, is

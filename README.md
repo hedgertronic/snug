@@ -67,10 +67,10 @@ Use Xcode with the macOS 26 SDK and Swift 6.2 or later. Set your code-signing id
 SNUG_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" python3 scripts/build.py
 ```
 
-This builds `build/Snug.app` as a universal arm64 + x86_64 app, plus the developer lab and benchmark. Use a consistent signing identity to preserve macOS permission grants. Local builds are not notarized.
+This builds `build/Snug.app` as a universal arm64 + x86_64 app. Add `--lab` to also build the developer lab app and the benchmark. Use a consistent signing identity to preserve macOS permission grants. Local builds are not notarized.
 
 ## Privacy, license, and credit
 
 Capture processing, OCR, and subject cutouts run on-device. Snug does not upload captures. It uses Sparkle to check for and download updates. If you connect an agent, that agent can read your latest handoff and handles it under its own data policies.
 
-[MIT licensed](LICENSE). Made by [Josh Hejka](https://hedgertronic.com/), with [Sparkle](https://sparkle-project.org/) for updates and [Fredoka](brand/fonts/OFL.txt) for the wordmark.
+[MIT licensed](LICENSE). Made by [Josh Hejka](https://hedgertronic.com/), with [Sparkle](https://sparkle-project.org/) for updates and [Fredoka](brand/fonts/OFL.txt) for the wordmark. Their license notices ship inside the app, in `Snug.app/Contents/Resources/Licenses`.

@@ -369,7 +369,8 @@ final class OverlayController {
         updateHover(pixel: CGPoint(x: (pointer.x - window.frame.minX) * scale, y: (window.frame.maxY - pointer.y) * scale))
     }
 
-    /// Closes the overlay, cancels pending work, and releases the frozen image.
+    /// Closes the overlay, cancels pending work, and releases the frozen image and everything derived from it: detections, flat fills
+    /// (four bytes a pixel of the analysis image), the Dock's tiles, accessibility observations and the screen text read at capture.
     func dismiss() {
         cancelWork()
         disarmRecording()
@@ -396,8 +397,20 @@ final class OverlayController {
         windowNames = []
         windowIDs = []
         windowFrozen = []
+        detectionTask?.cancel()
+        detected = []
+        fillsTask?.cancel()
+        fillsTask = nil
+        fills = nil
+        dockTiles = []
+        accessibilityTask?.cancel()
+        accessibilityTask = nil
+        accessibilityObservations = [:]
+        screenTexts = []
         radii = [:]
         arcs = [:]
+        // A copy started just before dismissing still awaits its radius task, so the tasks are dropped, not canceled; a result that
+        // arrives after the image changed is never stored.
         radiusTasks = [:]
         editedRadii = [:]
         undoStack = []
@@ -988,8 +1001,8 @@ final class OverlayController {
                 } else {
                     (png: try await Output.png(image), width: image.width, height: image.height)
                 }
-                Output.publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save, destination: destination,
-                               pasteboard: pasteboard, defaults: defaults)
+                await Output.publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save, destination: destination,
+                                     pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
             }
@@ -1006,18 +1019,20 @@ final class OverlayController {
     }
 
     /// Measures a rectangle's corner radius and corner arcs off the main thread, once, and redraws when they arrive. A window's radius is
-    /// fitted to where its own color starts at each corner.
+    /// fitted to where its own color starts at each corner. Canceling the task cancels the measuring with it, and a canceled result is
+    /// never stored.
     private func measureRadius(_ rect: CGRect?) {
         guard let rect, let image, radii[rect] == nil, radiusTasks[rect] == nil else { return }
         // A frozen target (the Dock) is not a window with its own opaque color; its corners are fitted to its outline like any region's.
         let isWindow = windows.firstIndex(of: rect).map { !windowFrozen.indices.contains($0) || !windowFrozen[$0] } ?? false
         radiusTasks[rect] = Task {
-            let measured = await Task.detached { () -> (radius: CGFloat, arcs: CornerRadii) in
+            let measuring = Task.detached { () -> (radius: CGFloat, arcs: CornerRadii) in
                 if isWindow { return (windowCornerRadius(in: image, rect: rect), .zero) }
                 let arcs = cornerArcs(in: image, rect: rect)
                 return (arcs.agreed, arcs)
-            }.value
-            if self.image === image {
+            }
+            let measured = await withTaskCancellationHandler { await measuring.value } onCancel: { measuring.cancel() }
+            if !Task.isCancelled, self.image === image {
                 radii[rect] = measured.radius
                 arcs[rect] = measured.arcs
                 refresh()

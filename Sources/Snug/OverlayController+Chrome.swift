@@ -299,7 +299,8 @@ extension OverlayController {
             c.strip.show([subjects + [c.crop], [c.save, c.copy]])
             attachment = (view.viewRect(cutout.frame), true, [sizeChip(cutout.frame)] + statusChip(["K", "esc"], "back"), [])
         } else if let scrollArea {
-            let height = scrollHeight >= ScrollStitcher.maximumHeight ? "\(ScrollStitcher.maximumHeight) px, the limit" : "\(scrollHeight) px"
+            let limit = stitcher?.heightLimit ?? ScrollStitcher.maximumHeight
+            let height = scrollHeight >= limit ? "\(limit) px, the limit" : "\(scrollHeight) px"
             c.scrolled.setTitle("Scrolling \(height)")
             c.strip.show([[c.scrolled], [c.cancel, c.done]])
             attachment = (view.viewRect(scrollArea), true, statusChip([], "Scroll the app under the outline"), [])

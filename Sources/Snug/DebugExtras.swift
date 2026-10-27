@@ -827,7 +827,7 @@ extension DebugRun {
         let forever = toast { $0.set(-1, forKey: Pref.toastLifetime) }, off = toast { $0.set(0, forKey: Pref.toastLifetime) }
         forever.scheduleDismissal()
         require(forever.lifetime == nil && forever.dismissal == nil && off.lifetime == .seconds(4),
-                "Forever starts no dismissal timer, and with 0 a failure toast (the only kind 0 shows) lasts 4 s")
+                "Forever starts no dismissal timer, and with 0 a failure or warning toast (the only kinds 0 shows) lasts 4 s")
         let bottomRight = toast { $0.set("bottomRight", forKey: Pref.toastPosition) }, topRight = toast { $0.set("topRight", forKey: Pref.toastPosition) }
         require(bottomRight.frame.minX > plain.frame.minX && bottomRight.frame.minY == plain.frame.minY && topRight.frame.minX == bottomRight.frame.minX && topRight.frame.minY > bottomRight.frame.minY,
                 "the position setting moves the toast: \(plain.frame) \(bottomRight.frame) \(topRight.frame)")
@@ -2133,7 +2133,7 @@ extension DebugRun {
                     && abs(thumb.frame.height - thumb.frame.width * 900 / 1000) <= 1.5 * thumb.frame.width / 1000 + 1
                     && abs(markerLayer.frame.height / thumb.frame.height - 600.0 / 900) < 0.01 && markerLayer.frame.minY == 0,
                 "the minimap sits right of the area with the markerLayer over the bottom two thirds: \(minimap.frame) \(thumb.frame) \(markerLayer.frame) \(pageBox)")
-        require(minimap.window === overlay.window && overlay.window is CaptureExcluded && DisplayCapture.excludedWindowIDs().contains(CGWindowID(overlay.window.windowNumber)),
+        require(minimap.window === overlay.window && DisplayCapture.excludedWindowIDs().contains(CGWindowID(overlay.window.windowNumber)),
                 "the minimap is in the overlay window, which captures leave out: \(overlay.window.windowNumber) \(DisplayCapture.excludedWindowIDs().sorted())")
         offsets = [200]
         for _ in 0..<3000 where overlay.scrollHeight > 800 { try await Task.sleep(for: .milliseconds(10)) }
@@ -2553,10 +2553,10 @@ extension DebugRun {
         texting.openButton.performClick(nil)
         let textFile = Toast.opened!.file
         let written = try String(contentsOf: textFile, encoding: .utf8)
-        require(Toast.opened!.app == textApp.bundleIdentifier! && textFile.deletingLastPathComponent().path == FileManager.default.temporaryDirectory.appending(path: "Snug").path
-                    && textFile.lastPathComponent.hasPrefix("Snug Text ") && textFile.pathExtension == "txt" && texting.file == textFile
+        require(Toast.opened!.app == textApp.bundleIdentifier! && textFile.deletingLastPathComponent().deletingLastPathComponent().path == FileManager.default.temporaryDirectory.appending(path: "Snug").path
+                    && textFile.lastPathComponent.hasPrefix("Snug Text ") && textFile.pathExtension == "txt" && texting.file == nil
                     && written == copiedText,
-                "Open on copied text writes it as UTF-8 to Snug/Snug Text <date>.txt in the temporary folder and opens it in the default plain text app: \(textFile.path) \(Toast.opened!.app)")
+                "Open on copied text writes it as UTF-8 to Snug/<folder of its own>/Snug Text <date>.txt in the temporary folder and opens it in the default plain text app: \(textFile.path) \(Toast.opened!.app)")
         let againText = Toast(png: nil, message: "Copied", detail: "", file: nil, color: nil, text: "other", defaults: trashDefaults,
                               pasteboard: NSPasteboard(name: NSPasteboard.Name("snug-toast-text-\(UUID().uuidString)")))
         againText.openButton.performClick(nil)

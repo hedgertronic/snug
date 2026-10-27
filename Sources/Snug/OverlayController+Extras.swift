@@ -187,7 +187,7 @@ extension OverlayController {
         accessibilityStarted = .now
         accessibilityPixel = CGPoint(x: pixel.x.rounded(.down), y: pixel.y.rounded(.down))
         let id = windowIDs[index]
-        let primaryHeight = NSScreen.screens[0].frame.height
+        let primaryHeight = CGDisplayBounds(CGMainDisplayID()).height
         let origin = CGPoint(x: window.frame.minX, y: primaryHeight - window.frame.maxY)
         let point = AccessibilityBounds.point(forPixel: pixel, displayOrigin: origin, scale: scale)
         let (scale, extent, image, windows) = (scale, extent, image!, windows)

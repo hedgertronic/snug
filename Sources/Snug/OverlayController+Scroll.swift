@@ -6,6 +6,9 @@ import ScreenshotCore
 /// Scrolling capture: G on a released selection or the hovered element inside one window shows the live screen in that area, lets
 /// the pointer scroll the app underneath, and stitches the area's frames as its content moves. Return delivers, Esc cancels.
 extension OverlayController {
+    /// The most scroll and drag events kept before the old ones are dropped.
+    static let scrollInputLimit = 256
+
     func startScroll() {
         let (scale, displayID, scrollFrames) = (scale, displayID, scrollFrames)
         guard let area = selection?.rect ?? hoverRect, scrollFrames != nil || displayID != nil,
@@ -27,8 +30,14 @@ extension OverlayController {
         // The pointer's scrolling and dragging go to the app below; a global monitor sees a copy of each event.
         if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor) }
         scrollInput = []
+        // Only the last half second decides whether a frame moved, and the log takes events as each frame comes, so events over two
+        // seconds old go once there are more than `scrollInputLimit`.
         scrollMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.scrollWheel, .leftMouseDragged]) { [weak self] event in
-            MainActor.assumeIsolated { self?.scrollInput.append(event) }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.scrollInput.append(event)
+                if self.scrollInput.count > Self.scrollInputLimit { self.scrollInput.removeAll { $0.timestamp < event.timestamp - 2 } }
+            }
         }
         // The loop only captures and stitches; the display's filter is built once, and each frame's thumbnail is drawn in a task of its
         // own, which a newer frame's replaces.
@@ -48,17 +57,17 @@ extension OverlayController {
                     try FileManager.default.createDirectory(at: log, withIntermediateDirectories: true)
                     try Data().write(to: events)
                 }
-                var (logged, loggedInput) = (0, 0)
+                var (logged, loggedUntil) = (0, TimeInterval(0))
                 let source: (CGRect) async throws -> (CGImage, TimeInterval) = { area in
                     let frame = try await capture(area)
                     let time = ProcessInfo.processInfo.systemUptime
                     if let log, let events {
-                        let input = self.scrollInput[loggedInput...].map { event in
+                        let input = self.scrollInput.filter { $0.timestamp > loggedUntil }.map { event in
                             event.type == .scrollWheel
                                 ? "scroll \(event.timestamp) \(event.scrollingDeltaY) \(event.hasPreciseScrollingDeltas) \(event.phase.rawValue) \(event.momentumPhase.rawValue)\n"
                                 : "drag \(event.timestamp)\n"
                         }
-                        loggedInput = self.scrollInput.count
+                        loggedUntil = self.scrollInput.last?.timestamp ?? loggedUntil
                         let file = try FileHandle(forWritingTo: events)
                         try file.seekToEnd()
                         try file.write(contentsOf: Data((input.joined() + String(format: "frame %04d \(time)\n", logged)).utf8))

@@ -1,5 +1,6 @@
 import AppKit
 import CoreImage.CIFilterBuiltins
+import ScreenshotCore
 import Vision
 
 extension Pref {
@@ -28,7 +29,8 @@ extension OverlayController {
         textTask?.cancel()
         textTask = Task {
             do {
-                let subjects = try await Self.cutoutSubjects(image.cropping(to: rect)!, outline: outline)
+                guard let crop = image.cropping(to: rect) else { throw CocoaError(.fileReadCorruptFile) }
+                let subjects = try await Self.cutoutSubjects(crop, outline: outline)
                 try Task.checkCancellation()
                 guard !subjects.isEmpty else {
                     text.notice = "No subject found"
@@ -41,37 +43,47 @@ extension OverlayController {
         }
     }
 
-    /// The cut-out choices for `image`: every foreground instance together, then, when there are several, each one alone; empty when
-    /// Vision finds no subject. Each outline is `outline` pixels wide. The handler, observation and Core Image context are released on
-    /// return, so the preview holds only the images.
+    /// The cut-out choices for `image`: every foreground instance together, then, when there are several, each one alone, as many as
+    /// `CutoutLimits.choices` allows for the crop's size; empty when Vision finds no subject. A crop over `CutoutLimits.maximumPixels`
+    /// throws. Each outline is `outline` pixels wide. A canceled cut-out stops between choices. The handler, observation and Core Image
+    /// context are released on return, so the preview holds only the images.
     @concurrent
     static func cutoutSubjects(_ image: CGImage, outline: CGFloat) async throws -> [CutoutSubject] {
+        guard CutoutLimits.choices(instances: 1, pixels: image.width * image.height) != nil else {
+            throw CocoaError(.fileReadTooLarge, userInfo: [NSLocalizedDescriptionKey: "The selection is too large to cut out. Select a smaller area."])
+        }
         let handler = ImageRequestHandler(image)
         guard let observation = try await handler.perform(GenerateForegroundInstanceMaskRequest()), !observation.allInstances.isEmpty else { return [] }
         let all = observation.allInstances
-        let choices = all.count > 1 ? [all] + all.map { IndexSet(integer: $0) } : [all]
+        let count = CutoutLimits.choices(instances: all.count, pixels: image.width * image.height) ?? 1
+        let choices = ([all] + (all.count > 1 ? all.map { IndexSet(integer: $0) } : [])).prefix(count)
+        let space = image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!
         let context = CIContext()
-        return try choices.map { instances in
+        var subjects: [CutoutSubject] = []
+        for instances in choices {
+            try Task.checkCancellation()
             let buffer = try observation.generateMaskedImage(for: instances, imageFrom: handler, croppedToInstancesExtent: false)
-            let masked = CIImage(cvPixelBuffer: buffer, options: [.colorSpace: image.colorSpace!])
-            let cut = context.createCGImage(masked, from: masked.extent, format: .RGBA8, colorSpace: image.colorSpace!)!
+            let masked = CIImage(cvPixelBuffer: buffer, options: [.colorSpace: space])
             let grown = CIFilter.morphologyMaximum()
             grown.inputImage = masked
             grown.radius = Float(outline)
             let ring = CIFilter.sourceOutCompositing()
-            ring.inputImage = grown.outputImage!
+            ring.inputImage = grown.outputImage
             ring.backgroundImage = masked
-            let data = cut.dataProvider!.data!
-            let pixels = CFDataGetBytePtr(data)!
+            guard let cut = context.createCGImage(masked, from: masked.extent, format: .RGBA8, colorSpace: space),
+                  let data = cut.dataProvider?.data, let pixels = CFDataGetBytePtr(data), let ringImage = ring.outputImage,
+                  let edge = context.createCGImage(ringImage, from: masked.extent, format: .LA8, colorSpace: CGColorSpace(name: CGColorSpace.linearGray)!)
+            else { throw CocoaError(.fileReadCorruptFile) }
             var (minX, minY, maxX, maxY) = (cut.width, cut.height, -1, -1)
             for y in 0..<cut.height {
                 for x in 0..<cut.width where pixels[y * cut.bytesPerRow + x * 4 + 3] > 0 {
                     (minX, minY, maxX, maxY) = (min(minX, x), min(minY, y), max(maxX, x), max(maxY, y))
                 }
             }
-            return CutoutSubject(image: cut, outline: context.createCGImage(ring.outputImage!, from: masked.extent, format: .LA8,
-                                                                  colorSpace: CGColorSpace(name: CGColorSpace.linearGray)!)!,
-                                 bounds: CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1))
+            // An instance whose mask came back empty has no subject to offer.
+            guard maxX >= 0 else { continue }
+            subjects.append(CutoutSubject(image: cut, outline: edge, bounds: CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)))
         }
+        return subjects
     }
 }

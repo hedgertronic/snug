@@ -20,6 +20,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     private var recording: Task<ScreenRecording, any Error>? {
         didSet { statusItem.map { Self.showRecording(recording != nil, in: $0.menu!) } }
     }
+    /// The stopped recording's finish: its stop, the file's move to its name and the delivery. Quit waits for it; nil once it ends.
+    private var finishing: Task<Void, Never>?
     private var iconObservations: [NSKeyValueObservation] = []
     /// Sparkle's updater, made only when Snug launches for real, so debug runs never check for updates or ask about automatic checks.
     private var updater: SPUStandardUpdaterController?
@@ -175,10 +177,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         // A shortcut macOS refused is remembered too, so later preference writes don't retry it and toast again.
         registeredShortcut = current
         do {
-            if current[0] < 0 {
+            // A code no key has (as from `defaults write` while Snug runs) is no shortcut.
+            if current[0] < 0 || Shortcut.functionKeys[current[0]] == nil && Shortcut.keyNames[current[0]] == nil {
                 hotKey!.unregister()
             } else {
-                try hotKey!.register(keyCode: UInt32(current[0]), modifiers: NSEvent.ModifierFlags(rawValue: UInt(current[1])))
+                try hotKey!.register(keyCode: UInt32(current[0]), modifiers: NSEvent.ModifierFlags(rawValue: UInt(clamping: current[1])))
             }
             captureItem?.setShortcut(from: defaults)
         } catch {
@@ -200,7 +203,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     /// Keeps `button` showing the icon variant in `SnugMenuBarIcon` for the menu bar's light or dark appearance, redrawn as soon as the
     /// default changes, including from `defaults write` in another process, or the menu bar turns light or dark.
     static func observeMenuBarIcon(on button: NSButton, defaults: UserDefaults) -> [NSKeyValueObservation] {
-        let update = { @MainActor in button.image = menuBarIcon(defaults.string(forKey: Pref.menuBarIcon)!, dark: isDark(button)) }
+        // A variant written while Snug runs is not sanitized at launch; an unknown one draws the default.
+        let update = { @MainActor in
+            let variant = defaults.string(forKey: Pref.menuBarIcon).flatMap { Pref.menuBarIcons.contains($0) ? $0 : nil } ?? "q"
+            button.image = menuBarIcon(variant, dark: isDark(button))
+        }
         return [defaults.observe(\.SnugMenuBarIcon, options: [.initial]) { _, _ in Task { @MainActor in update() } },
                 button.observe(\.effectiveAppearance) { _, _ in Task { @MainActor in update() } }]
     }
@@ -402,16 +409,22 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     // MARK: Capture
 
-    private func screenUnderPointer() -> (screen: NSScreen, id: CGDirectDisplayID) {
-        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) }!
-        return (screen, CGDirectDisplayID((screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value))
+    /// The display under the pointer (`ScreenPick`: edges included, else the nearest display), or the main one; nil only with no
+    /// display at all, as while displays are rearranged.
+    private func displayUnderPointer() -> CGDirectDisplayID? {
+        let screens = NSScreen.screens
+        guard let screen = ScreenPick.index(of: NSEvent.mouseLocation, in: screens.map(\.frame)).map({ screens[$0] }) ?? NSScreen.main,
+              let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return nil }
+        return CGDirectDisplayID(number.uint32Value)
     }
 
     private func capture(text: Bool = false) {
         if recording != nil { return stopRecording(via: "shortcut") }
         guard !overlay.window.isVisible else { return }
         guard CGPreflightScreenCaptureAccess() else { return showFirstRun() }
-        let (screen, id) = screenUnderPointer()
+        guard let id = displayUnderPointer() else {
+            return Toast.show(message: "Capture failed", detail: CaptureError.noDisplayUnderPointer.localizedDescription, color: .systemRed)
+        }
         let clock = ContinuousClock()
         let pressed = clock.now
         captureTask?.cancel()
@@ -424,7 +437,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 signposter.endInterval("capture", capturing)
                 let captured = clock.now
                 try Task.checkCancellation()
-                overlay.present(image: image, frame: screen.frame, displayID: id)
+                // The display may have been disconnected, moved or rescaled while it was captured: the overlay takes its frame now, and an
+                // image whose shape no longer fits that frame is stale.
+                guard let current = DisplayCapture.screen(for: id),
+                      abs(CGFloat(image.width) / current.frame.width - CGFloat(image.height) / current.frame.height) < 0.05 else { throw CaptureError.displayUnavailable }
+                overlay.present(image: image, frame: current.frame, displayID: id)
                 let presented = clock.now
                 if text { overlay.setMode(.text) }
                 let scale = overlay.scale
@@ -442,7 +459,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     Pref.logHoverLine("dock union \(union) scale \(scale) image \(image.width)x\(image.height)")
                     // Live item frames are magnified, so the tiles come from the frozen pixels, off main while the Dock's titles are read;
                     // titles label them when the counts match.
-                    let pid = (CGWindowListCopyWindowInfo([.optionIncludingWindow], windows[index].id) as! [[String: Any]])[0][kCGWindowOwnerPID as String] as! Int32
+                    guard let pid = (CGWindowListCopyWindowInfo([.optionIncludingWindow], windows[index].id) as? [[String: Any]])?.first?[kCGWindowOwnerPID as String] as? Int32 else { continue }
                     let docking = clock.now
                     async let reading = (Accessibility.dockItemTitles(pid: pid), clock.now)
                     let (panel, tiles, tiled) = await Task.detached {
@@ -516,16 +533,58 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     private func stopRecording(via: String) {
         recordingLog.notice("stop requested via \(via, privacy: .public), recording \(self.recording != nil)")
         guard let start = endRecording() else { return }
-        Task {
+        let finish = Task {
             do {
                 let session = try await start.value
                 let file = try await session.stop()
                 Sound.recordStop.play(defaults: .standard)
-                _ = try await ScreenRecording.deliver(file, pasteboard: .general, defaults: .standard)
+                _ = try await ScreenRecording.deliver(file, warning: session.warning, pasteboard: .general, defaults: .standard)
             } catch {
                 showRecordingFailure(error)
             }
         }
+        finishing = finish
+        Task {
+            await finish.value
+            if finishing == finish { finishing = nil }
+        }
+    }
+
+    /// The longest Quit waits for a recording to start and then finish its file before Snug ends anyway: the stop's own
+    /// `ScreenRecording.finishTimeout` and time for a start still under way.
+    static let quitTimeout = ScreenRecording.finishTimeout + .seconds(5)
+    private var terminationReplied = false
+
+    /// Quit while recording (or while one starts) first stops it, and Quit just after a stop waits for that stop's `finishing`; either
+    /// waits at most `quitTimeout` for the file to be finished and moved to its name in the save folder, so the movie is playable and
+    /// visible. Nothing else delays quitting.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let start = endRecording()
+        let finishing = finishing
+        guard start != nil || finishing != nil else { return .terminateNow }
+        recordingLog.notice("quit while recording \(start != nil), while a stop finishes \(finishing != nil)")
+        let reply = { [self] in
+            guard !terminationReplied else { return }
+            terminationReplied = true
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        Task {
+            if let start {
+                do {
+                    let file = try await start.value.stop()
+                    recordingLog.notice("quit: recording saved as \(file.lastPathComponent, privacy: .public)")
+                } catch {
+                    recordingLog.error("quit: recording did not finish: \((error as NSError).localizedDescription, privacy: .public)")
+                }
+            }
+            await finishing?.value
+            reply()
+        }
+        Task {
+            try? await Task.sleep(for: Self.quitTimeout)
+            reply()
+        }
+        return .terminateLater
     }
 
     // MARK: Windows
@@ -568,12 +627,14 @@ extension NSMenuItem {
             keyEquivalent = ""
             return
         }
-        if let function = Shortcut.functionKeys[code] {
-            keyEquivalent = String(Character(UnicodeScalar(function.character)!))
-        } else {
-            let name = Shortcut.keyNames[code]!
+        if let function = Shortcut.functionKeys[code], let scalar = UnicodeScalar(function.character) {
+            keyEquivalent = String(Character(scalar))
+        } else if let name = Shortcut.keyNames[code] {
             keyEquivalent = name == "space" ? " " : name.lowercased()
+        } else {
+            keyEquivalent = ""
+            return
         }
-        keyEquivalentModifierMask = NSEvent.ModifierFlags(rawValue: UInt(defaults.integer(forKey: Pref.hotKeyModifiers)))
+        keyEquivalentModifierMask = NSEvent.ModifierFlags(rawValue: UInt(clamping: defaults.integer(forKey: Pref.hotKeyModifiers)))
     }
 }

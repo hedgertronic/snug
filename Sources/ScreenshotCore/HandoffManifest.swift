@@ -356,15 +356,22 @@ public struct HandoffStore: Sendable {
     }
 
     /// Writes the bundle into a temporary folder beside it, renames it into place, then removes every other bundle and partial folder, so
-    /// a reader never finds the folder empty. Other files in the folder are left alone.
+    /// a reader never finds the folder empty. Other files in the folder are left alone. The folders are the user's alone (0700) and the
+    /// files readable by the user alone (0600), whatever the process's umask. A manifest with an id or image name `png(of:)` would refuse
+    /// is not written.
     @discardableResult
     public func write(png: Data, manifest: HandoffManifest) throws -> URL {
         let files = FileManager.default
-        try files.createDirectory(at: root, withIntermediateDirectories: true)
+        guard Self.isValid(manifest) else { throw CocoaError(.fileWriteInvalidFileName) }
+        try files.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        try files.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
         let partial = root.appending(path: ".\(manifest.captureId).partial")
-        try files.createDirectory(at: partial, withIntermediateDirectories: false)
-        try png.write(to: partial.appending(path: manifest.image.file))
-        try manifest.json().write(to: partial.appending(path: "manifest.json"))
+        try files.createDirectory(at: partial, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        for (name, data) in [(manifest.image.file, png), ("manifest.json", try manifest.json())] {
+            guard files.createFile(atPath: partial.appending(path: name).path, contents: data, attributes: [.posixPermissions: 0o600]) else {
+                throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: partial.appending(path: name).path])
+            }
+        }
         let bundle = root.appending(path: manifest.captureId)
         try files.moveItem(at: partial, to: bundle)
         for name in try files.contentsOfDirectory(atPath: root.path) where name != manifest.captureId && Self.isBundle(name) {
@@ -373,12 +380,21 @@ public struct HandoffStore: Sendable {
         return bundle
     }
 
-    /// The manifest of the last capture, or nil when there is none.
+    /// The manifest of the last capture, or nil when there is none. A manifest whose id is not its folder's name, or whose image is not a
+    /// plain PNG name inside its folder, is damaged and throws.
     public func current() throws -> HandoffManifest? {
         guard FileManager.default.fileExists(atPath: root.path) else { return nil }
-        return try FileManager.default.contentsOfDirectory(atPath: root.path).filter(HandoffManifest.isId).map {
-            try HandoffManifest(json: Data(contentsOf: root.appending(path: "\($0)/manifest.json")))
+        return try FileManager.default.contentsOfDirectory(atPath: root.path).filter(HandoffManifest.isId).map { name in
+            let manifest = try HandoffManifest(json: Data(contentsOf: root.appending(path: "\(name)/manifest.json")))
+            guard manifest.captureId == name, Self.isValid(manifest) else { throw CocoaError(.fileReadCorruptFile) }
+            return manifest
         }.max { $0.capturedAt < $1.capturedAt }
+    }
+
+    /// Whether the manifest names a well-formed capture id and a plain `.png` file name, so its paths stay inside its bundle folder.
+    static func isValid(_ manifest: HandoffManifest) -> Bool {
+        let file = manifest.image.file
+        return HandoffManifest.isId(manifest.captureId) && file.hasSuffix(".png") && !file.hasPrefix(".") && !file.contains("/") && file.count <= 255
     }
 
     /// A bundle folder (named by a capture id) or the `.<id>.partial` folder a write builds it in.
@@ -386,9 +402,10 @@ public struct HandoffStore: Sendable {
         HandoffManifest.isId(name) || (name.hasPrefix(".") && name.hasSuffix(".partial") && HandoffManifest.isId(String(name.dropFirst().dropLast(8))))
     }
 
-    /// The bundle's PNG.
+    /// The bundle's PNG; a manifest that names another folder or file (`isValid`) throws.
     public func png(of manifest: HandoffManifest) throws -> Data {
-        try Data(contentsOf: root.appending(path: "\(manifest.captureId)/\(manifest.image.file)"))
+        guard Self.isValid(manifest) else { throw CocoaError(.fileReadInvalidFileName) }
+        return try Data(contentsOf: root.appending(path: manifest.captureId).appending(path: manifest.image.file))
     }
 
     /// Removes the bundle, and any folder a failed write left.

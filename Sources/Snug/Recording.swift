@@ -58,6 +58,9 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     /// Called on the main actor when the stream stops without `stop`, as when the system's screen-recording indicator in the menu bar
     /// stops it, or when the recording output finishes or fails after it wrote frames without `stop`; `stop` then returns on that end.
     var onStop: () -> Void = {}
+    /// The recording output's write or encoder failure after it wrote frames, as on a full disk (`RecordingEnd.partial`): `stop` still
+    /// returns the file, which holds what was written, and the delivery shows this as a warning.
+    private(set) var warning: (any Error)?
     private var stream: SCStream!
     private var output: SCRecordingOutput!
     private let panels: [RecordingPanel]
@@ -65,7 +68,11 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     private let ended: AsyncStream<(any Error)?>
     private let end: AsyncStream<(any Error)?>.Continuation
     private var stopping = false
+    /// Whether Snug's own stop (the shortcut, the menu, Quit) began while the stream was still running.
+    private var snugStopped = false
     private var streamStopped = false
+    /// Whether the stream stopped with a write failure (`RecordingEnd.isWriteFailure`), as for insufficient storage.
+    private var streamWriteFailure = false
     /// Counts the reminder's time once a second until the recording stops.
     private var ticking: Task<Void, any Error>?
 
@@ -90,6 +97,8 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         let requested = ContinuousClock.now
         func mark(_ step: String) { recordingLog.notice("start: \(step, privacy: .public) at \(Int(requested.duration(to: .now).milliseconds)) ms, app active \(NSApp.isActive)") }
         mark("requested")
+        // The display can be disconnected between choosing the area and the count-in's end.
+        guard DisplayCapture.screen(for: displayID) != nil else { throw CaptureError.displayUnavailable }
         // Ordered in while transparent, so the window server lists them for the filter that leaves them out.
         let dim = showsPanels ? makeDim(around: area, on: displayID, defaults: defaults) : nil
         let outline = showsPanels ? makeOutline(around: area, on: displayID) : nil
@@ -105,7 +114,7 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
             mark("content fetched")
-            let filter = DisplayCapture.filter(for: displayID, in: content, excluding: DisplayCapture.excludedWindowIDs())
+            let filter = try DisplayCapture.filter(for: displayID, in: content, excluding: DisplayCapture.excludedWindowIDs())
             let scale = CGFloat(SCShareableContent.info(for: filter).pointPixelScale)
             let configuration = SCStreamConfiguration()
             configuration.sourceRect = area
@@ -154,6 +163,7 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
     /// to: `file`, or its next free numbered name when another recording or capture already has it.
     func stop() async throws -> URL {
         stopping = true
+        snugStopped = !streamStopped
         ticking?.cancel()
         panels.forEach { $0.orderOut(nil) }
         // A failed stop ends the wait with its error; a stop that never returns is caught by the timeout.
@@ -194,11 +204,15 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         }
     }
 
+    /// A stream that stops with a write failure after frames were written (insufficient storage), without Snug's own stop, keeps that
+    /// error in `warning`, so the delivered file is shown as cut short whether the output then fails or finishes.
     nonisolated func stream(_ stream: SCStream, didStopWithError error: any Error) {
         let failure = error as NSError
         Task { @MainActor in
-            recordingLog.notice("stream stopped, error \(failure.domain, privacy: .public) \(failure.code), stopping \(self.stopping)")
             streamStopped = true
+            streamWriteFailure = RecordingEnd.isWriteFailure(error)
+            if streamWriteFailure, !snugStopped, output.recordedDuration > .zero { warning = warning ?? error }
+            recordingLog.notice("stream stopped, error \(failure.domain, privacy: .public) \(failure.code), write failure \(self.streamWriteFailure), stopping \(self.stopping)")
             if !stopping { onStop() }
         }
     }
@@ -211,15 +225,25 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         }
     }
 
-    /// A stop from outside Snug (the system's screen-recording indicator) may end the output with `userStopped`, or with another code
-    /// that arrives before the stream's own stop; once frames are written the file is as complete as after `stop`, so it delivers like
-    /// one. Only an output that fails with nothing written is a failure.
+    /// A stop from outside Snug (the system's screen-recording indicator) ends the output with `userStopped` or another code, which
+    /// delivers like `stop`, as does any failure after Snug's own stop or after the stream stopped for a reason other than a write
+    /// failure (`RecordingEnd.isDeliberateStop`). A write or encoder failure, the output's or the stream's, after
+    /// frames were written (`RecordingEnd.partial`: a full disk, an encoder error) also delivers the file, which holds what was written,
+    /// with the error kept in `warning`. Only an output that fails with nothing written is a failure. The log gets the error's domain
+    /// and code and those of the error under it.
     nonisolated func recordingOutput(_ recordingOutput: SCRecordingOutput, didFailWithError error: any Error) {
         let failure = error as NSError
+        let underlying = failure.userInfo[NSUnderlyingErrorKey] as? NSError
         Task { @MainActor in
-            let wroteFrames = output.recordedDuration > .zero
-            recordingLog.notice("output failed, error \(failure.domain, privacy: .public) \(failure.code), frames written \(wroteFrames), stopping \(self.stopping)")
-            finished(wroteFrames || (error as? SCStreamError)?.code == .userStopped ? nil : error)
+            let end = RecordingEnd(failed: true, userStopped: (error as? SCStreamError)?.code == .userStopped, wroteFrames: output.recordedDuration > .zero,
+                                   stopping: RecordingEnd.isDeliberateStop(snugStopped: snugStopped, streamStopped: streamStopped, streamWriteFailure: streamWriteFailure),
+                                   writeFailure: streamWriteFailure || RecordingEnd.isWriteFailure(error))
+            recordingLog.notice("""
+                output failed, error \(failure.domain, privacy: .public) \(failure.code), under it \(underlying?.domain ?? "none", privacy: .public) \
+                \(underlying?.code ?? 0), end \(String(describing: end), privacy: .public), stopping \(self.stopping), stream stopped \(self.streamStopped)
+                """)
+            if end == .partial { warning = warning ?? error }
+            finished(end == .failed ? error : nil)
         }
     }
 
@@ -299,9 +323,11 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
             pair.addSubview(pill)
         }
         pair.appearance = Chrome.appearance(defaults)
-        let screen = NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value == displayID }!
-        let visible = CGRect(x: screen.visibleFrame.minX - screen.frame.minX, y: screen.frame.maxY - screen.visibleFrame.maxY,
-                             width: screen.visibleFrame.width, height: screen.visibleFrame.height)
+        // A display that is gone has no visible frame; the whole display stands in, so the reminder still has a place.
+        let visible = DisplayCapture.screen(for: displayID).map { screen in
+            CGRect(x: screen.visibleFrame.minX - screen.frame.minX, y: screen.frame.maxY - screen.visibleFrame.maxY,
+                   width: screen.visibleFrame.width, height: screen.visibleFrame.height)
+        } ?? CGRect(origin: .zero, size: CGDisplayBounds(displayID).size)
         let panel = RecordingPanel(frame: screenFrame(reminderFrame(size: pair.frame.size, around: area, within: visible), on: displayID))
         panel.hasShadow = true
         panel.contentView = pair
@@ -322,8 +348,9 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
 
     /// Delivers a finished recording that is already in the save folder: copies its file URL,
     /// then shows the toast with the first frame, whose Show in Finder reveals the file. A copy the pasteboard refuses shows a red toast,
-    /// "Saved to ..., copy failed", never "Copied".
-    static func deliver(_ file: URL, pasteboard: NSPasteboard, defaults: UserDefaults) async throws -> CGImage {
+    /// "Saved to ..., copy failed", never "Copied". A `warning` (the recording's own failure after it wrote frames) takes the detail line
+    /// with an orange mark, so a recording cut short never passes for a complete one.
+    static func deliver(_ file: URL, warning: (any Error)? = nil, pasteboard: NSPasteboard, defaults: UserDefaults) async throws -> CGImage {
         recordingLog.notice("deliver started")
         let generator = AVAssetImageGenerator(asset: AVURLAsset(url: file))
         generator.appliesPreferredTrackTransform = true
@@ -332,8 +359,10 @@ final class ScreenRecording: NSObject, SCStreamDelegate, SCRecordingOutputDelega
         let copied = pasteboard.writeObjects([file as NSURL])
         recordingLog.notice("toast shown")
         let message = Output.message(copy: true, save: true, copied: copied, saved: true, folder: file.deletingLastPathComponent().lastPathComponent)
-        Toast.show(png: try await Output.png(frame), message: message, detail: copied ? file.lastPathComponent : "The pasteboard did not accept the file.",
-                   file: file, color: copied ? nil : .systemRed, defaults: defaults)
+        let detail = !copied ? "The pasteboard did not accept the file."
+            : warning.map { "The recording stopped early: \(($0 as NSError).localizedFailureReason ?? $0.localizedDescription)" } ?? file.lastPathComponent
+        Toast.show(png: try await Output.png(frame), message: message, detail: detail, file: file,
+                   color: !copied ? .systemRed : warning == nil ? nil : .systemOrange, defaults: defaults)
         return frame
     }
 

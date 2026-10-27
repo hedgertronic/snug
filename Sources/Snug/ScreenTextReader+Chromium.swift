@@ -26,9 +26,8 @@ extension ScreenTextReader {
         func node(_ element: AXUIElement) -> (role: String?, subrole: String?, frame: CGRect, children: [AXUIElement], value: String?)? {
             AXUIElementSetMessagingTimeout(element, messagingTimeout)
             var values: CFArray?
-            var frame = CGRect.zero
             guard began.duration(to: .now) < budget, AXUIElementCopyMultipleAttributeValues(element, names, [], &values) == .success, let values = values as? [Any],
-                  CFGetTypeID(values[2] as CFTypeRef) == AXValueGetTypeID(), AXValueGetValue(values[2] as! AXValue, .cgRect, &frame) else { return nil }
+                  values.count == 5, let frame = AXValues.rect(values[2] as CFTypeRef) else { return nil }
             return (values[0] as? String, values[1] as? String, frame, values[3] as? [AXUIElement] ?? [], values[4] as? String)
         }
         var areas: [(element: AXUIElement, frame: CGRect)] = []
@@ -53,9 +52,9 @@ extension ScreenTextReader {
                 for (index, word) in words.enumerated() where pieces.count < maxWords && began.duration(to: .now) < budget {
                     var range = CFRange(location: word.utf16.lowerBound, length: word.utf16.count)
                     var raw: CFTypeRef?
-                    var box = CGRect.zero
-                    guard AXUIElementCopyParameterizedAttributeValue(element, "AXBoundsForRange" as CFString, AXValueCreate(.cfRange, &range)!, &raw) == .success,
-                          AXValueGetValue(raw as! AXValue, .cgRect, &box), box.width > 0, box.height > 0 else { continue }
+                    guard let argument = AXValueCreate(.cfRange, &range),
+                          AXUIElementCopyParameterizedAttributeValue(element, "AXBoundsForRange" as CFString, argument, &raw) == .success,
+                          let box = AXValues.rect(raw), box.width > 0, box.height > 0 else { continue }
                     answered = true
                     // Icon fonts (Slack's) are private-use characters, which no one reads or copies as text.
                     if visible.contains(CGPoint(x: box.midX, y: box.midY)), !word.text.unicodeScalars.allSatisfy({ $0.properties.generalCategory == .privateUse }) {

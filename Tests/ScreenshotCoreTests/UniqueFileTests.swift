@@ -31,6 +31,29 @@ struct UniqueFileTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path).count == 2)
     }
 
+    @Test func scratchFilesOfOneNameNeverReplaceEachOther() throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let first = try UniqueFile.scratch(Data("first".utf8), named: "Snug.png", under: folder)
+        let second = try UniqueFile.scratch(Data("second".utf8), named: "Snug.png", under: folder)
+        #expect(first != second && first.lastPathComponent == "Snug.png" && second.lastPathComponent == "Snug.png")
+        #expect(try Data(contentsOf: first) == Data("first".utf8) && Data(contentsOf: second) == Data("second".utf8))
+    }
+
+    @Test func aScratchFileUnderAFileFails() throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let blocker = folder.appending(path: "blocker")
+        try Data().write(to: blocker)
+        #expect(throws: CocoaError.self) { try UniqueFile.scratch(Data(), named: "Snug.png", under: blocker) }
+    }
+
+    @Test func aFailedMoveLeavesNoTemporaryFileAndThrowsItsOwnError() throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        // The temporary file is written, then the move to a name longer than the volume allows fails.
+        let file = folder.appending(path: String(repeating: "n", count: 300) + ".png")
+        #expect(throws: CocoaError.self) { try UniqueFile.write(Data("capture".utf8), to: file) }
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path).isEmpty, "no .snug-*.tmp file is left")
+    }
+
     @Test func aMissingFolderThrowsInsteadOfLooping() {
         defer { try? FileManager.default.removeItem(at: folder) }
         #expect(throws: CocoaError.self) { try UniqueFile.write(Data(), to: folder.appending(path: "none/a.png")) }

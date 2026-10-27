@@ -31,7 +31,7 @@ extension OverlayController {
         case _? where candidate!.id.hasPrefix("fill-"): (.fill, .geometry, candidate!.label)
         case _?: (.element, candidate!.id.hasPrefix("ax-") ? .accessibility : .geometry, candidate!.label)
         }
-        let display = CGRect(x: window.frame.minX, y: NSScreen.screens[0].frame.height - window.frame.maxY, width: window.frame.width, height: window.frame.height)
+        let display = CGRect(x: window.frame.minX, y: CGDisplayBounds(CGMainDisplayID()).height - window.frame.maxY, width: window.frame.width, height: window.frame.height)
         let global = CGRect(x: display.minX + crop.minX / scale, y: display.minY + crop.minY / scale, width: crop.width / scale, height: crop.height / scale)
         let observation = accessibilityObservations[rect]
         let (scale, displayID, capturedAt, live) = (scale, displayID, frozenAt, displayID != nil && !isHeadless)
@@ -66,7 +66,7 @@ extension OverlayController {
                 let json = try manifest.json()
                 let png = HandoffManifest.embedding(json, in: try await Output.png(image.cropping(to: crop)!))
                 let store = HandoffStore(defaults: defaults)
-                try await Task.detached { try store.write(png: png, manifest: manifest) }.value
+                _ = try await Task.detached { try store.write(png: png, manifest: manifest) }.value
                 let item = NSPasteboardItem()
                 guard item.setData(png, forType: .png), item.setString(manifest.reference, forType: .string), item.setData(json, forType: .snugCapture) else {
                     throw CocoaError(.fileWriteUnknown)

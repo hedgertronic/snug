@@ -20,10 +20,17 @@ enum DisplayCapture {
         Set(NSApp.windows.filter { $0 is CaptureExcluded }.map { CGWindowID($0.windowNumber) })
     }
 
+    /// The screen showing `displayID`, nil once that display is gone.
+    @MainActor
+    static func screen(for displayID: CGDirectDisplayID) -> NSScreen? {
+        NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == displayID }
+    }
+
     /// The display with Snug's windows left out but for its listed windows that are not `excluded` (from `excludedWindowIDs`): Settings,
-    /// About. Leaving Snug out by application also covers a Snug window `content` does not list.
-    static func filter(for displayID: CGDirectDisplayID, in content: SCShareableContent, excluding excluded: Set<CGWindowID>) -> SCContentFilter {
-        let display = content.displays.first { $0.displayID == displayID }!
+    /// About. Leaving Snug out by application also covers a Snug window `content` does not list. Throws `CaptureError.displayUnavailable`
+    /// when `content` no longer lists the display, as after it was disconnected.
+    static func filter(for displayID: CGDirectDisplayID, in content: SCShareableContent, excluding excluded: Set<CGWindowID>) throws -> SCContentFilter {
+        guard let display = content.displays.first(where: { $0.displayID == displayID }) else { throw CaptureError.displayUnavailable }
         let pid = ProcessInfo.processInfo.processIdentifier
         let shown = content.windows.filter { $0.owningApplication?.processID == pid && !excluded.contains($0.windowID) }
         return SCContentFilter(display: display, excludingApplications: content.applications.filter { $0.processID == pid }, exceptingWindows: shown)
@@ -35,7 +42,7 @@ enum DisplayCapture {
         let listing = signposter.beginInterval("shareable content")
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         signposter.endInterval("shareable content", listing)
-        let filter = filter(for: displayID, in: content, excluding: await excludedWindowIDs())
+        let filter = try filter(for: displayID, in: content, excluding: await excludedWindowIDs())
         let info = SCShareableContent.info(for: filter)
         let configuration = SCScreenshotConfiguration()
         configuration.width = Int((info.contentRect.width * CGFloat(info.pointPixelScale)).rounded())
@@ -43,7 +50,10 @@ enum DisplayCapture {
         configuration.showsCursor = false
         let shot = signposter.beginInterval("screenshot")
         defer { signposter.endInterval("screenshot", shot) }
-        return try await SCScreenshotManager.captureScreenshot(contentFilter: filter, configuration: configuration).sdrImage!
+        guard let image = try await SCScreenshotManager.captureScreenshot(contentFilter: filter, configuration: configuration).sdrImage else {
+            throw CaptureError.noImage
+        }
+        return image
     }
 
     /// The display without Snug's windows (see `filter(for:in:excluding:)`), from the shareable content listed now. A scrolling capture
@@ -51,7 +61,7 @@ enum DisplayCapture {
     @concurrent
     static func filter(for displayID: CGDirectDisplayID) async throws -> SCContentFilter {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        return filter(for: displayID, in: content, excluding: await excludedWindowIDs())
+        return try filter(for: displayID, in: content, excluding: await excludedWindowIDs())
     }
 
     /// One area of the display through `filter`, `area` in display points with a top-left origin, at full pixel resolution.
@@ -63,7 +73,10 @@ enum DisplayCapture {
         configuration.width = Int((area.width * scale).rounded())
         configuration.height = Int((area.height * scale).rounded())
         configuration.showsCursor = false
-        return try await SCScreenshotManager.captureScreenshot(contentFilter: filter, configuration: configuration).sdrImage!
+        guard let image = try await SCScreenshotManager.captureScreenshot(contentFilter: filter, configuration: configuration).sdrImage else {
+            throw CaptureError.noImage
+        }
+        return image
     }
 
     /// One window as macOS captures it: real rounded corners and, unless `shadow` is false, its shadow, on a transparent
@@ -122,22 +135,23 @@ enum DisplayCapture {
     @concurrent
     static func windows(on displayID: CGDirectDisplayID, pixelScale: CGFloat, excluding excluded: Set<CGWindowID>) async -> [(rect: CGRect, name: String, id: CGWindowID, frozen: Bool)] {
         let display = CGDisplayBounds(displayID)
-        let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as! [[String: Any]]
+        // The window server can answer nil, and a window's entry can lack a field; such a window is skipped.
+        let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
         var result: [(rect: CGRect, name: String, id: CGWindowID, frozen: Bool)] = []
         for window in info {
-            let layer = window[kCGWindowLayer as String] as! Int
-            guard layer == 0 || systemLevels.contains(layer),
-                  !excluded.contains(CGWindowID(window[kCGWindowNumber as String] as! Int)),
-                  window[kCGWindowAlpha as String] as! Double > 0 else { continue }
-            let bounds = CGRect(dictionaryRepresentation: window[kCGWindowBounds as String] as! CFDictionary)!
-                .intersection(display)
+            guard let layer = window[kCGWindowLayer as String] as? Int, let number = window[kCGWindowNumber as String] as? Int,
+                  let alpha = window[kCGWindowAlpha as String] as? Double,
+                  let boundsInfo = window[kCGWindowBounds as String], CFGetTypeID(boundsInfo as CFTypeRef) == CFDictionaryGetTypeID(),
+                  let rawBounds = CGRect(dictionaryRepresentation: boundsInfo as! CFDictionary) else { continue }
+            guard layer == 0 || systemLevels.contains(layer), !excluded.contains(CGWindowID(number)), alpha > 0 else { continue }
+            let bounds = rawBounds.intersection(display)
             guard bounds.width >= 8, bounds.height >= 8 else { continue }
-            let id = CGWindowID(window[kCGWindowNumber as String] as! Int)
+            let id = CGWindowID(number)
             if layer != 0, bounds == display {
                 // The Dock's only window can span the display; its real shape is the union of its AXLists.
-                guard layer == Int(CGWindowLevelForKey(.dockWindow)), AXIsProcessTrusted(),
+                guard layer == Int(CGWindowLevelForKey(.dockWindow)), AXIsProcessTrusted(), let pid = window[kCGWindowOwnerPID as String] as? Int32,
                       let dock = AccessibilityBounds.dockRect(
-                        lists: await Accessibility.listFrames(pid: window[kCGWindowOwnerPID as String] as! Int32),
+                        lists: await Accessibility.listFrames(pid: pid),
                         displayOrigin: display.origin, scale: pixelScale,
                         extent: CGRect(x: 0, y: 0, width: display.width * pixelScale, height: display.height * pixelScale)) else { continue }
                 result.append((dock, "Dock", id, true))

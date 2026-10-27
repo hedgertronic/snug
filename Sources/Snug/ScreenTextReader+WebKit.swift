@@ -7,9 +7,12 @@ extension ScreenTextReader {
     /// engine). Chromium's web areas fail those calls.
     static let webKitApps: Set<String> = ["com.apple.Safari", "com.apple.SafariTechnologyPreview", "com.apple.mail"]
     /// One app's budget once its web areas are found: its lines take at most `webLineBudget`, then word boxes are added until
-    /// `webWordBudget`. Finding the areas is not counted, so a slow window walk (every app is read at once) still leaves time for lines.
+    /// `webWordBudget`. Finding the areas has a budget of its own, `webFindBudget` and `webFindElements`, so a slow window walk (every
+    /// app is read at once) still leaves time for lines and the whole read stays bounded; the walk does not go into tables or outlines.
     private static let webLineBudget = Duration.milliseconds(90)
     private static let webWordBudget = Duration.milliseconds(140)
+    private static let webFindBudget = Duration.milliseconds(150)
+    private static let webFindElements = 3000
     /// The most lines one web area walks, and the most off-screen lines in a row it walks past (DOM order is not visual order, so a
     /// column below the fold can sit before a visible one).
     private static let maxWebLines = 600
@@ -25,12 +28,14 @@ extension ScreenTextReader {
         let application = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(application, Accessibility.messagingTimeout)
         func frame(of element: AXUIElement) -> CGRect? {
-            guard let position = Accessibility.value(kAXPositionAttribute, of: element, type: .cgPoint, as: CGPoint.zero),
-                  let size = Accessibility.value(kAXSizeAttribute, of: element, type: .cgSize, as: CGSize.zero) else { return nil }
+            guard let position = AXValues.point(Accessibility.attribute(kAXPositionAttribute, of: element)),
+                  let size = AXValues.size(Accessibility.attribute(kAXSizeAttribute, of: element)) else { return nil }
             return CGRect(origin: position, size: size)
         }
         var areas: [(element: AXUIElement, visible: CGRect, offset: CGSize)] = []
+        let finding = AXBudget(time: webFindBudget, elements: webFindElements)
         func walk(_ element: AXUIElement, depth: Int, window: CGRect, scroll: AXUIElement?) {
+            guard finding.visit() else { return }
             AXUIElementSetMessagingTimeout(element, Accessibility.messagingTimeout)
             var role: CFTypeRef?
             AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role)
@@ -44,7 +49,8 @@ extension ScreenTextReader {
                       !visible.offsetBy(dx: offset.width, dy: offset.height).intersection(window).isEmpty else { return }
                 return areas.append((element, visible, offset))
             }
-            guard depth < Accessibility.maxDepth else { return }
+            // A table's or outline's rows hold no web area in the apps read here, and a long one (a message list) would spend the whole budget.
+            guard depth < Accessibility.maxDepth, ![kAXTableRole, kAXOutlineRole].contains(role as? String) else { return }
             let scroll = role as? String == kAXScrollAreaRole ? element : scroll
             for child in Accessibility.children(of: element, kAXChildrenAttribute) ?? [] { walk(child, depth: depth + 1, window: window, scroll: scroll) }
         }
@@ -78,9 +84,7 @@ extension ScreenTextReader {
         var offscreen = 0
         for _ in 0..<maxWebLines where ContinuousClock.now < deadline && offscreen < maxOffscreenLines {
             let start = AXTextMarkerRangeCopyStartMarker(range as! AXTextMarkerRange)
-            var box = CGRect.zero
-            if let value = markerAttribute("AXBoundsForTextMarkerRange", of: area, range), AXValueGetValue(value as! AXValue, .cgRect, &box),
-               box.width > 0, box.height > 0, visible.contains(CGPoint(x: box.midX, y: box.midY)) {
+            if let box = AXValues.rect(markerAttribute("AXBoundsForTextMarkerRange", of: area, range)), box.width > 0, box.height > 0, visible.contains(CGPoint(x: box.midX, y: box.midY)) {
                 offscreen = 0
                 if let text = markerAttribute("AXStringForTextMarkerRange", of: area, range) as? String { lines.append((text, box, start)) }
             } else {
@@ -109,10 +113,9 @@ extension ScreenTextReader {
         var marker: CFTypeRef = start
         var read = 0
         while read < length {
-            var box = CGRect.zero
             guard let range = markerAttribute("AXRightWordTextMarkerRangeForTextMarker", of: area, marker),
                   let text = markerAttribute("AXStringForTextMarkerRange", of: area, range) as? String, !text.isEmpty,
-                  let value = markerAttribute("AXBoundsForTextMarkerRange", of: area, range), AXValueGetValue(value as! AXValue, .cgRect, &box) else { return nil }
+                  let box = AXValues.rect(markerAttribute("AXBoundsForTextMarkerRange", of: area, range)) else { return nil }
             pieces.append((text, box))
             read += text.count
             marker = AXTextMarkerRangeCopyEndMarker(range as! AXTextMarkerRange)
