@@ -489,7 +489,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .o-toast { transition: none; }
-  .pop, .tx-btn, .tx-kp, .tx-kt, .tx-ktp, .tx-cap, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-on, .rv-kn, .rv-tdk, .rv-tlt, .rv-cur, .rv-out, .rv-rec, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cp-x, .cp-xh, .cp-chip, .cp-toast, .cp-key, .cp-kp, .ag-u, .ag-t, .ag-th, .ag-r, .ag-ck, .ag-i, .ag-sd, .card.flash .art { animation: none; }
+  .pop, .tx-btn, .tx-kp, .tx-kt, .tx-ktp, .tx-cap, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-on, .rv-kn, .rv-tdk, .rv-tlt, .rv-cur, .rv-out, .rv-rec, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cp-x, .cp-xh, .cp-chip, .cp-chip.cA, .cp-chip.cB, .cp-chip.cC0, .cp-toast, .cp-key, .cp-kp, .cp-k1 .cp-kp, .ag-u, .ag-t, .ag-th, .ag-r, .ag-ck, .ag-i, .ag-sd, .card.flash .art { animation: none; }
   .caps.hk .cap { transition: none; }
   .card .cap[data-hold], .bb .k[data-hold] { transition-duration: .01s; }
   .card .cap[data-hold].down, .bb .k[data-hold].down { transform: none; }
