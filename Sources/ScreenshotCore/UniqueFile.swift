@@ -13,6 +13,16 @@ public enum UniqueFile {
         return try move(temporary, to: file)
     }
 
+    /// Writes `data` as `name` in a new folder of its own under `folder`, so files of one name (a toast's capture to open, share or drag)
+    /// never replace each other. Returns the file written.
+    public static func scratch(_ data: Data, named name: String, under folder: URL) throws -> URL {
+        let own = folder.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: own, withIntermediateDirectories: true)
+        let file = own.appending(path: name)
+        try data.write(to: file)
+        return file
+    }
+
     /// A temporary name beside `file` for a file that is written in place, as a recording is, and moved to `file` with `move` once complete.
     public static func temporary(beside file: URL) -> URL {
         file.deletingLastPathComponent().appending(path: ".snug-\(UUID().uuidString).\(file.pathExtension)")

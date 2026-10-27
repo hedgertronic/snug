@@ -2553,10 +2553,10 @@ extension DebugRun {
         texting.openButton.performClick(nil)
         let textFile = Toast.opened!.file
         let written = try String(contentsOf: textFile, encoding: .utf8)
-        require(Toast.opened!.app == textApp.bundleIdentifier! && textFile.deletingLastPathComponent().path == FileManager.default.temporaryDirectory.appending(path: "Snug").path
-                    && textFile.lastPathComponent.hasPrefix("Snug Text ") && textFile.pathExtension == "txt" && texting.file == textFile
+        require(Toast.opened!.app == textApp.bundleIdentifier! && textFile.deletingLastPathComponent().deletingLastPathComponent().path == FileManager.default.temporaryDirectory.appending(path: "Snug").path
+                    && textFile.lastPathComponent.hasPrefix("Snug Text ") && textFile.pathExtension == "txt" && texting.file == nil
                     && written == copiedText,
-                "Open on copied text writes it as UTF-8 to Snug/Snug Text <date>.txt in the temporary folder and opens it in the default plain text app: \(textFile.path) \(Toast.opened!.app)")
+                "Open on copied text writes it as UTF-8 to Snug/<folder of its own>/Snug Text <date>.txt in the temporary folder and opens it in the default plain text app: \(textFile.path) \(Toast.opened!.app)")
         let againText = Toast(png: nil, message: "Copied", detail: "", file: nil, color: nil, text: "other", defaults: trashDefaults,
                               pasteboard: NSPasteboard(name: NSPasteboard.Name("snug-toast-text-\(UUID().uuidString)")))
         againText.openButton.performClick(nil)
