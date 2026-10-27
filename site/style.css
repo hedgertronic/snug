@@ -444,11 +444,23 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .cp-k3 .cp-kp { animation: cpkp3 10s infinite both; }
 @keyframes cpkp3 { 0%, 69% { opacity: 0; } 69.6%, 71.2% { opacity: 1; } 72%, 77% { opacity: 0; } 77.6%, 79.2% { opacity: 1; } 80%, 85% { opacity: 0; } 85.6%, 87.2% { opacity: 1; } 88%, 100% { opacity: 0; } }
 
-/* agent art: a pasted reference line */
-.art.ag { display: flex; flex-direction: column; justify-content: center; padding: 0 16px; }
-.ag-bub { align-self: flex-end; max-width: 94%; padding: 9px 11px; border-radius: 12px 12px 4px 12px; background: var(--d-win); color: var(--d-fg); box-shadow: 0 2px 8px rgba(0, 0, 0, .12); animation: in 6s -1s infinite both; }
-.ag-bub code { display: block; font: 11.5px/1.4 var(--mono); overflow-wrap: anywhere; }
-@keyframes in { 0%, 8% { opacity: 0; transform: translateY(6px); } 16%, 92% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+/* agent art: a generic chat window. The reference is pasted in the input and sent, the tool call returns the capture's link card, and a one-line reply follows */
+.ag-m { font: 400 4.6px var(--mono); fill: #FFFFFF; }
+.ag-tn { font: 500 4.6px var(--mono); fill: var(--w-fg); }
+.ag-r { font: 400 5.2px var(--sans); fill: var(--w-fg); }
+.ag-i { font: 400 4.4px var(--mono); fill: var(--w-fg2); }
+.ag-sd { fill: var(--d-out); }
+.ag-u, .ag-t, .ag-th, .ag-r, .ag-ck { animation-duration: 8s; animation-iteration-count: infinite; animation-fill-mode: both; }
+.ag-u { animation-name: agu; } .ag-t { animation-name: agt; } .ag-th { animation-name: agth; } .ag-r { animation-name: agr; } .ag-ck { animation-name: agck; }
+.ag-i { opacity: 0; animation: agi 8s infinite both; }
+.ag-sd { animation: agsd 8s infinite both; transform-box: fill-box; transform-origin: center; }
+@keyframes agu { 0% { opacity: 0; transform: translateY(5px); } 21% { opacity: 0; transform: translateY(5px); } 23.5% { opacity: 1; transform: none; } 91.5% { opacity: 1; transform: none; } 94% { opacity: 0; transform: translateY(5px); } 100% { opacity: 0; transform: translateY(5px); } }
+@keyframes agt { 0% { opacity: 0; transform: translateY(4px); } 37% { opacity: 0; transform: translateY(4px); } 39.5% { opacity: 1; transform: none; } 91.5% { opacity: 1; transform: none; } 94% { opacity: 0; transform: translateY(4px); } 100% { opacity: 0; transform: translateY(4px); } }
+@keyframes agth { 0% { opacity: 0; transform: translateY(4px); } 48% { opacity: 0; transform: translateY(4px); } 51% { opacity: 1; transform: none; } 91% { opacity: 1; transform: none; } 94% { opacity: 0; transform: translateY(4px); } 100% { opacity: 0; transform: translateY(4px); } }
+@keyframes agr { 0% { opacity: 0; transform: translateY(3px); } 63% { opacity: 0; transform: translateY(3px); } 66% { opacity: 1; transform: none; } 91% { opacity: 1; transform: none; } 94% { opacity: 0; transform: translateY(3px); } 100% { opacity: 0; transform: translateY(3px); } }
+@keyframes agck { 0%, 40% { opacity: 0; } 43%, 100% { opacity: 1; } }
+@keyframes agi { 0% { opacity: 0; } 3% { opacity: 0; } 5.5% { opacity: 1; } 18.5% { opacity: 1; } 21% { opacity: 0; } 100% { opacity: 0; } }
+@keyframes agsd { 0%, 17% { transform: none; } 19.5% { transform: scale(1.35); } 22%, 100% { transform: none; } }
 
 /* ---------- footer ---------- */
 .foot { background: var(--band); color: var(--bandfg2); padding: 26px max(16px, env(safe-area-inset-left, 0px), (100% - 1040px) / 2) calc(26px + env(safe-area-inset-bottom, 0px)); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 24px; font-size: 14px; border-radius: 28px 28px 0 0; }
@@ -503,7 +515,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .o-toast { transition: none; }
-  .pop, .tx-btn, .tx-kp, .tx-kt, .tx-ktp, .tx-cap, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-on, .rv-kn, .rv-tdk, .rv-tlt, .rv-cur, .rv-out, .rv-rec, .rv-toast, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cp-x, .cp-xh, .cp-chip, .cp-toast, .cp-key, .cp-kp, .ag-bub, .card.flash .art { animation: none; }
+  .pop, .tx-btn, .tx-kp, .tx-kt, .tx-ktp, .tx-cap, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-on, .rv-kn, .rv-tdk, .rv-tlt, .rv-cur, .rv-out, .rv-rec, .rv-toast, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cp-x, .cp-xh, .cp-chip, .cp-toast, .cp-key, .cp-kp, .ag-u, .ag-t, .ag-th, .ag-r, .ag-ck, .ag-i, .ag-sd, .card.flash .art { animation: none; }
   .caps.hk .cap { transition: none; }
   .card .cap[data-hold], .bb .k[data-hold] { transition-duration: .01s; }
   .card .cap[data-hold].down, .bb .k[data-hold].down { transform: none; }
