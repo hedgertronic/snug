@@ -201,6 +201,7 @@ final class HandoffServerValidationTests {
         #expect(try errorCode(#"{"jsonrpc":"2.0","id":"x","method":5}"#).id as? String == "x", "a valid id is kept")
         #expect(server.respond(to: #"{"jsonrpc":"2.0","method":"notifications/initialized"}"#) == nil)
         #expect(try errorCode(#"{"jsonrpc":"2.0","id":null,"method":"ping"}"#).code == nil, "a null id is a request")
+        #expect(try errorCode(#"{"jsonrpc":"2.0","id":9,"method":"ping","params":null}"#).code == nil, "null params read as none")
         let overlong = try JSONSerialization.jsonObject(with: Data(server.respondToOverlongRequest().utf8)) as! [String: Any]
         #expect((overlong["error"] as? [String: Any])?["code"] as? Int == -32600)
     }

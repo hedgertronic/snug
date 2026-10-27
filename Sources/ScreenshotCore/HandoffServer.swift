@@ -69,7 +69,8 @@ public struct HandoffServer: Sendable {
     }
 
     /// The response line to `line`, or nil for a notification. A message that is not a JSON-RPC 2.0 request (no "jsonrpc": "2.0", a
-    /// method that is not a string, an id that is not a string, number or null, params that are not an object) is an Invalid Request.
+    /// method that is not a string, an id that is not a string, number or null, params that are not an object or null) is an Invalid
+    /// Request.
     public func respond(to line: String) -> String? {
         guard let parsed = try? JSONSerialization.jsonObject(with: Data(line.utf8), options: .fragmentsAllowed) else {
             return encode(["jsonrpc": "2.0", "id": NSNull(), "error": ["code": -32700, "message": "Parse error"]])
@@ -78,7 +79,7 @@ public struct HandoffServer: Sendable {
         let id = message?["id"]
         let validId = id.map { $0 is String || $0 is NSNull || ($0 as? NSNumber).map { CFGetTypeID($0) == CFNumberGetTypeID() } == true } ?? true
         guard let message, message["jsonrpc"] as? String == "2.0", message["method"] is String, validId,
-              message["params"] == nil || message["params"] is [String: Any] else {
+              message["params"] == nil || message["params"] is NSNull || message["params"] is [String: Any] else {
             return encode(["jsonrpc": "2.0", "id": validId ? id ?? NSNull() : NSNull(), "error": ["code": -32600, "message": "Invalid Request"]])
         }
         guard let id else { return nil }
