@@ -143,7 +143,10 @@
     const x = r.x + (L ? inset : -outset), y = r.y + (T ? inset : -outset);
     const w = r.x + r.w - (R ? inset : -outset) - x, h = r.y + r.h - (B ? inset : -outset) - y;
     const m = Math.max(0, Math.min(w, h) / 2);
-    const [tl, tr, br, bl] = radii.map(v => Math.min(m, v > 0 ? v + outset : 0));
+    // A corner where both of its sides lie on the screen's edge follows the screen's own curve, so its radius shrinks by the inset
+    // and the stroke runs concentric with and inside it; any other rounded corner grows with the outset.
+    const edge = [L && T, R && T, R && B, L && B];
+    const [tl, tr, br, bl] = radii.map((v, i) => Math.min(m, v <= 0 ? 0 : edge[i] ? Math.max(0, v - inset) : v + outset));
     const f = n => Math.round(n * 100) / 100;
     return `M${f(x + tl)} ${f(y)}H${f(x + w - tr)}${tr ? `A${f(tr)} ${f(tr)} 0 0 1 ${f(x + w)} ${f(y + tr)}` : ''}V${f(y + h - br)}`
       + `${br ? `A${f(br)} ${f(br)} 0 0 1 ${f(x + w - br)} ${f(y + h)}` : ''}H${f(x + bl)}${bl ? `A${f(bl)} ${f(bl)} 0 0 1 ${f(x)} ${f(y + h - bl)}` : ''}`
@@ -247,6 +250,12 @@
       const v = this.view, k = this.el.clientWidth / v.w;
       if (!k) return;
       this.k = k;
+      // The demo's frame rounds the desktop's corners (a phone's crop shows none of the scene's corners), so the screen takes that
+      // radius in scene px and the boxes on its corners inherit it; the scene is clipped to the same curve.
+      const curve = this.phone ? 0 : (parseFloat(getComputedStyle(this.el).borderTopLeftRadius) || 0) / k;
+      BOX.screen.r = [curve, curve, curve, curve];
+      for (const key of KEYS) BOX[key].radii = radiiOf(key);
+      this.scene.style.clipPath = curve ? `inset(0 round ${curve.toFixed(2)}px)` : '';
       this.pt = this.phone ? 1.05 / k : Math.min(1.35, Math.max(0.72, 7.5 / (11 * k)));
       this.scene.style.transform = this.phone ? `scale(${k}) translate(${-v.x}px, ${-v.y}px)` : `scale(${k})`;
       this.scene.style.setProperty('--pt', this.pt);
