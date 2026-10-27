@@ -116,6 +116,21 @@ struct ScrollStitcherTests {
         #expect(pixels[0] == 200 && pixels[(small.height - 1) * small.width * 4] == 60)
     }
 
+    /// The pixel budget caps a wide area's height below `maximumHeight`: here 600 rows of 160 px. Scrolling past it stops growing the
+    /// image and reports it full; the image is the page as stitched when it filled, its footer included.
+    @Test func thePixelBudgetStopsTheImageAndSaysItIsFull() async {
+        let stitcher = ScrollStitcher(first: frame(0), maximumPixels: 600 * width)
+        #expect(stitcher.heightLimit == 600)
+        #expect(ScrollStitcher(first: frame(0)).heightLimit == ScrollStitcher.maximumHeight, "a narrow area keeps the height limit")
+        #expect(ScrollStitcher(first: frame(0), maximumPixels: 10).heightLimit == header + view + footer, "never under one frame")
+        for offset in stride(from: 100, through: 800, by: 100) { await stitcher.add(frame(offset)) }
+        let (height, full, image) = (await stitcher.height, await stitcher.isFull, await stitcher.image())
+        #expect(height == 600 && full && image.height == 600)
+        let expected = [UInt8](repeating: 200, count: header * width * 4) + rows(start: 10_000, count: 600 - header - footer)
+            + [UInt8](repeating: 60, count: footer * width * 4)
+        #expect(bytes(image) == expected)
+    }
+
     @Test func aFrameThatMatchesNowhereAddsNothing() async {
         let stitcher = ScrollStitcher(first: frame(0))
         #expect(await !stitcher.add(frame(5_000)))

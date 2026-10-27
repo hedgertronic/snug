@@ -23,8 +23,13 @@ import Foundation
 public actor ScrollStitcher {
     /// The tallest stitched image, in pixels.
     public static let maximumHeight = 30_000
+    /// The most pixels in a stitched image: 60 megapixels, 229 MiB of RGBA, so a wide area stops sooner than `maximumHeight` (at
+    /// 6,000 px wide, 10,000 px tall instead of a 687 MiB buffer).
+    public static let maximumPixels = 60_000_000
 
     public let width: Int
+    /// This capture's tallest image: `maximumHeight`, or fewer rows when `maximumPixels` runs out first, never under one frame.
+    public nonisolated let heightLimit: Int
     private let frameHeight: Int
     private let bytesPerRow: Int
     /// Stitched rows, RGBA; the output continues with the latest frame from row `cursor` down.
@@ -40,9 +45,10 @@ public actor ScrollStitcher {
     /// Rows that joined the stitched image as one frame showed them after failing the comparison between two frames.
     public private(set) var unmatchedRows = 0
 
-    public init(first: CGImage) {
+    public init(first: CGImage, maximumPixels: Int = ScrollStitcher.maximumPixels) {
         width = first.width
         frameHeight = first.height
+        heightLimit = min(Self.maximumHeight, max(first.height, maximumPixels / max(1, first.width)))
         bytesPerRow = first.width * 4
         let bytes = Self.rgba(first)
         body = bytes
@@ -52,7 +58,10 @@ public actor ScrollStitcher {
     }
 
     /// Stitched height in pixels, the height of `image()`.
-    public var height: Int { min(body.count / bytesPerRow + frameHeight - cursor, Self.maximumHeight) }
+    public var height: Int { min(body.count / bytesPerRow + frameHeight - cursor, heightLimit) }
+
+    /// Whether the image has reached `heightLimit`: scrolling further down adds nothing; scrolling back up still trims it.
+    public var isFull: Bool { height >= heightLimit }
 
     /// Adds a frame; returns whether it matched a move.
     @discardableResult
@@ -78,8 +87,10 @@ public actor ScrollStitcher {
         var best: (shift: Int, rows: Int)?
         for distance in 1..<max(1, band.count - 16) {
             if let best, band.count - distance <= best.rows { break }
+            // A capture that ended mid-search adds nothing.
+            if Task.isCancelled { return false }
             for shift in [distance, -distance] {
-                guard height + shift >= frameHeight, shift < 0 || height < Self.maximumHeight else { continue }
+                guard height + shift >= frameHeight, shift < 0 || height < heightLimit else { continue }
                 var (agreeing, voting) = (0, 0)
                 for row in max(band.lowerBound, band.lowerBound - shift)..<min(band.upperBound, band.upperBound - shift) {
                     var mismatches = 0, compared = 0
@@ -142,9 +153,14 @@ public actor ScrollStitcher {
         return true
     }
 
-    /// The stitched image: the first frame's header, the stitched rows, and the latest frame from where they end.
+    /// The stitched image: the first frame's header, the stitched rows, and the latest frame from where they end. The rows are copied
+    /// once, straight into the image's data.
     public func image() -> CGImage {
-        Self.cgImage(Data((body + latest[(cursor * bytesPerRow)...]).prefix(height * bytesPerRow)), width: width, height: height)
+        let total = height * bytesPerRow
+        var data = Data(capacity: total)
+        data.append(contentsOf: body.prefix(total))
+        data.append(contentsOf: latest[(cursor * bytesPerRow)...].prefix(total - data.count))
+        return Self.cgImage(data, width: width, height: height)
     }
 
     /// The stitched image scaled down (never up) to fit `size` in pixels, each pixel the average of 2 x 2 samples read in place, so a
