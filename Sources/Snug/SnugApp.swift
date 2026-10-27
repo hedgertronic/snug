@@ -209,9 +209,12 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     /// The menu bar logo as a template image, drawn in an 18 pt space into a 1x and a 2x bitmap so each display scale gets pixels placed for it.
     /// "a": the app tile, solid, with five arch dots and the band cut out. The dots sit on whole points, 2 x 2 squares at 1x and circles at 2x,
     /// and the band's curve is a 1 px step at 1x.
-    /// "h", the default: the app tile, solid, in the logo's proportions, with its dashed arch and the band's curve cut out; the band's top sits
+    /// "h": the app tile, solid, in the logo's proportions, with its dashed arch and the band's curve cut out; the band's top sits
     /// at about half the tile's height in the middle and 53% from the top at the sides. At 2x the arch's round-capped dashes mirror around
     /// one centered on top; at 1x they are 2 px on top and 2 px down each leg with 1 px gaps, and the curve is a 1 px step.
+    /// "p", the default: "h" with the pillow, the part of the tile inside the arch, at 50% opacity and the rest solid. At 2x the pillow is the arch's
+    /// centerline closed into a rounded rect, with the blanket below the band's cut kept solid; at 1x it is x 5-12, y 9-13. Template images keep partial alpha, so the
+    /// pillow shows as a lighter patch.
     static func menuBarIcon(_ variant: String) -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18))
         for scale in [1, 2] {
@@ -272,8 +275,73 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                     cut.lineWidth = 1
                     cut.stroke()
                 }
+            case "p":
+                let tile = NSBezierPath(roundedRect: CGRect(x: 1, y: 1, width: 16, height: 16), xRadius: 4, yRadius: 4)
+                let context = NSGraphicsContext.current!
+                if scale == 1 {
+                    // Each tile pixel takes its part's alpha; the tile's own 1x coverage comes from filling it into a mask.
+                    let mask = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 18, pixelsHigh: 18, bitsPerSample: 8, samplesPerPixel: 4,
+                                                hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+                    NSGraphicsContext.saveGraphicsState()
+                    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: mask)
+                    tile.fill()
+                    NSGraphicsContext.restoreGraphicsState()
+                    context.compositingOperation = .copy
+                    for x in 0..<18 {
+                        for y in 0..<18 {
+                            let coverage = mask.colorAt(x: x, y: 17 - y)!.alphaComponent
+                            guard coverage > 0 else { continue }
+                            NSColor(white: 0, alpha: ((5...12).contains(x) && (9...13).contains(y) ? 0.5 : 1) * coverage).setFill()
+                            CGRect(x: x, y: y, width: 1, height: 1).fill()
+                        }
+                    }
+                    context.compositingOperation = .clear
+                    for x: CGFloat in [5, 8, 11] { CGRect(x: x, y: 14, width: 2, height: 1).fill() }
+                    for x: CGFloat in [4, 13] { CGRect(x: x, y: 11, width: 1, height: 2).fill() }
+                    CGRect(x: 1, y: 7, width: 3, height: 1).fill()
+                    CGRect(x: 4, y: 8, width: 10, height: 1).fill()
+                    CGRect(x: 14, y: 7, width: 3, height: 1).fill()
+                } else {
+                    // Solid over the whole square, the pillow at half opacity, then everything outside the tile cleared so its edge keeps the
+                    // solid tile's coverage.
+                    context.compositingOperation = .copy
+                    NSColor.black.setFill()
+                    CGRect(x: 0, y: 0, width: 18, height: 18).fill()
+                    NSColor(white: 0, alpha: 0.5).setFill()
+                    NSBezierPath(roundedRect: CGRect(x: 4.75, y: 2, width: 8.5, height: 12.25), xRadius: 2.25, yRadius: 2.25).fill()
+                    // The blanket below the band's cut stays solid.
+                    let blanket = NSBezierPath()
+                    blanket.move(to: CGPoint(x: 0, y: 7.6))
+                    blanket.curve(to: CGPoint(x: 18, y: 7.6), controlPoint1: CGPoint(x: 5.4, y: 9.6), controlPoint2: CGPoint(x: 12.6, y: 9.6))
+                    blanket.line(to: CGPoint(x: 18, y: 0))
+                    blanket.line(to: CGPoint(x: 0, y: 0))
+                    blanket.close()
+                    NSColor.black.setFill()
+                    blanket.fill()
+                    let outside = NSBezierPath(rect: CGRect(x: 0, y: 0, width: 18, height: 18))
+                    outside.append(tile)
+                    outside.windingRule = .evenOdd
+                    context.compositingOperation = .clear
+                    outside.fill()
+                    for side: CGFloat in [-1, 1] {
+                        let half = NSBezierPath()
+                        half.move(to: CGPoint(x: 9, y: 14.25))
+                        half.line(to: CGPoint(x: 9 + 2 * side, y: 14.25))
+                        half.appendArc(withCenter: CGPoint(x: 9 + 2 * side, y: 12), radius: 2.25, startAngle: 90, endAngle: side < 0 ? 180 : 0, clockwise: side > 0)
+                        half.line(to: CGPoint(x: 9 + 4.25 * side, y: 10))
+                        half.lineWidth = 1.25
+                        half.lineCapStyle = .round
+                        half.setLineDash([0.25, 1.85, 0.5, 1.85, 0.5, 1.85, 0.5, 10], count: 8, phase: 0)
+                        half.stroke()
+                    }
+                    let cut = NSBezierPath()
+                    cut.move(to: CGPoint(x: 0, y: 7.6))
+                    cut.curve(to: CGPoint(x: 18, y: 7.6), controlPoint1: CGPoint(x: 5.4, y: 9.6), controlPoint2: CGPoint(x: 12.6, y: 9.6))
+                    cut.lineWidth = 1
+                    cut.stroke()
+                }
             default:
-                preconditionFailure("SnugMenuBarIcon is a or h: \(variant)")
+                preconditionFailure("SnugMenuBarIcon is a, h or p: \(variant)")
             }
             NSGraphicsContext.restoreGraphicsState()
             image.addRepresentation(rep)

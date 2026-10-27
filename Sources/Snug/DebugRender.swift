@@ -986,7 +986,7 @@ extension DebugRun {
     /// when another process writes `SnugMenuBarIcon`.
     static func renderMenuBarIcons(into directory: URL) async throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let variants = ["h", "a"]
+        let variants = ["p", "h", "a"]
         let cells: [(scale: Int, dark: Bool)] = [(1, false), (2, false), (1, true), (2, true)]
         let sheet = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 40 + 304 * cells.count, pixelsHigh: 348 * variants.count, bitsPerSample: 8,
                                      samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
@@ -1053,7 +1053,7 @@ extension DebugRun {
         Pref.register(in: defaults)
         let button = NSButton()
         let observation = SnugApp.observeMenuBarIcon(on: button, defaults: defaults)
-        // "h" is the registered default, so "a" goes first to make both writes real changes.
+        // "p" is the registered default, so it goes last to make every write a real change.
         for variant in variants.reversed() {
             let writer = try Process.run(URL(fileURLWithPath: "/usr/bin/defaults"), arguments: ["write", suite, Pref.menuBarIcon, variant])
             writer.waitUntilExit()

@@ -1,0 +1,92 @@
+{
+  "fill-specializations": [
+    {
+      "value": {
+        "automatic-gradient": "srgb:0.22745,0.13725,0.25098,1.00000"
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "automatic-gradient": "srgb:0.18039,0.10196,0.20784,1.00000"
+      }
+    }
+  ],
+  "groups": [
+    {
+      "name": "Blanket",
+      "layers": [
+        {
+          "name": "blanket",
+          "glass": true,
+          "image-name-specializations": [
+            {
+              "value": "blanket.svg"
+            },
+            {
+              "appearance": "dark",
+              "value": "blanket-dark.svg"
+            }
+          ]
+        },
+        {
+          "name": "rim",
+          "glass": true,
+          "image-name-specializations": [
+            {
+              "value": "rim.svg"
+            },
+            {
+              "appearance": "dark",
+              "value": "rim-dark.svg"
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.2
+      }
+    },
+    {
+      "name": "Pillow",
+      "layers": [
+        {
+          "name": "arch",
+          "glass": true,
+          "image-name": "arch.svg"
+        },
+        {
+          "name": "pillow",
+          "glass": false,
+          "image-name-specializations": [
+            {
+              "value": "pillow.svg"
+            },
+            {
+              "appearance": "dark",
+              "value": "pillow-dark.svg"
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.2
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}
