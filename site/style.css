@@ -1,0 +1,516 @@
+/* Snug site: a plum band holds the hero and the live demo; features below. Fredoka is the only web font. */
+
+@font-face { font-family: "Fredoka"; src: url("fonts/Fredoka-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+
+:root {
+  --bg: #FBF5F7;
+  --bg2: #F3E8EE;
+  --fg: #2A1830;
+  --fg2: #75607A;
+  --line: rgba(58, 35, 64, .14);
+  --band: #3A2340;
+  --bandfg: #FFF4F1;
+  --bandfg2: #D7BFD6;
+  --coral: #FF7A6B;
+  --hl: #FF7A6B;
+  --coral-ink: #C2453A;
+  --rec: #FF3B30;
+  /* keycaps */
+  --key: #FFFFFF;
+  --keyfg: #2A1830;
+  --keyline: rgba(58, 35, 64, .22);
+  --keyedge: #D6C4D2;
+
+  /* demo desktop and overlay chrome */
+  --d-wall: linear-gradient(155deg, #E6D3E4 0%, #F4C6BC 48%, #FBE5D2 100%);
+  --d-win: #FFFFFF; --d-bar: #F4F4F6; --d-fg: #1D1D1F; --d-fg2: #8A8A90; --d-line: rgba(0, 0, 0, .1); --d-row: rgba(0, 0, 0, .06);
+  --d-page: #FCFBF8; --d-card: #FFFFFF; --d-mb: rgba(255, 255, 255, .55);
+  --d-in: #E9E9EB; --d-infg: #1D1D1F; --d-out: #2F7CF6; --d-acc: #2F7CF6; --d-code: #24292F;
+  --d-add: rgba(40, 167, 69, .13); --d-addfg: #1F8A3B; --d-del: rgba(229, 72, 77, .12); --d-delfg: #C9373C;
+  --d-dim: rgba(20, 12, 24, .30); --d-chip: rgba(250, 250, 252, .94); --d-chipfg: #1D1D1F; --d-ghost: #FFFFFF;
+  /* the app's chrome surface, hairline, text and key caps (Chrome.swift NSColor.chrome*, capFill, capEdge) */
+  --c-surface: rgba(246, 246, 248, .92); --c-surface-solid: #F6F6F8; --c-text: rgba(0, 0, 0, .86); --c-text2: rgba(0, 0, 0, .5); --c-hair: rgba(0, 0, 0, .12); --c-sh: .2;
+  --cap-fill: #FFFFFF; --cap-edge: rgba(0, 0, 0, .18); --cap-sh: rgba(0, 0, 0, .22); --wash: 16%; --lit-text: color-mix(in srgb, var(--hl) 80%, #000);
+  /* the toast's corner radius in app points (20 is the 40 pt capsule's), for the hero's toast and every card's; and a swatch's edge (Chrome.swift swatchEdge) */
+  --toast-r: 13px; --sw-edge: rgba(0, 0, 0, .3);
+
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --round: "Fredoka", ui-rounded, "SF Pro Rounded", -apple-system, sans-serif;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1A1020; --bg2: #26182C; --fg: #F8EDF2; --fg2: #B79FB9; --line: rgba(255, 255, 255, .12);
+    --band: #2A1830; --bandfg2: #C9AFCB; --hl: #FF8A7C; --coral-ink: #FF8A7C; --rec: #FF453A;
+    --key: #3A2843; --keyfg: #FBF1F6; --keyline: rgba(255, 255, 255, .22); --keyedge: #0C0610;
+    --d-wall: linear-gradient(155deg, #23152A 0%, #4A2A40 52%, #6E3B3B 100%);
+    --d-win: #1E1E20; --d-bar: #2A2A2D; --d-fg: #ECECEE; --d-fg2: #8E8E93; --d-line: rgba(255, 255, 255, .1); --d-row: rgba(255, 255, 255, .08);
+    --d-page: #18191A; --d-card: #222325; --d-mb: rgba(20, 14, 24, .5);
+    --d-in: #3A3A3C; --d-infg: #F2F2F4; --d-out: #2C6FE0; --d-acc: #5B9BFF; --d-code: #E6E6EA;
+    --d-add: rgba(63, 185, 80, .17); --d-addfg: #62CB78; --d-del: rgba(248, 81, 73, .17); --d-delfg: #FF7B72;
+    --d-dim: rgba(0, 0, 0, .42); --d-chip: rgba(44, 44, 48, .94); --d-chipfg: #F5F5F7;
+    --c-surface: rgba(48, 48, 53, .96); --c-surface-solid: #303035; --c-text: rgba(255, 255, 255, .92); --c-text2: rgba(255, 255, 255, .55); --c-hair: rgba(255, 255, 255, .22); --c-sh: .42;
+    --cap-fill: rgba(255, 255, 255, .16); --cap-edge: rgba(0, 0, 0, .45); --cap-sh: rgba(0, 0, 0, .55); --wash: 26%; --lit-text: color-mix(in srgb, var(--hl) 62%, #FFF); --sw-edge: rgba(255, 255, 255, .5);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1A1020; --bg2: #26182C; --fg: #F8EDF2; --fg2: #B79FB9; --line: rgba(255, 255, 255, .12);
+  --band: #2A1830; --bandfg2: #C9AFCB; --hl: #FF8A7C; --coral-ink: #FF8A7C; --rec: #FF453A;
+  --key: #3A2843; --keyfg: #FBF1F6; --keyline: rgba(255, 255, 255, .22); --keyedge: #0C0610;
+  --d-wall: linear-gradient(155deg, #23152A 0%, #4A2A40 52%, #6E3B3B 100%);
+  --d-win: #1E1E20; --d-bar: #2A2A2D; --d-fg: #ECECEE; --d-fg2: #8E8E93; --d-line: rgba(255, 255, 255, .1); --d-row: rgba(255, 255, 255, .08);
+  --d-page: #18191A; --d-card: #222325; --d-mb: rgba(20, 14, 24, .5);
+    --d-in: #3A3A3C; --d-infg: #F2F2F4; --d-out: #2C6FE0; --d-acc: #5B9BFF; --d-code: #E6E6EA;
+    --d-add: rgba(63, 185, 80, .17); --d-addfg: #62CB78; --d-del: rgba(248, 81, 73, .17); --d-delfg: #FF7B72;
+  --d-dim: rgba(0, 0, 0, .42); --d-chip: rgba(44, 44, 48, .94); --d-chipfg: #F5F5F7;
+  --c-surface: rgba(48, 48, 53, .96); --c-surface-solid: #303035; --c-text: rgba(255, 255, 255, .92); --c-text2: rgba(255, 255, 255, .55); --c-hair: rgba(255, 255, 255, .22); --c-sh: .42;
+  --cap-fill: rgba(255, 255, 255, .16); --cap-edge: rgba(0, 0, 0, .45); --cap-sh: rgba(0, 0, 0, .55); --wash: 26%; --lit-text: color-mix(in srgb, var(--hl) 62%, #FFF); --sw-edge: rgba(255, 255, 255, .5);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+h1, h2, h3, p { margin: 0; }
+h1, h2, h3 { text-wrap: balance; }
+a { color: inherit; cursor: pointer; }
+.nw { white-space: nowrap; }
+
+/* small inline keycap */
+kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; margin: 0 1px; border-radius: 6px; font: 600 12.5px/1 var(--sans); background: var(--key); color: var(--keyfg); box-shadow: 0 0 0 1px var(--keyline), 0 1.5px 0 var(--keyedge); vertical-align: 1px; white-space: nowrap; }
+
+.wm { display: inline-flex; align-items: center; gap: 9px; font: 700 23px/1 var(--round); }
+.wm img { width: 30px; height: 30px; }
+
+/* ---------- plum band ---------- */
+.band { background: var(--band); color: var(--bandfg); padding: 0 max(16px, env(safe-area-inset-left, 0px)) 52px; border-radius: 0 0 28px 28px; }
+/* the header: wordmark left, the shortcut's caps centered, the maker credit right */
+.top { max-width: 1040px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 18px 0; }
+.top .wm { justify-self: start; white-space: nowrap; }
+.top .top-links { justify-self: end; }
+.top-links { display: flex; align-items: center; gap: 18px; font-size: 14.5px; font-weight: 500; }
+.top-links a { text-decoration: none; color: var(--bandfg2); display: inline-flex; align-items: center; gap: 7px; }
+@media (hover: hover) and (pointer: fine) { .top-links a:hover { color: var(--bandfg); } }
+/* the maker credit: a quiet pill on the plum */
+.top-links .maker { gap: 6px; height: 32px; padding: 0 12px 0 8px; border-radius: 999px; font-size: 13px; font-weight: 500;
+  background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); transition: background-color .15s, box-shadow .15s, color .15s; }
+@media (hover: hover) and (pointer: fine) { .top-links .maker:hover { background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24); } }
+.top-links .maker img { width: 18px; height: 18px; border-radius: 50%; }
+
+.hero { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0; padding: 30px 0 44px; }
+.hero h1 { font: 700 clamp(36px, 7vw, 58px)/1.04 var(--round); letter-spacing: -.005em; max-width: 15ch; }
+.cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 32px; }
+.dl, .dl-gh { display: inline-flex; align-items: center; height: 54px; padding: 0 22px; border-radius: 999px; background: var(--coral); color: #2A1228; font-weight: 650; font-size: 15.5px; text-decoration: none; }
+.dl { flex-direction: column; justify-content: center; gap: 1px; line-height: 1.15; }
+.dl small { font-size: 11.5px; font-weight: 400; opacity: .72; letter-spacing: 0; }
+@media (hover: hover) and (pointer: fine) { .dl:hover { background: #FF8E81; } }
+.dl-gh { gap: 8px; background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); color: var(--bandfg); font-weight: 600; font-size: 15.5px; text-decoration: none; transition: background-color .15s, box-shadow .15s; }
+@media (hover: hover) and (pointer: fine) { .dl-gh:hover { background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24); } }
+
+.demo-wrap { max-width: 880px; margin: 0 auto; }
+a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
+/* The demo takes focus for its keys. A pointer focus draws nothing; a keyboard focus draws a faint white ring, never coral. */
+.demo:focus-visible:not([data-via="pointer"]) { outline: 1.5px solid rgba(255, 255, 255, .35); outline-offset: 3px; }
+
+/* ---------- the demo ---------- */
+.demo { position: relative; width: 100%; aspect-ratio: 16 / 10; border-radius: 14px; overflow: hidden; outline: none; touch-action: pan-y;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .12), 0 10px 24px -14px rgba(0, 0, 0, .4); }
+.scene { position: absolute; left: 0; top: 0; width: 640px; height: 400px; transform-origin: 0 0; font: 11px/1.3 var(--sans); color: var(--d-fg); user-select: none; -webkit-user-select: none; cursor: crosshair; overflow: hidden; }
+.scene .b { position: absolute; }
+.rvg { display: contents; }
+.s-screen { background: var(--d-wall); }
+.s-menubar { display: flex; align-items: center; gap: 12px; padding: 0 12px; background: var(--d-mb); font-size: 11px; }
+.s-menubar b { font-weight: 700; }
+.s-menubar .clock { margin-left: auto; }
+.s-win { background: var(--d-page); border-radius: 12px; box-shadow: 0 0 0 .5px rgba(0, 0, 0, .3), 0 20px 44px rgba(30, 10, 30, .3); }
+.s-toolbar { display: flex; align-items: center; padding: 0 14px; background: var(--d-bar); border-radius: 12px 12px 0 0; border-bottom: .5px solid var(--d-line); }
+.s-lights { display: inline-flex; gap: 7px; }
+.s-lights i { width: 11px; height: 11px; border-radius: 50%; background: #FF5F57; }
+.s-lights i:nth-child(2) { background: #FEBC2E; }
+.s-lights i:nth-child(3) { background: #28C840; }
+.s-wt { position: absolute; left: 0; right: 0; text-align: center; font-weight: 600; color: var(--d-fg); pointer-events: none; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.s-toolbar .s-lights { position: relative; z-index: 1; }
+.av { display: inline-block; flex: none; width: 16px; height: 16px; border-radius: 50%; background: linear-gradient(140deg, #FFB38A, #FF7A6B); }
+.av.a2 { background: linear-gradient(140deg, #9CC7FF, #6C8CF5); }
+
+/* the review window: the change's title, then one file of the diff with an inline comment */
+.s-pr { font-size: 14px; font-weight: 700; color: var(--d-fg); letter-spacing: -.01em; }
+.s-pr small { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 10.5px; font-weight: 400; color: var(--d-fg2); letter-spacing: 0; }
+.s-tag { padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--d-acc) 16%, transparent); color: var(--d-acc); font-weight: 600; font-size: 9.5px; }
+.s-pr ins, .s-fhead ins { text-decoration: none; color: var(--d-addfg); font-weight: 600; }
+.s-pr del, .s-fhead del { text-decoration: none; color: var(--d-delfg); font-weight: 600; }
+.s-file { background: var(--d-card); border-radius: 8px; box-shadow: 0 0 0 .5px var(--d-line), 0 1px 3px rgba(0, 0, 0, .05); }
+.s-fhead { display: flex; align-items: center; justify-content: space-between; padding: 0 10px; background: var(--d-row); border-radius: 8px 8px 0 0; border-bottom: .5px solid var(--d-line); font-size: 10px; color: var(--d-fg2); }
+.s-fhead code { font: 600 10px var(--mono); color: var(--d-fg); }
+.s-ln { display: flex; align-items: center; font: 10px/1 var(--mono); color: var(--d-code); }
+.s-ln .no { width: 24px; flex: none; padding-right: 6px; text-align: right; color: var(--d-fg2); opacity: .8; font-size: 9px; }
+.s-ln .mk { width: 14px; flex: none; text-align: center; font-weight: 700; }
+.s-ln code { font: inherit; white-space: pre; }
+.s-ln.add { background: var(--d-add); }
+.s-ln.add .mk, .s-ln.add .no { color: var(--d-addfg); }
+.s-ln.del { background: var(--d-del); }
+.s-ln.del .mk, .s-ln.del .no { color: var(--d-delfg); }
+.s-cmt { display: flex; align-items: center; gap: 8px; padding: 9px 10px; background: var(--d-page); border-radius: 8px; box-shadow: 0 0 0 .5px var(--d-line), 0 2px 6px rgba(0, 0, 0, .06); }
+.s-cmt > .av { align-self: flex-start; }
+.s-cmt b { font-size: 10.5px; }
+.s-cmt small { font-size: 9.5px; color: var(--d-fg2); }
+.s-cmt p { margin-top: 3px; font-size: 10.5px; line-height: 1.35; }
+.s-cmt .act { display: block; margin-top: 6px; color: var(--d-acc); font-weight: 600; }
+
+/* the chat window: bubbles, one with a link preview, a timestamp and the message field */
+.s-ts { font-size: 9px; color: var(--d-fg2); text-align: center; }
+.s-bub { padding: 6px 11px; border-radius: 13px; font-size: 10.5px; line-height: 14px; background: var(--d-in); color: var(--d-infg); }
+.s-bub.out { background: var(--d-out); color: #FFFFFF; }
+.s-link { display: flex; flex-direction: column; overflow: hidden; border-radius: 9px; background: var(--d-card); color: var(--d-fg); }
+.s-link .th { display: flex; flex-direction: column; justify-content: center; gap: 4px; height: 32px; padding: 0 10px; flex: none; background: linear-gradient(120deg, #F7D9D3, #E4D8F0); }
+.s-link .th i { display: block; height: 4px; border-radius: 2px; background: rgba(42, 24, 48, .28); width: 62%; }
+.s-link .th i:nth-child(2) { width: 44%; background: rgba(31, 138, 59, .55); }
+.s-link .th i:nth-child(3) { width: 52%; }
+.s-link b { padding: 5px 9px 0; font-size: 10px; }
+.s-link small { padding: 1px 9px 0; font-size: 9px; color: var(--d-fg2); }
+.s-field { display: flex; align-items: center; padding: 0 12px; border-radius: 16px; box-shadow: inset 0 0 0 .5px var(--d-line); background: var(--d-row); color: var(--d-fg2); font-size: 10.5px; }
+
+/* The overlay, drawn as the app draws it: OverlayView.swift (geometry, default highlight: fill 0.1, dim 0.5, glow 0.2) and
+   Chrome.swift (chips, strip buttons, key caps). --pt is the app's point in scene px, set by snug.js. */
+/* The scene's own stacking context: the window chrome's z-index (the traffic lights) stays below every overlay layer. */
+.content { position: absolute; left: 0; top: 0; width: 640px; height: 400px; isolation: isolate; }
+.ovg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.ovg path { vector-effect: none; }
+.ovg .dim { fill: rgba(0, 0, 0, .5); }
+.ovg .hint { fill: none; stroke: rgba(255, 255, 255, .38); stroke-width: calc(1px * var(--pt)); stroke-dasharray: calc(4px * var(--pt)) calc(3px * var(--pt)); }
+.ovg .ring { fill: none; stroke: color-mix(in srgb, var(--hl) 28%, transparent); stroke-width: calc(3px * var(--pt)); }
+.ovg .glow { fill: var(--hl); opacity: .32; }
+.ovg .hov { fill: color-mix(in srgb, var(--hl) 10%, transparent); stroke: var(--hl); stroke-width: calc(1.5px * var(--pt)); }
+.ovg .ghost { fill: none; stroke: rgba(255, 255, 255, .9); stroke-width: calc(1px * var(--pt)); }
+.ovg .outl { fill: none; stroke: var(--hl); stroke-width: calc(1.5px * var(--pt)); }
+.ovg .handles { fill: #FFFFFF; stroke: var(--hl); stroke-width: calc(1.5px * var(--pt)); }
+
+.ov { position: absolute; inset: 0; pointer-events: none; }
+.ov > * { position: absolute; left: 0; top: 0; }
+.o-chip, .o-strip .pill, .o-snap .bb { background: var(--c-surface); color: var(--c-text); box-shadow: inset 0 0 0 calc(.5px * var(--pt)) var(--c-hair), 0 calc(8px * var(--pt)) calc(22px * var(--pt)) rgba(0, 0, 0, var(--c-sh)); }
+.o-chip { display: inline-flex; align-items: center; gap: calc(8px * var(--pt)); height: calc(26px * var(--pt)); padding: 0 calc(8px * var(--pt)); border-radius: calc(8px * var(--pt)); white-space: nowrap; font: 600 calc(12px * var(--pt))/1 var(--sans); }
+.ov .mono { font: 400 calc(12px * var(--pt))/1 var(--mono); }
+.ov .dim2 { opacity: .65; }
+.o-strip { display: flex; gap: calc(8px * var(--pt)); pointer-events: auto; cursor: default; }
+.o-strip .copy, .o-strip .tool { cursor: pointer; }
+.o-strip.narrow .tools { display: none; }
+.o-strip .pill { display: flex; align-items: center; gap: calc(2px * var(--pt)); height: calc(32px * var(--pt)); padding: 0 calc(3px * var(--pt)); border-radius: calc(11px * var(--pt)); }
+.bb { display: inline-flex; align-items: center; gap: calc(7px * var(--pt)); height: calc(26px * var(--pt)); padding: 0 calc(7px * var(--pt)); border-radius: calc(8px * var(--pt)); white-space: nowrap; color: var(--c-text); font: 500 calc(12px * var(--pt))/1 var(--sans); }
+.bb.sym { gap: calc(6px * var(--pt)); }
+.bb svg { width: calc(14px * var(--pt)); height: calc(14px * var(--pt)); }
+.bb .k + .k { margin-left: calc(-5px * var(--pt)); }
+.bb.lit { background: color-mix(in srgb, var(--hl) var(--wash), transparent); color: var(--lit-text); }
+.o-snap .bb.lit { background: color-mix(in srgb, var(--hl) var(--wash), var(--c-surface-solid)); }
+.bb.primary { background: var(--hl); color: #FFFFFF; font-weight: 600; }
+.k { display: inline-flex; align-items: center; justify-content: center; min-width: calc(20px * var(--pt)); height: calc(20px * var(--pt)); padding: 0 calc(5px * var(--pt)); border-radius: calc(5px * var(--pt)); font: 600 calc(11px * var(--pt))/1 var(--sans); background: var(--cap-fill); color: var(--c-text); box-shadow: inset 0 0 0 calc(.5px * var(--pt)) var(--cap-edge), 0 calc(1px * var(--pt)) 0 var(--cap-sh); }
+.bb.primary .k { background: rgba(255, 255, 255, .94); color: var(--hl); box-shadow: 0 calc(1px * var(--pt)) 0 var(--cap-sh); }
+.bb.primary.pressed .k { background: color-mix(in srgb, var(--hl) 60%, #000); color: #FFFFFF; box-shadow: inset 0 0 0 calc(1px * var(--pt)) rgba(255, 255, 255, .7); }
+
+/* The toast (Toast.swift): a 40 pt capsule, up to 360 pt wide, with a lead tile (the capture's 44 x 28 pt thumbnail, a 28 pt swatch or the
+   text glyph), the message and the detail on one line; the detail gives way first. --toast-gap is its distance from the bottom. */
+.o-toast { left: var(--tl, 50%); top: auto; bottom: calc(var(--tb, 0px) + var(--toast-gap, 24px) * var(--pt)); display: flex; align-items: center; height: calc(40px * var(--pt)); max-width: calc(360px * var(--pt)); padding: 0 calc(12px * var(--pt)) 0 calc(6px * var(--pt)); border-radius: calc(var(--toast-r) * var(--pt)); white-space: nowrap;
+  background: var(--c-surface); color: var(--c-text); box-shadow: inset 0 0 0 calc(.5px * var(--pt)) var(--c-hair), 0 calc(10px * var(--pt)) calc(30px * var(--pt)) rgba(0, 0, 0, .28), 0 0 0 calc(.5px * var(--pt)) rgba(0, 0, 0, .12);
+  opacity: 0; transform: translate(-50%, calc(6px * var(--pt))); transition: opacity .2s ease-out, transform .2s ease-out; }
+.o-toast.show { opacity: 1; transform: translate(-50%, 0); }
+.o-toast .th { position: relative; flex: none; width: calc(44px * var(--pt)); height: calc(28px * var(--pt)); margin-right: calc(10px * var(--pt)); border-radius: calc(7px * var(--pt)); overflow: hidden; outline: 1px solid rgba(128, 128, 128, .3); outline-offset: -1px; }
+.o-toast .th > svg { display: block; width: 100%; height: 100%; }
+.o-toast .thc { position: absolute; left: 0; top: 0; width: 640px; height: 400px; transform-origin: 0 0; }
+.o-toast .sw, .o-toast .ti { flex: none; width: calc(28px * var(--pt)); height: calc(28px * var(--pt)); margin-right: calc(10px * var(--pt)); }
+.o-toast .sw { border-radius: calc(7px * var(--pt)); background: var(--sw); box-shadow: inset 0 0 0 1px var(--sw-edge); }
+.o-toast .ti rect { fill: var(--hl); }
+.o-toast .ti path { fill: #FFFFFF; }
+.o-toast b { flex: none; font: 600 calc(13px * var(--pt))/1 var(--sans); margin-right: calc(8px * var(--pt)); }
+.o-toast em { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 400 calc(12px * var(--pt))/1.2 var(--mono); font-style: normal; color: var(--c-text2); }
+
+/* The pointer: the system crosshair over the open overlay (OverlayView.cursor), the arrow once it closes. */
+.o-cursor { will-change: transform; }
+.o-cursor svg { position: absolute; display: block; filter: drop-shadow(0 .5px 1px rgba(0, 0, 0, .3)); }
+.c-arrow { left: calc(-2px * var(--pt)); top: calc(-2px * var(--pt)); width: calc(17px * var(--pt)); height: calc(24px * var(--pt)); }
+.c-cross { left: calc(-11px * var(--pt)); top: calc(-11px * var(--pt)); width: calc(22px * var(--pt)); height: calc(22px * var(--pt)); }
+.scene[data-cursor="arrow"] .c-cross, .scene[data-cursor="cross"] .c-arrow, .scene[data-auto="false"] .o-cursor { display: none; }
+.scene[data-open="false"] { cursor: default; }
+.scene[data-open="false"] :is(.ovg, .o-chip, .o-snap, .o-strip) { display: none; }
+
+/* ---------- features ---------- */
+.feat { max-width: 1072px; margin: 0 auto; padding: 96px max(16px, env(safe-area-inset-left, 0px)) 72px; }
+.feat-h { font: 700 clamp(28px, 3.4vw, 36px)/1.1 var(--round); letter-spacing: -.005em; margin-bottom: 28px; text-align: center; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 36px 28px; }
+.card { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.card-head { display: flex; align-items: center; gap: 14px; }
+.card h3 { font: 700 22px/1.15 var(--round); }
+.cap { min-width: 46px; height: 46px; padding: 0 12px; margin: 0; border-radius: 11px; font: 600 21px/1 var(--sans); box-shadow: 0 0 0 1px var(--keyline), 0 3px 0 var(--keyedge), 0 5px 12px -4px rgba(42, 24, 48, .25); vertical-align: 0; flex: none; }
+.caps { display: inline-flex; gap: 6px; flex: none; }
+/* The header's caps press under a pointer or the real keys. Every state draws the same five shadows in the same order (ring, edge, drop, inset, glow),
+   so press and release both interpolate; only transform moves the cap, so nothing beside it shifts. */
+.caps.hk { gap: 6px; }
+.caps.hk .cap { min-width: 34px; height: 31px; padding: 0 9px; border-radius: 8px; font-size: 16px;
+  margin: 0; background: var(--key); color: var(--keyfg); font-family: var(--sans); font-weight: 600; cursor: default; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; touch-action: manipulation;
+  box-shadow: 0 0 0 1px var(--keyline), 0 2px 0 var(--keyedge), 0 5px 10px -4px rgba(0, 0, 0, .4), inset 0 0 0 transparent, 0 0 0 0 transparent;
+  transition: transform .24s cubic-bezier(.3, 0, .2, 1), box-shadow .24s cubic-bezier(.3, 0, .2, 1), background-color .24s ease-out; }
+.caps.hk .cap.space { min-width: 72px; font-size: 12.5px; letter-spacing: .01em; }
+.caps.hk .cap.down, .caps.hk .cap.flash { transform: translateY(2px); background: color-mix(in srgb, var(--coral) 34%, var(--key));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--coral) 70%, var(--keyline)), 0 0 0 var(--keyedge), 0 1px 2px -1px rgba(0, 0, 0, .4), inset 0 2px 4px rgba(42, 24, 48, .3), 0 0 14px 1px color-mix(in srgb, var(--coral) 55%, transparent);
+  transition-duration: .07s; }
+.caps.hk .cap.flash { background: color-mix(in srgb, var(--coral) 70%, var(--key));
+  box-shadow: 0 0 0 1px var(--coral), 0 0 0 var(--keyedge), 0 1px 2px -1px rgba(0, 0, 0, .4), inset 0 2px 4px rgba(42, 24, 48, .3), 0 0 22px 4px color-mix(in srgb, var(--coral) 80%, transparent); }
+
+/* The feature cards' caps (and the demo strip's) light while their real key is down, and press briefly under a pointer. Every state draws the same five
+   shadows in the same order (ring, edge, drop, inset, glow) so press and release both interpolate; only transform moves a cap. */
+.card .cap[data-hold] { cursor: default; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; touch-action: manipulation;
+  box-shadow: 0 0 0 1px var(--keyline), 0 3px 0 var(--keyedge), 0 5px 12px -4px rgba(42, 24, 48, .25), inset 0 0 0 transparent, 0 0 0 0 transparent;
+  transition: transform .24s cubic-bezier(.3, 0, .2, 1), box-shadow .24s cubic-bezier(.3, 0, .2, 1), background-color .24s ease-out; }
+.card .cap[data-hold].down { transform: translateY(2px); background: color-mix(in srgb, var(--coral) 34%, var(--key));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--coral) 70%, var(--keyline)), 0 0 0 var(--keyedge), 0 1px 2px -1px rgba(42, 24, 48, .25), inset 0 2px 4px rgba(42, 24, 48, .3), 0 0 14px 1px color-mix(in srgb, var(--coral) 55%, transparent);
+  transition-duration: .07s; }
+.bb:not(.pressed) .k[data-hold] { transition: transform .24s cubic-bezier(.3, 0, .2, 1), box-shadow .24s cubic-bezier(.3, 0, .2, 1), background-color .24s ease-out; }
+.bb:not(.primary) .k[data-hold] { box-shadow: inset 0 0 0 calc(.5px * var(--pt)) var(--cap-edge), 0 calc(1px * var(--pt)) 0 var(--cap-sh), 0 0 0 0 transparent; }
+.bb.primary .k[data-hold] { box-shadow: 0 calc(1px * var(--pt)) 0 var(--cap-sh), 0 0 0 0 transparent, 0 0 0 0 transparent; }
+.bb:not(.primary) .k[data-hold].down { transform: translateY(calc(1px * var(--pt))); background: color-mix(in srgb, var(--coral) 40%, var(--cap-fill));
+  box-shadow: inset 0 0 0 calc(.5px * var(--pt)) color-mix(in srgb, var(--coral) 80%, var(--cap-edge)), 0 0 0 0 var(--cap-sh), 0 0 calc(7px * var(--pt)) calc(1px * var(--pt)) color-mix(in srgb, var(--coral) 55%, transparent); transition-duration: .07s; }
+.bb.primary .k[data-hold].down { transform: translateY(calc(1px * var(--pt))); background: color-mix(in srgb, var(--coral) 45%, #FFFFFF);
+  box-shadow: 0 0 0 calc(1px * var(--pt)) var(--coral), 0 0 0 0 var(--cap-sh), 0 0 calc(7px * var(--pt)) calc(1px * var(--pt)) color-mix(in srgb, var(--coral) 70%, transparent); transition-duration: .07s; }
+
+/* The chord's pop: the group scales up and springs back while one coral ring ripples out of it and fades. Transform and opacity only,
+   on the group and a pseudo-element, so nothing beside the caps moves. */
+.caps.hk { position: relative; }
+.caps.hk::after { content: ""; position: absolute; inset: -5px -7px; border-radius: 13px; border: 2px solid var(--coral); opacity: 0; pointer-events: none; }
+.caps.hk.chord { animation: hk-pop .5s linear; }
+.caps.hk.chord::after { animation: hk-ring .5s cubic-bezier(.2, .6, .3, 1); }
+@keyframes hk-pop {
+  0% { transform: scale(1); animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
+  28% { transform: scale(1.15); animation-timing-function: ease-in-out; }
+  58% { transform: scale(.975); animation-timing-function: ease-in-out; }
+  80% { transform: scale(1.012); animation-timing-function: ease-out; }
+  100% { transform: scale(1); }
+}
+@keyframes hk-ring { 0% { transform: scale(1); opacity: .85; } 100% { transform: scale(1.7, 2); opacity: 0; } }
+
+/* feature art: the finished state is each piece's base style, so reduced motion shows a still frame */
+/* Each card is a small desktop, as the hero's: its wallpaper behind every scene, and every window (or picture) on it drawn alike: radius 8,
+   a 14-unit title bar with the hero's three lights, a hairline and one drop shadow. */
+.art { position: relative; aspect-ratio: 200 / 124; border-radius: 16px; overflow: hidden; background: var(--d-wall); box-shadow: 0 0 0 1px var(--line);
+  --w-bg: var(--d-win); --w-bar: var(--d-bar); --w-fg: var(--d-fg); --w-fg2: var(--d-fg2); --w-line: var(--d-line); }
+.art svg { display: block; width: 100%; height: 100%; }
+.art .win, .art .pic { fill: var(--w-bg); stroke: rgba(0, 0, 0, .2); stroke-width: .5; filter: drop-shadow(0 2px 4px rgba(30, 10, 30, .22)); }
+.art .win.term { fill: #1B1B1F; stroke: rgba(255, 255, 255, .12); }
+.art .lights circle:nth-child(1) { fill: #FF5F57; }
+.art .lights circle:nth-child(2) { fill: #FEBC2E; }
+.art .lights circle:nth-child(3) { fill: #28C840; }
+.art .wbar { fill: var(--w-bar); }
+.art .ink { fill: var(--w-fg); opacity: .75; }
+.art .ink2 { fill: var(--w-fg2); opacity: .45; }
+.art .line { stroke: var(--w-line); }
+.art .ui { font: 500 10px var(--sans); fill: var(--w-fg); }
+.art .ui2 { font: 500 7.5px var(--sans); fill: var(--w-fg2); }
+.art .mono { font: 9.5px var(--mono); }
+.art .outline { fill: none; stroke: var(--hl); stroke-width: 1.5; }
+/* The pointers are the hero's (.c-arrow, .c-cross) at the same size in points: 0.6 drawing units per point. */
+.art .ptr { filter: drop-shadow(0 .5px 1px rgba(0, 0, 0, .3)); }
+
+/* A card's Snug chrome: the hero's chip, strip and toast styles in HTML over the scene, sized by --pt (set in snug.js from the card's
+   width, at the hero's scale). Only the Copy text card shows a toast: it runs in 0.25 s, holds 2.25 s and fades in 0.25 s. */
+.cov { --pt: 1; --toast-gap: 16px; position: absolute; inset: 0; pointer-events: none; }
+.cov > * { position: absolute; }
+.cov .o-toast { opacity: 0; transition: none; max-width: calc(100% - 32px * var(--pt)); }
+.cov .o-strip { pointer-events: none; }
+.art .cov .mono { font: 400 calc(12px * var(--pt))/1 var(--mono); }
+
+/* T: the selection sweeps over two lines, the Text strip's Copy button (Chrome.swift textStrip) appears under it, its Return cap presses, and the toast follows */
+/* A continuous 6 s loop that ends in the state it starts from (the terminal, no selection, strip or toast): the sweep draws over 0.3 to 1.2 s, Copy shows at 1.3 s, Return presses it at 2.4 s, the toast slides in at 2.8 s, holds 2.1 s and slides out, then the selection clears at 5.3 s and the loop rests 0.8 s before it draws again. */
+/* The terminal ends 34 units above the art's bottom edge (a toast is 40 pt = 24 units), so the toast centres in that band: 5 units, 8.33 pt, either side. */
+.tx-ov .o-toast { --toast-gap: 8.33px; animation: txt 6s infinite both; }
+@keyframes txt { 0%, 46% { opacity: 0; transform: translate(-50%, calc(6px * var(--pt))); animation-timing-function: ease-out; } 49.5%, 85% { opacity: 1; transform: translate(-50%, 0); animation-timing-function: ease-in; } 88.5%, 100% { opacity: 0; transform: translate(-50%, calc(6px * var(--pt))); } }
+/* The text strip's Copy (Chrome.swift textStrip), 8 pt under the selection from its left edge; Return presses its cap as the hero's does. */
+.tx-ov .tx-btn { left: 10.5%; top: calc(56.85% + 8px * var(--pt)); animation: txbtn 6s infinite both; }
+@keyframes txbtn { 0%, 20% { opacity: 0; transform: translateY(calc(2px * var(--pt))); } 24%, 46% { opacity: 1; transform: none; } 48.5%, 100% { opacity: 0; transform: none; } }
+.tx-ov .bb.primary .k { animation: txk 6s infinite both; }
+@keyframes txk { 0%, 40% { background-color: rgba(255, 255, 255, .94); color: var(--hl); } 40.1%, 44% { background-color: color-mix(in srgb, var(--hl) 60%, #000); color: #FFFFFF; } 44.1%, 100% { background-color: rgba(255, 255, 255, .94); color: var(--hl); } }
+.tx-sel { fill: color-mix(in srgb, var(--hl) 55%, transparent); transform-box: fill-box; transform-origin: left; animation: sweep 6s infinite both; }
+.tx-sel2 { animation-name: sweep2; }
+@keyframes sweep { 0%, 5% { transform: scaleX(0); opacity: 1; } 17%, 89% { transform: scaleX(1); opacity: 1; } 92% { transform: scaleX(1); opacity: 0; } 92.1%, 100% { transform: scaleX(0); opacity: 0; } }
+@keyframes sweep2 { 0%, 7.5% { transform: scaleX(0); opacity: 1; } 19.5%, 89% { transform: scaleX(1); opacity: 1; } 92% { transform: scaleX(1); opacity: 0; } 92.1%, 100% { transform: scaleX(0); opacity: 0; } }
+/* the scrolling page: a review's title, a diff, two comments and a link card, drawn once and used by both the window and the stitched preview */
+.art .t0 { font: 700 7px var(--sans); fill: var(--w-fg); }
+.art .t1 { font: 600 5.4px var(--sans); fill: var(--w-fg); }
+.art .t2 { font: 400 5px var(--sans); fill: var(--w-fg2); }
+.art .t2b { font: 400 5.2px var(--sans); fill: var(--w-fg); }
+.art .t3 { font: 600 4.6px var(--sans); fill: var(--d-acc); }
+.art .tm { font: 400 4.9px var(--mono); fill: var(--d-code); }
+.art .tm.tb { fill: var(--w-fg2); }
+.art .g-card { fill: var(--d-card); stroke: var(--w-line); stroke-width: .4; }
+.art .g-row { fill: var(--d-row); }
+.art .g-add { fill: var(--d-add); }
+.art .g-del { fill: var(--d-del); }
+.art .g-tag { fill: color-mix(in srgb, var(--d-acc) 18%, transparent); }
+.art .gm-a, .art .gm-a.t3 { fill: var(--d-addfg); font-weight: 700; }
+.art .gm-d { fill: var(--d-delfg); font-weight: 700; }
+/* G: the app's scrolling capture (OverlayController+Scroll.swift): the area's outline and, 8 pt to its right and centred on it, the minimap,
+   the stitched thumbnail at most 72 pt wide with a 1.5 pt marker on the part in view; it grows as the page scrolls. Return delivers
+   the stitched image. A 7 s loop: the scroll takes 2.7 s, the full page and its minimap hold until 6.4 s, then fade while the page returns to its top. */
+.sc-scroll { transform: translateY(-102px); animation: scroll 7s infinite both; }
+@keyframes scroll { 0%, 14% { transform: none; opacity: 1; animation-timing-function: ease-in-out; } 52%, 94% { transform: translateY(-102px); opacity: 1; } 96% { transform: translateY(-102px); opacity: 0; } 96.1% { transform: none; opacity: 0; } 98%, 100% { transform: none; opacity: 1; } }
+.sc-cap { animation: sccap 7s infinite both; }
+@keyframes sccap { 0%, 8% { opacity: 0; } 12%, 91% { opacity: 1; } 94%, 100% { opacity: 0; } }
+.art .sc-mbg { fill: var(--d-page); }
+.sc-mini { clip-path: inset(0 round 2.4px); animation: scmini 7s infinite both; }
+@keyframes scmini { 0%, 14% { clip-path: inset(0 0 54.3% 0 round 2.4px); animation-timing-function: ease-in-out; } 52%, 100% { clip-path: inset(0 0 0 0 round 2.4px); } }
+.sc-view { fill: none; stroke: var(--hl); stroke-width: .9; transform: translateY(39.2px); animation: scview 7s infinite both; }
+@keyframes scview { 0%, 14% { transform: none; animation-timing-function: ease-in-out; } 52%, 100% { transform: translateY(39.2px); } }
+/* V: a 6 s recording of a settings card as the app shows one (Recording.swift): the rest of the screen dimmed, a 2 pt red border
+   3 pt outside the area with a radius of 4 that pulses once at the start, and the stop reminder under it, the elapsed time and the
+   capture shortcut. The pointer clicks the Dark mode switch and the preview tile fades to dark, then it clicks again and the tile
+   fades back, then the recording fades out and in again. The base style is the switch on at 0:03, so reduced motion shows it. */
+.rv-nm { font: 600 8.5px var(--sans); fill: var(--w-fg); }
+.rv-dm { font-size: 8px; fill: var(--w-fg); }
+.rv-off { fill: color-mix(in srgb, var(--w-fg2) 45%, transparent); }
+.rv-on { fill: var(--d-acc); animation: rvon 6s infinite both; }
+.rv-kn { fill: #FFFFFF; filter: drop-shadow(0 .5px 1px rgba(0, 0, 0, .35)); transform: translateX(8px); animation: rvkn 6s infinite both; }
+.rv-tl { fill: #F1F1F4; stroke: rgba(0, 0, 0, .12); stroke-width: .5; }
+.rv-td2 { fill: #1E1E20; stroke: rgba(255, 255, 255, .18); stroke-width: .5; }
+.rv-tdk { animation: rvdk 6s infinite both; }
+.rv-tlt { animation: rvlt 6s infinite both; }
+@keyframes rvon { 0%, 20% { opacity: 0; } 27%, 52% { opacity: 1; } 59%, 100% { opacity: 0; } }
+@keyframes rvkn { 0%, 20% { transform: none; animation-timing-function: cubic-bezier(.4, 0, .2, 1); } 27%, 52% { transform: translateX(8px); animation-timing-function: cubic-bezier(.4, 0, .2, 1); } 59%, 100% { transform: none; } }
+@keyframes rvdk { 0%, 22% { opacity: 0; animation-timing-function: ease-in-out; } 36%, 54% { opacity: 1; animation-timing-function: ease-in-out; } 68%, 100% { opacity: 0; } }
+@keyframes rvlt { 0%, 22% { opacity: 1; animation-timing-function: ease-in-out; } 36%, 54% { opacity: 0; animation-timing-function: ease-in-out; } 68%, 100% { opacity: 1; } }
+.rv-cur { transform: translate(94px, 54px); animation: rvcur 6s infinite both; }
+@keyframes rvcur {
+  0%, 8% { transform: translate(138px, 66px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); }
+  17%, 19% { transform: translate(94px, 54px) scale(1); animation-timing-function: ease-in; }
+  20.5% { transform: translate(94px, 54px) scale(.82); animation-timing-function: ease-out; }
+  22.5%, 49% { transform: translate(94px, 54px) scale(1); animation-timing-function: ease-in; }
+  50.5% { transform: translate(94px, 54px) scale(.82); animation-timing-function: ease-out; }
+  52.5%, 78% { transform: translate(94px, 54px) scale(1); }
+  100% { transform: translate(138px, 66px); }
+}
+.rv-rec { animation: rvrec 6s infinite both; }
+@keyframes rvrec { 0% { opacity: 0; } 3%, 93% { opacity: 1; } 97%, 100% { opacity: 0; } }
+.rv-dim { fill: rgba(0, 0, 0, .5); }
+.rv-out { fill: none; stroke: var(--rec); stroke-width: 2; animation: rvpulse 6s infinite both; }
+@keyframes rvpulse { 0% { opacity: 0; } 2.8% { opacity: 1; } 5.6% { opacity: .25; } 8.3%, 100% { opacity: 1; } }
+/* The stop reminder (Recording.swift makeReminder): two 32 pt pills 8 pt apart, centred 11 pt under the area, the elapsed time, then "stop" and
+   the shortcut's caps; it comes and goes with the recording. */
+.rv-ov .rv-rem { left: 50%; top: calc(63.7% + 11px * var(--pt)); transform: translateX(-50%); animation: rvrec 6s infinite both; }
+.rv-rem .pill { padding: 0 calc(14px * var(--pt)); gap: calc(6px * var(--pt)); font: 500 calc(12px * var(--pt))/1 var(--sans); }
+.rv-rem .kk { display: inline-flex; gap: calc(2px * var(--pt)); }
+.art .cov .rv-cl { display: grid; font-weight: 500; }
+.rv-cl > span { grid-area: 1 / 1; opacity: 0; animation: rvt 6s infinite both; }
+.rv-cl > .on { opacity: 1; }
+@keyframes rvt { 0%, 16.66% { opacity: 1; } 16.67%, 100% { opacity: 0; } }
+/* K: a photo on the desktop, framed like the color card's picture. K opens the app's cut-out preview (OverlayController+Cutout.swift
+   CutoutView): the frame's checkerboard (white and 85% white, 8 pt squares, in either look), the removed pixels at 20%, the subject with
+   its edge in the highlight color. The preview holds for 3.7 s of a 6 s loop, then the photo returns. The base style is the preview, so reduced motion shows it. */
+.vk-bg { opacity: .2; animation: vkbg 6s infinite both; }
+@keyframes vkbg { 0%, 14% { opacity: 1; animation-timing-function: ease-in-out; } 20%, 82% { opacity: .2; animation-timing-function: ease-in-out; } 88%, 100% { opacity: 1; } }
+.vk-fl { flood-color: var(--hl); }
+.vk-ring { animation: vkring 6s infinite both; }
+@keyframes vkring { 0%, 14% { opacity: 0; animation-timing-function: ease-in-out; } 20%, 82% { opacity: 1; animation-timing-function: ease-in-out; } 88%, 100% { opacity: 0; } }
+
+/* C: a sunset picture; the picker moves over it and the app's readout (Guides.swift: swatch, value, Copy, C) follows each stop. The readout holds at the last stop for 3.5 s of an 8 s loop.
+   It uses the hero's chip styles, sized by --pt from the card's width. The base style is the last stop, so reduced motion shows it. */
+.cp-ov .o-chip { left: 50%; top: auto; bottom: calc((var(--toast-gap) + 7px) * var(--pt)); transform: translateX(-50%); }
+.cp-ov .o-chip .sw { display: block; flex: none; width: calc(12px * var(--pt)); height: calc(12px * var(--pt)); border-radius: calc(3px * var(--pt)); background: var(--sw); box-shadow: inset 0 0 0 calc(.5px * var(--pt)) var(--sw-edge); }
+.cp-ov .o-chip .t { font-weight: 500; }
+.cp-ov .cp-ch { opacity: 0; }
+.cp-ov .cp-ch.cC0 { opacity: 1; }
+.cp-x { transform: translate(161px, 78px); animation: cpx 8s infinite both; }
+.cp-xh { animation: cpxo 8s infinite both; }
+@keyframes cpx { 0%, 24% { transform: translate(100px, 50px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 29%, 44% { transform: translate(39px, 64px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 49%, 100% { transform: translate(161px, 78px); } }
+@keyframes cpxo { 0% { opacity: 0; } 1.5% { opacity: 1; } 93% { opacity: 1; } 96% { opacity: 0; } 100% { opacity: 0; } }
+.cp-ov .cp-ch.cA { animation: cpa 8s infinite both; }
+@keyframes cpa { 0% { opacity: 0; } 2.5% { opacity: 0; } 3.3% { opacity: 1; } 23.7% { opacity: 1; } 24.5% { opacity: 0; } 100% { opacity: 0; } }
+.cp-ov .cp-ch.cB { animation: cpb 8s infinite both; }
+@keyframes cpb { 0% { opacity: 0; } 28.5% { opacity: 0; } 29.3% { opacity: 1; } 43.7% { opacity: 1; } 44.5% { opacity: 0; } 100% { opacity: 0; } }
+.cp-ov .cp-ch.cC0 { animation: cpc0 8s infinite both; }
+@keyframes cpc0 { 0% { opacity: 0; } 48% { opacity: 0; } 48.8% { opacity: 1; } 93% { opacity: 1; } 96% { opacity: 0; } 100% { opacity: 0; } }
+
+/* agent art: a generic chat window. The reference is pasted in the input and sent, the tool call returns the capture's link card, and a one-line reply follows */
+.ag-m { font: 400 4.6px var(--mono); fill: #FFFFFF; }
+.ag-tn { font: 500 4.6px var(--mono); fill: var(--w-fg); }
+.ag-r { font: 400 5.2px var(--sans); fill: var(--w-fg); }
+.ag-i { font: 400 4.4px var(--mono); fill: var(--w-fg2); }
+.ag-sd { fill: var(--d-out); }
+.ag-u, .ag-t, .ag-th, .ag-r, .ag-ck { animation-duration: 8s; animation-iteration-count: infinite; animation-fill-mode: both; }
+.ag-u { animation-name: agu; } .ag-t { animation-name: agt; } .ag-th { animation-name: agth; } .ag-r { animation-name: agr; } .ag-ck { animation-name: agck; }
+.ag-i { opacity: 0; animation: agi 8s infinite both; }
+.ag-sd { animation: agsd 8s infinite both; transform-box: fill-box; transform-origin: center; }
+@keyframes agu { 0% { opacity: 0; transform: translateY(5px); } 21% { opacity: 0; transform: translateY(5px); } 23.5% { opacity: 1; transform: none; } 91.5% { opacity: 1; transform: none; } 94% { opacity: 0; transform: translateY(5px); } 100% { opacity: 0; transform: translateY(5px); } }
+@keyframes agt { 0% { opacity: 0; transform: translateY(4px); } 37% { opacity: 0; transform: translateY(4px); } 39.5% { opacity: 1; transform: none; } 91.5% { opacity: 1; transform: none; } 94% { opacity: 0; transform: translateY(4px); } 100% { opacity: 0; transform: translateY(4px); } }
+@keyframes agth { 0% { opacity: 0; transform: translateY(4px); } 48% { opacity: 0; transform: translateY(4px); } 51% { opacity: 1; transform: none; } 91% { opacity: 1; transform: none; } 94% { opacity: 0; transform: translateY(4px); } 100% { opacity: 0; transform: translateY(4px); } }
+@keyframes agr { 0% { opacity: 0; transform: translateY(3px); } 63% { opacity: 0; transform: translateY(3px); } 66% { opacity: 1; transform: none; } 91% { opacity: 1; transform: none; } 94% { opacity: 0; transform: translateY(3px); } 100% { opacity: 0; transform: translateY(3px); } }
+@keyframes agck { 0%, 40% { opacity: 0; } 43%, 100% { opacity: 1; } }
+@keyframes agi { 0% { opacity: 0; } 3% { opacity: 0; } 5.5% { opacity: 1; } 18.5% { opacity: 1; } 21% { opacity: 0; } 100% { opacity: 0; } }
+@keyframes agsd { 0%, 17% { transform: none; } 19.5% { transform: scale(1.35); } 22%, 100% { transform: none; } }
+
+/* ---------- footer ---------- */
+.foot { background: var(--band); color: var(--bandfg2); padding: 26px max(16px, env(safe-area-inset-left, 0px), (100% - 1040px) / 2) calc(26px + env(safe-area-inset-bottom, 0px)); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 24px; font-size: 14px; border-radius: 28px 28px 0 0; }
+.foot .wm { color: var(--bandfg); font-size: 19px; }
+.foot .wm img { width: 24px; height: 24px; }
+/* the Ko-fi link: a quiet pill like the header's, with the flower in sunflower yellow as its only color */
+.seeds { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px 0 11px; border-radius: 999px; color: var(--bandfg2); font: 500 13px/1 var(--sans); text-decoration: none; white-space: nowrap;
+  background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); transition: background-color .15s, box-shadow .15s, color .15s; }
+.seeds svg { width: 14px; height: 14px; color: rgb(255, 212, 59); fill: currentColor; flex: none; }
+@media (hover: hover) and (pointer: fine) { .seeds:hover { color: var(--bandfg); background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24); } }
+
+/* a strip tool's card, briefly ringed after the demo scrolls to it */
+.card { scroll-margin: 24px; }
+.card.flash .art { box-shadow: 0 0 0 1px var(--line), 0 0 0 4px color-mix(in srgb, var(--hl) 70%, transparent); animation: flash 2.2s ease-out both; }
+@keyframes flash { 0%, 50% { box-shadow: 0 0 0 1px var(--line), 0 0 0 4px color-mix(in srgb, var(--hl) 70%, transparent); } 100% { box-shadow: 0 0 0 1px var(--line), 0 0 0 4px transparent; } }
+
+@media (max-width: 900px) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .band { padding-bottom: 36px; border-radius: 0 0 22px 22px; }
+  .hero { padding: 18px 0 32px; }
+  .cta { margin-top: 26px; }
+  .demo { border-radius: 10px; }
+  .feat { padding-top: 64px; padding-bottom: 52px; }
+  .feat-h { margin-bottom: 24px; }
+  .grid { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+  .top-links { gap: 14px; }
+  .foot { justify-content: center; text-align: center; }
+  /* the credit keeps only its logo; the name stays for screen readers */
+  .top-links .maker { width: 32px; padding: 0; justify-content: center; }
+  .top-links .maker .mk-t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+/* On a phone the demo is watch-only: the chat window alone, cropped and enlarged, ignoring touch so the page scrolls over it. */
+@media (max-width: 599.98px) {
+  .demo { aspect-ratio: 276 / 396; max-width: 440px; margin: 0 auto; touch-action: auto; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  .demo, .demo * { pointer-events: none !important; }
+  .rvg { display: none; }
+  /* the desktop runs on below the chat window, where the toast sits */
+  .scene, .content { height: 440px; }
+  .s-screen { height: 440px !important; }
+  .scene .o-toast { --toast-gap: 10px; }
+  .s-menubar { padding-left: calc(var(--vx, 0px) + 12px); }
+  .s-menubar span:nth-child(4), .s-menubar span:nth-child(5) { display: none; }
+}
+@media (max-width: 400px) {
+  .top { gap: 8px; }
+  .top .wm { font-size: 20px; gap: 7px; }
+  .top .wm img { width: 26px; height: 26px; }
+  .top-links { gap: 10px; }
+  .caps.hk { gap: 5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .o-toast { transition: none; }
+  /* Every card animation, whatever its selector's weight, stops on its base style. */
+  .art *, .card.flash .art { animation: none !important; }
+  .caps.hk .cap { transition: none; }
+  .card .cap[data-hold], .bb .k[data-hold] { transition-duration: .01s; }
+  .card .cap[data-hold].down, .bb .k[data-hold].down { transform: none; }
+  .caps.hk.chord, .caps.hk.chord::after { animation: none; }
+}
+
+/* ---------- hero blanket: the band's bottom edge echoes the icon's blanket (brand/Snug.icon): a cream rim along an upward arch, coral below it.
+   It sits below the demo, clear of it. Self-contained: delete this block and the .blanket svg in index.html to revert. ---------- */
+/* The logo's coral and cream in both looks. The arch keeps its size; the band runs on below it, and the rim is a tenth of the band's height. */
+.band { position: relative; overflow: hidden; padding-bottom: calc(clamp(59px, 6.8vw, 87px) + clamp(28px, 4vw, 52px)); border-radius: 0; --bl-fill: #FF7A6B; --bl-rim: #FFECEA; }
+.blanket { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: clamp(59px, 6.8vw, 87px); display: block; pointer-events: none; }
+.bl-fill { fill: var(--bl-fill); }
+.bl-rim { fill: var(--bl-rim); }
