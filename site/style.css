@@ -312,7 +312,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .art .ptr { filter: drop-shadow(0 .5px 1px rgba(0, 0, 0, .3)); }
 
 /* A card's Snug chrome: the hero's chip, strip and toast styles in HTML over the scene, sized by --pt (set in snug.js from the card's
-   width, at the hero's scale). Each card's keyframes run its toast in 0.25 s, hold it at least 2 s, and fade it in 0.25 s. */
+   width, at the hero's scale). Only the Copy text card shows a toast: it runs in 0.25 s, holds 2.25 s and fades in 0.25 s. */
 .cov { --pt: 1; --toast-gap: 16px; position: absolute; inset: 0; pointer-events: none; }
 .cov > * { position: absolute; }
 .cov .o-toast { opacity: 0; transition: none; max-width: calc(100% - 32px * var(--pt)); }
