@@ -391,11 +391,11 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 @keyframes lift { 0%, 25% { transform: none; } 38%, 88% { transform: scale(1.05); } 100% { transform: none; } }
 @keyframes shade { 0%, 25% { opacity: 0; } 38%, 88% { opacity: 1; } 100% { opacity: 0; } }
 
-/* C: the picker moves over a small piece of the story and its readout follows each stop; C copies and the toast shows (Toast.swift), then Shift-C steps the
-   readout through the app's formats (ColorFormat: hex, rgb, hsl, swift). The base style is the last stop with its hex value, so reduced motion shows it. */
-.cp-x { transform: translate(178px, 103px); animation: cpx 10s infinite both; }
-.cp-xh { animation: cpxo 10s infinite both; }
-@keyframes cpx { 0%, 19% { transform: translate(100px, 54px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 23.5%, 36% { transform: translate(30px, 84px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 40.5%, 100% { transform: translate(178px, 103px); } }
+/* C: the picker moves over a sunset and its readout follows each stop; C at the last stop copies and the toast shows (Toast.swift). The base style is the
+   last stop with its hex value, so reduced motion shows it. */
+.cp-x { transform: translate(178px, 103px); animation: cpx 8s infinite both; }
+.cp-xh { animation: cpxo 8s infinite both; }
+@keyframes cpx { 0%, 24% { transform: translate(100px, 54px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 29%, 44% { transform: translate(30px, 84px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 49%, 100% { transform: translate(178px, 103px); } }
 .cp-chip, .cp-toast, .cp-key { opacity: 0; }
 .cp-chip.cC0 { opacity: 1; }
 .cp-v { font: 500 7px var(--mono); fill: var(--d-chipfg); }
@@ -404,31 +404,19 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .cp-k { fill: var(--cap-fill); stroke: var(--cap-edge); stroke-width: .4; }
 .cp-kp { fill: color-mix(in srgb, var(--hl) 45%, var(--cap-fill)); stroke: var(--hl); stroke-width: .5; opacity: 0; }
 .cp-kt { font: 600 7.4px var(--sans); fill: var(--c-text); }
-@keyframes cpxo { 0% { opacity: 0; } 1.5% { opacity: 1; } 48.5% { opacity: 1; } 50% { opacity: 0; } 63.5% { opacity: 0; } 65.0% { opacity: 1; } 94.0% { opacity: 1; } 95.5% { opacity: 0; } 100% { opacity: 0; } }
-.cp-chip.cA { animation: cpa 10s infinite both; }
-@keyframes cpa { 0% { opacity: 0; } 2.5% { opacity: 0; } 3.3% { opacity: 1; } 18.7% { opacity: 1; } 19.5% { opacity: 0; } 100% { opacity: 0; } }
-.cp-chip.cB { animation: cpb 10s infinite both; }
-@keyframes cpb { 0% { opacity: 0; } 23% { opacity: 0; } 23.8% { opacity: 1; } 35.7% { opacity: 1; } 36.5% { opacity: 0; } 100% { opacity: 0; } }
-.cp-chip.cC0 { animation: cpc0 10s infinite both; }
-@keyframes cpc0 { 0% { opacity: 0; } 40% { opacity: 0; } 40.8% { opacity: 1; } 49.2% { opacity: 1; } 50% { opacity: 0; } 64% { opacity: 0; } 64.8% { opacity: 1; } 69.7% { opacity: 1; } 70.5% { opacity: 0; } 100% { opacity: 0; } }
-.cp-chip.cR { animation: cpr 10s infinite both; }
-@keyframes cpr { 0% { opacity: 0; } 70% { opacity: 0; } 70.8% { opacity: 1; } 77.7% { opacity: 1; } 78.5% { opacity: 0; } 100% { opacity: 0; } }
-.cp-chip.cH { animation: cph 10s infinite both; }
-@keyframes cph { 0% { opacity: 0; } 78% { opacity: 0; } 78.8% { opacity: 1; } 85.7% { opacity: 1; } 86.5% { opacity: 0; } 100% { opacity: 0; } }
-.cp-chip.cS { animation: cps 10s infinite both; }
-@keyframes cps { 0% { opacity: 0; } 86% { opacity: 0; } 86.8% { opacity: 1; } 93.2% { opacity: 1; } 94% { opacity: 0; } 100% { opacity: 0; } }
-.cp-toast { animation: cpt 10s infinite both; }
-@keyframes cpt { 0%, 50.5% { opacity: 0; transform: translateY(2px); } 53%, 61% { opacity: 1; transform: none; } 64%, 100% { opacity: 0; } }
-.cp-k1 { animation: cpk1 10s infinite both; }
-@keyframes cpk1 { 0%, 47% { opacity: 0; } 48%, 54% { opacity: 1; } 55%, 100% { opacity: 0; } }
-.cp-k2, .cp-k3 { animation: cpk2 10s infinite both; }
-@keyframes cpk2 { 0%, 67% { opacity: 0; } 68%, 88% { opacity: 1; } 89%, 100% { opacity: 0; } }
-.cp-k2 .cp-kp { animation: cpkh 10s infinite both; }
-@keyframes cpkh { 0%, 68% { opacity: 0; } 69%, 88% { opacity: 1; } 89%, 100% { opacity: 0; } }
-.cp-k1 .cp-kp { animation: cpkp1 10s infinite both; }
-@keyframes cpkp1 { 0%, 49% { opacity: 0; } 49.8%, 51.8% { opacity: 1; } 52.6%, 100% { opacity: 0; } }
-.cp-k3 .cp-kp { animation: cpkp3 10s infinite both; }
-@keyframes cpkp3 { 0%, 69% { opacity: 0; } 69.6%, 71.2% { opacity: 1; } 72%, 77% { opacity: 0; } 77.6%, 79.2% { opacity: 1; } 80%, 85% { opacity: 0; } 85.6%, 87.2% { opacity: 1; } 88%, 100% { opacity: 0; } }
+@keyframes cpxo { 0% { opacity: 0; } 1.5% { opacity: 1; } 58.5% { opacity: 1; } 60% { opacity: 0; } 100% { opacity: 0; } }
+.cp-chip.cA { animation: cpa 8s infinite both; }
+@keyframes cpa { 0% { opacity: 0; } 2.5% { opacity: 0; } 3.3% { opacity: 1; } 23.7% { opacity: 1; } 24.5% { opacity: 0; } 100% { opacity: 0; } }
+.cp-chip.cB { animation: cpb 8s infinite both; }
+@keyframes cpb { 0% { opacity: 0; } 28.5% { opacity: 0; } 29.3% { opacity: 1; } 43.7% { opacity: 1; } 44.5% { opacity: 0; } 100% { opacity: 0; } }
+.cp-chip.cC0 { animation: cpc0 8s infinite both; }
+@keyframes cpc0 { 0% { opacity: 0; } 48% { opacity: 0; } 48.8% { opacity: 1; } 59.2% { opacity: 1; } 60% { opacity: 0; } 100% { opacity: 0; } }
+.cp-toast { animation: cpt 8s infinite both; }
+@keyframes cpt { 0%, 61% { opacity: 0; transform: translateY(2px); } 64%, 86% { opacity: 1; transform: none; } 91%, 100% { opacity: 0; } }
+.cp-k1 { animation: cpk1 8s infinite both; }
+@keyframes cpk1 { 0%, 55% { opacity: 0; } 56%, 63% { opacity: 1; } 65%, 100% { opacity: 0; } }
+.cp-k1 .cp-kp { animation: cpkp1 8s infinite both; }
+@keyframes cpkp1 { 0%, 57% { opacity: 0; } 57.8%, 60.2% { opacity: 1; } 61.2%, 100% { opacity: 0; } }
 
 /* agent art: a generic chat window. The reference is pasted in the input and sent, the tool call returns the capture's link card, and a one-line reply follows */
 .ag-m { font: 400 4.6px var(--mono); fill: #FFFFFF; }
