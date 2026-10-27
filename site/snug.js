@@ -28,9 +28,9 @@
     l3: { n: 'Removed line 14', x: 30, y: 178, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
     l4: { n: 'Added line 14', x: 30, y: 196, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
     l5: { n: 'Added line 15', x: 30, y: 214, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
-    rvc: { n: 'Review comment', x: 46, y: 240, w: 288, h: 62, p: 'rvfile', r: [8, 8, 8, 8] },
-    l6: { n: 'Line 16', x: 30, y: 310, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
-    l7: { n: 'Line 17', x: 30, y: 328, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
+    rvc: { n: 'Review comment', x: 46, y: 240, w: 288, h: 68, p: 'rvfile', r: [8, 8, 8, 8] },
+    l6: { n: 'Line 16', x: 30, y: 316, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
+    l7: { n: 'Line 17', x: 30, y: 334, w: 320, h: 18, p: 'rvfile', r: [0, 0, 0, 0] },
     // The chat window, to its right.
     ch: { n: 'Chat', x: 380, y: 58, w: 244, h: 328, p: 'screen', r: [12, 12, 12, 12] },
     chbar: { n: 'Toolbar', x: 380, y: 58, w: 244, h: 34, p: 'ch', r: [0, 0, 0, 0] },
@@ -49,7 +49,7 @@
      at `from`, ends at `to` and snaps on a pause; `after` is where the pointer rests before Return. The phone drags a rough box
      around the link preview. */
   const DESK = { view: { x: 0, y: 0, w: W, h: H }, tour: [[480, 136, 800, 1100], [520, 262, 700, 1200], [205, 205, 850, 1200]],
-    from: [40, 238, 650], to: [340, 300, 1000], after: [240, 270] };
+    from: [40, 238, 650], to: [340, 306, 1000], after: [240, 270] };
   const PHONE = { view: { x: 364, y: 40, w: 276, h: 396 }, tour: [[480, 136, 800, 1100], [520, 262, 700, 1200]],
     from: [440, 222, 600], to: [600, 280, 900], after: [556, 268] };
   const ZERO = [0, 0, 0, 0];

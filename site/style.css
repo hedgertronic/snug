@@ -152,7 +152,8 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .s-ln.add .mk, .s-ln.add .no { color: var(--d-addfg); }
 .s-ln.del { background: var(--d-del); }
 .s-ln.del .mk, .s-ln.del .no { color: var(--d-delfg); }
-.s-cmt { display: flex; gap: 8px; padding: 9px 10px; background: var(--d-page); border-radius: 8px; box-shadow: 0 0 0 .5px var(--d-line), 0 2px 6px rgba(0, 0, 0, .06); }
+.s-cmt { display: flex; align-items: center; gap: 8px; padding: 9px 10px; background: var(--d-page); border-radius: 8px; box-shadow: 0 0 0 .5px var(--d-line), 0 2px 6px rgba(0, 0, 0, .06); }
+.s-cmt > .av { align-self: flex-start; }
 .s-cmt b { font-size: 10.5px; }
 .s-cmt small { font-size: 9.5px; color: var(--d-fg2); }
 .s-cmt p { margin-top: 3px; font-size: 10.5px; line-height: 1.35; }
