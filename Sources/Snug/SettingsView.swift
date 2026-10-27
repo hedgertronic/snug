@@ -22,9 +22,9 @@ enum Shortcut {
 
     static func label(code: Int, modifiers: Int) -> String {
         guard code >= 0 else { return "None" }
-        let flags = NSEvent.ModifierFlags(rawValue: UInt(modifiers))
+        let flags = NSEvent.ModifierFlags(rawValue: UInt(clamping: modifiers))
         return (flags.contains(.control) ? "\u{2303}" : "") + (flags.contains(.option) ? "\u{2325}" : "")
-            + (flags.contains(.shift) ? "\u{21E7}" : "") + (flags.contains(.command) ? "\u{2318}" : "") + (functionKeys[code]?.name ?? keyNames[code]!)
+            + (flags.contains(.shift) ? "\u{21E7}" : "") + (flags.contains(.command) ? "\u{2318}" : "") + (functionKeys[code]?.name ?? keyNames[code] ?? "?")
     }
 
     static func label(from defaults: UserDefaults) -> String {

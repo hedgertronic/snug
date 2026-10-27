@@ -175,10 +175,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         // A shortcut macOS refused is remembered too, so later preference writes don't retry it and toast again.
         registeredShortcut = current
         do {
-            if current[0] < 0 {
+            // A code no key has (as from `defaults write` while Snug runs) is no shortcut.
+            if current[0] < 0 || Shortcut.functionKeys[current[0]] == nil && Shortcut.keyNames[current[0]] == nil {
                 hotKey!.unregister()
             } else {
-                try hotKey!.register(keyCode: UInt32(current[0]), modifiers: NSEvent.ModifierFlags(rawValue: UInt(current[1])))
+                try hotKey!.register(keyCode: UInt32(current[0]), modifiers: NSEvent.ModifierFlags(rawValue: UInt(clamping: current[1])))
             }
             captureItem?.setShortcut(from: defaults)
         } catch {
@@ -200,7 +201,11 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     /// Keeps `button` showing the icon variant in `SnugMenuBarIcon` for the menu bar's light or dark appearance, redrawn as soon as the
     /// default changes, including from `defaults write` in another process, or the menu bar turns light or dark.
     static func observeMenuBarIcon(on button: NSButton, defaults: UserDefaults) -> [NSKeyValueObservation] {
-        let update = { @MainActor in button.image = menuBarIcon(defaults.string(forKey: Pref.menuBarIcon)!, dark: isDark(button)) }
+        // A variant written while Snug runs is not sanitized at launch; an unknown one draws the default.
+        let update = { @MainActor in
+            let variant = defaults.string(forKey: Pref.menuBarIcon).flatMap { Pref.menuBarIcons.contains($0) ? $0 : nil } ?? "q"
+            button.image = menuBarIcon(variant, dark: isDark(button))
+        }
         return [defaults.observe(\.SnugMenuBarIcon, options: [.initial]) { _, _ in Task { @MainActor in update() } },
                 button.observe(\.effectiveAppearance) { _, _ in Task { @MainActor in update() } }]
     }
@@ -609,12 +614,14 @@ extension NSMenuItem {
             keyEquivalent = ""
             return
         }
-        if let function = Shortcut.functionKeys[code] {
-            keyEquivalent = String(Character(UnicodeScalar(function.character)!))
-        } else {
-            let name = Shortcut.keyNames[code]!
+        if let function = Shortcut.functionKeys[code], let scalar = UnicodeScalar(function.character) {
+            keyEquivalent = String(Character(scalar))
+        } else if let name = Shortcut.keyNames[code] {
             keyEquivalent = name == "space" ? " " : name.lowercased()
+        } else {
+            keyEquivalent = ""
+            return
         }
-        keyEquivalentModifierMask = NSEvent.ModifierFlags(rawValue: UInt(defaults.integer(forKey: Pref.hotKeyModifiers)))
+        keyEquivalentModifierMask = NSEvent.ModifierFlags(rawValue: UInt(clamping: defaults.integer(forKey: Pref.hotKeyModifiers)))
     }
 }

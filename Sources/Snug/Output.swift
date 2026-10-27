@@ -131,7 +131,36 @@ enum Pref {
             recordCountIn: 3,
             recordCursor: true
         ])
+        PreferenceRules.sanitize(defaults, rules: rules)
     }
+
+    /// The values each constrained preference may hold; `register` removes any other stored value, so its default answers instead.
+    static var rules: [String: PreferenceRule] { [
+        menuBarIcon: .oneOf(menuBarIcons),
+        colorFormat: .oneOf(Set(ColorFormat.allCases.map(\.rawValue))),
+        guidesAnimation: .oneOf(["fade", "slide", "none"]),
+        overlayAppearance: .oneOf(["system", "light", "dark"]),
+        toastPosition: .oneOf(["topLeft", "topCenter", "topRight", "bottomLeft", "bottomCenter", "bottomRight"]),
+        toastLifetime: .integer(-1...86_400),
+        frameShadow: .oneOf(["default", "custom"]),
+        frameShadowColor: .hexColor(emptyAllowed: false),
+        frameShadowOpacity: .number(0...1),
+        frameShadowBlur: .number(0...100),
+        frameShadowDistance: .number(0...64),
+        frameShadowAngle: .number(0...360),
+        framePadding: .integer(0...64),
+        highlightColor: .hexColor(emptyAllowed: true),
+        highlightFill: .number(0...1),
+        highlightFade: .number(0...1),
+        highlightGlow: .number(0...1),
+        recordCountIn: .integerIn([0, 3, 5]),
+        hotKeyCode: .integerIn(Set([-1] + Array(Shortcut.keyNames.keys) + Array(Shortcut.functionKeys.keys))),
+        hotKeyModifiers: .flags(mask: Int(NSEvent.ModifierFlags([.control, .option, .command, .shift]).rawValue)),
+        saveFolder: .nonEmptyString,
+    ] }
+
+    /// The menu bar icon variants `SnugApp.menuBarIcon` draws.
+    static let menuBarIcons: Set<String> = ["q", "p", "h", "a"]
 }
 
 /// Crops, styles, encodes, and delivers captures.
