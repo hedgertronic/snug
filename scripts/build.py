@@ -87,11 +87,28 @@ def write_feed(appcast: Path, feed: str, item: str) -> None:
 
 
 def sparkle_tool(name: str) -> Path:
-    """One of the tools in Sparkle's SwiftPM artifact, under the checkout's package identity."""
+    """One of the tools in Sparkle's SwiftPM artifact, under the checkout's package identity. Exits when none is found, or when more
+    than one artifact folder has it, since which one the build resolved is then unknown."""
     found = sorted((root / ".build/artifacts").glob(f"*/Sparkle/bin/{name}"))
     if not found:
         sys.exit(f"Sparkle's {name} is missing from .build/artifacts; run swift package resolve")
+    if len(found) > 1:
+        sys.exit(f"Sparkle's {name} is in more than one artifact folder: {', '.join(str(path) for path in found)}; remove the stale ones")
     return found[0]
+
+
+def signing_identity_name(identities: str, signing_identity: str) -> str:
+    """The name of the one identity in `security find-identity -v -p codesigning` output that `signing_identity` (a hash or a name)
+    matches. Exits unless exactly one identity (by hash; one listed twice counts once) matches and it is a Developer ID Application one."""
+    # Each line is `  1) HASH "Developer ID Application: Name (TEAM)"`.
+    matches = {}
+    for line in identities.splitlines():
+        if '"' in line and signing_identity in line:
+            matches[line.split()[1]] = line.split('"')[1]
+    names = sorted(matches.values())
+    if len(matches) != 1 or not names[0].startswith("Developer ID Application"):
+        sys.exit(f"SNUG_SIGNING_IDENTITY must name exactly one valid Developer ID Application identity; it matches {names or 'none'}")
+    return names[0]
 
 
 def check_release_tools(signing_identity: str, env: dict[str, str]) -> None:
@@ -101,10 +118,7 @@ def check_release_tools(signing_identity: str, env: dict[str, str]) -> None:
         if subprocess.run(tool, capture_output=True).returncode != 0:
             sys.exit(f"{tool[-1]} is missing")
     identities = subprocess.run(["security", "find-identity", "-v", "-p", "codesigning"], check=True, text=True, capture_output=True).stdout
-    # Each line is `  1) HASH "Developer ID Application: Name (TEAM)"`; the identity may be given by its hash or its name.
-    names = [line.split('"')[1] for line in identities.splitlines() if '"' in line and signing_identity in line]
-    if not names or not all(name.startswith("Developer ID Application") for name in names):
-        sys.exit(f"SNUG_SIGNING_IDENTITY must name one valid Developer ID Application identity; it matches {names or 'none'}")
+    signing_identity_name(identities, signing_identity)
     if subprocess.run(["xcrun", "notarytool", "history", "--keychain-profile", NOTARY_PROFILE], capture_output=True).returncode != 0:
         sys.exit(f"The notary keychain profile {NOTARY_PROFILE} is missing or rejected; see xcrun notarytool store-credentials")
     subprocess.run(["swift", "package", "resolve"], cwd=root, env=env, check=True)

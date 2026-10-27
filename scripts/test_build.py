@@ -4,6 +4,7 @@ import contextlib
 import io
 import tempfile
 import unittest
+from unittest import mock
 
 import build
 
@@ -74,6 +75,50 @@ class FeedTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 build.write_feed(appcast, "<rss/>", "<item/>")
             self.assertEqual(appcast.read_text(), "<rss/>")
+
+
+
+IDENTITIES = """  1) AAAA1111 "Apple Development: Someone (TEAM1)"
+  2) BBBB2222 "Developer ID Application: Someone (TEAM2)"
+  3) CCCC3333 "Developer ID Application: Someone Else (TEAM3)"
+     3 valid identities found
+"""
+
+
+class SigningIdentityTests(unittest.TestCase):
+    def test_one_developer_id_by_hash_or_name(self):
+        self.assertEqual(build.signing_identity_name(IDENTITIES, "BBBB2222"), "Developer ID Application: Someone (TEAM2)")
+        self.assertEqual(build.signing_identity_name(IDENTITIES, "Someone Else"), "Developer ID Application: Someone Else (TEAM3)")
+
+    def test_the_same_identity_listed_twice_counts_once(self):
+        self.assertEqual(build.signing_identity_name(IDENTITIES + IDENTITIES, "BBBB2222"), "Developer ID Application: Someone (TEAM2)")
+
+    def test_several_none_or_another_kind_fail(self):
+        for identity in ("Developer ID Application", "Someone", "DDDD4444", "AAAA1111"):
+            with self.assertRaises(SystemExit, msg=identity):
+                build.signing_identity_name(IDENTITIES, identity)
+
+
+class SparkleToolTests(unittest.TestCase):
+    def tool_in(self, folder: Path, package: str) -> Path:
+        tool = folder / ".build/artifacts" / package / "Sparkle/bin/sign_update"
+        tool.parent.mkdir(parents=True)
+        tool.touch()
+        return tool
+
+    def test_one_artifact_folder_is_used(self):
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(build, "root", Path(folder)):
+            tool = self.tool_in(Path(folder), "snug")
+            self.assertEqual(build.sparkle_tool("sign_update"), tool)
+
+    def test_none_or_several_fail(self):
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(build, "root", Path(folder)):
+            with self.assertRaises(SystemExit):
+                build.sparkle_tool("sign_update")
+            self.tool_in(Path(folder), "snug")
+            self.tool_in(Path(folder), "old-checkout")
+            with self.assertRaises(SystemExit):
+                build.sparkle_tool("sign_update")
 
 
 if __name__ == "__main__":
