@@ -504,7 +504,8 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .o-toast { transition: none; }
-  .art *, .card.flash .art { animation: none; }
+  /* Every card animation, whatever its selector's weight, stops on its base style. */
+  .art *, .card.flash .art { animation: none !important; }
   .caps.hk .cap { transition: none; }
   .card .cap[data-hold], .bb .k[data-hold] { transition-duration: .01s; }
   .card .cap[data-hold].down, .bb .k[data-hold].down { transform: none; }
