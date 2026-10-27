@@ -50,17 +50,20 @@ The menu bar icon also offers Capture, Capture Text, Settings, Check for Updates
 
 Cmd-Return copies the capture for an agent: the pixels at full resolution plus a manifest of what was under the pointer (app, window, element). Paste it into your agent chat. The paste carries a short reference line with a capture id.
 
-To let an agent read it, add Snug's MCP server to Claude Code:
+To let an agent read it, add Snug's MCP server to your agent. For Claude Code or Codex:
 
 ```sh
 claude mcp add snug -- /path/to/Snug.app/Contents/MacOS/Snug --mcp
+codex mcp add snug -- /path/to/Snug.app/Contents/MacOS/Snug --mcp
 ```
 
-Settings > Agent shows this command with the real path and a Copy button. The server is read-only and has two tools, `get_capture` and `zoom`. Snug never captures for an agent; it only serves what you copied. Only the last capture is kept. "Clear last capture" in Settings > Agent removes it. Captures are stored in `~/Library/Application Support/Snug/Agent/`.
+Other clients, such as Gemini CLI and Cursor, take an `mcpServers` entry with `"command": "/path/to/Snug.app/Contents/MacOS/Snug"` and `"args": ["--mcp"]`.
+
+The Agent section at the bottom of Settings > General shows each of these with the real path and a Copy button. The server is read-only and has two tools, `get_capture` and `zoom`. Snug never captures for an agent; it only serves what you copied. Only the last capture is kept. Clear next to Last capture removes it. Captures are stored in `~/Library/Application Support/Snug/Agent/`.
 
 ## Settings
 
-- **General:** capture shortcut, save folder (where Cmd-S saves and Save As starts), Open at login, permission status.
+- **General:** About the developer, capture shortcut, save folder (where Cmd-S saves and Save As starts), Open at login, sounds, Text mode, permission status, and the Agent section.
 - **Appearance:** overlay look (System, Light, Dark), highlight color, fill, fade and glow, and the toast's preview, position and lifetime.
 - **Keys:** a reference of every overlay key. Rebinding is not available yet.
 - **Agent:** the MCP command and Clear last capture.

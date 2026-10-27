@@ -131,7 +131,7 @@ private func caption(_ text: String) -> some View {
 }
 
 /// The app icon and name once; About the developer: the headshot, name, a link to hedgertronic.com, a short bio, and the Ko-fi button; then
-/// shortcut, save folder, open at login, sounds, the Text mode switch, the permissions, and the agent's last capture and command.
+/// under General the shortcut, save folder, open at login, sounds, the Text mode switch, the permissions, and the agent's last capture and command.
 private struct GeneralPane: View {
     @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
@@ -172,6 +172,7 @@ private struct GeneralPane: View {
                     .padding(.vertical, 12)
                     SupportButton().frame(maxWidth: .infinity).padding(.vertical, 10)
                 }
+                caption("General")
                 Card {
                     LabeledContent("Shortcut") {
                         ShortcutRecorder(code: hotKeyCode, modifiers: hotKeyModifiers).fixedSize()
@@ -889,11 +890,25 @@ struct ShortcutRecorder: NSViewRepresentable {
     }
 }
 
-/// General's Agent section: the last capture, with Clear, and the command that adds Snug's MCP server to Claude Code. Snug adds it nowhere by itself.
+/// General's Agent section on one card: the last capture, with Clear, then a client picker and the command or config entry that adds Snug's
+/// MCP server to it. Claude Code and Codex take a command; Other is the `mcpServers` JSON that Gemini CLI, Cursor and most other clients read.
+/// Snug adds itself nowhere.
 private struct AgentSection: View {
     @State private var captureId: String?
+    @State private var client = "claude"
     private let store = HandoffStore(defaults: .standard)
-    private let command = "claude mcp add snug -- " + { $0.contains(" ") ? "'\($0)'" : $0 }(Bundle.main.executablePath!) + " --mcp"
+    private let executable = Bundle.main.executablePath!
+
+    private var setup: String {
+        let quoted = executable.contains(" ") ? "'\(executable)'" : executable
+        switch client {
+        case "claude": return "claude mcp add snug -- \(quoted) --mcp"
+        case "codex": return "codex mcp add snug -- \(quoted) --mcp"
+        default:
+            let entry = ["mcpServers": ["snug": ["command": executable, "args": ["--mcp"]]]]
+            return String(data: try! JSONSerialization.data(withJSONObject: entry, options: [.sortedKeys, .withoutEscapingSlashes]), encoding: .utf8)!
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -908,15 +923,20 @@ private struct AgentSection: View {
                     detailed("Last capture", captureId ?? "None")
                 }
                 .padding(.vertical, 4)
-            }
-            caption("Add to Claude Code")
-            Card {
+                Picker("Add to", selection: $client) {
+                    Text("Claude Code").tag("claude")
+                    Text("Codex").tag("codex")
+                    Text("Other").tag("other")
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .help("The agent to add Snug's MCP server to; Other is the JSON entry for Gemini CLI, Cursor and most other clients")
                 HStack(spacing: 8) {
-                    Text(command).font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                    Text(setup).font(.system(size: 11, design: .monospaced)).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                     Spacer(minLength: 0)
                     Button("Copy") {
                         NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(command, forType: .string)
+                        NSPasteboard.general.setString(setup, forType: .string)
                     }
                 }
             }

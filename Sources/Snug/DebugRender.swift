@@ -706,13 +706,23 @@ extension DebugRun {
             offscreen.contentView = host
             host.layoutSubtreeIfNeeded()
             precondition(host.fittingSize.width == SettingsTabs.width, "the \(item.label) tab is \(SettingsTabs.width) pt wide: \(host.fittingSize.width)")
-            precondition(!["Appearance", "Keys"].contains(item.label) || host.fittingSize.height == SettingsTabs.tallHeight,
+            precondition(host.fittingSize.height == SettingsTabs.tallHeight,
                          "the \(item.label) tab is \(SettingsTabs.tallHeight) pt tall: \(host.fittingSize.height)")
             let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
             host.cacheDisplay(in: host.bounds, to: rep)
             let file = directory.appending(path: "settings-\(item.label.lowercased()).png")
             try rep.representation(using: .png, properties: [:])!.write(to: file)
             print(file.path, host.fittingSize)
+            if item.label == "General" {
+                // The pane scrolled to its end, where the Agent section sits.
+                let scroll = descendants(of: host, NSScrollView.self).first!
+                scroll.documentView!.scroll(CGPoint(x: 0, y: scroll.documentView!.isFlipped ? scroll.documentView!.bounds.maxY : 0))
+                host.layoutSubtreeIfNeeded()
+                host.cacheDisplay(in: host.bounds, to: rep)
+                let scrolled = directory.appending(path: "settings-general-scrolled.png")
+                try rep.representation(using: .png, properties: [:])!.write(to: scrolled)
+                print(scrolled.path)
+            }
             if item.label == "Appearance" {
                 // The checks below change these real settings; they are put back as they were.
                 let saved = [Pref.frameShadow, Pref.highlightColor, Pref.frameShadowColor].map { ($0, UserDefaults.standard.object(forKey: $0)) }
@@ -756,9 +766,9 @@ extension DebugRun {
             }
             guard item.label == "General" else { continue }
             let field = descendants(of: host, ShortcutRecorder.Field.self).first!
-            // The Reset button and the Save to button, then an Allow button for each missing permission; the last
-            // two focus rings are the hedgertronic and Ko-fi links, which are not buttons.
-            let controls = descendants(of: host, NSView.self).filter { "\(type(of: $0))".contains("FocusRingView") }.dropLast(2)
+            // The first two focus rings are the hedgertronic and Ko-fi links at the top, which are not buttons; then the Reset button and the
+            // Save to button, an Allow button for each missing permission, and the Agent section's Clear and Copy.
+            let controls = descendants(of: host, NSView.self).filter { "\(type(of: $0))".contains("FocusRingView") }.dropFirst(2)
             print("shortcut field", host.convert(field.frame, from: field.superview), "pop-up and button frames", controls.map { host.convert($0.frame, from: $0.superview) })
             precondition(controls.count >= 2 && controls.allSatisfy { $0.frame.height == field.frame.height }, "the shortcut field is as tall as the pop-ups and buttons: \(controls.map(\.frame)) \(field.frame)")
             field.beginRecording()
