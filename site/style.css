@@ -320,17 +320,19 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .art .cov .mono { font: 400 calc(12px * var(--pt))/1 var(--mono); }
 
 /* T: the selection sweeps over two lines, the Text strip's Copy button (Chrome.swift textStrip) appears under it, its Return cap presses, and the toast follows */
-/* A 6 s loop: the sweep takes 1.1 s, Copy shows 0.8 s before Return presses it, the selection goes with the overlay, and the toast holds 2.25 s. */
+/* A continuous 6 s loop that ends in the state it starts from (the terminal, no selection, strip or toast): the sweep draws over 0.3 to 1.2 s, Copy shows at 1.3 s, Return presses it at 2.4 s, the toast slides in at 2.8 s, holds 2.1 s and slides out, then the selection clears at 5.3 s and the loop rests 0.8 s before it draws again. */
 /* The terminal ends 34 units above the art's bottom edge (a toast is 40 pt = 24 units), so the toast centres in that band: 5 units, 8.33 pt, either side. */
 .tx-ov .o-toast { --toast-gap: 8.33px; animation: txt 6s infinite both; }
-@keyframes txt { 0%, 51.7% { opacity: 0; transform: translate(-50%, calc(6px * var(--pt))); animation-timing-function: ease-out; } 55.8%, 93.3% { opacity: 1; transform: translate(-50%, 0); animation-timing-function: ease-out; } 97.5%, 100% { opacity: 0; transform: translate(-50%, 0); } }
+@keyframes txt { 0%, 46% { opacity: 0; transform: translate(-50%, calc(6px * var(--pt))); animation-timing-function: ease-out; } 49.5%, 85% { opacity: 1; transform: translate(-50%, 0); animation-timing-function: ease-in; } 88.5%, 100% { opacity: 0; transform: translate(-50%, calc(6px * var(--pt))); } }
 /* The text strip's Copy (Chrome.swift textStrip), 8 pt under the selection from its left edge; Return presses its cap as the hero's does. */
 .tx-ov .tx-btn { left: 10.5%; top: calc(56.85% + 8px * var(--pt)); animation: txbtn 6s infinite both; }
-@keyframes txbtn { 0%, 28% { opacity: 0; transform: translateY(calc(2px * var(--pt))); } 32.5%, 50% { opacity: 1; transform: none; } 53.3%, 100% { opacity: 0; transform: none; } }
+@keyframes txbtn { 0%, 20% { opacity: 0; transform: translateY(calc(2px * var(--pt))); } 24%, 46% { opacity: 1; transform: none; } 48.5%, 100% { opacity: 0; transform: none; } }
 .tx-ov .bb.primary .k { animation: txk 6s infinite both; }
-@keyframes txk { 0%, 43.3% { background-color: rgba(255, 255, 255, .94); color: var(--hl); } 43.4%, 48.3% { background-color: color-mix(in srgb, var(--hl) 60%, #000); color: #FFFFFF; } 48.4%, 100% { background-color: rgba(255, 255, 255, .94); color: var(--hl); } }
+@keyframes txk { 0%, 40% { background-color: rgba(255, 255, 255, .94); color: var(--hl); } 40.1%, 44% { background-color: color-mix(in srgb, var(--hl) 60%, #000); color: #FFFFFF; } 44.1%, 100% { background-color: rgba(255, 255, 255, .94); color: var(--hl); } }
 .tx-sel { fill: color-mix(in srgb, var(--hl) 55%, transparent); transform-box: fill-box; transform-origin: left; animation: sweep 6s infinite both; }
-@keyframes sweep { 0%, 6.7% { transform: scaleX(0); opacity: 1; } 25%, 50% { transform: scaleX(1); opacity: 1; } 53.3%, 100% { transform: scaleX(1); opacity: 0; } }
+.tx-sel2 { animation-name: sweep2; }
+@keyframes sweep { 0%, 5% { transform: scaleX(0); opacity: 1; } 17%, 89% { transform: scaleX(1); opacity: 1; } 92% { transform: scaleX(1); opacity: 0; } 92.1%, 100% { transform: scaleX(0); opacity: 0; } }
+@keyframes sweep2 { 0%, 7.5% { transform: scaleX(0); opacity: 1; } 19.5%, 89% { transform: scaleX(1); opacity: 1; } 92% { transform: scaleX(1); opacity: 0; } 92.1%, 100% { transform: scaleX(0); opacity: 0; } }
 /* the scrolling page: a review's title, a diff, two comments and a link card, drawn once and used by both the window and the stitched preview */
 .art .t0 { font: 700 7px var(--sans); fill: var(--w-fg); }
 .art .t1 { font: 600 5.4px var(--sans); fill: var(--w-fg); }
