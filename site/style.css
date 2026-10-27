@@ -22,7 +22,7 @@
   --keyedge: #D6C4D2;
 
   /* demo desktop and overlay chrome */
-  --d-wall: linear-gradient(155deg, #E6D3E4 0%, #F4C6BC 48%, #FBE5D2 100%);
+  --d-wall: linear-gradient(155deg, #E6D3E4 0%, #F4C6BC 48%, #FBE5D2 100%); --d-w0: #E6D3E4; --d-w1: #F4C6BC; --d-w2: #FBE5D2;
   --d-win: #FFFFFF; --d-bar: #F4F4F6; --d-fg: #1D1D1F; --d-fg2: #8A8A90; --d-line: rgba(0, 0, 0, .1); --d-row: rgba(0, 0, 0, .06);
   --d-page: #FCFBF8; --d-card: #FFFFFF; --d-mb: rgba(255, 255, 255, .55);
   --d-in: #E9E9EB; --d-infg: #1D1D1F; --d-out: #2F7CF6; --d-acc: #2F7CF6; --d-code: #24292F;
@@ -43,7 +43,7 @@
     --bg: #1A1020; --bg2: #26182C; --fg: #F8EDF2; --fg2: #B79FB9; --line: rgba(255, 255, 255, .12);
     --band: #2A1830; --bandfg2: #C9AFCB; --hl: #FF8A7C; --coral-ink: #FF8A7C; --rec: #FF453A;
     --key: #3A2843; --keyfg: #FBF1F6; --keyline: rgba(255, 255, 255, .22); --keyedge: #0C0610;
-    --d-wall: linear-gradient(155deg, #23152A 0%, #4A2A40 52%, #6E3B3B 100%);
+    --d-wall: linear-gradient(155deg, #23152A 0%, #4A2A40 52%, #6E3B3B 100%); --d-w0: #23152A; --d-w1: #4A2A40; --d-w2: #6E3B3B;
     --d-win: #1E1E20; --d-bar: #2A2A2D; --d-fg: #ECECEE; --d-fg2: #8E8E93; --d-line: rgba(255, 255, 255, .1); --d-row: rgba(255, 255, 255, .08);
     --d-page: #18191A; --d-card: #222325; --d-mb: rgba(20, 14, 24, .5);
     --d-in: #3A3A3C; --d-infg: #F2F2F4; --d-out: #2C6FE0; --d-acc: #5B9BFF; --d-code: #E6E6EA;
@@ -58,7 +58,7 @@
   --bg: #1A1020; --bg2: #26182C; --fg: #F8EDF2; --fg2: #B79FB9; --line: rgba(255, 255, 255, .12);
   --band: #2A1830; --bandfg2: #C9AFCB; --hl: #FF8A7C; --coral-ink: #FF8A7C; --rec: #FF453A;
   --key: #3A2843; --keyfg: #FBF1F6; --keyline: rgba(255, 255, 255, .22); --keyedge: #0C0610;
-  --d-wall: linear-gradient(155deg, #23152A 0%, #4A2A40 52%, #6E3B3B 100%);
+  --d-wall: linear-gradient(155deg, #23152A 0%, #4A2A40 52%, #6E3B3B 100%); --d-w0: #23152A; --d-w1: #4A2A40; --d-w2: #6E3B3B;
   --d-win: #1E1E20; --d-bar: #2A2A2D; --d-fg: #ECECEE; --d-fg2: #8E8E93; --d-line: rgba(255, 255, 255, .1); --d-row: rgba(255, 255, 255, .08);
   --d-page: #18191A; --d-card: #222325; --d-mb: rgba(20, 14, 24, .5);
     --d-in: #3A3A3C; --d-infg: #F2F2F4; --d-out: #2C6FE0; --d-acc: #5B9BFF; --d-code: #E6E6EA;
@@ -342,32 +342,42 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 /* the scroll fades out at the loop's end and in at its start, so the rewind is never seen */
 .seam { animation: seam 4s infinite both; }
 @keyframes seam { 0% { opacity: 0; } 5%, 93% { opacity: 1; } 98%, 100% { opacity: 0; } }
-/* V: a 6 s recording of the bug in the story, as the app shows one (Recording.swift): the rest of the screen dimmed, a 2 pt red border
+/* V: a 6 s recording of a settings card as the app shows one (Recording.swift): the rest of the screen dimmed, a 2 pt red border
    3 pt outside the area with a radius of 4 that pulses once at the start, and the stop reminder under it, the elapsed time and the
-   capture shortcut. The chat window narrows and the header's avatars squeeze into slits with square corners, then it widens again.
-   The base style is the narrow, squeezed frame, so reduced motion shows the bug. */
+   capture shortcut. The pointer clicks the Dark mode switch and the preview tile fades to dark, then it clicks again and the tile
+   fades back; the recording stops and the toast shows. The base style is the switch on at 0:03, so reduced motion shows it. */
+.rw0 { stop-color: var(--d-w0); } .rw1 { stop-color: var(--d-w1); } .rw2 { stop-color: var(--d-w2); }
 .rv-nm { font: 600 8.5px var(--sans); fill: var(--w-fg); }
-.rv-cov { fill: var(--bg2); }
-.rv-cap { fill: var(--w-bg); filter: drop-shadow(1px 1px 1.5px rgba(0, 0, 0, .25)); }
-.rv-capl { fill: none; stroke: rgba(0, 0, 0, .2); stroke-width: .5; }
-.rv-win, .rv-cur { transform: translateX(-56px); animation: rvwin 6s infinite both; }
-.rv-cur { transform: translate(130px, 86px); animation-name: rvcur; }
-@keyframes rvwin { 0%, 10% { transform: none; animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 32%, 62% { transform: translateX(-56px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 84%, 100% { transform: none; } }
-@keyframes rvcur { 0%, 10% { transform: translate(185px, 86px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 32%, 62% { transform: translate(130px, 86px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 84%, 100% { transform: translate(185px, 86px); } }
-.avs { transform-box: fill-box; transform-origin: left; transform: translateX(calc(var(--n) * -9px)) scaleX(.45); animation: rvav 6s infinite both; }
-.avs.nm { transform: translateX(-27px); animation-name: rvnm; }
-@keyframes rvav { 0%, 10% { transform: none; animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 32%, 62% { transform: translateX(calc(var(--n) * -9px)) scaleX(.45); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 84%, 100% { transform: none; } }
-@keyframes rvnm { 0%, 10% { transform: none; animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 32%, 62% { transform: translateX(-27px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 84%, 100% { transform: none; } }
-.ar { opacity: 0; animation: rvar 6s infinite both; }
-.as { animation: rvas 6s infinite both; }
-@keyframes rvar { 0%, 19% { opacity: 1; } 23%, 71% { opacity: 0; } 75%, 100% { opacity: 1; } }
-@keyframes rvas { 0%, 19% { opacity: 0; } 23%, 71% { opacity: 1; } 75%, 100% { opacity: 0; } }
+.rv-card { filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .2)); }
+.rv-dm { font-size: 8px; fill: var(--w-fg); }
+.rv-off { fill: color-mix(in srgb, var(--w-fg2) 45%, transparent); }
+.rv-on { fill: var(--d-acc); animation: rvon 6s infinite both; }
+.rv-kn { fill: #FFFFFF; filter: drop-shadow(0 .5px 1px rgba(0, 0, 0, .35)); transform: translateX(8px); animation: rvkn 6s infinite both; }
+.rv-tl { fill: #F1F1F4; stroke: rgba(0, 0, 0, .12); stroke-width: .5; }
+.rv-td2 { fill: #1E1E20; stroke: rgba(255, 255, 255, .18); stroke-width: .5; }
+.rv-tdk { animation: rvdk 6s infinite both; }
+.rv-tlt { animation: rvlt 6s infinite both; }
+@keyframes rvon { 0%, 20% { opacity: 0; } 27%, 52% { opacity: 1; } 59%, 100% { opacity: 0; } }
+@keyframes rvkn { 0%, 20% { transform: none; animation-timing-function: cubic-bezier(.4, 0, .2, 1); } 27%, 52% { transform: translateX(8px); animation-timing-function: cubic-bezier(.4, 0, .2, 1); } 59%, 100% { transform: none; } }
+@keyframes rvdk { 0%, 22% { opacity: 0; animation-timing-function: ease-in-out; } 36%, 54% { opacity: 1; animation-timing-function: ease-in-out; } 68%, 100% { opacity: 0; } }
+@keyframes rvlt { 0%, 22% { opacity: 1; animation-timing-function: ease-in-out; } 36%, 54% { opacity: 0; animation-timing-function: ease-in-out; } 68%, 100% { opacity: 1; } }
+.rv-cur { transform: translate(94px, 54px); animation: rvcur 6s infinite both; }
+@keyframes rvcur {
+  0%, 8% { transform: translate(138px, 66px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); }
+  17%, 19% { transform: translate(94px, 54px) scale(1); animation-timing-function: ease-in; }
+  20.5% { transform: translate(94px, 54px) scale(.82); animation-timing-function: ease-out; }
+  22.5%, 49% { transform: translate(94px, 54px) scale(1); animation-timing-function: ease-in; }
+  50.5% { transform: translate(94px, 54px) scale(.82); animation-timing-function: ease-out; }
+  52.5%, 78% { transform: translate(94px, 54px) scale(1); }
+  100% { transform: translate(138px, 66px); }
+}
 .rv-rec { animation: rvrec 6s infinite both; }
-@keyframes rvrec { 0% { opacity: 0; } 3%, 85% { opacity: 1; } 89%, 100% { opacity: 0; } }
+@keyframes rvrec { 0% { opacity: 0; } 3%, 80% { opacity: 1; } 85%, 100% { opacity: 0; } }
 .rv-toast { opacity: 0; animation: rvtoast 6s infinite both; }
 .rv-toast .pl { fill: var(--c-surface); stroke: var(--c-hair); stroke-width: .3; }
 .rv-toast { filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .25)); }
-@keyframes rvtoast { 0%, 87% { opacity: 0; transform: translateY(3px); } 91%, 96% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@keyframes rvtoast { 0%, 86% { opacity: 0; transform: translateY(3px); } 90%, 95% { opacity: 1; transform: none; } 99%, 100% { opacity: 0; } }
+.rv-ts { fill: var(--w-fg2); opacity: .3; }
 .rv-th { fill: var(--w-bg); stroke: rgba(128, 128, 128, .35); stroke-width: .3; }
 .rv-tm { font: 600 6px var(--sans); fill: var(--c-text); }
 .rv-td { font: 400 5px var(--mono); fill: var(--c-text2); }
@@ -453,7 +463,7 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .o-toast { transition: none; }
-  .pop, .q, .tx-btn, .tx-kp, .tx-kt, .tx-ktp, .tx-cap, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-win, .rv-cur, .avs, .ar, .as, .rv-out, .rv-rec, .rv-toast, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cc, .ag-bub, .card.flash .art { animation: none; }
+  .pop, .q, .tx-btn, .tx-kp, .tx-kt, .tx-ktp, .tx-cap, .tx-sel, .sc-scroll, .sc-cover, .sc-view, .seam, .rv-on, .rv-kn, .rv-tdk, .rv-tlt, .rv-cur, .rv-out, .rv-rec, .rv-toast, .rv-t, .vk-bg, .vk-subj, .vk-sh, .cc, .ag-bub, .card.flash .art { animation: none; }
   .caps.hk .cap { transition: none; }
   .card .cap[data-hold], .bb .k[data-hold] { transition-duration: .01s; }
   .card .cap[data-hold].down, .bb .k[data-hold].down { transform: none; }
