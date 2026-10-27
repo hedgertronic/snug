@@ -347,18 +347,16 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .art .gm-d { fill: var(--d-delfg); font-weight: 700; }
 /* G: the app's scrolling capture (OverlayController+Scroll.swift): the area's outline and, 8 pt to its right and centred on it, the minimap,
    the stitched thumbnail at most 72 pt wide with a 1.5 pt marker on the part in view; it grows as the page scrolls. Return delivers
-   the stitched image: the outline goes and the toast shows it. A 7 s loop; the page fades back to its top while nothing else shows. */
+   the stitched image. A 7 s loop: the scroll takes 2.7 s, the full page and its minimap hold until 6.4 s, then fade while the page returns to its top. */
 .sc-scroll { transform: translateY(-102px); animation: scroll 7s infinite both; }
-@keyframes scroll { 0%, 14% { transform: none; opacity: 1; animation-timing-function: ease-in-out; } 58%, 94% { transform: translateY(-102px); opacity: 1; } 96% { transform: translateY(-102px); opacity: 0; } 96.1% { transform: none; opacity: 0; } 98%, 100% { transform: none; opacity: 1; } }
+@keyframes scroll { 0%, 14% { transform: none; opacity: 1; animation-timing-function: ease-in-out; } 52%, 94% { transform: translateY(-102px); opacity: 1; } 96% { transform: translateY(-102px); opacity: 0; } 96.1% { transform: none; opacity: 0; } 98%, 100% { transform: none; opacity: 1; } }
 .sc-cap { animation: sccap 7s infinite both; }
-@keyframes sccap { 0%, 8% { opacity: 0; } 12%, 64% { opacity: 1; } 67%, 100% { opacity: 0; } }
+@keyframes sccap { 0%, 8% { opacity: 0; } 12%, 91% { opacity: 1; } 94%, 100% { opacity: 0; } }
 .art .sc-mbg { fill: var(--d-page); }
 .sc-mini { clip-path: inset(0 round 2.4px); animation: scmini 7s infinite both; }
-@keyframes scmini { 0%, 14% { clip-path: inset(0 0 54.3% 0 round 2.4px); animation-timing-function: ease-in-out; } 58%, 100% { clip-path: inset(0 0 0 0 round 2.4px); } }
+@keyframes scmini { 0%, 14% { clip-path: inset(0 0 54.3% 0 round 2.4px); animation-timing-function: ease-in-out; } 52%, 100% { clip-path: inset(0 0 0 0 round 2.4px); } }
 .sc-view { fill: none; stroke: var(--hl); stroke-width: .9; transform: translateY(39.2px); animation: scview 7s infinite both; }
-@keyframes scview { 0%, 14% { transform: none; animation-timing-function: ease-in-out; } 58%, 100% { transform: translateY(39.2px); } }
-.sc-ov .o-toast { animation: sct 7s infinite both; }
-@keyframes sct { 0%, 65% { opacity: 0; transform: translate(-50%, calc(6px * var(--pt))); animation-timing-function: ease-out; } 68.5%, 91% { opacity: 1; transform: translate(-50%, 0); animation-timing-function: ease-out; } 94.5%, 100% { opacity: 0; transform: translate(-50%, 0); } }
+@keyframes scview { 0%, 14% { transform: none; animation-timing-function: ease-in-out; } 52%, 100% { transform: translateY(39.2px); } }
 /* V: a 6 s recording of a settings card as the app shows one (Recording.swift): the rest of the screen dimmed, a 2 pt red border
    3 pt outside the area with a radius of 4 that pulses once at the start, and the stop reminder under it, the elapsed time and the
    capture shortcut. The pointer clicks the Dark mode switch and the preview tile fades to dark, then it clicks again and the tile
@@ -402,36 +400,30 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 @keyframes rvt { 0%, 16.66% { opacity: 1; } 16.67%, 100% { opacity: 0; } }
 /* K: a photo on the desktop, framed like the color card's picture. K opens the app's cut-out preview (OverlayController+Cutout.swift
    CutoutView): the frame's checkerboard (white and 85% white, 8 pt squares, in either look), the removed pixels at 20%, the subject with
-   its edge in the highlight color. Return copies it: the preview closes and the toast shows the subject's thumbnail and pixel size
-   (Output.publish). A 7 s loop; the base style is the preview, so reduced motion shows it. */
-.vk-bg { opacity: .2; animation: vkbg 7s infinite both; }
-@keyframes vkbg { 0%, 14% { opacity: 1; animation-timing-function: ease-in-out; } 20%, 52% { opacity: .2; animation-timing-function: ease-in-out; } 55%, 100% { opacity: 1; } }
+   its edge in the highlight color. The preview holds for 3.7 s of a 6 s loop, then the photo returns. The base style is the preview, so reduced motion shows it. */
+.vk-bg { opacity: .2; animation: vkbg 6s infinite both; }
+@keyframes vkbg { 0%, 14% { opacity: 1; animation-timing-function: ease-in-out; } 20%, 82% { opacity: .2; animation-timing-function: ease-in-out; } 88%, 100% { opacity: 1; } }
 .vk-fl { flood-color: var(--hl); }
-.vk-ring { animation: vkring 7s infinite both; }
-@keyframes vkring { 0%, 14% { opacity: 0; animation-timing-function: ease-in-out; } 20%, 52% { opacity: 1; animation-timing-function: ease-in-out; } 55%, 100% { opacity: 0; } }
-.vk-ov .o-toast { animation: vkt 7s infinite both; }
-@keyframes vkt { 0%, 53% { opacity: 0; transform: translate(-50%, calc(6px * var(--pt))); animation-timing-function: ease-out; } 56.5%, 90% { opacity: 1; transform: translate(-50%, 0); animation-timing-function: ease-out; } 93.5%, 100% { opacity: 0; transform: translate(-50%, 0); } }
+.vk-ring { animation: vkring 6s infinite both; }
+@keyframes vkring { 0%, 14% { opacity: 0; animation-timing-function: ease-in-out; } 20%, 82% { opacity: 1; animation-timing-function: ease-in-out; } 88%, 100% { opacity: 0; } }
 
-/* C: a sunset picture; the picker moves over it and the app's readout (Guides.swift: swatch, value, Copy, C) follows each stop; C at the last stop copies and the toast
-   shows. The readout and toast use the hero's chip and toast styles, sized by --pt from the card's width. The base style is the last stop, so reduced motion shows it. */
-/* The readout row sits on the toast's centre line. */
+/* C: a sunset picture; the picker moves over it and the app's readout (Guides.swift: swatch, value, Copy, C) follows each stop. The readout holds at the last stop for 3.5 s of an 8 s loop.
+   It uses the hero's chip styles, sized by --pt from the card's width. The base style is the last stop, so reduced motion shows it. */
 .cp-ov .o-chip { left: 50%; top: auto; bottom: calc((var(--toast-gap) + 7px) * var(--pt)); transform: translateX(-50%); }
 .cp-ov .o-chip .sw { display: block; flex: none; width: calc(12px * var(--pt)); height: calc(12px * var(--pt)); border-radius: calc(3px * var(--pt)); background: var(--sw); box-shadow: inset 0 0 0 calc(.5px * var(--pt)) var(--sw-edge); }
 .cp-ov .o-chip .t { font-weight: 500; }
-.cp-ov .o-toast { animation: cpt 8s infinite both; }
 .cp-ov .cp-ch { opacity: 0; }
 .cp-ov .cp-ch.cC0 { opacity: 1; }
 .cp-x { transform: translate(150px, 69px); animation: cpx 8s infinite both; }
 .cp-xh { animation: cpxo 8s infinite both; }
 @keyframes cpx { 0%, 24% { transform: translate(100px, 46px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 29%, 44% { transform: translate(50px, 58px); animation-timing-function: cubic-bezier(.45, 0, .3, 1); } 49%, 100% { transform: translate(150px, 69px); } }
-@keyframes cpxo { 0% { opacity: 0; } 1.5% { opacity: 1; } 58.5% { opacity: 1; } 60% { opacity: 0; } 100% { opacity: 0; } }
+@keyframes cpxo { 0% { opacity: 0; } 1.5% { opacity: 1; } 93% { opacity: 1; } 96% { opacity: 0; } 100% { opacity: 0; } }
 .cp-ov .cp-ch.cA { animation: cpa 8s infinite both; }
 @keyframes cpa { 0% { opacity: 0; } 2.5% { opacity: 0; } 3.3% { opacity: 1; } 23.7% { opacity: 1; } 24.5% { opacity: 0; } 100% { opacity: 0; } }
 .cp-ov .cp-ch.cB { animation: cpb 8s infinite both; }
 @keyframes cpb { 0% { opacity: 0; } 28.5% { opacity: 0; } 29.3% { opacity: 1; } 43.7% { opacity: 1; } 44.5% { opacity: 0; } 100% { opacity: 0; } }
 .cp-ov .cp-ch.cC0 { animation: cpc0 8s infinite both; }
-@keyframes cpc0 { 0% { opacity: 0; } 48% { opacity: 0; } 48.8% { opacity: 1; } 59.2% { opacity: 1; } 60% { opacity: 0; } 100% { opacity: 0; } }
-@keyframes cpt { 0%, 60% { opacity: 0; transform: translate(-50%, calc(6px * var(--pt))); animation-timing-function: ease-out; } 63%, 92% { opacity: 1; transform: translate(-50%, 0); animation-timing-function: ease-out; } 95%, 100% { opacity: 0; transform: translate(-50%, 0); } }
+@keyframes cpc0 { 0% { opacity: 0; } 48% { opacity: 0; } 48.8% { opacity: 1; } 93% { opacity: 1; } 96% { opacity: 0; } 100% { opacity: 0; } }
 
 /* agent art: a generic chat window. The reference is pasted in the input and sent, the tool call returns the capture's link card, and a one-line reply follows */
 .ag-m { font: 400 4.6px var(--mono); fill: #FFFFFF; }
