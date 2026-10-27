@@ -35,7 +35,7 @@ In Text mode, select text and press Return to copy it. With recording armed, V o
 
 ## Agent / MCP setup
 
-Press **Cmd-Return** in Capture mode, then paste into your agent chat. Snug supplies the image and a reference to its app, window, and element context.
+Press **Cmd-Return** in Capture mode, then paste into your agent chat. The clipboard holds the image and a one-line reference to the capture. With the MCP server below, the agent fetches the full capture and its app, window, and element context from that reference. Without it, paste the image itself (for example, Ctrl+V in Claude Code).
 
 Settings → General → Agent → Copy Setup copies the command with your installed app's path. Or replace `/path/to/Snug.app` below:
 
