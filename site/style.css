@@ -227,7 +227,8 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 .scene[data-open="false"] :is(.ovg, .o-chip, .o-snap, .o-strip) { display: none; }
 
 /* ---------- features ---------- */
-.feat { max-width: 1072px; margin: 0 auto; padding: 72px max(16px, env(safe-area-inset-left, 0px)) 72px; }
+.feat { max-width: 1072px; margin: 0 auto; padding: 96px max(16px, env(safe-area-inset-left, 0px)) 72px; }
+.feat-h { font: 700 clamp(28px, 3.4vw, 36px)/1.1 var(--round); letter-spacing: -.005em; margin-bottom: 28px; }
 .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 36px 28px; }
 .card { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .card-head { display: flex; align-items: center; gap: 14px; }
@@ -349,7 +350,8 @@ a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
   .hero p { margin-top: 12px; }
   .cta { margin-top: 24px; }
   .demo { border-radius: 10px; }
-  .feat { padding-top: 52px; padding-bottom: 52px; }
+  .feat { padding-top: 64px; padding-bottom: 52px; }
+  .feat-h { margin-bottom: 24px; }
   .grid { grid-template-columns: minmax(0, 1fr); gap: 40px; }
   .top-links { gap: 14px; }
   .foot { justify-content: center; text-align: center; }
