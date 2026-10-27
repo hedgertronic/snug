@@ -65,6 +65,8 @@ snug_contents = snug / "Contents"
 (snug_contents / "MacOS").mkdir(parents=True, exist_ok=True)
 (snug_contents / "Resources").mkdir(exist_ok=True)
 install_binary(binary_dir / "Snug", snug_contents / "MacOS/Snug")
+# Local symbols only serve a debugger; without them each architecture's slice is about a third smaller.
+subprocess.run(["strip", "-x", str(snug_contents / "MacOS/Snug")], check=True)
 # A fresh copy of Sparkle.framework, its Versions symlinks kept, so nothing from an earlier Sparkle stays behind.
 framework = snug_contents / "Frameworks/Sparkle.framework"
 if framework.exists():
