@@ -7,9 +7,12 @@ extension ScreenTextReader {
     /// engine). Chromium's web areas fail those calls.
     static let webKitApps: Set<String> = ["com.apple.Safari", "com.apple.SafariTechnologyPreview", "com.apple.mail"]
     /// One app's budget once its web areas are found: its lines take at most `webLineBudget`, then word boxes are added until
-    /// `webWordBudget`. Finding the areas is not counted, so a slow window walk (every app is read at once) still leaves time for lines.
+    /// `webWordBudget`. Finding the areas has a budget of its own, `webFindBudget` and `webFindElements`, so a slow window walk (every
+    /// app is read at once) still leaves time for lines and the whole read stays bounded.
     private static let webLineBudget = Duration.milliseconds(90)
     private static let webWordBudget = Duration.milliseconds(140)
+    private static let webFindBudget = Duration.milliseconds(150)
+    private static let webFindElements = 3000
     /// The most lines one web area walks, and the most off-screen lines in a row it walks past (DOM order is not visual order, so a
     /// column below the fold can sit before a visible one).
     private static let maxWebLines = 600
@@ -30,7 +33,9 @@ extension ScreenTextReader {
             return CGRect(origin: position, size: size)
         }
         var areas: [(element: AXUIElement, visible: CGRect, offset: CGSize)] = []
+        let finding = AXBudget(time: webFindBudget, elements: webFindElements)
         func walk(_ element: AXUIElement, depth: Int, window: CGRect, scroll: AXUIElement?) {
+            guard finding.visit() else { return }
             AXUIElementSetMessagingTimeout(element, Accessibility.messagingTimeout)
             var role: CFTypeRef?
             AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role)

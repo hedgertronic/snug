@@ -10,6 +10,16 @@ enum Accessibility {
     private static let peerBudget = Duration.milliseconds(100)
     /// The longest a walk down from the window by frames takes; a slow app gets the depth it reached.
     private static let walkBudget = Duration.milliseconds(100)
+    /// The whole lookup at a point: the parent chain, the walk down and the sidebar check share it (`AXBudget`), whatever each
+    /// message's own timeout; peers have `peerBudget` besides. Once it is spent, the lookup keeps what it read.
+    private static let lookupBudget = Duration.milliseconds(250)
+    private static let lookupElements = 400
+    /// The Dock's lists and titles, and a terminal's text areas and rows, each read within one budget.
+    private static let listBudget = Duration.milliseconds(300)
+    private static let listElements = 400
+    private static let terminalElements = 3000
+    /// The most rows read from one terminal text area.
+    static let maxTerminalRows = 500
 
     /// The frames of the element at `point` (global points, top-left origin) in `pid`'s app and its parents up to the window,
     /// innermost first, each with its role, title, subrole, identifier and description. When the hit test's answer and its parents are
@@ -19,14 +29,16 @@ enum Accessibility {
     /// its own pid runs in this process, off main, and AppKit's hit test there trips the MainActor isolation check.
     @concurrent
     static func frames(at point: CGPoint, pid: pid_t) async -> [AXFrame] {
-        sidebarFrames(chain(at: point, pid: pid))
+        let budget = AXBudget(time: lookupBudget, elements: lookupElements)
+        return sidebarFrames(chain(at: point, pid: pid, budget: budget), budget: budget)
     }
 
     /// `frames(at:pid:)` and, with them, the chains of the hovered element's peers (see `peers(of:)`).
     @concurrent
     static func framesAndPeers(at point: CGPoint, pid: pid_t) async -> (frames: [AXFrame], peers: [[AXFrame]]) {
-        let chain = chain(at: point, pid: pid)
-        return (sidebarFrames(chain), peers(of: chain))
+        let budget = AXBudget(time: lookupBudget, elements: lookupElements)
+        let chain = chain(at: point, pid: pid, budget: budget)
+        return (sidebarFrames(chain, budget: budget), peers(of: chain))
     }
 
     /// `frames(at:pid:)` for Copy for Agent, with `details`: the element `HandoffManifest.Target.match` picks for `crop` gets its
@@ -37,8 +49,9 @@ enum Accessibility {
     @concurrent
     static func handoff(at point: CGPoint, pid: pid_t, crop: CGRect, display: CGRect, tolerance: CGFloat) async
         -> (frames: [AXFrame], document: String?, url: String?, pageTitle: String?) {
-        let chain = chain(at: point, pid: pid)
-        var frames = sidebarFrames(chain)
+        let budget = AXBudget(time: lookupBudget, elements: lookupElements)
+        let chain = chain(at: point, pid: pid, budget: budget)
+        var frames = sidebarFrames(chain, budget: budget)
         // The sidebar panel `sidebarFrames` adds has no element.
         let elements = frames.map { frame in chain.first { $0.frame == frame }?.element }
         func read(_ attribute: String, of element: AXUIElement) -> CFTypeRef? {
@@ -88,21 +101,23 @@ enum Accessibility {
 
     /// `chain`'s frames, with a sidebar's full panel above its scroll area (`AccessibilityBounds.withSidebarPanel`) when no other
     /// element of the window lies in the title-bar band the panel adds.
-    private static func sidebarFrames(_ chain: [(element: AXUIElement, frame: AXFrame)]) -> [AXFrame] {
-        guard let sidebar = AccessibilityBounds.withSidebarPanel(chain.map(\.frame)), !occupied(sidebar.band, under: chain.last!.element) else { return chain.map(\.frame) }
+    private static func sidebarFrames(_ chain: [(element: AXUIElement, frame: AXFrame)], budget: AXBudget) -> [AXFrame] {
+        guard let sidebar = AccessibilityBounds.withSidebarPanel(chain.map(\.frame)), !occupied(sidebar.band, under: chain.last!.element, budget: budget) else { return chain.map(\.frame) }
         return sidebar.frames
     }
 
     /// Whether an element under `element` lies in `band` (`AccessibilityBounds.occupies`). The walk looks inside the elements that span
-    /// the whole band (Finder's toolbar and split groups) and not inside the others.
-    private static func occupied(_ band: CGRect, under element: AXUIElement) -> Bool {
+    /// the whole band (Finder's toolbar and split groups) and not inside the others. Once `budget` is spent the band counts as
+    /// occupied, so no panel is added on a guess.
+    private static func occupied(_ band: CGRect, under element: AXUIElement, budget: AXBudget) -> Bool {
         (children(of: element, kAXChildrenAttribute) ?? []).contains { child in
+            guard budget.visit() else { return true }
             guard let frame = frame(of: child) else { return false }
-            return frame.rect.contains(band) ? occupied(band, under: child) : AccessibilityBounds.occupies(frame, band)
+            return frame.rect.contains(band) ? occupied(band, under: child, budget: budget) : AccessibilityBounds.occupies(frame, band)
         }
     }
 
-    private static func chain(at point: CGPoint, pid: pid_t) -> [(element: AXUIElement, frame: AXFrame)] {
+    private static func chain(at point: CGPoint, pid: pid_t, budget: AXBudget) -> [(element: AXUIElement, frame: AXFrame)] {
         guard pid != getpid(), AXIsProcessTrusted() else { return [] }
         let application = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(application, messagingTimeout)
@@ -110,7 +125,7 @@ enum Accessibility {
         guard AXUIElementCopyElementAtPosition(application, Float(point.x), Float(point.y), &hit) == .success, var element = hit else { return [] }
         var chain: [(element: AXUIElement, frame: AXFrame)] = []
         for _ in 0..<maxDepth {
-            guard let frame = frame(of: element) else { break }
+            guard budget.visit(), let frame = frame(of: element) else { break }
             chain.append((element, frame))
             guard frame.role != kAXWindowRole, let parent = AXValues.element(attribute(kAXParentAttribute, of: element)) else { break }
             element = parent
@@ -129,7 +144,7 @@ enum Accessibility {
         // sibling of the browser's split group. Then the window is walked down by frames: at each level, the smallest child that contains the point.
         var path = [window]
         let began = ContinuousClock.now
-        while path.count < maxDepth, began.duration(to: .now) < walkBudget, let children = children(of: path.last!.element, kAXChildrenAttribute),
+        while path.count < maxDepth, began.duration(to: .now) < walkBudget, budget.visit(), let children = children(of: path.last!.element, kAXChildrenAttribute),
               let smallest = children.compactMap({ child in frame(of: child).map { (element: child, frame: $0) } })
                   .filter({ $0.frame.rect.contains(point) }).min(by: { $0.frame.rect.width * $0.frame.rect.height < $1.frame.rect.width * $1.frame.rect.height }) {
             path.append(smallest)
@@ -202,7 +217,9 @@ enum Accessibility {
         var children: CFTypeRef?
         guard AXUIElementCopyAttributeValue(application, kAXChildrenAttribute as CFString, &children) == .success,
               let children = children as? [AXUIElement] else { return [] }
+        let budget = AXBudget(time: listBudget, elements: listElements)
         return children.compactMap { child in
+            guard budget.visit() else { return nil }
             AXUIElementSetMessagingTimeout(child, messagingTimeout)
             var role: CFTypeRef?
             AXUIElementCopyAttributeValue(child, kAXRoleAttribute as CFString, &role)
@@ -222,11 +239,15 @@ enum Accessibility {
         var lists: CFTypeRef?
         guard AXUIElementCopyAttributeValue(application, kAXChildrenAttribute as CFString, &lists) == .success,
               let lists = lists as? [AXUIElement] else { return [] }
+        // A budget that runs out leaves fewer titles than tiles, so the tiles keep their generic label.
+        let budget = AXBudget(time: listBudget, elements: listElements)
         return lists.flatMap { list -> [String] in
+            guard budget.visit() else { return [] }
             AXUIElementSetMessagingTimeout(list, messagingTimeout)
             var items: CFTypeRef?
             AXUIElementCopyAttributeValue(list, kAXChildrenAttribute as CFString, &items)
             return (items as? [AXUIElement] ?? []).compactMap { item in
+                guard budget.visit() else { return nil }
                 AXUIElementSetMessagingTimeout(item, messagingTimeout)
                 var subrole: CFTypeRef?
                 AXUIElementCopyAttributeValue(item, kAXSubroleAttribute as CFString, &subrole)
@@ -241,8 +262,9 @@ enum Accessibility {
     /// box per visual row (measured on iTerm2 3.6: the visible rows only, 8 pt cells, each row padded to the grid's width).
     static let terminalApps: Set<String> = ["com.googlecode.iterm2"]
 
-    /// The text areas in `pid`'s windows, each one's frame and its visible rows' text and boxes, in global points. Empty without
-    /// permission, on a timeout, or for an area that does not answer for its rows.
+    /// The text areas in `pid`'s windows, each one's frame and its visible rows' text and boxes (at most `maxTerminalRows`), in global
+    /// points, all read within one budget. Empty without permission, on a timeout, or for an area that does not answer for its rows; an
+    /// area whose rows the budget cut short keeps the rows read.
     @concurrent
     static func terminalRows(pid: pid_t) async -> [(frame: CGRect, rows: [(text: String, box: CGRect)])] {
         guard pid != getpid(), AXIsProcessTrusted() else { return [] }
@@ -252,9 +274,10 @@ enum Accessibility {
             var result: CFTypeRef?
             return AXUIElementCopyParameterizedAttributeValue(element, attribute as CFString, argument, &result) == .success ? result : nil
         }
+        let budget = AXBudget(time: listBudget, elements: terminalElements)
         var areas: [AXUIElement] = []
         func walk(_ element: AXUIElement, depth: Int) {
-            guard let frame = frame(of: element) else { return }
+            guard budget.visit(), let frame = frame(of: element) else { return }
             if frame.role == kAXTextAreaRole { return areas.append(element) }
             guard depth < maxDepth else { return }
             for child in children(of: element, kAXChildrenAttribute) ?? [] { walk(child, depth: depth + 1) }
@@ -266,12 +289,14 @@ enum Accessibility {
                   let value = raw as? String as NSString?, value.length > 0,
                   let last = AXValues.index(parameter("AXLineForIndex", area, value.length - 1 as CFNumber)) else { return nil }
             var rows: [(text: String, box: CGRect)] = []
-            for line in 0...last {
+            for line in 0...min(last, maxTerminalRows - 1) {
+                guard budget.visit() else { break }
                 guard let lineRange = parameter("AXRangeForLine", area, line as CFNumber),
                       let range = AXValues.range(lineRange).flatMap({ AXValues.range($0, within: value.length) }),
                       let box = AXValues.rect(parameter("AXBoundsForRange", area, lineRange)) else { return nil }
                 rows.append((value.substring(with: range), box))
             }
+            guard !rows.isEmpty else { return nil }
             return (frame, rows)
         }
     }
