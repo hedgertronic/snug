@@ -529,18 +529,22 @@ final class Toast: NSPanel, NSDraggingSource {
         do {
             try png!.write(to: chosen, options: .atomic)
         } catch {
-            message.stringValue = "Save failed"
-            detail.stringValue = (error as NSError).localizedFailureReason ?? error.localizedDescription
-            detail.font = .systemFont(ofSize: 12)
-            detail.textColor = Toast.failureText
-            detail.lineBreakMode = .byTruncatingTail
-            detail.toolTip = detail.stringValue
-            detail.isHidden = false
-            layoutText()
-            scheduleDismissal()
-            return
+            return showFailure("Save failed", error)
         }
         dismiss()
+    }
+
+    /// Shows `title` and the error's reason in the toast, in red, and restarts its timer; the toast and its buttons stay.
+    private func showFailure(_ title: String, _ error: any Error) {
+        message.stringValue = title
+        detail.stringValue = (error as NSError).localizedFailureReason ?? error.localizedDescription
+        detail.font = .systemFont(ofSize: 12)
+        detail.textColor = Toast.failureText
+        detail.lineBreakMode = .byTruncatingTail
+        detail.toolTip = detail.stringValue
+        detail.isHidden = false
+        layoutText()
+        scheduleDismissal()
     }
 
     override func mouseEntered(with event: NSEvent) { track(event, inside: true) }
