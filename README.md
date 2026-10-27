@@ -1,6 +1,6 @@
 # Snug
 
-**Screenshots that snap into place.**
+**Screenshots that fit like a glove.**
 
 Hover to grab any window or element, or drag a rough box and Snug snaps it tight. Press Return to copy. Snug is a menu bar screenshot app for macOS 26 or later, built with Swift and AppKit.
 
