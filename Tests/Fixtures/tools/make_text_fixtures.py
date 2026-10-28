@@ -43,7 +43,7 @@ def rows_fixture() -> Image.Image:
         "   - D at 1x reads as loose dots. Its arch can come down 1 pt to match the reference.",
         "2. Hint label: remove it. On the 16 sample cases it never reached a second hint, so it now shows only when there's a real alternative,",
         "   which is almost never.",
-        "3. An intro animation: none exists today. Do you want a quick fade, or the panel growing into place?",
+        "3. An intro animation: none exists today. Do you want a quick fade, or the panel sliding into place?",
         "4. Cleanup: should I remove the 30+ old sample files and archives, and clear the old cache (3.3 MB) in /tmp/demo-cache?",
         "",
         "Details and caveats are in docs/notes.md.",
