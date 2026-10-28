@@ -307,7 +307,7 @@ private struct MakerButton: View {
         PillLink(url: URL(string: "https://hedgertronic.com/")!, help: "Visit hedgertronic.com") {
             HStack(spacing: 5) {
                 Image(nsImage: NSImage(data: makerCameraPNG)!).resizable().interpolation(.high).frame(width: 15, height: 15).clipShape(Circle())
-                Text("hedgertronic.com")
+                Text("hedgertronic")
             }
         }
     }
