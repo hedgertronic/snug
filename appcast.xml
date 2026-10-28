@@ -4,11 +4,11 @@
         <title>Snug</title>
         <item>
             <title>1.0.0</title>
-            <pubDate>Wed, 28 Oct 2026 02:15:21 -0000</pubDate>
+            <pubDate>Wed, 28 Oct 2026 02:28:04 -0000</pubDate>
             <sparkle:version>2</sparkle:version>
             <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/hedgertronic/snug/releases/download/v1.0.0/Snug-1.0.0.zip" sparkle:edSignature="EWmyzvOp04w8oHq+qsRefqDNAmJQD/BlIcefDL1chdaAvLepUCVueMig1NBigu0x7e22bOi2BFompdSXT7BQAw==" length="6907424" type="application/octet-stream"/>
+            <enclosure url="https://github.com/hedgertronic/snug/releases/download/v1.0.0/Snug-1.0.0.zip" sparkle:edSignature="ShhZhr4a+4MFxalxi0221xSfmLifLQ0nYzJY/EzzM072D40T0UytfDr+zs0bVx6Ec2FfKB5c7OLn9CVdR/SSBg==" length="6906937" type="application/octet-stream"/>
         </item>
     </channel>
 </rss>

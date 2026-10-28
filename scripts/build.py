@@ -28,6 +28,8 @@ MINIMUM_SYSTEM = "26.0"
 FEED_URL = "https://snugshot.app/appcast.xml"
 PUBLIC_ED_KEY = "ZEuRf2celsTZdW8b4sBNlKNOXeqiNkawPIPmQE4mgWg="
 NOTARY_PROFILE = "snug-notary"
+# The Homebrew cask, in a clone of github.com/hedgertronic/homebrew-tap next to this repository.
+CASK = Path(__file__).resolve().parents[2] / "homebrew-tap/Casks/snug.rb"
 # The newest item goes right after the channel's title, the one place this line appears.
 FEED_ANCHOR = "<title>Snug</title>"
 EMPTY_FEED = ('<?xml version="1.0" encoding="utf-8"?>\n'
@@ -141,6 +143,8 @@ def check_release_tools(signing_identity: str, env: dict[str, str]) -> None:
     public_key = subprocess.run([str(sparkle_tool("generate_keys")), "-p"], text=True, capture_output=True)
     if public_key.returncode != 0 or public_key.stdout.strip() != PUBLIC_ED_KEY:
         sys.exit("The login keychain has no Sparkle private key matching PUBLIC_ED_KEY")
+    if not CASK.is_file():
+        sys.exit(f"The Homebrew cask {CASK} is missing; clone github.com/hedgertronic/homebrew-tap next to this repository")
 
 
 def install_binary(source: Path, destination: Path) -> None:
@@ -280,7 +284,8 @@ def main() -> None:
         feed = read_feed(appcast)
         check_feed(feed, VERSION, BUILD)
         write_feed(appcast, feed, feed_item(VERSION, BUILD, archive.name, signature))
-        write_cask(root / "Casks/snug.rb", VERSION, archive)
+        write_cask(CASK, VERSION, archive)
+        print(f"Cask: {CASK} (commit and push it in homebrew-tap)")
         # Only the zip stays, so Spotlight and Launch Services find one Snug: build/Snug.app.
         shutil.rmtree(snug)
         print(f"Release: {archive}")

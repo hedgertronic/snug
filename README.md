@@ -10,7 +10,7 @@ Hover to grab any window or element, or drag a rough box and Snug snaps it tight
 
 ```sh
 curl -fsSL https://snugshot.app/install.sh | sh
-brew tap hedgertronic/snug https://github.com/hedgertronic/snug && brew install --cask hedgertronic/snug/snug
+brew install --cask hedgertronic/tap/snug
 ```
 
 Open it and allow Screen Recording. Accessibility permission helps Snug find elements and read text accurately; without it, Snug uses pixels and OCR.
