@@ -76,6 +76,26 @@ class FeedTests(unittest.TestCase):
                 build.write_feed(appcast, "<rss/>", "<item/>")
             self.assertEqual(appcast.read_text(), "<rss/>")
 
+    def test_cask_takes_the_version_and_the_zips_sha256(self):
+        with tempfile.TemporaryDirectory() as folder:
+            cask, archive = Path(folder) / "snug.rb", Path(folder) / "Snug-1.0.1.zip"
+            cask.write_text((build.root / "Casks/snug.rb").read_text())
+            archive.write_bytes(b"zip")
+            build.write_cask(cask, "1.0.1", archive)
+            text = cask.read_text()
+            self.assertIn('  version "1.0.1"\n', text)
+            self.assertIn('  sha256 "4a70fe9aa6436e02c2dea340fbd1e352e4ef2d8ce6ca52ad25d4b95471fc8bf2"\n', text)
+            self.assertEqual(sorted(path.name for path in Path(folder).iterdir()), ["Snug-1.0.1.zip", "snug.rb"])
+
+    def test_cask_without_one_version_line_is_refused(self):
+        with tempfile.TemporaryDirectory() as folder:
+            cask, archive = Path(folder) / "snug.rb", Path(folder) / "Snug.zip"
+            cask.write_text('cask "snug" do\nend\n')
+            archive.write_bytes(b"zip")
+            with self.assertRaises(SystemExit):
+                build.write_cask(cask, "1.0.1", archive)
+            self.assertEqual(cask.read_text(), 'cask "snug" do\nend\n')
+
 
 
 IDENTITIES = """  1) AAAA1111 "Apple Development: Someone (TEAM1)"

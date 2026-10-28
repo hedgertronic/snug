@@ -6,7 +6,14 @@ Hover to grab any window or element, or drag a rough box and Snug snaps it tight
 
 ## Install and use
 
-[Download Snug](https://snugshot.app), open it, and allow Screen Recording. Accessibility permission helps Snug find elements and read text accurately; without it, Snug uses pixels and OCR.
+[Download Snug](https://snugshot.app), or install it from Terminal with either line:
+
+```sh
+curl -fsSL https://snugshot.app/install.sh | sh
+brew tap hedgertronic/snug https://github.com/hedgertronic/snug && brew install --cask hedgertronic/snug/snug
+```
+
+Open it and allow Screen Recording. Accessibility permission helps Snug find elements and read text accurately; without it, Snug uses pixels and OCR.
 
 Press **Control-Shift-Space** to capture the display under your pointer. Hover and click or press Return to copy, or drag an area. Hold Option while dragging for an exact crop. Change the capture shortcut in Settings → General.
 

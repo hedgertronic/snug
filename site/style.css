@@ -110,6 +110,22 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 @media (hover: hover) and (pointer: fine) { .dl:hover { background: #FF8E81; } }
 .dl-gh { gap: 8px; background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); color: var(--bandfg); font-weight: 600; font-size: 15.5px; text-decoration: none; transition: background-color .15s, box-shadow .15s; }
 @media (hover: hover) and (pointer: fine) { .dl-gh:hover { background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .24); } }
+/* The one-line Terminal install under the buttons: the label and curl / Homebrew switch, then the command on a row of its own, which
+   keeps one width whichever command it shows; a longer command scrolls sideways inside its pill. */
+.cli { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 10px; margin-top: 18px; width: min(520px, 100%); }
+.cli-row { display: flex; align-items: center; gap: 8px; flex: 1 0 100%; min-width: 0; }
+.cli-row .cli-c { flex: 1; min-width: 0; text-align: left; }
+.cli-l { font-size: 13px; color: var(--bandfg2); }
+.cli-tabs { display: inline-flex; padding: 2px; border-radius: 999px; background: rgba(0, 0, 0, .22); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); }
+.cli-tab { height: 26px; padding: 0 11px; border: 0; border-radius: 999px; background: none; color: var(--bandfg2); font: 600 12px var(--sans); cursor: pointer; }
+.cli-tab[aria-pressed="true"] { background: rgba(255, 255, 255, .14); color: var(--bandfg); }
+.cli-tab:focus-visible { outline: 2px solid var(--coral); outline-offset: 1px; }
+.cli-c { max-width: 100%; overflow-x: auto; white-space: nowrap; padding: 7px 12px; border-radius: 9px; background: rgba(0, 0, 0, .22); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+  font: 12.5px/1.3 var(--mono); color: var(--bandfg); user-select: all; -webkit-user-select: all; scrollbar-width: none; }
+.cli-copy { height: 30px; padding: 0 12px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, .08); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+  color: var(--bandfg); font: 600 12.5px var(--sans); cursor: pointer; }
+@media (hover: hover) and (pointer: fine) { .cli-copy:hover { background: rgba(255, 255, 255, .14); } }
+.cli-copy:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
 
 .demo-wrap { max-width: 880px; margin: 0 auto; }
 a:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }

@@ -10,6 +10,7 @@ and that the feed has one place for the new item. Upload the zip to the GitHub r
 from email.utils import formatdate
 from pathlib import Path
 import argparse
+import hashlib
 import json
 import os
 import plistlib
@@ -84,6 +85,20 @@ def write_feed(appcast: Path, feed: str, item: str) -> None:
     with tempfile.NamedTemporaryFile("w", dir=appcast.parent, prefix=".appcast-", suffix=".xml", delete=False) as temporary:
         temporary.write(updated)
     os.replace(temporary.name, appcast)
+
+
+def write_cask(cask: Path, version: str, archive: Path) -> None:
+    """Sets the Homebrew cask's `version` and `sha256` lines to `version` and `archive`'s SHA-256, through a temporary file renamed
+    over `cask`. Exits unless the cask has exactly one of each line."""
+    text = cask.read_text()
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    text, versions = re.subn(r'^(\s*version )"[^"]*"$', rf'\g<1>"{version}"', text, flags=re.M)
+    text, digests = re.subn(r'^(\s*sha256 )"[0-9a-f]*"$', rf'\g<1>"{digest}"', text, flags=re.M)
+    if versions != 1 or digests != 1:
+        sys.exit(f"{cask.name} must have exactly one version line and one sha256 line")
+    with tempfile.NamedTemporaryFile("w", dir=cask.parent, prefix=".snug-", suffix=".rb", delete=False) as temporary:
+        temporary.write(text)
+    os.replace(temporary.name, cask)
 
 
 def sparkle_tool(name: str) -> Path:
@@ -265,6 +280,7 @@ def main() -> None:
         feed = read_feed(appcast)
         check_feed(feed, VERSION, BUILD)
         write_feed(appcast, feed, feed_item(VERSION, BUILD, archive.name, signature))
+        write_cask(root / "Casks/snug.rb", VERSION, archive)
         # Only the zip stays, so Spotlight and Launch Services find one Snug: build/Snug.app.
         shutil.rmtree(snug)
         print(f"Release: {archive}")

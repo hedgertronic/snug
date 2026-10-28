@@ -783,3 +783,29 @@
     new ResizeObserver(() => ov.style.setProperty('--pt', (art.clientWidth * 0.003).toFixed(4))).observe(art);
   }
 })();
+
+// The Terminal install: curl or Homebrew picks the command shown, and Copy copies it and says so for 1.5 s.
+(() => {
+  const button = document.querySelector('.cli-copy'), command = document.querySelector('.cli-c');
+  if (!button || !command) return;
+  const tabs = document.querySelectorAll('.cli-tab');
+  for (const tab of tabs) {
+    tab.addEventListener('click', () => {
+      for (const other of tabs) other.setAttribute('aria-pressed', String(other === tab));
+      command.textContent = tab.dataset.cmd;
+      command.scrollLeft = 0;
+    });
+  }
+  let reset;
+  button.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(command.textContent.trim());
+      button.textContent = 'Copied';
+    } catch {
+      getSelection().selectAllChildren(command);
+      button.textContent = 'Press ⌘C';
+    }
+    clearTimeout(reset);
+    reset = setTimeout(() => { button.textContent = 'Copy'; }, 1500);
+  });
+})();
