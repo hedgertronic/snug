@@ -542,6 +542,8 @@ extension DebugRun {
         let address = CGPoint(x: 345, y: 932)
         require(liveText.hasText(at: topLeft(address)), "the Address label is text inside the box")
         textDrag(from: address, to: CGPoint(x: 460, y: 932))
+        // Snug's highlight comes from the whole image's accurate OCR, which can still be running after the drag.
+        try await waitFor("the whole image's accurate OCR finishes") { overlay.text.ocrLines != nil }
         require(overlay.selection == nil && !o().textPills.isEmpty && o().textPills.allSatisfy { $0.minY <= address.y && $0.maxY >= address.y }
                     && liveText.selectedText.hasPrefix("Address"),
                 "a drag on text inside the box selects that text, clears the box, and highlights only its row: \(liveText.selectedText.debugDescription) \(o().textPills)")

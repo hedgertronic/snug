@@ -45,15 +45,17 @@ public enum TextLayout {
         return bands + [CGRect(x: crop.minX, y: crop.maxY - height, width: crop.width, height: height)]
     }
 
-    /// The lines read in each band, as one read: a line within 3 px of a band edge inside `crop` is cut by it and drops (the overlap
-    /// holds it whole in the next band), and of lines from different bands that overlap by more than half the smaller box, the one
-    /// with the longer text stays. They come back top to bottom, then left to right, so `lines(of:in:)` takes the topmost
-    /// of repeated lines (a cart's three "Brief description" lines) whatever order the bands finish in.
+    /// The lines read in each band, as one read: a line within a third of its height (3 px at least) of a band edge inside `crop` is
+    /// cut by it and drops (the overlap holds it whole in the next band; Vision can box a cut line's garbled read a few pixels short
+    /// of the edge), and of lines from different bands that overlap by more than half the smaller box, the one with the longer text
+    /// stays. They come back top to bottom, then left to right, so `lines(of:in:)` takes the topmost of repeated lines (a cart's
+    /// three "Brief description" lines) whatever order the bands finish in.
     public static func merge(_ reads: [(band: CGRect, lines: [TextLine])], in crop: CGRect) -> [TextLine] {
         let whole = reads.indices.flatMap { index in
             let band = reads[index].band
             return reads[index].lines.filter {
-                !(band.minY > crop.minY && $0.bounds.minY < band.minY + 3) && !(band.maxY < crop.maxY && $0.bounds.maxY > band.maxY - 3)
+                let margin = max(3, $0.bounds.height / 3)
+                return !(band.minY > crop.minY && $0.bounds.minY < band.minY + margin) && !(band.maxY < crop.maxY && $0.bounds.maxY > band.maxY - margin)
             }.map { (index, $0) }
         }
         var kept: [(Int, TextLine)] = []
@@ -116,9 +118,11 @@ public enum TextLayout {
     /// The OCR lines a Live Text selection covers. Live Text's transcript can drop or split lines, so `selected` only marks a span:
     /// placed on `ocr` in reading order (`lines(of:in:)`), it gives every OCR line from the first matched one to the last within the
     /// matched lines' columns, with Live Text's partly selected text only in the first and last rows (where the selection starts and
-    /// ends inside a line); rows between take OCR's text, which keeps what Live Text dropped (a list item's "- "). Selected lines that
-    /// match no OCR line drop out, unless none match. A box that covers most of the height of two other lines, one below the other,
-    /// is OCR reading across two rows and drops out first; pieces of one row whose edges touch (a long terminal line OCR splits) stay.
+    /// ends inside a line); rows between take OCR's text, which keeps what Live Text dropped (a list item's "- "). Selected lines
+    /// that match no OCR line before the first matched one or after the last (OCR misread them: two list items read as one garbled
+    /// line) keep Live Text's text, each on its own row above or below the span; ones between drop out, their rows taking OCR's text.
+    /// A box that covers most of the height of two other lines, one below the other, is OCR reading across two rows and drops out
+    /// first; pieces of one row whose edges touch (a long terminal line OCR splits) stay.
     public static func selection(_ selected: String, in ocr: [TextLine]) -> [TextLine] {
         let ocr = ocr.filter { line in
             let covered = ocr.filter { $0 != line && $0.bounds.intersection(line.bounds).height > $0.bounds.height / 2 }
@@ -132,13 +136,21 @@ public enum TextLayout {
         let span = rows.indices.filter { rows[$0].contains(where: matched.contains) }
         let first = span.first!, last = span.last!
         let start = rows[first].first(where: matched.contains)!.bounds.minX, end = rows[last].last(where: matched.contains)!.bounds.maxX
-        return (first...last).flatMap { index in
+        let between = (first...last).flatMap { index in
             rows[index].compactMap { line in
                 if let partial = placed.first(where: { $0.bounds == line.bounds }) { return index == first || index == last ? partial : line }
                 let inside = line.bounds.minX < column.maxX && line.bounds.maxX > column.minX
                 return inside && (index > first || line.bounds.minX > start) && (index < last || line.bounds.maxX < end) ? line : nil
             }
         }
+        // `lines(of:in:)` already stacks unmatched lines below the one before them; leading ones stack up above the first row.
+        func unmatched(_ line: TextLine) -> Bool { !matched.contains { $0.bounds == line.bounds } }
+        let leading = placed.prefix(while: unmatched), trailing = placed.reversed().prefix(while: unmatched).reversed()
+        let top = rows[first][0].bounds
+        let above = leading.enumerated().map { offset, line in
+            TextLine(text: line.text, bounds: CGRect(x: top.minX, y: top.minY - CGFloat(leading.count - offset) * (top.height + 1), width: top.width, height: top.height))
+        }
+        return above + between + trailing
     }
 
     /// Splits rows into blocks in reading order: where two or more rows of an unbroken run have a cell (the table rule's wide gap)

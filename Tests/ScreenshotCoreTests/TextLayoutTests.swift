@@ -81,6 +81,17 @@ struct TextLayoutTests {
         #expect(TextLayout.selection("first row\nsecond row", in: ocr).map(\.text) == ["first row", "second row"])
     }
 
+    @Test func aSelectionKeepsLiveTextsLinesThatOCRMisreadBeforeOrAfterItsSpan() {
+        // OCR reads the last two list items as one garbled line; Live Text reads them right. Copying keeps them, each on its own line.
+        let ocr = [line("1. Theme setting", 10, 100, width: 300), line("2. Hint label", 10, 120, width: 300),
+                   TextLine(text: ". An intro animation: a quick age, or The pare he", bounds: CGRect(x: 12, y: 142, width: 300, height: 35))]
+        let selected = "1. Theme setting\n2. Hint label\n3. An intro animation\n4. Cleanup"
+        #expect(TextLayout.paragraphs(TextLayout.rows(TextLayout.selection(selected, in: ocr))) == selected)
+        // A misread first line goes above the span.
+        let first = TextLayout.selection("0. Garbled start\n1. Theme setting\n2. Hint label", in: ocr)
+        #expect(first.map(\.text) == ["0. Garbled start", "1. Theme setting", "2. Hint label"] && first[0].bounds.maxY < 100)
+    }
+
     @Test func aSelectionKeepsPiecesOfOneRowWhoseEdgesTouch() {
         // A long terminal line OCR splits in five, each piece's edge 3 px into the next; Live Text reads the line whole.
         let pieces = [line("the same word much", 75, 86, width: 241), line("higher", 313, 86, width: 93),
@@ -219,6 +230,10 @@ struct TextLayoutTests {
         // The overlap's line keeps its longer copy; the line the top band's edge cuts keeps the bottom band's whole copy; a line at the
         // bottom band's top edge (cut) drops, though no other copy holds it.
         #expect(TextLayout.merge(reads, in: crop).map(\.text) == ["First", "In the overlap.", "Cut by the edge", "Last"])
+        // Vision boxes a cut line's garbled read 4 px short of the edge, with more letters than the whole copy: it is cut all the same.
+        let garbled = [(band: top, lines: [TextLine(text: "ic a moicture concor for the card worth it", bounds: CGRect(x: 10, y: 409, width: 500, height: 19))]),
+                       (band: bottom, lines: [TextLine(text: "- is a moisture sensor", bounds: CGRect(x: 10, y: 405, width: 500, height: 34))])]
+        #expect(TextLayout.merge(garbled, in: crop).map(\.text) == ["- is a moisture sensor"])
         // Lines of one band never merge with each other.
         #expect(TextLayout.merge([(band: crop, lines: [line("a", 10, 100), line("a b", 10, 102)])], in: crop).count == 2)
     }
