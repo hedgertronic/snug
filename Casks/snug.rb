@@ -4,7 +4,7 @@
 # scripts/build.py --release writes the version and sha256 below for each new download.
 cask "snug" do
   version "1.0.0"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  sha256 "d45b4bd67e97d2f02e65be6ed73534504ca804b11c072cc16ecba013f2cf5bb6"
 
   url "https://github.com/hedgertronic/snug/releases/download/v#{version}/Snug-#{version}.zip"
   name "Snug"
