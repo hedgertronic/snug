@@ -784,28 +784,30 @@
   }
 })();
 
-// The Terminal install: curl or Homebrew picks the command shown, and Copy copies it and says so for 1.5 s.
+// The Terminal install: the curl / brew tabs pick the command shown, and the copy button copies it and shows "Copied" for 1.5 s
+// (or selects it, for Cmd-C, where the clipboard is unavailable).
 (() => {
-  const button = document.querySelector('.cli-copy'), command = document.querySelector('.cli-c');
-  if (!button || !command) return;
-  const tabs = document.querySelectorAll('.cli-tab');
+  const box = document.querySelector('.cli');
+  if (!box) return;
+  const button = box.querySelector('.cli-copy'), pre = box.querySelector('.cli-c'), command = pre.querySelector('code'), done = box.querySelector('.cli-done');
+  const tabs = box.querySelectorAll('.cli-tab');
   for (const tab of tabs) {
     tab.addEventListener('click', () => {
       for (const other of tabs) other.setAttribute('aria-pressed', String(other === tab));
       command.textContent = tab.dataset.cmd;
-      command.scrollLeft = 0;
     });
   }
   let reset;
   button.addEventListener('click', async () => {
     try {
-      await navigator.clipboard.writeText(command.textContent.trim());
-      button.textContent = 'Copied';
+      await navigator.clipboard.writeText(command.textContent);
+      done.textContent = 'Copied';
     } catch {
       getSelection().selectAllChildren(command);
-      button.textContent = 'Press ⌘C';
+      done.textContent = 'Press \u2318C';
     }
+    button.dataset.done = '';
     clearTimeout(reset);
-    reset = setTimeout(() => { button.textContent = 'Copy'; }, 1500);
+    reset = setTimeout(() => { delete button.dataset.done; }, 1500);
   });
 })();

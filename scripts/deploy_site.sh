@@ -28,6 +28,12 @@ fi
 if [[ -e dist ]]; then trash dist; fi
 mkdir dist
 rsync -a --exclude '_shots' --exclude '.gitignore' --exclude '.DS_Store' site/ dist/
+# The page names its stylesheet and script by content, so a browser never pairs a new page with an old cached style.css or snug.js.
+for asset in style.css snug.js; do
+  hash="$(shasum -a 256 "dist/$asset" | cut -c1-12)"
+  grep -q "\"$asset\"" dist/index.html || { echo "dist/index.html does not link $asset" >&2; exit 1; }
+  sed -i '' "s|\"$asset\"|\"$asset?v=$hash\"|" dist/index.html
+done
 [[ -f appcast.xml ]] && cp appcast.xml dist/appcast.xml
 [[ -f "$archive" ]] && cp "$archive" "dist/Snug-$version.zip"
 printf '/download /Snug-%s.zip 302\n' "$version" > dist/_redirects
