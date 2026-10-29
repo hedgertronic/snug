@@ -203,11 +203,17 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     /// Keeps `button` showing the icon variant in `SnugMenuBarIcon` for the menu bar's light or dark appearance, redrawn as soon as the
     /// default changes, including from `defaults write` in another process, or the menu bar turns light or dark.
+    /// The status item sets the button's appearance and back for each menu bar's snapshot, and a new image takes new snapshots, so the button
+    /// keeps its image unless the variant or the menu bar's light or dark changed.
     static func observeMenuBarIcon(on button: NSButton, defaults: UserDefaults) -> [NSKeyValueObservation] {
+        var drawn: (variant: String, dark: Bool)?
         // A variant written while Snug runs is not sanitized at launch; an unknown one draws the default.
         let update = { @MainActor in
             let variant = defaults.string(forKey: Pref.menuBarIcon).flatMap { Pref.menuBarIcons.contains($0) ? $0 : nil } ?? "q"
-            button.image = menuBarIcon(variant, dark: isDark(button))
+            let dark = isDark(button)
+            guard drawn == nil || drawn! != (variant, dark) else { return }
+            drawn = (variant, dark)
+            button.image = menuBarIcon(variant, dark: dark)
         }
         return [defaults.observe(\.SnugMenuBarIcon, options: [.initial]) { _, _ in Task { @MainActor in update() } },
                 button.observe(\.effectiveAppearance) { _, _ in Task { @MainActor in update() } }]

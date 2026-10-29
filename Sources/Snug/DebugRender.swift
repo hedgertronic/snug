@@ -1018,7 +1018,7 @@ extension DebugRun {
     /// `--render-menubar-icons DIR`: every menu bar icon variant drawn from `SnugApp.menuBarIcon` the way the status item draws it (an 18 pt
     /// template image picking its 1x or 2x representation), tinted for a light (#F6F6F6) and a dark (#1E1E1E) menu bar, at true size above
     /// an 8x nearest-neighbor zoom, one row per variant in `menubar-icons.png`. Then checks that the status item's observer switches icons
-    /// when another process writes `SnugMenuBarIcon`.
+    /// when another process writes `SnugMenuBarIcon`, and keeps its icon when the button's appearance is set again without turning light or dark.
     static func renderMenuBarIcons(into directory: URL) async throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let variants = ["q", "p", "h", "a"]
@@ -1097,6 +1097,20 @@ extension DebugRun {
             precondition(button.image?.tiffRepresentation == expected, "`defaults write \(Pref.menuBarIcon) \(variant)` from another process switches the icon")
             print("defaults write \(Pref.menuBarIcon) \(variant): the status item shows variant \(variant)")
         }
+        // The status item's snapshots set the button's appearance and back; the image stays until light or dark actually changes.
+        let pairs: [(NSAppearance.Name, NSAppearance.Name)] = [(.aqua, .vibrantLight), (.darkAqua, .vibrantDark)]
+        for (name, alike) in SnugApp.isDark(button) ? pairs : pairs.reversed() {
+            let before = button.image
+            button.appearance = NSAppearance(named: name)
+            for _ in 0..<500 where button.image === before { try await Task.sleep(for: .milliseconds(10)) }
+            precondition(button.image !== before && SnugApp.isDark(button) == (name == .darkAqua), "\(name.rawValue) redraws the icon")
+            let drawn = button.image
+            button.appearance = NSAppearance(named: alike)
+            button.appearance = NSAppearance(named: name)
+            try await Task.sleep(for: .milliseconds(200))
+            precondition(button.image === drawn, "\(alike.rawValue) and back keeps the \(name.rawValue) icon")
+        }
+        print("a vibrant appearance and back keeps the status item's icon; light to dark redraws it")
         observation.forEach { $0.invalidate() }
     }
 }
