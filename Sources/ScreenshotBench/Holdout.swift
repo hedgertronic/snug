@@ -23,7 +23,8 @@ extension ScreenshotBenchSuite {
     /// Prints the selection report for the manifest's tasks in `split` ("all" for every task), counting every task: first-choice
     /// accepts, tasks reachable within two corrections, and failures split into missing proposals and poor ranking. Detection runs the
     /// same `Detection.run` the suite uses, on saved images, so it never has Accessibility. `live.tsv` beside the manifest
-    /// (id, on|off, 0|1|2|miss per line) adds the live Accessibility on and off rows.
+    /// (id, on|off, 0|1|2|miss per line) adds the live Accessibility on and off rows. `Detection.run` is not the app's
+    /// hover pipeline (`GeometryDetector` on a downsampled capture alongside Accessibility, `OverlayController+Extras.swift`).
     @MainActor
     public static func holdout(manifestURL: URL, split: String, candidateList: Bool) async throws {
         let manifest = try JSONDecoder().decode(HoldoutManifest.self, from: Data(contentsOf: manifestURL))
