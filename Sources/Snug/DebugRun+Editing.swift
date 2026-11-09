@@ -1,3 +1,4 @@
+#if DEBUG
 import AppKit
 import ScreenshotCore
 
@@ -660,3 +661,4 @@ extension DebugRun {
         return passed
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if DEBUG
 import AppKit
 import Carbon.HIToolbox
 import ScreenshotCore
@@ -2594,3 +2595,4 @@ extension DebugRun {
         exit(EXIT_SUCCESS)
     }
 }
+#endif

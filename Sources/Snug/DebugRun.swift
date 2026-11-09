@@ -1,3 +1,4 @@
+#if DEBUG
 import AppKit
 import ImageIO
 import ScreenCaptureKit
@@ -652,17 +653,6 @@ enum DebugRun {
 
     // MARK: --measure
 
-    /// The process's physical memory footprint, as Activity Monitor's Memory column shows it.
-    static func footprint() -> String {
-        var info = task_vm_info_data_t()
-        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
-        let result = withUnsafeMutablePointer(to: &info) {
-            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count) }
-        }
-        precondition(result == KERN_SUCCESS)
-        return String(format: "%.1f MiB", Double(info.phys_footprint) / 1_048_576)
-    }
-
     /// Each run presents a fresh, already decoded copy of the image in the display's color space, as ScreenCaptureKit returns a capture,
     /// and moves the pointer over it once the hover geometry has joined, with the loupe on. Prints the process's memory footprint before
     /// the first capture and after the last.
@@ -794,3 +784,4 @@ enum DebugRun {
         exit(EXIT_SUCCESS)
     }
 }
+#endif

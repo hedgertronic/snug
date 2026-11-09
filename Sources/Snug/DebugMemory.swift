@@ -1,3 +1,4 @@
+#if DEBUG
 import AppKit
 
 extension DebugRun {
@@ -130,3 +131,4 @@ extension DebugRun {
         exit(EXIT_SUCCESS)
     }
 }
+#endif

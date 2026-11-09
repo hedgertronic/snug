@@ -1,3 +1,4 @@
+#if DEBUG
 import AppKit
 
 extension DebugRun {
@@ -77,3 +78,4 @@ extension DebugRun {
         return context.makeImage()!
     }
 }
+#endif
