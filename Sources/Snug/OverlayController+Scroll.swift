@@ -16,8 +16,7 @@ extension OverlayController {
         cancelWork()
         detectionTask?.cancel()
         detectionTask = nil
-        accessibilityTask?.cancel()
-        accessibilityTask = nil
+        cancelAccessibility()
         selection = nil
         session = nil
         scrollArea = area
@@ -59,7 +58,9 @@ extension OverlayController {
                 }
                 var (logged, loggedUntil) = (0, TimeInterval(0))
                 let source: (CGRect) async throws -> (CGImage, TimeInterval) = { area in
+                    try Task.checkCancellation()
                     let frame = try await capture(area)
+                    try Task.checkCancellation()
                     let time = ProcessInfo.processInfo.systemUptime
                     if let log, let events {
                         let input = self.scrollInput.filter { $0.timestamp > loggedUntil }.map { event in
