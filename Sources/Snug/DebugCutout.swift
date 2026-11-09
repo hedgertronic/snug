@@ -1,3 +1,4 @@
+#if DEBUG
 import AppKit
 import CoreImage
 import ImageIO
@@ -107,7 +108,7 @@ extension DebugRun {
             last = (handler, observation)
         }
         let (handler, found) = last!
-        let alive = await footprint()
+        let alive = footprint()
         guard let observation = found else {
             let empty = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!.makeImage()!
@@ -159,3 +160,4 @@ extension DebugRun {
         return (box, Double(count) / Double(image.width * image.height), pixels[3])
     }
 }
+#endif

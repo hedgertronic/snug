@@ -1,3 +1,4 @@
+#if DEBUG
 import AppKit
 import Carbon.HIToolbox
 import ScreenCaptureKit
@@ -433,7 +434,7 @@ extension DebugRun {
             try snapshot("text-item-picked")
             overlay.dismiss()
 
-            overlay.present(image: itemsFixture(width: image.width, height: image.height), frame: frame, displayID: nil)
+            overlay.present(image: VisionWarmup.itemsFixture(width: image.width, height: image.height), frame: frame, displayID: nil)
             key(17, "t")
             try await waitFor("Live Text") { liveText.analysis != nil }
             key(48, "\t", .shift)
@@ -1114,3 +1115,4 @@ extension DebugRun {
         observation.forEach { $0.invalidate() }
     }
 }
+#endif

@@ -1,6 +1,6 @@
+#if DEBUG
 import AppKit
 import ScreenshotCore
-import CoreImage.CIFilterBuiltins
 import Translation
 import Vision
 
@@ -775,7 +775,7 @@ extension DebugRun {
                 "Return copies the rows the selection spans in reading order, not Live Text's: \(returned.debugDescription) (Live Text: \(liveOrder.debugDescription))")
 
         // Found items on a generated page: a link, an email address, a phone number, and a QR code.
-        let fixture = itemsFixture(width: image.width, height: image.height)
+        let fixture = VisionWarmup.itemsFixture(width: image.width, height: image.height)
         let qrBounds = CGRect(x: image.width - 700, y: image.height - 700, width: 500, height: 500)
         var opened: [URL] = []
         overlay.openURL = { opened.append($0) }
@@ -1184,7 +1184,7 @@ extension DebugRun {
         try await Task.sleep(for: .seconds(8))
         print("Vision warm-up: \(String(format: "%.1f", start.duration(to: warmed).milliseconds)) ms, footprint \(before) before, "
               + "\(String(format: "%.1f", peak)) MiB peak, \(released) after, \(settled) 2 s after, \(footprint()) 10 s after")
-        _ = try await OverlayController.findItems(in: itemsFixture(width: image.width, height: image.height))
+        _ = try await OverlayController.findItems(in: VisionWarmup.itemsFixture(width: image.width, height: image.height))
     }
 
     /// Launch's Vision warm-up on private defaults, before anything in this process loads Vision: the first call starts a `--warm-vision`
@@ -1215,40 +1215,6 @@ extension DebugRun {
         print("Vision warm-up child: \(String(format: "%.1f", start.duration(to: .now).milliseconds)) ms, this process's footprint \(before) before, \(footprint()) after")
     }
 
-    /// `--warm-vision`: runs Tab's accurate OCR and barcode requests on the warm-up page, then Shift-Return's accurate OCR on each of its
-    /// script rows alone, and exits. Vision compiles each model into the on-disk cache on a binary's first use of it: the text detector,
-    /// orientation, the barcode networks, and one recognizer per script, which automatic language detection only reaches for a row on its
-    /// own. A child process pays that once per binary and takes the requests' memory with it when it exits. Prints the time, the items
-    /// found, and the footprint before and after.
-    static func warmVisionAndExit() async throws {
-        let before = footprint()
-        let start = ContinuousClock.now
-        let (page, cells) = warmFixture()
-        let items = try await OverlayController.findItems(in: page)
-        for cell in cells { _ = try await OverlayController.recognize(page, crop: cell) }
-        print("warm-vision: \(String(format: "%.1f", start.duration(to: .now).milliseconds)) ms, \(items.count) items, footprint \(before) before, \(footprint()) after")
-        exit(EXIT_SUCCESS)
-    }
-
-    /// The found-items page at 2000 x 1100 px with an Arabic and a Devanagari row of text above it, and each row's rect (top-left origin,
-    /// pixels). Those two scripts have recognizers of their own; Cyrillic, Chinese, Japanese, Korean and Thai rows compiled nothing more.
-    static func warmFixture() -> (page: CGImage, cells: [CGRect]) {
-        let (width, height) = (2000, 1100)
-        let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
-                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        context.draw(itemsFixture(width: width, height: height), in: CGRect(x: 0, y: 0, width: width, height: height))
-        let rows = ["مرحبا بك في التطبيق", "नमस्ते, आप कैसे हैं"]
-        var cells: [CGRect] = []
-        for (index, text) in rows.enumerated() {
-            let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 30), .foregroundColor: NSColor.black]))
-            let baseline = CGPoint(x: 40 + index * 640, y: 1050)
-            context.textPosition = baseline
-            CTLineDraw(line, context)
-            cells.append(CGRect(x: baseline.x - 20, y: CGFloat(height) - baseline.y - 38, width: 640, height: 50))
-        }
-        return (context.makeImage()!, cells)
-    }
-
     /// `images` side by side on a white page, 20 px apart and from the edges, centered vertically. With the icon, Dock tile and badge
     /// fixtures Vision finds 3 instances; 120 px apart it finds none, as on a whole page.
     static func subjectsFixture(_ images: [CGImage]) -> CGImage {
@@ -1265,25 +1231,6 @@ extension DebugRun {
         return context.makeImage()!
     }
 
-    /// A white page of `width` x `height` pixels with a link, an email address and a phone number in large text from the top left, and a
-    /// 500 px QR code of a URL 200 px from the bottom-right corner.
-    static func itemsFixture(width: Int, height: Int) -> CGImage {
-        let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
-                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        context.setFillColor(.white)
-        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-        for (index, text) in ["Docs: https://example.com/snug", "Mail you@example.com", "Call +1 (555) 010-4477"].enumerated() {
-            let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 56), .foregroundColor: NSColor.black]))
-            context.textPosition = CGPoint(x: 200, y: CGFloat(height - 300 - index * 160))
-            CTLineDraw(line, context)
-        }
-        let qr = CIFilter.qrCodeGenerator()
-        qr.message = Data("https://example.org/qr".utf8)
-        let code = CIContext().createCGImage(qr.outputImage!, from: qr.outputImage!.extent)!
-        context.interpolationQuality = .none
-        context.draw(code, in: CGRect(x: width - 700, y: 200, width: 500, height: 500))
-        return context.makeImage()!
-    }
 }
 
 /// Holds a press back from Live Text's text view until the pointer moves 2 pt or lifts, as the immediate action recognizer VisionKit puts on
@@ -1307,3 +1254,4 @@ final class HeldPress: NSGestureRecognizer {
 
     override func mouseUp(with event: NSEvent) { state = .failed }
 }
+#endif
