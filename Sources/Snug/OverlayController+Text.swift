@@ -150,8 +150,10 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
         view.liveText.selectableItemsHighlighted = false
         highlightFoundText()
         if let warmUp = Self.visionWarmUp {
+            let image = image
             Task {
                 await warmUp.value
+                guard self.image === image, mode == .text else { return }
                 if text.notice == Self.warmUpNotice { text.notice = nil }
                 refresh()
             }
@@ -379,10 +381,11 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     /// exits, says so, and returns true. Returns false when there is no warm-up running.
     private func waitsForWarmUp(_ key: String, _ action: @escaping @MainActor () -> Void) -> Bool {
         guard let warmUp = Self.visionWarmUp else { return false }
+        textTask?.cancel()
         text.queued = ("\(key) will run when text recognition is ready.", action)
         textTask = Task {
             await warmUp.value
-            guard let queued = text.queued else { return }
+            guard !Task.isCancelled, let queued = text.queued else { return }
             text.queued = nil
             text.notice = nil
             queued.run()
@@ -451,9 +454,11 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
             return refresh()
         }
         let target = targetLanguage
+        textTask?.cancel()
         textTask = Task {
             do {
                 let status = await translationStatus(source, target)
+                try Task.checkCancellation()
                 switch TextTranslation.plan(source: source, target: target, status: status) {
                 case .sameLanguage(let notice), .unavailable(let notice):
                     text.notice = notice
@@ -474,6 +479,7 @@ extension OverlayController: ImageAnalysisOverlayViewDelegate {
     func copySelectionText(translating: Bool) {
         guard let rect = selection?.rect ?? hoverRect, let image else { return beep() }
         guard !waitsForWarmUp(translating ? "Option-Return" : "Shift-Return", { self.copySelectionText(translating: translating) }) else { return }
+        textTask?.cancel()
         text.reading = rect
         textTask = Task {
             do {

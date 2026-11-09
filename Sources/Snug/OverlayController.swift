@@ -291,6 +291,7 @@ final class OverlayController {
     /// Shows the frozen image in the reused window. `frame` is in screen points.
     func present(image: CGImage, frame: CGRect, displayID: CGDirectDisplayID?) {
         cancelWork()
+        cancelInteraction()
         view.liveText.analysis = nil
         smallImage = nil
         dimResolved = false
@@ -299,7 +300,7 @@ final class OverlayController {
         fillsTask?.cancel()
         fills = nil
         dockTiles = []
-        accessibilityTask?.cancel()
+        cancelAccessibility()
         accessibilityObservations = [:]
         screenTexts = []
         frozenAt = .now
@@ -373,6 +374,7 @@ final class OverlayController {
     /// (four bytes a pixel of the analysis image), the Dock's tiles, accessibility observations and the screen text read at capture.
     func dismiss() {
         cancelWork()
+        cancelInteraction()
         disarmRecording()
         scrollTask?.cancel()
         scrollTask = nil
@@ -387,7 +389,6 @@ final class OverlayController {
         window.backgroundColor = .black
         if !isHeadless { window.ignoresMouseEvents = false }
         view.liveText.analysis = nil
-        window.textBox = nil
         smallImage = nil
         window.orderOut(nil)
         escape?.unregister()
@@ -403,8 +404,7 @@ final class OverlayController {
         fillsTask = nil
         fills = nil
         dockTiles = []
-        accessibilityTask?.cancel()
-        accessibilityTask = nil
+        cancelAccessibility()
         accessibilityObservations = [:]
         screenTexts = []
         radii = [:]
@@ -425,11 +425,7 @@ final class OverlayController {
         chrome.colorMenu.isHidden = true
         walkedLevel = false
         selection = nil
-        interaction = .none
-        spaceHeld = false
         resetExtras()
-        snappedEdges = []
-        edgeFramesTask?.cancel()
         view.cursor = .crosshair
         refresh()
     }
@@ -446,6 +442,24 @@ final class OverlayController {
         snapTask = nil
         snapPreview = nil
         snapSuggestions = []
+    }
+
+    /// Ends a pointer gesture before its selection or text analysis is replaced. Trailing drag/release events then do nothing.
+    func cancelInteraction() {
+        interaction = .none
+        pressState = nil
+        hadSelection = false
+        bypassSnap = false
+        spaceHeld = false
+        edgeFramesTask?.cancel()
+        edgeFramesTask = nil
+        edgeFrames = []
+        snappedEdges = []
+        window.textPress = nil
+        window.textBox = nil
+        window.screenTextPress = false
+        window.buttonPress = false
+        window.textDragging = false
     }
 
     // MARK: Pointer
@@ -570,7 +584,13 @@ final class OverlayController {
                 interaction = .resizing(handle, start: selection.rect)
                 edgeFrames = []
                 edgeFramesTask?.cancel()
-                if mode == .capture { edgeFramesTask = Task { edgeFrames = try await snapFrames(around: selection.rect) } }
+                if mode == .capture {
+                    edgeFramesTask = Task {
+                        let frames = try await snapFrames(around: selection.rect)
+                        try Task.checkCancellation()
+                        edgeFrames = frames
+                    }
+                }
                 return updateCursor()
             }
             if shiftHeld, mode == .capture {
@@ -760,6 +780,10 @@ final class OverlayController {
     /// starts the analysis; on a released drag, off takes the exact drag and on the best fit (computed now if the drag had none).
     func toggleSnap() {
         defaults.set(!snapEnabled, forKey: Pref.snap)
+        if !snapEnabled {
+            snapTask?.cancel()
+            snapTask = nil
+        }
         if case .drawing(let drag) = interaction {
             scheduleSnap(for: drag.rect)
         } else if var current = selection, !current.isEdited, lockedRatio == nil {
