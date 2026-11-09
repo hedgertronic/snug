@@ -39,6 +39,12 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         Pref.register(in: .standard)
         let arguments = CommandLine.arguments
+        if arguments.contains("--warm-vision") {
+            Task { try! await VisionWarmup.runAndExit() }
+            return
+        }
+        // The debug harness (Debug*.swift) is compiled into debug builds only; a release binary rejects its flags as unknown below.
+        #if DEBUG
         if let index = arguments.firstIndex(of: "--cutout") {
             Task {
                 do {
@@ -64,10 +70,6 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             }
             return
         }
-        if arguments.contains("--warm-vision") {
-            Task { try! await DebugRun.warmVisionAndExit() }
-            return
-        }
         if let index = arguments.firstIndex(of: "--render-settings") {
             try! DebugRun.renderSettings(into: URL(fileURLWithPath: arguments[index + 1]))
             exit(EXIT_SUCCESS)
@@ -76,10 +78,12 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             Task { try! await DebugRun.verifySettingsCapture(overlay: overlay) }
             return
         }
+        #endif
         let image = arguments.firstIndex(of: "--image").map { index in
             let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: arguments[index + 1]) as CFURL, nil)!
             return CGImageSourceCreateImageAtIndex(source, 0, nil)!
         }
+        #if DEBUG
         let imageRuns = ["--verify-area-ui", "--verify-extras-ui", "--verify-toast-trash", "--verify-text-ui", "--measure", "--render-states",
                          "--loupe-frames", "--memory-steps", "--verify-agent-ui", "--render-toasts", "--verify-screen-text-ui", "--verify-lifecycle-ui"]
         if let image, imageRuns.contains(where: arguments.contains) {
@@ -119,6 +123,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             }
             return
         }
+        #endif
         // A mistyped or image-less debug flag would otherwise launch the real app, which takes focus and registers the capture shortcut.
         if let flag = arguments.dropFirst().first(where: { $0.hasPrefix("--") && $0 != "--image" }) {
             FileHandle.standardError.write(Data("Unknown or incomplete debug flag \(flag)\n".utf8))

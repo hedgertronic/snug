@@ -1,3 +1,4 @@
+#if DEBUG
 import AppKit
 import ScreenshotCore
 
@@ -78,3 +79,4 @@ extension DebugRun {
         exit(EXIT_SUCCESS)
     }
 }
+#endif

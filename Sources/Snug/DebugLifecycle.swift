@@ -1,3 +1,4 @@
+#if DEBUG
 import AppKit
 import ScreenshotCore
 import Translation
@@ -148,3 +149,4 @@ extension DebugRun {
         exit(EXIT_SUCCESS)
     }
 }
+#endif
