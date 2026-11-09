@@ -79,7 +79,7 @@ class FeedTests(unittest.TestCase):
     def test_cask_takes_the_version_and_the_zips_sha256(self):
         with tempfile.TemporaryDirectory() as folder:
             cask, archive = Path(folder) / "snug.rb", Path(folder) / "Snug-1.0.1.zip"
-            cask.write_text(build.CASK.read_text())
+            cask.write_text('cask "snug" do\n  version "1.0.0"\n  sha256 "' + "0" * 64 + '"\nend\n')
             archive.write_bytes(b"zip")
             build.write_cask(cask, "1.0.1", archive)
             text = cask.read_text()

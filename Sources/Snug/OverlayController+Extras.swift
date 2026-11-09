@@ -38,15 +38,23 @@ extension OverlayController {
     func setMode(_ new: Mode) {
         guard new != mode else { return }
         cancelWork()
+        cancelInteraction()
         detectionTask?.cancel()
         detectionTask = nil
-        accessibilityTask?.cancel()
-        accessibilityTask = nil
+        cancelAccessibility()
         session = nil
         selection = nil
+        undoStack = []
+        redoStack = []
+        lastEdit = nil
+        focusedCorner = nil
+        hoveredCorner = nil
+        lastEditedCorner = nil
+        lockedRatio = nil
+        ratioBase = nil
+        ratioPortrait = nil
         mode = new
         view.liveText.resetSelection()
-        window.textBox = nil
         // A click in Live Text leaves focus there; hiding it would hand focus to the window, out of reach of the overlay's keys.
         window.makeFirstResponder(view)
         if image != nil { if new == .capture { startHover() } else { startLiveText() } }
@@ -57,10 +65,7 @@ extension OverlayController {
     func resetExtras() {
         detectionTask?.cancel()
         detectionTask = nil
-        accessibilityTask?.cancel()
-        accessibilityTask = nil
-        accessibilityStarted = nil
-        accessibilityPixel = nil
+        cancelAccessibility()
         session = nil
         detected = []
         dockTiles = []
@@ -117,6 +122,16 @@ extension OverlayController {
     }
 
     // MARK: Capture hover
+
+    /// Releases the lookup and its throttled retry together when leaving a hover session.
+    func cancelAccessibility() {
+        accessibilityTask?.cancel()
+        accessibilityTask = nil
+        accessibilityRetry?.cancel()
+        accessibilityRetry = nil
+        accessibilityStarted = nil
+        accessibilityPixel = nil
+    }
 
     var windowCandidates: [Candidate] {
         windows.enumerated().map {
@@ -192,7 +207,7 @@ extension OverlayController {
         let point = AccessibilityBounds.point(forPixel: pixel, displayOrigin: origin, scale: scale)
         let (scale, extent, image, windows) = (scale, extent, image!, windows)
         accessibilityTask = Task {
-            defer { accessibilityTask = nil }
+            defer { if !Task.isCancelled { accessibilityTask = nil } }
             let info = CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]]
             guard let pid = info?.first?[kCGWindowOwnerPID as String] as? Int32 else { return }
             let began = ContinuousClock.now
