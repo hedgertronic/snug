@@ -7,6 +7,7 @@ extension OverlayController {
     /// Only live captures with Accessibility allowed ask; debug runs use `snapFrameSource`. No permission, a timeout, or no
     /// elements gives no frames.
     func snapFrames(around rect: CGRect) async throws -> [CGRect] {
+        try Task.checkCancellation()
         if let snapFrameSource { return await snapFrameSource(rect) }
         guard displayID != nil, !isHeadless, AXIsProcessTrusted() else { return [] }
         let origin = CGPoint(x: window.frame.minX, y: CGDisplayBounds(CGMainDisplayID()).height - window.frame.maxY)
