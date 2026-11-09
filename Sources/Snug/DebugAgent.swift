@@ -1,3 +1,4 @@
+#if DEBUG
 import AppKit
 import ScreenshotCore
 
@@ -198,3 +199,4 @@ extension DebugRun {
         defaults.set(false, forKey: Pref.frame)
     }
 }
+#endif

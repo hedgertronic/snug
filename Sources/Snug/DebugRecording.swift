@@ -1,3 +1,4 @@
+#if DEBUG
 import AppKit
 import AVFoundation
 import ScreenCaptureKit
@@ -393,3 +394,4 @@ extension DebugRun {
                 "the recording filter includes none of Snug's chrome windows \(leftOut.sorted())")
     }
 }
+#endif
