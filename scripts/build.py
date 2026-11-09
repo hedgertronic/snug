@@ -20,8 +20,8 @@ import sys
 import tempfile
 
 # Sparkle compares CFBundleVersion, so each release needs a BUILD greater than every one already in appcast.xml.
-VERSION = "1.0.1"
-BUILD = "3"
+VERSION = "1.0.2"
+BUILD = "4"
 MINIMUM_SYSTEM = "26.0"
 # Where installed copies look for updates.
 FEED_URL = "https://snugshot.app/appcast.xml"
