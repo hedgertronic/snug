@@ -387,7 +387,7 @@ final class BarButton: NSView {
     }
 }
 
-/// Floating pills side by side, 8 pt apart, each a group of buttons: the top bar and the action strip. Clicks between the pills go
+/// Floating pills side by side, 8 pt apart, each a group of buttons: the settings bar and the action strip. Clicks between the pills go
 /// to the overlay; clicks on a pill go nowhere unless they land on a button.
 @MainActor
 final class Bar: NSView {
@@ -436,7 +436,7 @@ final class Bar: NSView {
 /// All the overlay's on-screen chrome. `OverlayController.refreshChrome` positions and fills it.
 @MainActor
 final class Chrome {
-    /// The two pill heights. Controls (the top bar's groups, the action strip, the recording pills) and labels (the chip row,
+    /// The two pill heights. Controls (the settings bar's groups, the action strip, the recording pills) and labels (the chip row,
     /// the loupe's readout) keep theirs with or without a key cap inside.
     static let controlHeight: CGFloat = 32
     static let labelHeight: CGFloat = 26
@@ -462,7 +462,7 @@ final class Chrome {
     }
 
     /// The settings bar at the bottom center: three pills of remembered settings, the modes, view, and style, then the keys sheet's button.
-    let topBar = Bar()
+    let settingsBar = Bar()
     let modeButtons: [OverlayController.Mode: BarButton] = [.capture: BarButton("Capture", key: "A"), .text: BarButton("Text", key: "T")]
     let viewToggles = [(Pref.loupe, BarButton("Loupe", key: "L")), (Pref.rulers, BarButton("Rulers", key: "R")), (Pref.crosshair, BarButton("Crosshair", key: "X"))]
     let styleToggles = [(Pref.roundCorners, BarButton("Rounded", key: "O")), (Pref.frame, BarButton("Frame", key: "M"))]
@@ -578,5 +578,5 @@ final class Chrome {
 
     /// Lowest first, in tiers: the hint caps, the chips, the strip and settings bar with their tool tip and menus, then the keys sheet.
     /// The cut-out preview goes under all of them, and the loupe over them.
-    var all: [NSView] { [upHint, downHint, hover, size, snap, ratio, radius, status, reading, legend] + sideHints + [cornerKeys, snapTag, coordinates, list, minimap, topBar, strip, toolTip, ratioMenu, colorMenu, help] }
+    var all: [NSView] { [upHint, downHint, hover, size, snap, ratio, radius, status, reading, legend] + sideHints + [cornerKeys, snapTag, coordinates, list, minimap, settingsBar, strip, toolTip, ratioMenu, colorMenu, help] }
 }

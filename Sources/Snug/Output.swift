@@ -52,13 +52,15 @@ enum Pref {
     /// The overlay chrome's look: "system" follows macOS, "light" and "dark" force one.
     static let overlayAppearance = "SnugOverlayAppearance"
     /// Where the toast sits (topLeft, topCenter, topRight, bottomLeft, bottomCenter, or bottomRight), and how many seconds it stays while the pointer is elsewhere
-    /// (one of `Toast.lifetimes`: 0 shows no toast but failures and warnings, -1 keeps it until closed).
+    /// (any whole number from -1 to 86,400, though Settings offers only `Toast.lifetimes`: 0 shows no toast but failures and warnings, -1
+    /// keeps it until closed).
     static let toastPosition = "SnugToastPosition"
     static let toastLifetime = "SnugToastLifetime"
     /// Whether Snug plays its sounds on a capture and a recording's start and stop (Settings > General). Failures beep either way.
     static let playSounds = "SnugPlaySounds"
-    /// Off unless set with `defaults write com.hedgertronic.snug SnugLogHover -bool true`: each hover lookup and the Dock's window rect append to
-    /// ~/Library/Logs/Snug/hover.log, so live accessibility frames can be read back without Accessibility in a terminal.
+    /// Off unless set with `defaults write com.hedgertronic.snug SnugLogHover -bool true`: hover lookups, the Dock's panel and tiles,
+    /// window captures and their interiors, and screen-text reads append to ~/Library/Logs/Snug/hover.log, so live accessibility frames
+    /// can be read back without Accessibility in a terminal. `logHoverLine` also writes `logText`'s text.log.
     static let logHover = "SnugLogHover"
     /// Off unless set with `defaults write com.hedgertronic.snug SnugLogText -bool true`: each Text mode press, drag event and release appends
     /// Live Text's selection before and after Snug's fix to ~/Library/Logs/Snug/text.log.

@@ -71,10 +71,17 @@ The read-only tools, `get_capture` and `zoom`, serve only captures you hand over
 Use Xcode with the macOS 26 SDK and Swift 6.2 or later. Set your code-signing identity:
 
 ```sh
-SNUG_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" python3 scripts/build.py
+SNUG_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" uv run python scripts/build.py
 ```
 
 This builds `build/Snug.app` as a universal arm64 + x86_64 app. Use a consistent signing identity to preserve macOS permission grants. Local builds are not notarized.
+
+Run the Swift tests and the build script's tests:
+
+```sh
+swift test
+uv run python -m unittest discover -s scripts -p 'test_*.py'
+```
 
 ## Privacy, license, and credit
 
