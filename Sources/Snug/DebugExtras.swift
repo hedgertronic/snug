@@ -5,65 +5,182 @@ import ScreenshotCore
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// The text of every visible label under `view`.
+@MainActor
+func texts(in view: NSView) -> [String] {
+    guard !view.isHidden else { return [] }
+    return ((view as? NSTextField).map { [$0.stringValue] } ?? []) + view.subviews.flatMap(texts)
+}
+
 extension DebugRun {
     /// `--verify-extras-ui`: modes, view toggles, color, help, and Capture hover through synthesized events.
-    /// The text of every visible label under `view`.
-    static func texts(in view: NSView) -> [String] {
-        guard !view.isHidden else { return [] }
-        return ((view as? NSTextField).map { [$0.stringValue] } ?? []) + view.subviews.flatMap(texts)
-    }
-
     static func verifyExtras(image: CGImage, frame: CGRect, overlay: OverlayController) async throws {
         _ = privateSetup(overlay)
-        let pasteboard = overlay.pasteboard
-        let defaults = overlay.defaults
-        var passed: [String] = []
+        let run = ExtrasRun(image: image, frame: frame, overlay: overlay)
+        run.checkFixture()
+        try await run.modesAndGuides()
+        try await run.loupeAndRulers()
+        try await run.colorCopying()
+        try await run.ratioMenuKeys()
+        try await run.keysSheet()
+        try await run.hoverOutlines()
+        try await run.toastCards()
+        try await run.hoverNavigation()
+        try await run.chromeControls()
+        try await run.stripTools()
+        try await run.chipRow()
+        try await run.stripActions()
+        try await run.chromeLayout()
+        try await run.cursorAndArming()
+        try await run.scrollingCapture()
+        try await run.settingsBarPlacement()
+        try await run.safeArea()
+        try await run.agentAndRecording()
+        try await run.outlineDistance()
+        try await run.framePreview()
+        try await run.frameShadows()
+        try await run.hotKeyTargets()
 
-        func require(_ condition: Bool, _ message: String) {
-            guard condition else {
-                FileHandle.standardError.write(Data("Extras UI verification failed: \(message)\n".utf8))
-                exit(EXIT_FAILURE)
-            }
-            passed.append(message)
+        requireBackground(overlay)
+        print("Extras UI verification passed (\(run.passed.count) checks)")
+        run.passed.forEach { print("  ok: \($0)") }
+        exit(EXIT_SUCCESS)
+    }
+}
+
+/// `--verify-extras-ui`'s run: the fixture and overlay, the checks passed so far, and the event and pixel helpers that each feature's
+/// checks share. Each method checks one feature, in the order the run takes them.
+@MainActor
+final class ExtrasRun {
+    let image: CGImage
+    let frame: CGRect
+    let overlay: OverlayController
+    let pasteboard: NSPasteboard
+    let defaults: UserDefaults
+    var passed: [String] = []
+    let source: NSBitmapImageRep
+    // Raw file bytes: the fixture is 8-bit sRGB, so they are the expected sRGB values with no color-management math.
+    let raw: UnsafeMutablePointer<UInt8>
+    let returnKey: UInt16 = 36, up: UInt16 = 126, down: UInt16 = 125, left: UInt16 = 123, right: UInt16 = 124
+    let flat = CGPoint(x: 2185, y: 1024)
+    lazy var flatBytes = pixel(Int(flat.x), Int(flat.y))
+    let extent: CGRect
+    let rough = CGRect(x: 350, y: 458, width: 580, height: 64)
+    // Shared by the features after the one that sets them.
+    let guides: Guides
+    let guides2: Guides
+    let chrome: Chrome
+    let top: Bar
+    let readout: Pill
+    let coordinates: Pill
+    let text = CGPoint(x: 2061, y: 1024)
+    let screenWindow: CGRect
+    let window = CGRect(x: 300, y: 300, width: 400, height: 200)
+    let captureStrip = ["Copy", "\u{21A9}", "Save", "\u{2318}", "S", "G", "V", "K"]
+    let large = CGRect(x: 600, y: 300, width: 1000, height: 600)
+    let framedWindow = CGRect(x: 600, y: 300, width: 1000, height: 600)
+    let frameButton: BarButton
+    let tag: BarButton
+    var aim = CGPoint.zero
+    var windowBox = CGRect.zero
+    var hovered = CGRect.zero
+    var width0: CGFloat = 0
+
+    init(image: CGImage, frame: CGRect, overlay: OverlayController) {
+        self.image = image
+        self.frame = frame
+        self.overlay = overlay
+        pasteboard = overlay.pasteboard
+        defaults = overlay.defaults
+        source = NSBitmapImageRep(cgImage: image)
+        raw = source.bitmapData!
+        extent = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+        guides = overlay.view.guides
+        guides2 = overlay.view.guides
+        chrome = overlay.chrome
+        top = chrome.topBar
+        readout = guides.readout
+        coordinates = overlay.chrome.coordinates
+        frameButton = chrome.styleToggles[1].1
+        tag = chrome.snapTag
+        screenWindow = CGRect(x: 10, y: 10, width: extent.width - 20, height: extent.height - 20)
+    }
+
+    func require(_ condition: Bool, _ message: String) {
+        guard condition else {
+            FileHandle.standardError.write(Data("Extras UI verification failed: \(message)\n".utf8))
+            exit(EXIT_FAILURE)
         }
-        func mouse(_ type: NSEvent.EventType, _ pixel: CGPoint, _ flags: NSEvent.ModifierFlags = []) {
-            let point = CGPoint(x: pixel.x / overlay.scale, y: overlay.view.bounds.height - pixel.y / overlay.scale)
-            overlay.window.sendEvent(NSEvent.mouseEvent(with: type, location: point, modifierFlags: flags,
+        passed.append(message)
+    }
+    func mouse(_ type: NSEvent.EventType, _ pixel: CGPoint, _ flags: NSEvent.ModifierFlags = []) {
+        let point = CGPoint(x: pixel.x / overlay.scale, y: overlay.view.bounds.height - pixel.y / overlay.scale)
+        overlay.window.sendEvent(NSEvent.mouseEvent(with: type, location: point, modifierFlags: flags,
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: overlay.window.windowNumber,
+            context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!)
+    }
+    func key(_ code: UInt16, _ characters: String, _ flags: NSEvent.ModifierFlags = []) {
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            overlay.window.sendEvent(NSEvent.keyEvent(with: type, location: .zero, modifierFlags: flags,
                 timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: overlay.window.windowNumber,
-                context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!)
+                context: nil, characters: characters, charactersIgnoringModifiers: characters,
+                isARepeat: false, keyCode: code)!)
         }
-        func key(_ code: UInt16, _ characters: String, _ flags: NSEvent.ModifierFlags = []) {
-            for type in [NSEvent.EventType.keyDown, .keyUp] {
-                overlay.window.sendEvent(NSEvent.keyEvent(with: type, location: .zero, modifierFlags: flags,
-                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: overlay.window.windowNumber,
-                    context: nil, characters: characters, charactersIgnoringModifiers: characters,
-                    isARepeat: false, keyCode: code)!)
-            }
-        }
-        func open() { overlay.present(image: image, frame: frame, displayID: nil) }
-        func drag(_ rect: CGRect) {
-            mouse(.leftMouseDown, CGPoint(x: rect.minX, y: rect.minY))
-            mouse(.leftMouseDragged, CGPoint(x: rect.maxX, y: rect.maxY))
-            mouse(.leftMouseUp, CGPoint(x: rect.maxX, y: rect.maxY))
-        }
-        let source = NSBitmapImageRep(cgImage: image)
-        func bytes(_ color: NSColor) -> [Int] {
-            let c = color.usingColorSpace(.sRGB)!
-            return [c.redComponent, c.greenComponent, c.blueComponent].map { Int(($0 * 255).rounded()) }
-        }
-        // Raw file bytes: the fixture is 8-bit sRGB, so they are the expected sRGB values with no color-management math.
-        let raw = source.bitmapData!
-        func pixel(_ x: Int, _ y: Int) -> [Int] { (0..<3).map { Int(raw[y * source.bytesPerRow + x * source.samplesPerPixel + $0]) } }
-        func parse(_ hex: String) -> [Int] { [1, 3, 5].map { Int(hex.dropFirst($0).prefix(2), radix: 16)! } }
-        func close(_ a: [Int], _ b: [Int], _ tolerance: Int) -> Bool { zip(a, b).allSatisfy { abs($0 - $1) <= tolerance } }
-        let returnKey: UInt16 = 36, up: UInt16 = 126, down: UInt16 = 125, left: UInt16 = 123, right: UInt16 = 124
-        require(source.bitsPerSample == 8 && image.colorSpace?.name == CGColorSpace.sRGB, "the fixture is 8-bit sRGB (\(String(describing: image.colorSpace?.name)))")
-        let flat = CGPoint(x: 2185, y: 1024)
-        let flatBytes = pixel(Int(flat.x), Int(flat.y))
-        require(flatBytes != [0, 0, 0] && flatBytes != [255, 255, 255], "the flat test pixel is a real color \(flatBytes)")
-        let extent = CGRect(x: 0, y: 0, width: image.width, height: image.height)
-        let rough = CGRect(x: 350, y: 458, width: 580, height: 64)
+    }
+    func open() { overlay.present(image: image, frame: frame, displayID: nil) }
+    func drag(_ rect: CGRect) {
+        mouse(.leftMouseDown, CGPoint(x: rect.minX, y: rect.minY))
+        mouse(.leftMouseDragged, CGPoint(x: rect.maxX, y: rect.maxY))
+        mouse(.leftMouseUp, CGPoint(x: rect.maxX, y: rect.maxY))
+    }
+    func bytes(_ color: NSColor) -> [Int] {
+        let c = color.usingColorSpace(.sRGB)!
+        return [c.redComponent, c.greenComponent, c.blueComponent].map { Int(($0 * 255).rounded()) }
+    }
+    func pixel(_ x: Int, _ y: Int) -> [Int] { (0..<3).map { Int(raw[y * source.bytesPerRow + x * source.samplesPerPixel + $0]) } }
+    func parse(_ hex: String) -> [Int] { [1, 3, 5].map { Int(hex.dropFirst($0).prefix(2), radix: 16)! } }
+    func close(_ a: [Int], _ b: [Int], _ tolerance: Int) -> Bool { zip(a, b).allSatisfy { abs($0 - $1) <= tolerance } }
+    func viewPixel(_ point: CGPoint) -> CGPoint { CGPoint(x: point.x * overlay.scale, y: (overlay.view.bounds.height - point.y) * overlay.scale) }
+    func centerOf(_ view: NSView) -> CGPoint { view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: overlay.view) }
+    func flags(_ modifiers: NSEvent.ModifierFlags) {
+        overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
+    }
+    func chromeClear(_ state: String) {
+        let pieces: [(String, NSView)] = [("bar", chrome.topBar), ("strip", chrome.strip), ("hover", chrome.hover), ("size", chrome.size), ("snap", chrome.snap),
+                                           ("ratio", chrome.ratio), ("radius", chrome.radius), ("status", chrome.status), ("legend", chrome.legend),
+                                           ("corner chip", overlay.cornerChip), ("corner keys", chrome.cornerKeys), ("up cap", chrome.upHint), ("down cap", chrome.downHint),
+                                           ("cluster", chrome.coordinates), ("snap tag", chrome.snapTag), ("tool tip", chrome.toolTip), ("list", chrome.list),
+                                           ("reading", chrome.reading), ("minimap", chrome.minimap), ("readout", guides2.readout)]
+            + chrome.sideHints.enumerated().map { ("side \($0.offset)", $0.element) }
+        let shown = pieces.filter { !$0.1.isHidden }
+        let overlaps = shown.indices.flatMap { i in shown.indices.filter { $0 > i && shown[i].1.frame.intersects(shown[$0].1.frame) }.map { "\(shown[i].0) x \(shown[$0].0)" } }
+        let screen = CGRect(x: 0, y: 0, width: overlay.view.bounds.width, height: overlay.view.bounds.height - overlay.topInset)
+        let outside = shown.filter { !screen.contains($0.1.frame) }.map { "\($0.0) \($0.1.frame) in \(screen)" }
+        let host = overlay.view.guides.host
+        require(overlaps.isEmpty && outside.isEmpty, "\(state): the chrome does not overlap or leave the screen: overlaps \(overlaps), outside \(outside) \(shown.map { "\($0.0) \($0.1.frame)" }) loupe \(guides2.loupe.frame)")
+        require(!guides2.loupe.isHidden && guides2.loupe.superlayer === host.layer && guides2.readout.superview === host && overlay.view.subviews.last === host,
+                "\(state): the loupe and its readout draw above all the chrome: \(overlay.view.subviews.last.map { "\(type(of: $0))" } ?? "none") on top")
+    }
 
+    /// The key caps under `view` whose glyph is `text`.
+    func keyCaps(_ text: String, in view: NSView) -> [KeyCap] {
+        ((view as? KeyCap).map { cap in cap.text == text ? [cap] : [] } ?? []) + view.subviews.flatMap { keyCaps(text, in: $0) }
+    }
+    /// Visible chrome drawn at less than full opacity, other than a disabled button.
+    func faded(_ view: NSView) -> [String] {
+        guard !view.isHidden else { return [] }
+        return (view.alphaValue < 1 && (view as? BarButton)?.isEnabled != false ? ["\(type(of: view)) \(texts(in: view))"] : []) + view.subviews.flatMap(faded)
+    }
+
+    /// The fixture is 8-bit sRGB and its flat test pixel a real color.
+    func checkFixture() {
+        require(source.bitsPerSample == 8 && image.colorSpace?.name == CGColorSpace.sRGB, "the fixture is 8-bit sRGB (\(String(describing: image.colorSpace?.name)))")
+        require(flatBytes != [0, 0, 0] && flatBytes != [255, 255, 255], "the flat test pixel is a real color \(flatBytes)")
+    }
+
+    /// A and T switch modes; opening draws at once; L, R and X toggle the loupe, rulers and crosshair; the loupe's readout and the pointer cluster.
+    func modesAndGuides() async throws {
         // Modes: A / T, mode changes clear the selection.
         open()
         require(overlay.mode == .capture, "the overlay opens in Capture")
@@ -87,9 +204,7 @@ extension DebugRun {
         require(animations(overlay.view.layer!).isEmpty, "opening animates no layer: \(animations(overlay.view.layer!))")
 
         // L / R / X toggle their layers, remembered.
-        let guides = overlay.view.guides
         require(guides.loupe.isHidden && guides.rulers.isHidden && guides.crosshair.isHidden, "loupe, rulers, and crosshair start off")
-        let text = CGPoint(x: 2061, y: 1024)
         mouse(.mouseMoved, text)
         for (code, character, layer, preference) in [(37, "l", guides.loupe, Pref.loupe), (15, "r", guides.rulers, Pref.rulers), (7, "x", guides.crosshair, Pref.crosshair)] {
             key(UInt16(code), character)
@@ -113,7 +228,7 @@ extension DebugRun {
         mouse(.mouseMoved, text)
         // The readout under the loupe is a chip: swatch, hex value, pixel coordinates, then Copy with a C key cap that flashes on C (here through the flash
         // hook alone, since a real C copies and closes the overlay).
-        let readout = guides.readout, readoutCap = readout.subviews.compactMap { $0 as? KeyCap }.filter { $0.text == "C" }
+        let readoutCap = readout.subviews.compactMap { $0 as? KeyCap }.filter { $0.text == "C" }
         let loupeBox = guides.loupe.frame
         require(!readout.isHidden && readoutCap.count == 1 && texts(in: readout).count == 3 && texts(in: readout)[0].hasPrefix("#") && texts(in: readout)[1] == "Copy"
                     && readout.frame.height == Chrome.labelHeight && readout.frame.minY >= loupeBox.minY && readout.frame.maxY <= loupeBox.minY + Chrome.labelHeight && abs(readout.frame.midX - loupeBox.midX) <= 1
@@ -121,7 +236,7 @@ extension DebugRun {
                 "the loupe's readout is a chip under the disc with the value, Copy, and a C cap: \(texts(in: readout)) \(readout.frame) \(loupeBox)")
         // The pointer's pixel is a chip in the Snap tag's cluster, `[x 123  y 456] [Snap S]`: centered under the readout, clicks pass through,
         // and it follows the pointer with no animation.
-        let coordinates = overlay.chrome.coordinates, snapTag = overlay.chrome.snapTag
+        let snapTag = overlay.chrome.snapTag
         func passesClicks(_ chip: NSView) -> Bool {
             let hit = overlay.view.hitTest(chip.convert(CGPoint(x: chip.bounds.midX, y: chip.bounds.midY), to: overlay.view))
             return !(hit?.isDescendant(of: chip) ?? false)
@@ -165,7 +280,10 @@ extension DebugRun {
         // The loupe's readout and the rulers' text change without a cross-fade once displayed.
         CATransaction.flush()
         require(animations(guides.root).isEmpty, "moving the pointer animates no guide layer: \(animations(guides.root))")
+    }
 
+    /// The loupe's pixels, its placement beside the bars, and the guides' animations.
+    func loupeAndRulers() async throws {
         // The loupe shows the right magnified pixels: render it and compare cells to the source.
         // render(in:) filters slightly, so cell centers match within a few levels, not exactly.
         let size = Int(Guides.loupeSize)
@@ -363,7 +481,10 @@ extension DebugRun {
         }
         defaults.set(GuidesAnimation.fade.rawValue, forKey: Pref.guidesAnimation)
         for key in [Pref.rulers, Pref.loupe] { defaults.set(false, forKey: key) }
+    }
 
+    /// C and Shift-C copy colors; U opens the Colors menu.
+    func colorCopying() async throws {
         // C copies the pixel color; Shift-C cycles the format.
         open()
         mouse(.mouseMoved, flat)
@@ -483,7 +604,10 @@ extension DebugRun {
         mouse(.leftMouseUp, CGPoint(x: rowPoint.x * overlay.scale, y: (overlay.view.bounds.height - rowPoint.y) * overlay.scale))
         require(!overlay.window.isVisible && pasteboard.string(forType: .string) == palette[0], "a click on a row copies its value \(palette[0])")
         overlay.dismiss()
+    }
 
+    /// The ratio menu's numbered rows.
+    func ratioMenuKeys() async throws {
         // The ratio menu numbers its nine rows 1-9 (the separator has no cap). Each digit picks its row as a click does (Portrait keeps the menu open),
         // as one undo step; Cmd-Z restores the selection and the lock.
         open()
@@ -513,7 +637,10 @@ extension DebugRun {
             require(overlay.selection!.rect == box && !overlay.ratioLocked, "undo restores the selection and the lock after the \(number + 1) key")
         }
         overlay.dismiss()
+    }
 
+    /// The keys sheet that ? shows.
+    func keysSheet() async throws {
         // ? shows and hides the keys sheet; Esc closes it without closing the overlay.
         open()
         let help = overlay.chrome.help
@@ -552,7 +679,10 @@ extension DebugRun {
         require(help.isHidden && overlay.window.isVisible, "Esc closes the sheet and leaves the overlay open")
         overlay.dismiss()
         require(overlay.mode == .capture, "closing the overlay resets the mode to Capture")
+    }
 
+    /// Capture hover: the outlines, Up/Down and Left/Right hints, and the highlight's settings, glow and color.
+    func hoverOutlines() async throws {
         // Capture hover: geometry in the background, no text candidates, accessibility elements first.
         open()
         require(overlay.mode == .capture && overlay.detectionTask != nil, "Capture starts geometry analysis in the background")
@@ -562,7 +692,6 @@ extension DebugRun {
         require(overlay.detected.allSatisfy { extent.insetBy(dx: -4, dy: -4).contains($0.bounds) },
                 "geometry runs on the \(Int(overlay.scale))x copy and returns regions in full-resolution pixels")
         require(overlay.session!.candidates.allSatisfy { $0.kind != .text }, "Capture never reads text: no text-line or paragraph candidates")
-        let screenWindow = CGRect(x: 10, y: 10, width: extent.width - 20, height: extent.height - 20)
         overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         require(overlay.session!.candidates.contains { $0.kind == .window }, "window rectangles become window candidates")
         var hoveredKinds = Set<CandidateKind>()
@@ -574,9 +703,9 @@ extension DebugRun {
         }
         require(!hoveredKinds.contains(.text) && !hoveredKinds.isDisjoint(with: [.cell, .region, .table]), "hover picks pixel geometry and never text: \(hoveredKinds)")
         let target = overlay.detected.filter { $0.bounds.width < extent.width / 2 && $0.bounds.height < extent.height / 2 }.min { $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height }!
-        let aim = CGPoint(x: target.bounds.midX, y: target.bounds.midY)
+        aim = CGPoint(x: target.bounds.midX, y: target.bounds.midY)
         mouse(.mouseMoved, aim)
-        let hovered = overlay.view.overlays.hover!
+        hovered = overlay.view.overlays.hover!
         require(hovered != screenWindow && ![CandidateKind.window, .display].contains(overlay.session!.selected!.kind), "hover over geometry selects it, not the window \(hovered)")
         require(Array(texts(in: overlay.chrome.hover).dropFirst()) == ["\(Int(hovered.width)) x \(Int(hovered.height))"] && texts(in: overlay.chrome.strip).prefix(4) == ["Edit", "E", "Copy", "\u{21A9}"],
                 "the hover chip shows the name and the size, and the strip below starts with Edit, then Copy: \(texts(in: overlay.chrome.hover))")
@@ -601,7 +730,7 @@ extension DebugRun {
         mouse(.leftMouseDown, aim)
         mouse(.leftMouseUp, aim)
         await overlay.commitTask?.value
-        require(pngSize(pasteboard.data(forType: .png)) == element.bounds.size && !overlay.window.isVisible, "a click on a hovered element crops it \(element.bounds)")
+        require(DebugRun.pngSize(pasteboard.data(forType: .png)) == element.bounds.size && !overlay.window.isVisible, "a click on a hovered element crops it \(element.bounds)")
 
         // The Up and Down outlines take their rectangle's corner radii, and a level within 4 pt of the hover shows no outline.
         let scale = overlay.scale
@@ -816,7 +945,10 @@ extension DebugRun {
             try exercise("blue", blue)
             for key in [Pref.highlightColor, Pref.candidates, Pref.loupe, Pref.rulers, Pref.crosshair] { defaults.removeObject(forKey: key) }
         }
+    }
 
+    /// The toast: its card, actions, Open and Save, its lifetime, and stacking.
+    func toastCards() async throws {
         // The toast: one card with the thumbnail, its size, position, and lifetime, and the preview in its own panel.
         let capture = try await Output.png(image.cropping(to: CGRect(x: 0, y: 0, width: 1200, height: 400))!)
         func toast(_ setup: (UserDefaults) -> Void = { _ in }) -> Toast {
@@ -1015,8 +1147,11 @@ extension DebugRun {
         mouse(.leftMouseDown, aim)
         mouse(.leftMouseUp, aim)
         await overlay.commitTask?.value
-        require(pngSize(pasteboard.data(forType: .png)) == hovered.size && !overlay.window.isVisible, "a click on a hovered geometry region crops it \(hovered)")
+        require(DebugRun.pngSize(pasteboard.data(forType: .png)) == hovered.size && !overlay.window.isVisible, "a click on a hovered geometry region crops it \(hovered)")
+    }
 
+    /// Accessibility hover: sidebars, Up and Down through parents, dimming, Left and Right peers, the candidate list, and hover without permission.
+    func hoverNavigation() async throws {
         // Accessibility lookups at different pointer positions score the same frame differently; the smallest frame at the pointer is the one hovered.
         open()
         await overlay.detectionTask?.value
@@ -1111,7 +1246,7 @@ extension DebugRun {
         // Dim = not part of the target: with nothing targeted (just opened, or the pointer on a blank stretch of page with no window) the
         // whole screen dims evenly; a hovered element cuts it out; the full display walked out to and Text mode dim nothing.
         open()
-        let dimBox = { overlay.view.dimLayer.path?.boundingBox ?? .null }
+        let dimBox = { [self] in overlay.view.dimLayer.path?.boundingBox ?? .null }
         let openedDim = (overlay.view.overlays.dimsAll, dimBox())
         await overlay.detectionTask?.value
         mouse(.mouseMoved, CGPoint(x: 2450, y: 1500))
@@ -1203,26 +1338,15 @@ extension DebugRun {
         let overlayCenter = CGPoint(x: overlay.window.frame.midX, y: NSScreen.screens[0].frame.height - overlay.window.frame.midY)
         require(await Accessibility.frames(at: overlayCenter, pid: getpid()).isEmpty, "Snug's own windows are never looked up (trusted: \(AXIsProcessTrusted()))")
         overlay.dismiss()
+    }
 
+    /// The settings bar and its ? button, the toggles' looks, and the pointer cluster with the Snap tag.
+    func chromeControls() async throws {
         // Chrome: bottom bar, hints, badges, style bar, hover title, and the safe area.
-        let chrome = overlay.chrome
-        let width0 = overlay.view.bounds.width
-        let guides2 = overlay.view.guides
+        width0 = overlay.view.bounds.width
         open()
         overlay.detectionTask?.cancel()
         mouse(.mouseMoved, flat)
-        let top = chrome.topBar
-        /// The key caps under `view` whose glyph is `text`.
-        func keyCaps(_ text: String, in view: NSView) -> [KeyCap] {
-            ((view as? KeyCap).map { cap in cap.text == text ? [cap] : [] } ?? []) + view.subviews.flatMap { keyCaps(text, in: $0) }
-        }
-        func viewPixel(_ point: CGPoint) -> CGPoint { CGPoint(x: point.x * overlay.scale, y: (overlay.view.bounds.height - point.y) * overlay.scale) }
-        func centerOf(_ view: NSView) -> CGPoint { view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: overlay.view) }
-        /// Visible chrome drawn at less than full opacity, other than a disabled button.
-        func faded(_ view: NSView) -> [String] {
-            guard !view.isHidden else { return [] }
-            return (view.alphaValue < 1 && (view as? BarButton)?.isEnabled != false ? ["\(type(of: view)) \(texts(in: view))"] : []) + view.subviews.flatMap(faded)
-        }
         require(texts(in: top) == ["Capture", "A", "Text", "T", "Loupe", "L", "Rulers", "R", "Crosshair", "X", "Rounded", "O", "Frame", "M", "?"]
                     && top.groups.count == 4 && top.groups[3].subviews == [chrome.keys] && zip(top.groups, top.groups.dropFirst()).allSatisfy { abs($1.frame.minX - $0.frame.maxX - 8) < 0.01 },
                 "the settings bar is four pills 8 pt apart, the modes, view, style, and the ? button, with key caps: \(texts(in: top))")
@@ -1239,7 +1363,6 @@ extension DebugRun {
         func clipped() -> [String] {
             barButtons.filter { $0.title.cell!.cellSize.width > $0.title.frame.width || $0.title.frame.maxX > $0.frame.width }.map { $0.title.stringValue }
         }
-        let frameButton = chrome.styleToggles[1].1
         for framed in [false, true] {
             for mode in [OverlayController.Mode.capture, .text] {
                 defaults.set(framed, forKey: Pref.frame)
@@ -1272,17 +1395,16 @@ extension DebugRun {
         require(!defaults.bool(forKey: Pref.frame) && !frameButton.lit, "the Frame button turns Frame off")
         key(2, "d")
         require(!defaults.bool(forKey: Pref.frame) && !frameButton.lit && chrome.styleToggles.count == 2, "D does nothing and there is no Shadow button")
-        let window = CGRect(x: 300, y: 300, width: 400, height: 200)
         overlay.setWindows([window], names: ["Browser"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
         defaults.set(false, forKey: Pref.loupe)
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
-        let windowBox = overlay.view.viewRect(window)
+        windowBox = overlay.view.viewRect(window)
         require(texts(in: chrome.hover) == ["Browser", "400 x 200"] && chrome.snap.isHidden,
                 "hovering a window shows the chip row: its title and size (a frozen run crops windows, so no shadow), and no Snap chip: \(texts(in: chrome.hover))")
         require(chrome.hover.frame.minX == windowBox.minX && chrome.hover.frame.minY == windowBox.maxY + 8, "the chip row sits on the hovered box's top-left edge: \(chrome.hover.frame) \(windowBox)")
         // The pointer cluster: the coordinates, then the Snap tag, both label tier, 16 pt below and right of the pointer. The tag is lit with
         // Snap on and plain with it off, and clicks pass through both.
-        let tag = chrome.snapTag, pointerView = CGPoint(x: overlay.pointer.x / overlay.scale, y: overlay.view.bounds.height - overlay.pointer.y / overlay.scale)
+        let pointerView = CGPoint(x: overlay.pointer.x / overlay.scale, y: overlay.view.bounds.height - overlay.pointer.y / overlay.scale)
         require(!tag.isHidden && texts(in: tag) == ["Snap", "S"] && tag.lit && tag.frame.height == Chrome.labelHeight
                     && !coordinates.isHidden && texts(in: coordinates).count == 1 && coordinates.frame.height == Chrome.labelHeight
                     && coordinates.frame.minX == pointerView.x + 16 && coordinates.frame.maxY == pointerView.y - 16
@@ -1296,8 +1418,11 @@ extension DebugRun {
         mouse(.mouseMoved, CGPoint(x: extent.width - 2, y: extent.height - 2))
         require(overlay.view.bounds.contains(tag.frame.union(coordinates.frame)), "at the screen corner the pointer cluster is clamped into the view: \(coordinates.frame) \(tag.frame)")
         mouse(.mouseMoved, CGPoint(x: 400, y: 400))
+    }
+
+    /// The strip's tools: their caps, held modifiers, tool tips, Save As, Translate, Edit, the Colors menu in hover, and Frame's padding.
+    func stripTools() async throws {
         // The tools are a symbol and their key cap, named for accessibility; at rest Copy and Save show only their own keys.
-        let captureStrip = ["Copy", "\u{21A9}", "Save", "\u{2318}", "S", "G", "V", "K"]
         let offline = captureStrip.filter { !["G", "V"].contains($0) }
         require(texts(in: chrome.strip) == ["Edit", "E"] + offline + ["U"] && chrome.strip.groups.count == 3 && chrome.copy.primary && !chrome.edit.primary && !chrome.edit.lit
                     && chrome.edit.superview === chrome.strip.groups[0] && chrome.strip.frame.maxY == windowBox.minY - 8 && chrome.strip.frame.minX == windowBox.minX,
@@ -1310,10 +1435,6 @@ extension DebugRun {
         require(chrome.all.flatMap(faded).isEmpty, "nothing else in the chrome is faded: \(chrome.all.flatMap(faded))")
         // Held modifiers fold the alternates into Copy and Save, light their caps, and dim what has no modified meaning; the strip's left
         // edge stays put while the labels change. Releasing restores the strip.
-        func flags(_ modifiers: NSEvent.ModifierFlags) {
-            overlay.window.sendEvent(NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
-                windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
-        }
         let restStrip = texts(in: chrome.strip), restLeft = chrome.strip.frame.minX
         let others = [chrome.edit, chrome.cutout, chrome.colors]
         for (held, copy, save, saveKeys) in [(NSEvent.ModifierFlags.command, "Agent", "Save", ["\u{2318}", "S"]), (.shift, "Text", "Save As", ["\u{21E7}", "\u{2318}", "S"]),
@@ -1401,7 +1522,7 @@ extension DebugRun {
         flags([])
         // In hover, Option-Return and an Option-click on Copy (reading Translate) both translate, queued behind a warm-up that never ends.
         OverlayController.visionWarmUp = Task { try? await Task.sleep(for: .seconds(3600)) }
-        let hoverTranslates: [(String, () -> Void)] = [("Option-Return", { key(36, "\r", .option) }), ("an Option-click on Copy", {
+        let hoverTranslates: [(String, () -> Void)] = [("Option-Return", { [self] in key(36, "\r", .option) }), ("an Option-click on Copy", { [self] in
             mouse(.mouseMoved, viewPixel(centerOf(chrome.copy)), .option)
             flags(.option)
             mouse(.leftMouseDown, viewPixel(centerOf(chrome.copy)), .option)
@@ -1424,7 +1545,7 @@ extension DebugRun {
         chrome.edit.onClick()
         require(overlay.selection?.rect == window && texts(in: chrome.strip).prefix(2) == ["Edit", "E"] && chrome.edit.lit,
                 "clicking Edit opens the hovered window as a selection, with a lit Edit in the strip: \(String(describing: overlay.selection?.rect))")
-        for (name, leave) in [("clicking Edit", { chrome.edit.onClick() }), ("E", { key(14, "e") }), ("Esc", { key(53, "") })] as [(String, () -> Void)] {
+        for (name, leave) in [("clicking Edit", { [self] in chrome.edit.onClick() }), ("E", { [self] in key(14, "e") }), ("Esc", { [self] in key(53, "") })] as [(String, () -> Void)] {
             leave()
             require(overlay.selection == nil && texts(in: chrome.strip).first == "Edit" && !chrome.edit.lit, "\(name) in edit goes back to the hover and a plain Edit button: \(texts(in: chrome.strip))")
             key(6, "z", .command)
@@ -1488,6 +1609,10 @@ extension DebugRun {
         require(texts(in: chrome.snap) == ["Snapped", "S"] && chrome.snap.lit, "after release on a fit: Snapped, lit")
         require(!top.isHidden && texts(in: chrome.strip) == ["Edit", "E"] + offline + ["U"] && chrome.edit.lit,
                 "a selection keeps the settings bar and has the strip with a lit Edit: \(texts(in: chrome.strip))")
+    }
+
+    /// The chip row, the ratio menu, the edge keys and their legend, and corner focus with Tab.
+    func chipRow() async throws {
         // The chip row: size and Snap from the selection's left edge, the ratio and radius ending at its right edge (after Snap when they
         // would meet). The ratio chip's readout with P opens the ratio menu, the lock with Shift-P toggles the lock, with no fills of their own.
         let lockedBefore = overlay.ratioLocked, rectBefore = overlay.selection!.rect
@@ -1707,11 +1832,13 @@ extension DebugRun {
         require(overlay.window.isVisible && overlay.selection == nil && chrome.ratio.isHidden, "the first Esc drops the selection back to hover")
         key(53, "")
         require(chrome.strip.isHidden && chrome.size.isHidden && chrome.snap.isHidden && chrome.ratio.isHidden, "a second Esc takes the strip and chips away")
+    }
 
+    /// The strip's modified Copy, the radius chip, and animated jumps between hover candidates.
+    func stripActions() async throws {
         // The strip's Copy with Shift held (Text) runs Shift-Return and with Option held (Translate) Option-Return, queued here behind a warm-up that never ends so no text recognition runs. The chips
         // and strip anchor to the selection's edges: a new radius moves none of them.
         open()
-        let large = CGRect(x: 600, y: 300, width: 1000, height: 600)
         overlay.selection = AreaSelection(extent: extent, exact: large)
         overlay.editedRadii[large] = CornerRadii(40 * overlay.scale)
         overlay.refresh()
@@ -1823,29 +1950,16 @@ extension DebugRun {
         overlay.animates = false
         require(overlay.view.overlays.hover == hoverAfter && jumpAnimations().allSatisfy(\.isEmpty), "with motion, a repeated Up moves the hover at once: \(jumpAnimations())")
         overlay.dismiss()
+    }
 
+    /// Chrome stays on screen and apart, the legend and arrow caps show at any size and edge, and the menu bar hover.
+    func chromeLayout() async throws {
         // Chrome never overlaps or leaves the screen, and the loupe, which is on throughout, draws above all of it: a large and a small
         // selection, one at each screen edge (the bottom one moves the bar to the top), and the full screen with a 38 pt inset, each with
         // the pointer inside so the edge keys show, then on the top-left and bottom-right corner dots, then with the top-left corner focused.
         overlay.dismiss()
         open()
         defaults.set(true, forKey: Pref.loupe)
-        func chromeClear(_ state: String) {
-            let pieces: [(String, NSView)] = [("bar", chrome.topBar), ("strip", chrome.strip), ("hover", chrome.hover), ("size", chrome.size), ("snap", chrome.snap),
-                                               ("ratio", chrome.ratio), ("radius", chrome.radius), ("status", chrome.status), ("legend", chrome.legend),
-                                               ("corner chip", overlay.cornerChip), ("corner keys", chrome.cornerKeys), ("up cap", chrome.upHint), ("down cap", chrome.downHint),
-                                               ("cluster", chrome.coordinates), ("snap tag", chrome.snapTag), ("tool tip", chrome.toolTip), ("list", chrome.list),
-                                               ("reading", chrome.reading), ("minimap", chrome.minimap), ("readout", guides2.readout)]
-                + chrome.sideHints.enumerated().map { ("side \($0.offset)", $0.element) }
-            let shown = pieces.filter { !$0.1.isHidden }
-            let overlaps = shown.indices.flatMap { i in shown.indices.filter { $0 > i && shown[i].1.frame.intersects(shown[$0].1.frame) }.map { "\(shown[i].0) x \(shown[$0].0)" } }
-            let screen = CGRect(x: 0, y: 0, width: overlay.view.bounds.width, height: overlay.view.bounds.height - overlay.topInset)
-            let outside = shown.filter { !screen.contains($0.1.frame) }.map { "\($0.0) \($0.1.frame) in \(screen)" }
-            let host = overlay.view.guides.host
-            require(overlaps.isEmpty && outside.isEmpty, "\(state): the chrome does not overlap or leave the screen: overlaps \(overlaps), outside \(outside) \(shown.map { "\($0.0) \($0.1.frame)" }) loupe \(guides2.loupe.frame)")
-            require(!guides2.loupe.isHidden && guides2.loupe.superlayer === host.layer && guides2.readout.superview === host && overlay.view.subviews.last === host,
-                    "\(state): the loupe and its readout draw above all the chrome: \(overlay.view.subviews.last.map { "\(type(of: $0))" } ?? "none") on top")
-        }
         let edgeCases = [("large", large), ("small", CGRect(x: 600, y: 300, width: 120, height: 80)), ("left", CGRect(x: 0, y: 600, width: 500, height: 300)),
                          ("right", CGRect(x: extent.width - 500, y: 600, width: 500, height: 300)), ("top", CGRect(x: 900, y: 0, width: 700, height: 300)),
                          ("bottom", CGRect(x: 900, y: extent.height - 300, width: 700, height: 300)),
@@ -2011,7 +2125,10 @@ extension DebugRun {
             }
         }
         overlay.topInset = 0
+    }
 
+    /// The cursor over chrome, lit buttons, and the recording-armed selection.
+    func cursorAndArming() async throws {
         // The cursor is the crosshair over a button of the top bar and the strip, over a row of an open menu, on the gaps between them and
         // on the labels that pass the pointer through, inside a selection too, where elsewhere it is the open hand.
         overlay.dismiss()
@@ -2113,11 +2230,14 @@ extension DebugRun {
         key(53, "\u{1B}")
         require(overlay.armedRecording == nil && texts(in: chrome.strip) == ["Edit", "E"] + captureStrip.filter { $0 != "G" } + ["U"] && !chrome.ratio.isHidden, "Esc disarms and brings the editing chrome back: \(texts(in: chrome.strip))")
         overlay.dismiss()
+    }
 
+    /// G's scrolling capture and the minimap.
+    func scrollingCapture() async throws {
         // G: scrolling capture of a released selection inside a window, with frames cut from the fixture as if the page scrolled 300 px.
         let page = CGRect(x: 400, y: 200, width: 1000, height: 600)
         var offsets = [0, 0, 150, 300]
-        overlay.scrollFrames = { area in
+        overlay.scrollFrames = { [self] area in
             let offset = offsets.count > 1 ? offsets.removeFirst() : offsets[0]
             return image.cropping(to: area.offsetBy(dx: 0, dy: CGFloat(offset)))!
         }
@@ -2199,7 +2319,7 @@ extension DebugRun {
         // Esc while a frame is on its way to the stitcher: the third frame's capture closes the overlay before it returns a moved frame.
         // The frame is still added, and nothing of it shows afterwards.
         var (captures, inFlight) = (0, nil as Task<Void, Never>?)
-        overlay.scrollFrames = { area in
+        overlay.scrollFrames = { [self] area in
             captures += 1
             if captures == 3 {
                 inFlight = overlay.scrollTask
@@ -2216,7 +2336,7 @@ extension DebugRun {
         try await Task.sleep(for: .milliseconds(100))
         require(captures == 3 && !overlay.window.isVisible && overlay.scrollArea == nil && overlay.stitcher == nil && overlay.scrollThumbnail == nil && overlay.scrollHeight == 0,
                 "Esc while a frame is being added closes cleanly, with no thumbnail or height left: \(captures) \(overlay.scrollHeight) \(overlay.scrollThumbnail != nil)")
-        overlay.scrollFrames = { area in
+        overlay.scrollFrames = { [self] area in
             let offset = offsets.count > 1 ? offsets.removeFirst() : offsets[0]
             return image.cropping(to: area.offsetBy(dx: 0, dy: CGFloat(offset)))!
         }
@@ -2250,7 +2370,10 @@ extension DebugRun {
                 "with no spot free the minimap hides: \(minimap.frame) strip \(chrome.strip.frame)")
         overlay.view.setFrameSize(CGSize(width: width0, height: overlay.view.bounds.height))
         overlay.dismiss()
+    }
 
+    /// The settings bar on a narrow screen, and its move to the top and back.
+    func settingsBarPlacement() async throws {
         // On a narrow screen the settings bar keeps only its ? button.
         open()
         overlay.view.setFrameSize(CGSize(width: 520, height: overlay.view.bounds.height))
@@ -2313,7 +2436,10 @@ extension DebugRun {
         drag(rough)
         require(!chrome.strip.isHidden && top.frame.minY == 8, "a selection mid-screen keeps the bar home")
         overlay.dismiss()
+    }
 
+    /// With a simulated 38 pt inset, nothing sits under the camera housing.
+    func safeArea() async throws {
         // Safe area: with a simulated 38 pt inset, nothing sits under the camera housing.
         open()
         let width = overlay.view.bounds.width
@@ -2335,9 +2461,16 @@ extension DebugRun {
         require(guides2.bands.path!.boundingBox.maxY == overlay.view.bounds.height, "without an inset the top ruler sits at the top edge")
         overlay.dismiss()
         for key in [Pref.rulers, Pref.loupe] { defaults.set(false, forKey: key) }
-        try await verifyAgentHandoff(image: image, frame: frame, overlay: overlay, require: require)
-        try await verifyRecording(image: image, frame: frame, overlay: overlay, require: require)
+    }
 
+    /// The agent handoff and recording checks, which share this run's overlay and checks.
+    func agentAndRecording() async throws {
+        try await DebugRun.verifyAgentHandoff(image: image, frame: frame, overlay: overlay, require: require)
+        try await DebugRun.verifyRecording(image: image, frame: frame, overlay: overlay, require: require)
+    }
+
+    /// Chrome keeps 8 pt from the object's outline.
+    func outlineDistance() async throws {
         // Chrome keeps its distance from the object's outline: 8 pt off it outside, and 8 pt in from it when the screen leaves no room outside.
         open()
         overlay.detectionTask?.cancel()
@@ -2368,10 +2501,12 @@ extension DebugRun {
             }
         }
         overlay.dismiss()
+    }
 
+    /// The dashed Frame preview and when it draws the card.
+    func framePreview() async throws {
         // The dashed Frame preview is the padded card of an area or element; on a selection that matches a live window the output is the
         // window's real shadow, so no card is drawn. A frozen window or an imported image crops, so it keeps the card.
-        let framedWindow = CGRect(x: 600, y: 300, width: 1000, height: 600)
         defaults.set(true, forKey: Pref.frame)
         for (name, display, frozen, card) in [("a live window", CGMainDisplayID() as CGDirectDisplayID?, false, false), ("a frozen window", CGMainDisplayID(), true, true), ("a window of an imported image", nil, false, true)] {
             overlay.present(image: image, frame: frame, displayID: display)
@@ -2385,7 +2520,10 @@ extension DebugRun {
             require(overlay.view.overlays.styleFrame == OutputFrame.rect(around: framedWindow.insetBy(dx: 40, dy: 40), scale: overlay.scale, padding: 24), "an area inside \(name) keeps the card preview")
             overlay.dismiss()
         }
+    }
 
+    /// Frame's default and custom shadows.
+    func frameShadows() async throws {
         // Shadow: Default captures a live window with its system shadow; Custom without it, and the live window, a frozen window, a
         // window of an imported image, and an area inside each come out on the canvas OutputFrame.rect gives with the custom shadow
         // below them, the canvas the preview card draws. Live capture cannot run headless, so a stand-in answers for the window and
@@ -2424,13 +2562,13 @@ extension DebugRun {
                     let png = pasteboard.data(forType: .png)
                     let label = "\(target == framedWindow ? name : "an area inside \(name)") under the \(shadow) shadow"
                     guard shadow == "custom" else {
-                        require(requested == [true] && pngSize(png) == framedWindow.size, "\(label) is captured with the system shadow: \(requested)")
+                        require(requested == [true] && DebugRun.pngSize(png) == framedWindow.size, "\(label) is captured with the system shadow: \(requested)")
                         continue
                     }
                     let expected = OutputFrame.rect(around: target, scale: overlay.scale, padding: 24, shadow: custom)
                     require(requested == (live ? [false] : []), "\(label) asks for no system shadow: \(requested)")
-                    require(preview == expected && pngSize(png) == expected.size && expected.height - target.height > expected.width - target.width,
-                            "\(label) and its preview card come out \(expected.size), grown more below: \(String(describing: pngSize(png))) \(String(describing: preview))")
+                    require(preview == expected && DebugRun.pngSize(png) == expected.size && expected.height - target.height > expected.width - target.width,
+                            "\(label) and its preview card come out \(expected.size), grown more below: \(String(describing: DebugRun.pngSize(png))) \(String(describing: preview))")
                     // Just under the target's bottom edge, at its middle, the shadow is red (raw PNG bytes, 8-bit sRGB RGBA).
                     let rep = NSBitmapImageRep(data: png!)!
                     let offset = (Int(target.maxY - expected.minY) + 4) * rep.bytesPerRow + Int(target.midX - expected.minX) * 4
@@ -2444,7 +2582,10 @@ extension DebugRun {
             defaults.removeObject(forKey: key)
         }
         defaults.set(false, forKey: Pref.frame)
+    }
 
+    /// Each hot key handler takes only its own presses.
+    func hotKeyTargets() async throws {
         // Hot keys: each handler takes only presses of its own ID (the capture shortcut and the overlay's Esc share the app's target).
         // The presses are Carbon events sent to the app, so nothing is registered system-wide.
         var fired: [UInt32] = []
@@ -2458,11 +2599,6 @@ extension DebugRun {
             ReleaseEvent(event)
         }
         require(fired == [7, 8, 7] && hotKeys.count == 2, "each hot key acts on its own presses only: \(fired)")
-
-        requireBackground(overlay)
-        print("Extras UI verification passed (\(passed.count) checks)")
-        passed.forEach { print("  ok: \($0)") }
-        exit(EXIT_SUCCESS)
     }
 }
 
