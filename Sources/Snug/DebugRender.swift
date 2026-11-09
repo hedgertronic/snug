@@ -99,7 +99,7 @@ extension DebugRun {
             overlay.dismiss()
             // The pointer just above the settings bar: the loupe flips above it instead of hiding behind it.
             overlay.present(image: content, frame: frame, displayID: nil)
-            let barTop = overlay.chrome.topBar.frame.maxY
+            let barTop = overlay.chrome.settingsBar.frame.maxY
             let nearBar = CGRect(x: 900, y: (overlay.view.bounds.height - barTop - 40) * overlay.scale - 200, width: 500, height: 200)
             drag(nearBar, release: false)
             try snapshot("loupe-near-bar-\(name)")
@@ -308,8 +308,8 @@ extension DebugRun {
             }
             func center(_ view: NSView, dx: CGFloat = 0, dy: CGFloat = 0) -> CGPoint { CGPoint(x: (view.frame.midX + dx) * overlay.scale, y: (overlay.view.bounds.height - view.frame.midY + dy) * overlay.scale) }
             let spots: [(String, CGPoint)] = [("strip", center(chrome.strip)), ("strip-left", center(chrome.strip, dx: -chrome.strip.frame.width / 2 - 30)),
-                                              ("strip-below", center(chrome.strip, dy: chrome.strip.frame.height / 2 + 20)), ("bar", center(chrome.topBar)),
-                                              ("bar-left", center(chrome.topBar, dx: -chrome.topBar.frame.width / 2 - 30)), ("bottom-edge", CGPoint(x: 1280, y: editExtent.height - 4))]
+                                              ("strip-below", center(chrome.strip, dy: chrome.strip.frame.height / 2 + 20)), ("bar", center(chrome.settingsBar)),
+                                              ("bar-left", center(chrome.settingsBar, dx: -chrome.settingsBar.frame.width / 2 - 30)), ("bottom-edge", CGPoint(x: 1280, y: editExtent.height - 4))]
             for (name, spot) in spots {
                 mouse(.mouseMoved, CGPoint(x: 40, y: 40))
                 mouse(.mouseMoved, spot)
@@ -660,7 +660,7 @@ extension DebugRun {
         capture.setShortcut(from: defaults)
         require(capture.keyEquivalent == "k" && capture.keyEquivalentModifierMask == [.control, .option], "a recorded letter shortcut updates the key equivalent")
         require(Shortcut.label(from: defaults) == "\u{2303}\u{2325}K", "the recorded shortcut displays from code and modifiers: \(Shortcut.label(from: defaults))")
-        let hintFill = overlay.chrome.topBar.groups[0].layer!.backgroundColor.flatMap(NSColor.init(cgColor:))!
+        let hintFill = overlay.chrome.settingsBar.groups[0].layer!.backgroundColor.flatMap(NSColor.init(cgColor:))!
         require(hintFill.alphaComponent >= 0.92, "the settings bar is on the chrome surface: \(hintFill.alphaComponent)")
         requireBackground(overlay)
         exit(EXIT_SUCCESS)

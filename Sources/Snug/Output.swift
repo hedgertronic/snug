@@ -12,7 +12,7 @@ let openLog = Logger(subsystem: "com.hedgertronic.snug", category: "open")
 enum Pref {
     static let snap = "SnugSnap"
     /// Whether output gets its shadow (Frame): a live window its real macOS shadow, a subject the synthetic window shadow, an area or
-    /// element a padded card with a shadow. Replaces the "SnugStyle" string and the "SnugShadow" bool, which `register` removes.
+    /// element a padded card with a shadow.
     static let frame = "SnugFrame"
     /// The transparent padding around a framed area or element, in whole points from 0 to 64 (Settings > Appearance > Frame).
     static let framePadding = "SnugFramePadding"
@@ -26,9 +26,6 @@ enum Pref {
     static let frameShadowDistance = "SnugFrameShadowDistance"
     static let frameShadowAngle = "SnugFrameShadowAngle"
     static let frameShadowColor = "SnugFrameShadowColor"
-    private static let legacyStyle = "SnugStyle"
-    private static let legacyShadow = "SnugShadow"
-    private static let orphanedKeys = ["SnugAfterCapture", "SnugLastArea", "SnugModeBar", "SnugToastPreview"]
     static let saveFolder = "SnugSaveFolder"
     static let hotKeyCode = "SnugHotKeyCode"
     static let hotKeyModifiers = "SnugHotKeyModifiers"
@@ -55,13 +52,15 @@ enum Pref {
     /// The overlay chrome's look: "system" follows macOS, "light" and "dark" force one.
     static let overlayAppearance = "SnugOverlayAppearance"
     /// Where the toast sits (topLeft, topCenter, topRight, bottomLeft, bottomCenter, or bottomRight), and how many seconds it stays while the pointer is elsewhere
-    /// (one of `Toast.lifetimes`: 0 shows no toast but failures and warnings, -1 keeps it until closed).
+    /// (any whole number from -1 to 86,400, though Settings offers only `Toast.lifetimes`: 0 shows no toast but failures and warnings, -1
+    /// keeps it until closed).
     static let toastPosition = "SnugToastPosition"
     static let toastLifetime = "SnugToastLifetime"
     /// Whether Snug plays its sounds on a capture and a recording's start and stop (Settings > General). Failures beep either way.
     static let playSounds = "SnugPlaySounds"
-    /// Off unless set with `defaults write com.hedgertronic.snug SnugLogHover -bool true`: each hover lookup and the Dock's window rect append to
-    /// ~/Library/Logs/Snug/hover.log, so live accessibility frames can be read back without Accessibility in a terminal.
+    /// Off unless set with `defaults write com.hedgertronic.snug SnugLogHover -bool true`: hover lookups, the Dock's panel and tiles,
+    /// window captures and their interiors, and screen-text reads append to ~/Library/Logs/Snug/hover.log, so live accessibility frames
+    /// can be read back without Accessibility in a terminal. `logHoverLine` also writes `logText`'s text.log.
     static let logHover = "SnugLogHover"
     /// Off unless set with `defaults write com.hedgertronic.snug SnugLogText -bool true`: each Text mode press, drag event and release appends
     /// Live Text's selection before and after Snug's fix to ~/Library/Logs/Snug/text.log.
@@ -101,14 +100,6 @@ enum Pref {
     }
 
     static func register(in defaults: UserDefaults) {
-        if let style = defaults.string(forKey: legacyStyle) {
-            defaults.set(style == "backdrop", forKey: frame)
-            defaults.removeObject(forKey: legacyStyle)
-        }
-        // Shadow on (its default) with Frame off stays off: Frame keeps its own value, so only the key goes.
-        defaults.removeObject(forKey: legacyShadow)
-        // Keys earlier versions wrote and nothing reads.
-        for key in orphanedKeys { defaults.removeObject(forKey: key) }
         defaults.register(defaults: [
             snap: true,
             frame: false,

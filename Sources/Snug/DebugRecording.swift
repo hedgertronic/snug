@@ -62,8 +62,8 @@ extension DebugRun {
         require(overlay.window.isVisible && requests.isEmpty && armed != nil && overlay.selection != nil,
                 "V on a released selection arms recording and keeps the overlay and selection: \(requests)")
         require(armed!.outline.superlayer != nil && armed!.outline.path != nil && armed!.outline.strokeColor == NSColor.systemRed.cgColor
-                && !overlay.view.overlays.showsHandles && overlay.chrome.topBar.isHidden,
-                "armed: a red outline on the selection, no handles or top bar")
+                && !overlay.view.overlays.showsHandles && overlay.chrome.settingsBar.isHidden,
+                "armed: a red outline on the selection, no handles or settings bar")
         require(strip() == ["Cursor", "H", "Audio", "J", "Count-in", "I", "Cancel", "esc", "Start", "\u{21A9}"] && overlay.chrome.cursor.lit && !overlay.chrome.audio.lit
                     && !overlay.chrome.countIn.lit && overlay.chrome.start.primary && status().isEmpty,
                 "the armed strip: Cursor lit, Audio and Count-in plain, Start primary; no status chip, since the strip shows Start and Cancel: \(strip()) \(status())")

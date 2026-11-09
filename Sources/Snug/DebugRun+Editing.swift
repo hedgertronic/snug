@@ -71,14 +71,14 @@ extension DebugRun {
         }
         func radii() -> CornerRadii { overlay.cornerRadii(of: overlay.selection!.rect) }
 
-        // The key map: the help table lists the new keys, and every key the keys line used to show.
+        // The key map: the help table lists every key, the newer ones among them.
         open()
         let helpKeys = HelpSheet.columns.flatMap(\.rows).map(\.keys)
-        let keysLineKeys = ["drag", "\u{2325} click", "F", "W", "tab", "C", "+ / -", "\u{2191} / \u{2193}", "\u{2190} \u{2192}", "\u{2325} arrow", "\u{2325} \u{2318} arrow",
-                            "\u{2303} \u{2325} arrow", "\u{2303} \u{2325} \u{2318} arrow", "\u{2318} Z", "Text: drag", "Text: \u{21A9}", "Text: \u{21E7} \u{21A9}", "Text: tab", "Text: \u{2325} \u{21A9}",
-                            "Menus: \u{2191} / \u{2193}", "Subject: K / esc", "?"]
-        require(keysLineKeys.allSatisfy(helpKeys.contains) && !helpKeys.contains("B"),
-                "the help table lists every key the keys line showed, and no B: missing \(keysLineKeys.filter { !helpKeys.contains($0) })")
+        let listedKeys = ["drag", "\u{2325} click", "F", "W", "tab", "C", "+ / -", "\u{2191} / \u{2193}", "\u{2190} \u{2192}", "\u{2325} arrow", "\u{2325} \u{2318} arrow",
+                          "\u{2303} \u{2325} arrow", "\u{2303} \u{2325} \u{2318} arrow", "\u{2318} Z", "Text: drag", "Text: \u{21A9}", "Text: \u{21E7} \u{21A9}", "Text: tab", "Text: \u{2325} \u{21A9}",
+                          "Menus: \u{2191} / \u{2193}", "Subject: K / esc", "?"]
+        require(listedKeys.allSatisfy(helpKeys.contains) && !helpKeys.contains("B"),
+                "the help table lists every key, and no B: missing \(listedKeys.filter { !helpKeys.contains($0) })")
         require(["\u{21E7} \u{2318} S", "E / \u{21E7} click", "\u{2325} arrow", "\u{21E7} click", "\u{21E7} drag", "P", "M", "=", "O"].allSatisfy(helpKeys.contains), "the help table lists the new keys")
         require(!["Cmd-1/2", "Corner dot"].contains(where: helpKeys.contains) && HelpSheet.columns.flatMap(\.rows).contains { $0.keys == "O" && $0.action == "Rounded corners" },
                 "the help table has no Cmd-1/2 or Corner dot row, and O reads Rounded corners")

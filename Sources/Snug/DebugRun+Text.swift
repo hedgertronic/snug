@@ -88,8 +88,8 @@ extension DebugRun {
         key(tKey, "t")
         let entered = ContinuousClock.now
         require(overlay.mode == .text && !liveText.isHidden, "T enters Text mode and shows Live Text")
-        require(overlay.chrome.strip.isHidden && texts(in: overlay.chrome.topBar) == ["Capture", "A", "Text", "T", "Loupe", "L", "Rulers", "R", "Crosshair", "X", "?"],
-                "Text mode with nothing selected shows no strip, and the bar has the modes, view and the keys button: \(texts(in: overlay.chrome.topBar))")
+        require(overlay.chrome.strip.isHidden && texts(in: overlay.chrome.settingsBar) == ["Capture", "A", "Text", "T", "Loupe", "L", "Rulers", "R", "Crosshair", "X", "?"],
+                "Text mode with nothing selected shows no strip, and the bar has the modes, view and the keys button: \(texts(in: overlay.chrome.settingsBar))")
         require(!overlay.chrome.reading.isHidden && texts(in: overlay.chrome.reading) == ["Reading text…"], "a Reading text… pill shows while the analysis runs")
         try await waitFor("the Live Text analysis attaches") { liveText.analysis != nil }
         print("Live Text analysis: \(String(format: "%.1f", overlay.lastLiveTextMilliseconds)) ms (first in this process)")
@@ -113,7 +113,7 @@ extension DebugRun {
         require(overlay.view.hitTest(textPoint)?.isDescendant(of: liveText) == true, "a press on the image reaches Live Text")
         let button = overlay.chrome.modeButtons[.capture]!
         let buttonPoint = button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: overlay.view)
-        require(overlay.view.hitTest(buttonPoint)?.isDescendant(of: button) == true, "the top bar stays clickable above Live Text")
+        require(overlay.view.hitTest(buttonPoint)?.isDescendant(of: button) == true, "the settings bar stays clickable above Live Text")
         mouse(.mouseMoved, CGPoint(x: productName.midX, y: productName.midY))
         require(overlay.view.cursor == .iBeam, "the cursor is an I-beam over text")
         mouse(.mouseMoved, blank)
@@ -892,8 +892,8 @@ extension DebugRun {
         let ringPixels = (0..<ring.height).reduce(0) { sum, y in sum + (0..<ring.width).count { ringAlpha[y * ring.bytesPerRow + $0 * 2 + 1] > 0 } }
         require(ringAlpha[(ring.height / 2) * ring.bytesPerRow + ring.width / 2 * 2 + 1] == 0 && ringPixels > 0 && ringPixels < ring.width * ring.height / 10,
                 "the outline is a thin ring outside the subject: \(ringPixels) of \(ring.width * ring.height) pixels, center clear")
-        require(overlay.selection == nil && texts(in: overlay.chrome.topBar).last == "?" && !texts(in: overlay.chrome.topBar).contains("Capture") && overlay.view.overlays.selection == iconRect
-                && !overlay.view.overlays.showsHandles, "while previewing, the top bar has no modes, the handles stay hidden and the area stays outlined")
+        require(overlay.selection == nil && texts(in: overlay.chrome.settingsBar).last == "?" && !texts(in: overlay.chrome.settingsBar).contains("Capture") && overlay.view.overlays.selection == iconRect
+                && !overlay.view.overlays.showsHandles, "while previewing, the settings bar has no modes, the handles stay hidden and the area stays outlined")
         require(texts(in: overlay.chrome.strip) == ["Snap to Subject", "S", "Save", "\u{2318}", "S", "Copy", "\u{21A9}"] && !overlay.chrome.crop.lit
                     && texts(in: overlay.chrome.status) == ["Back", "K", "esc"] && overlay.chrome.status.frame.minY == overlay.chrome.size.frame.minY
                     && overlay.chrome.status.frame.minX == overlay.chrome.size.frame.maxX + 6,

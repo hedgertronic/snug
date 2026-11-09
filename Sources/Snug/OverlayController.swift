@@ -276,7 +276,7 @@ final class OverlayController {
         // Bottom to top: the hint caps, the chips, the strip and settings bar with their menus, the keys sheet, then the loupe.
         chrome.all.forEach(view.addSubview)
         cornerChip.isHidden = true
-        view.addSubview(cornerChip, positioned: .below, relativeTo: chrome.topBar)
+        view.addSubview(cornerChip, positioned: .below, relativeTo: chrome.settingsBar)
         view.addSubview(view.guides.host)
         wireChrome()
     }
@@ -472,7 +472,7 @@ final class OverlayController {
         if shift != shiftHeld, image != nil {
             shiftHeld = shift
             movedWithShift = false
-            // On the top bar or the strip the hover holds, so Shift relabels the strip under the pointer instead of picking anew.
+            // On the settings bar or the strip the hover holds, so Shift relabels the strip under the pointer instead of picking anew.
             if !holdsHover(at: CGPoint(x: pointer.x / scale, y: view.bounds.height - pointer.y / scale)) { updateHover(pixel: pointer) }
         }
         refresh()
@@ -488,7 +488,7 @@ final class OverlayController {
         movedWithShift = shiftHeld
         let wasOnSelection = pointerOnSelection
         pointer = view.pixelPoint(event)
-        // On the top bar, or crossing from the hovered element to its chips or strip, the hover holds so their buttons can be clicked;
+        // On the settings bar, or crossing from the hovered element to its chips or strip, the hover holds so their buttons can be clicked;
         // the guides, loupe and crosshair still follow the pointer.
         if holdsHover(at: view.convert(event.locationInWindow, from: nil)) {
             updateGuides()

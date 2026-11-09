@@ -1,8 +1,8 @@
 import AppKit
 import ScreenshotCore
 
-/// Positions and fills the on-screen chrome: the top bar, the chip row above the object and the action strip below it, the keys
-/// line, the candidate list, and the keys sheet.
+/// Positions and fills the on-screen chrome: the settings bar, the chip row above the object and the action strip below it, the
+/// candidate list, and the keys sheet.
 extension OverlayController {
     /// A click on a button presses its key, so it does what the key does in the current state.
     func wireChrome() {
@@ -45,7 +45,7 @@ extension OverlayController {
         lightCaps()
     }
 
-    /// Whether `point` (view points) is on the top bar, or between the hovered element and its strip: there the hover holds, so the
+    /// Whether `point` (view points) is on the settings bar, or between the hovered element and its strip: there the hover holds, so the
     /// strip's buttons can be reached. The chips are labels that clicks and hover pass through, so they never hold it.
     func holdsHover(at point: CGPoint) -> Bool {
         guard selection == nil, let hover = view.overlays.hover else { return false }
@@ -57,10 +57,10 @@ extension OverlayController {
             return [item.frame] + (right > left ? [CGRect(x: left, y: span.minY, width: right - left, height: span.height)] : [])
         }
         return !box.contains(point) && attached.contains { $0.insetBy(dx: -2, dy: -2).contains(point) }
-            || !chrome.topBar.isHidden && chrome.topBar.frame.contains(point)
+            || !chrome.settingsBar.isHidden && chrome.settingsBar.frame.contains(point)
     }
 
-    /// Whether the pointer is on clickable chrome: a button of the top bar, strip or chips, or a row of an open menu (which covers the
+    /// Whether the pointer is on clickable chrome: a button of the settings bar, strip or chips, or a row of an open menu (which covers the
     /// rest). The chips that pass clicks through are not.
     var overClickableChrome: Bool {
         if let menu = [chrome.ratioMenu, chrome.colorMenu].first(where: { !$0.isHidden }) { return menu.overRow }
@@ -168,7 +168,7 @@ extension OverlayController {
         Chrome.tint = tint
         let look = Chrome.appearance(defaults)
         // The keys sheet keeps its own dark material.
-        if c.topBar.appearance?.name != look?.name {
+        if c.settingsBar.appearance?.name != look?.name {
             for item in c.all + [cornerChip, view.guides.readout] where item !== c.help { item.appearance = look }
         }
         // Chrome motion, off in debug runs and with Reduce Motion: the strip's buttons cross-fade their labels and caps and animate their
@@ -197,17 +197,16 @@ extension OverlayController {
         // The settings bar: the modes (not in cut out), view, style (not in Text), and the keys sheet's button; hidden while scrolling or
         // armed to record. On a screen too narrow for it, the keys sheet's button alone.
         if scrollArea != nil || armedRecording != nil {
-            c.topBar.isHidden = true
+            c.settingsBar.isHidden = true
         } else {
             let modes = cutout == nil ? [[c.modeButtons[.capture]!, c.modeButtons[.text]!]] : []
-            c.topBar.show(modes + [c.viewToggles.map(\.1)] + (mode == .text ? [] : [c.styleToggles.map(\.1)]) + [[c.keys]])
-            if c.topBar.frame.width > bounds.width - 16 { c.topBar.show([[c.keys]]) }
+            c.settingsBar.show(modes + [c.viewToggles.map(\.1)] + (mode == .text ? [] : [c.styleToggles.map(\.1)]) + [[c.keys]])
+            if c.settingsBar.frame.width > bounds.width - 16 { c.settingsBar.show([[c.keys]]) }
         }
         for (current, button) in c.modeButtons { button.primary = current == mode }
         for (key, button) in c.viewToggles + c.styleToggles { button.lit = defaults.bool(forKey: key) }
 
-        // The object's chips and strip, filled before the keys line, which leaves out what the strip shows, and attached to the object
-        // once the bar and keys line are placed.
+        // The object's chips and strip, filled here and attached to the object once the settings bar is placed.
         var attachment: (box: CGRect, strip: Bool, left: [NSView], right: [NSView])?
         c.stripSlack = 0
         func sizeChip(_ rect: CGRect, drag: String = "") -> Pill {
@@ -350,19 +349,19 @@ extension OverlayController {
         // The settings bar sits 8 pt above the bottom edge, or above a Dock there. It moves under the menu bar or notch while a drag, preview, or selection is
         // within 24 pt of it there and not there.
         let objects = [overlays.ghost, overlays.preview, overlays.selection].compactMap { $0 }.map(view.viewRect)
-        let barSize = c.topBar.frame.size
+        let barSize = c.settingsBar.frame.size
         func barFrame(atTop: Bool) -> CGRect {
             CGRect(x: ((bounds.width - barSize.width) / 2).rounded(), y: atTop ? topEdge - 8 - barSize.height : bottomInset + 8, width: barSize.width, height: barSize.height)
         }
-        let barAtTop = !c.topBar.isHidden && objects.contains {
+        let barAtTop = !c.settingsBar.isHidden && objects.contains {
             $0.intersects(barFrame(atTop: false).insetBy(dx: -24, dy: -24)) && !$0.intersects(barFrame(atTop: true).insetBy(dx: -24, dy: -24))
         }
         // Chrome attached to an object keeps between `floor` and `top`, clear of the bar.
         var top = topEdge, floor: CGFloat = 8
         var frames: [(NSView, CGRect)] = []
-        if !c.topBar.isHidden {
+        if !c.settingsBar.isHidden {
             let frame = barFrame(atTop: barAtTop)
-            frames.append((c.topBar, frame))
+            frames.append((c.settingsBar, frame))
             if barAtTop { top = frame.minY } else { floor = frame.maxY + 8 }
         }
         animate(motion && (barAtTop != c.barAtTop || ruler != c.ruler), duration: duration) {
@@ -438,7 +437,7 @@ extension OverlayController {
         //     them: the loupe follows the pointer on its lower or upper side, sliding up or down past a bar or chip it would cover, and
         //     its readout and the cluster hang under it.
         let screen = CGRect(x: 4 + ruler, y: 4, width: bounds.width - 8 - ruler, height: topEdge - 8)
-        var placed = [c.topBar, c.strip].filter { !$0.isHidden }.map(\.frame)
+        var placed = [c.settingsBar, c.strip].filter { !$0.isHidden }.map(\.frame)
         /// Moves `group` as one so its first view's origin takes the first free spot, or hides it.
         func settle(_ group: [NSView], _ spots: [CGPoint]) {
             let start = group[0].frame.origin

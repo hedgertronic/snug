@@ -98,7 +98,7 @@ final class ExtrasRun {
         guides = overlay.view.guides
         guides2 = overlay.view.guides
         chrome = overlay.chrome
-        top = chrome.topBar
+        top = chrome.settingsBar
         readout = guides.readout
         coordinates = overlay.chrome.coordinates
         frameButton = chrome.styleToggles[1].1
@@ -147,7 +147,7 @@ final class ExtrasRun {
             windowNumber: overlay.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!)
     }
     func chromeClear(_ state: String) {
-        let pieces: [(String, NSView)] = [("bar", chrome.topBar), ("strip", chrome.strip), ("hover", chrome.hover), ("size", chrome.size), ("snap", chrome.snap),
+        let pieces: [(String, NSView)] = [("bar", chrome.settingsBar), ("strip", chrome.strip), ("hover", chrome.hover), ("size", chrome.size), ("snap", chrome.snap),
                                            ("ratio", chrome.ratio), ("radius", chrome.radius), ("status", chrome.status), ("legend", chrome.legend),
                                            ("corner chip", overlay.cornerChip), ("corner keys", chrome.cornerKeys), ("up cap", chrome.upHint), ("down cap", chrome.downHint),
                                            ("cluster", chrome.coordinates), ("snap tag", chrome.snapTag), ("tool tip", chrome.toolTip), ("list", chrome.list),
@@ -194,8 +194,8 @@ final class ExtrasRun {
         key(17, "t")
         require(overlay.mode == .text && overlay.selection == nil, "changing mode clears the selection")
         overlay.chrome.modeButtons[.capture]!.onClick()
-        require(overlay.mode == .capture, "clicking a top bar mode switches mode")
-        require(overlay.chrome.modeButtons.count == 2 && !texts(in: overlay.chrome.topBar).contains("Element"), "the top bar has two modes, Capture and Text")
+        require(overlay.mode == .capture, "clicking a settings bar mode switches mode")
+        require(overlay.chrome.modeButtons.count == 2 && !texts(in: overlay.chrome.settingsBar).contains("Element"), "the settings bar has two modes, Capture and Text")
         overlay.dismiss()
 
         // Opening draws at once: no layer under the view animates implicitly, so the frozen image replaces the black window in one frame.
@@ -215,10 +215,10 @@ final class ExtrasRun {
         // With Rulers on, nothing covers a ruler's band, and the settings bar stays 8 pt above the bottom edge.
         let topRuler = CGRect(x: 0, y: view.bounds.height - overlay.topInset - Guides.rulerThickness, width: view.bounds.width, height: Guides.rulerThickness)
         let leftRuler = CGRect(x: 0, y: 0, width: Guides.rulerThickness, height: view.bounds.height)
-        let edgeChrome = [overlay.chrome.topBar, overlay.chrome.strip, overlay.chrome.hover, overlay.chrome.coordinates, overlay.chrome.snapTag].filter { !$0.isHidden }
-        require(edgeChrome.allSatisfy { !$0.frame.intersects(topRuler) && !$0.frame.intersects(leftRuler) } && overlay.chrome.topBar.frame.minY == 8,
+        let edgeChrome = [overlay.chrome.settingsBar, overlay.chrome.strip, overlay.chrome.hover, overlay.chrome.coordinates, overlay.chrome.snapTag].filter { !$0.isHidden }
+        require(edgeChrome.allSatisfy { !$0.frame.intersects(topRuler) && !$0.frame.intersects(leftRuler) } && overlay.chrome.settingsBar.frame.minY == 8,
                 "with Rulers on, the settings bar stays at the bottom and no chrome covers a ruler: \(edgeChrome.map(\.frame)) \(topRuler)")
-        let controls = overlay.chrome.topBar.groups + [overlay.chrome.strip].filter { !$0.isHidden }
+        let controls = overlay.chrome.settingsBar.groups + [overlay.chrome.strip].filter { !$0.isHidden }
         let labelPills = [overlay.chrome.hover, overlay.chrome.size, overlay.chrome.reading].filter { !$0.isHidden }
         require(controls.allSatisfy { $0.frame.height == Chrome.controlHeight } && labelPills.allSatisfy { $0.frame.height == Chrome.labelHeight },
                 "controls are \(Chrome.controlHeight) pt and labels \(Chrome.labelHeight) pt tall: \(controls.map(\.frame.height)) \(labelPills.map(\.frame.height))")
@@ -393,9 +393,9 @@ final class ExtrasRun {
         open()
         let barChrome = overlay.chrome
         defaults.set(true, forKey: Pref.loupe)
-        for y in stride(from: barChrome.topBar.frame.maxY + 4, through: barChrome.topBar.frame.maxY + 140, by: 12) {
-            mouse(.mouseMoved, CGPoint(x: barChrome.topBar.frame.midX * overlay.scale, y: (viewBounds.height - y) * overlay.scale))
-            let covered = [barChrome.topBar, barChrome.strip].filter { !$0.isHidden && guides.loupe.frame.intersects($0.frame) }
+        for y in stride(from: barChrome.settingsBar.frame.maxY + 4, through: barChrome.settingsBar.frame.maxY + 140, by: 12) {
+            mouse(.mouseMoved, CGPoint(x: barChrome.settingsBar.frame.midX * overlay.scale, y: (viewBounds.height - y) * overlay.scale))
+            let covered = [barChrome.settingsBar, barChrome.strip].filter { !$0.isHidden && guides.loupe.frame.intersects($0.frame) }
             require(covered.isEmpty, "the loupe with the pointer at y \(y) covers no bar: \(guides.loupe.frame) \(covered.map(\.frame))")
         }
         // Nor over a chip: with a selection's chips showing (size, Snap, ratio, radius, and the "move" legend), a sweep of the pointer left of
@@ -1263,8 +1263,8 @@ final class ExtrasRun {
         for _ in 0..<20 where overlay.session!.selected!.kind != .display { key(up, "") }
         let fullChips = [overlay.chrome.hover, overlay.chrome.coordinates, overlay.chrome.snapTag, overlay.chrome.strip]
         require(overlay.view.overlays.hover == extent && overlay.view.dimLayer.path?.isEmpty != false && texts(in: overlay.chrome.hover).first == "Full screen"
-                    && fullChips.allSatisfy { !$0.isHidden && overlay.view.bounds.contains($0.frame) && !$0.frame.intersects(overlay.chrome.topBar.frame) },
-                "the full display walked out to dims nothing, and its chips and strip sit on screen clear of the top bar: \(fullChips.map(\.frame))")
+                    && fullChips.allSatisfy { !$0.isHidden && overlay.view.bounds.contains($0.frame) && !$0.frame.intersects(overlay.chrome.settingsBar.frame) },
+                "the full display walked out to dims nothing, and its chips and strip sit on screen clear of the settings bar: \(fullChips.map(\.frame))")
         key(17, "t")
         require(overlay.mode == .text && overlay.view.dimLayer.path?.isEmpty != false, "Text mode dims nothing")
         key(0, "a")
@@ -1342,7 +1342,7 @@ final class ExtrasRun {
 
     /// The settings bar and its ? button, the toggles' looks, and the pointer cluster with the Snap tag.
     func chromeControls() async throws {
-        // Chrome: bottom bar, hints, badges, style bar, hover title, and the safe area.
+        // Chrome: the settings bar's pills and its ? button, the toggles' looks, and the pointer cluster with the Snap tag.
         width0 = overlay.view.bounds.width
         open()
         overlay.detectionTask?.cancel()
@@ -1825,7 +1825,7 @@ final class ExtrasRun {
                 "the strip hangs under the selection: \(chrome.strip.frame) \(released)")
         require(chrome.size.frame.minY == released.maxY + 8, "the size chip sits above the selection")
         frameButton.onClick()
-        require(overlay.framed && frameButton.lit, "clicking the top bar's Frame turns Frame on and lights it")
+        require(overlay.framed && frameButton.lit, "clicking the settings bar's Frame turns Frame on and lights it")
         key(46, "m")
         require(!overlay.framed && !frameButton.lit, "M turns Frame off on a released selection")
         key(53, "")
@@ -2006,7 +2006,7 @@ final class ExtrasRun {
                 overlay.focusedCorner = corner
                 overlay.refresh()
                 require(!overlay.cornerChip.isHidden && texts(in: chrome.cornerKeys) == ["Radius", "[", "]", "Next Corner", "tab", "All Corners", "esc"],
-                        "the \(name) selection's focused \(corner) corner shows its chip and keys: \(overlay.cornerChip.isHidden) \(texts(in: chrome.cornerKeys)); box \(overlay.view.viewRect(rect)) \(([("bar", chrome.topBar), ("strip", chrome.strip), ("size", chrome.size), ("snap", chrome.snap), ("ratio", chrome.ratio), ("radius", chrome.radius), ("chip", overlay.cornerChip), ("keys", chrome.cornerKeys)] as [(String, NSView)]).map { "\($0.0) \($0.1.isHidden ? "hidden" : "\($0.1.frame)")" })")
+                        "the \(name) selection's focused \(corner) corner shows its chip and keys: \(overlay.cornerChip.isHidden) \(texts(in: chrome.cornerKeys)); box \(overlay.view.viewRect(rect)) \(([("bar", chrome.settingsBar), ("strip", chrome.strip), ("size", chrome.size), ("snap", chrome.snap), ("ratio", chrome.ratio), ("radius", chrome.radius), ("chip", overlay.cornerChip), ("keys", chrome.cornerKeys)] as [(String, NSView)]).map { "\($0.0) \($0.1.isHidden ? "hidden" : "\($0.1.frame)")" })")
                 chromeClear("the \(name) selection's focused \(corner) corner, set directly")
             }
             overlay.focusedCorner = nil
@@ -2115,7 +2115,7 @@ final class ExtrasRun {
                 overlay.setWindows([screenWindow], names: ["Form"], pointer: CGPoint(x: frame.minX, y: frame.maxY))
                 overlay.merge([Candidate(id: "ax-menu-bar", label: "Menu bar", bounds: hovered, score: AccessibilityBounds.baseScore, kind: .element)])
                 mouse(.mouseMoved, CGPoint(x: hovered.midX, y: 8))
-                let pieces: [(String, NSView)] = [("hover chip", chrome.hover), ("strip", chrome.strip), ("bar", chrome.topBar)].filter { !$0.1.isHidden }
+                let pieces: [(String, NSView)] = [("hover chip", chrome.hover), ("strip", chrome.strip), ("bar", chrome.settingsBar)].filter { !$0.1.isHidden }
                 let clashes = pieces.indices.flatMap { i in pieces.indices.filter { $0 > i && pieces[i].1.frame.intersects(pieces[$0].1.frame) }.map { "\(pieces[i].0) x \(pieces[$0].0)" } }
                 let box = overlay.view.viewRect(hovered)
                 require(pieces.map(\.0) == ["hover chip", "strip", "bar"] && clashes.isEmpty && !chrome.barAtTop && chrome.strip.frame.maxY == min(box.minY, overlay.view.bounds.height - inset) - 8
@@ -2129,7 +2129,7 @@ final class ExtrasRun {
 
     /// The cursor over chrome, lit buttons, and the recording-armed selection.
     func cursorAndArming() async throws {
-        // The cursor is the crosshair over a button of the top bar and the strip, over a row of an open menu, on the gaps between them and
+        // The cursor is the crosshair over a button of the settings bar and the strip, over a row of an open menu, on the gaps between them and
         // on the labels that pass the pointer through, inside a selection too, where elsewhere it is the open hand.
         overlay.dismiss()
         open()
@@ -2142,7 +2142,7 @@ final class ExtrasRun {
         chromeClear("a hover")
         // Must-show: with the pointer over the strip, the bar, a tool and near the screen's edges, the pointer cluster hangs under the
         // loupe's readout and both keep clear of the chrome, tool tip included.
-        for (name, point) in [("the strip", viewPixel(centerOf(chrome.strip))), ("the bar", viewPixel(centerOf(chrome.topBar))),
+        for (name, point) in [("the strip", viewPixel(centerOf(chrome.strip))), ("the bar", viewPixel(centerOf(chrome.settingsBar))),
                               ("the strip's left end", viewPixel(CGPoint(x: chrome.strip.frame.minX + 2, y: chrome.strip.frame.midY))),
                               ("the bottom edge", CGPoint(x: flat.x, y: extent.height - 2)), ("the right edge", CGPoint(x: extent.width - 2, y: flat.y))] {
             mouse(.mouseMoved, flat)
@@ -2167,7 +2167,7 @@ final class ExtrasRun {
         }
         let barGap = CGPoint(x: (top.groups[0].frame.maxX + top.groups[1].frame.minX) / 2 + top.frame.minX, y: top.frame.midY)
         mouse(.mouseMoved, viewPixel(barGap))
-        require(overlay.view.cursor === NSCursor.crosshair, "the cursor is the capture cursor on the gap between top bar pills: \(overlay.view.cursor)")
+        require(overlay.view.cursor === NSCursor.crosshair, "the cursor is the capture cursor on the gap between settings bar pills: \(overlay.view.cursor)")
         mouse(.mouseMoved, flat)
         mouse(.mouseMoved, viewPixel(centerOf(chrome.hover)))
         require(overlay.view.cursor === NSCursor.crosshair, "the hover chip passes the pointer through, so the cursor does not change over it: \(overlay.view.cursor)")
@@ -2248,8 +2248,8 @@ final class ExtrasRun {
         overlay.editedRadii[page] = CornerRadii(24 * overlay.scale)
         require(!overlay.view.guides.loupe.isHidden && !overlay.view.guides.readout.isHidden, "the loupe shows before scrolling capture")
         key(5, "g")
-        require(overlay.scrollArea == page && overlay.selection == nil && overlay.view.image == nil && overlay.window.ignoresMouseEvents && chrome.topBar.isHidden,
-                "G starts scrolling capture: the frozen image goes away, the top bar hides, and the pointer reaches the app below")
+        require(overlay.scrollArea == page && overlay.selection == nil && overlay.view.image == nil && overlay.window.ignoresMouseEvents && chrome.settingsBar.isHidden,
+                "G starts scrolling capture: the frozen image goes away, the settings bar hides, and the pointer reaches the app below")
         require(overlay.view.guides.loupe.isHidden && overlay.view.guides.readout.isHidden && chrome.coordinates.isHidden && chrome.snapTag.isHidden,
                 "the loupe hides during scrolling capture, with the pointer cluster")
         for _ in 0..<3000 where overlay.scrollHeight < 900 { try await Task.sleep(for: .milliseconds(10)) }
@@ -2378,7 +2378,7 @@ final class ExtrasRun {
         open()
         overlay.view.setFrameSize(CGSize(width: 520, height: overlay.view.bounds.height))
         overlay.refresh()
-        require(!chrome.topBar.isHidden && texts(in: chrome.topBar) == ["?"] && chrome.topBar.frame.width <= 520 - 16, "a 520 pt screen keeps only the bar's ? button: \(texts(in: chrome.topBar))")
+        require(!chrome.settingsBar.isHidden && texts(in: chrome.settingsBar) == ["?"] && chrome.settingsBar.frame.width <= 520 - 16, "a 520 pt screen keeps only the bar's ? button: \(texts(in: chrome.settingsBar))")
         overlay.view.setFrameSize(CGSize(width: width0, height: overlay.view.bounds.height))
         overlay.dismiss()
 
@@ -2455,7 +2455,7 @@ final class ExtrasRun {
         for item in chrome.all where !item.isHidden && item !== chrome.help {
             require(item.frame.maxY <= limit + 0.5 && item.frame.minY >= 0 && item.frame.minX >= 0 && item.frame.maxX <= width, "\(type(of: item)) \(item.frame) lies inside the safe area")
         }
-        require(!chrome.size.isHidden && !chrome.strip.isHidden && !chrome.topBar.isHidden, "the full-screen state shows the size chip, strip, and settings bar")
+        require(!chrome.size.isHidden && !chrome.strip.isHidden && !chrome.settingsBar.isHidden, "the full-screen state shows the size chip, strip, and settings bar")
         overlay.topInset = 0
         overlay.refresh()
         require(guides2.bands.path!.boundingBox.maxY == overlay.view.bounds.height, "without an inset the top ruler sits at the top edge")

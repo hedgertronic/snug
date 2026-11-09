@@ -2,6 +2,9 @@ import Foundation
 import ScreenshotBench
 import XCTest
 
+/// Runs the public bench suite against its frozen baseline. The suite measures `Detection.run` (geometry or Vision detection on the
+/// full-size image), not the app's hover pipeline, which runs `GeometryDetector` on a downsampled capture alongside Accessibility
+/// (`OverlayController+Extras.swift`), so a pass here does not cover hover in the app.
 final class ScreenshotBenchSuiteTests: XCTestCase {
     @MainActor
     func testPublicSuiteAgainstFrozenBaseline() async throws {
