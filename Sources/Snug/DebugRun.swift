@@ -178,7 +178,7 @@ enum DebugRun {
         let tightSize = try await copiedSize()
         require(tightSize == tight.size, "Return writes a PNG of \(tight.size)")
 
-        // Frame size, M toggling it, Cmd-1 / Cmd-2 / Cmd-3 gone, and the one-time SnugStyle migration.
+        // Frame size, M toggling it, and Cmd-1 / Cmd-2 / Cmd-3 gone.
         open()
         pressDrag(rough)
         try await waitFor("preview for the frame") { overlay.snapPreview != nil }
@@ -199,13 +199,6 @@ enum DebugRun {
         require(overlay.framed, "M turns Frame back on")
         for digit in ["1", "2", "3"] { key(0, digit, .command) }
         require(overlay.framed, "Cmd-1, Cmd-2 and Cmd-3 do nothing now")
-        for (stored, framed) in [("backdrop", true), ("tight", false), ("margin", false)] {
-            let legacy = UserDefaults(suiteName: FileManager.default.temporaryDirectory.appending(path: "snug-migrate-\(UUID().uuidString)").path)!
-            legacy.set(stored, forKey: "SnugStyle")
-            Pref.register(in: legacy)
-            require(legacy.bool(forKey: Pref.frame) == framed && legacy.object(forKey: "SnugStyle") == nil,
-                    "a stored SnugStyle of \(stored) migrates to Frame \(framed) and the old key is removed")
-        }
         defaults.set(false, forKey: Pref.frame)
         overlay.dismiss()
 

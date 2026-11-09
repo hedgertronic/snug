@@ -12,7 +12,7 @@ let openLog = Logger(subsystem: "com.hedgertronic.snug", category: "open")
 enum Pref {
     static let snap = "SnugSnap"
     /// Whether output gets its shadow (Frame): a live window its real macOS shadow, a subject the synthetic window shadow, an area or
-    /// element a padded card with a shadow. Replaces the "SnugStyle" string and the "SnugShadow" bool, which `register` removes.
+    /// element a padded card with a shadow.
     static let frame = "SnugFrame"
     /// The transparent padding around a framed area or element, in whole points from 0 to 64 (Settings > Appearance > Frame).
     static let framePadding = "SnugFramePadding"
@@ -26,9 +26,6 @@ enum Pref {
     static let frameShadowDistance = "SnugFrameShadowDistance"
     static let frameShadowAngle = "SnugFrameShadowAngle"
     static let frameShadowColor = "SnugFrameShadowColor"
-    private static let legacyStyle = "SnugStyle"
-    private static let legacyShadow = "SnugShadow"
-    private static let orphanedKeys = ["SnugAfterCapture", "SnugLastArea", "SnugModeBar", "SnugToastPreview"]
     static let saveFolder = "SnugSaveFolder"
     static let hotKeyCode = "SnugHotKeyCode"
     static let hotKeyModifiers = "SnugHotKeyModifiers"
@@ -101,14 +98,6 @@ enum Pref {
     }
 
     static func register(in defaults: UserDefaults) {
-        if let style = defaults.string(forKey: legacyStyle) {
-            defaults.set(style == "backdrop", forKey: frame)
-            defaults.removeObject(forKey: legacyStyle)
-        }
-        // Shadow on (its default) with Frame off stays off: Frame keeps its own value, so only the key goes.
-        defaults.removeObject(forKey: legacyShadow)
-        // Keys earlier versions wrote and nothing reads.
-        for key in orphanedKeys { defaults.removeObject(forKey: key) }
         defaults.register(defaults: [
             snap: true,
             frame: false,
