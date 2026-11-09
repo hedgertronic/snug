@@ -1,5 +1,4 @@
 import AppKit
-import Darwin
 import ImageIO
 import ScreenshotCore
 import UniformTypeIdentifiers
@@ -127,81 +126,7 @@ struct ScreenshotBench {
             print("Wrote six synthetic fixtures and manifest to \(args[1])")
             return
         }
-        guard args.first == "analyze", let input = option("--image"), let output = option("--output"),
-              let detector = DetectorKind(rawValue: option("--detector") ?? "geometry") else {
-            throw BenchError.message("Usage: ScreenshotBench fixtures DIR | analyze --image FILE --output DIR --detector geometry|vision [--repeat N] [--manifest FILE] | snap --image FILE --rect x,y,width,height --output DIR | evaluate --labels FILE --results DIR --output FILE | suite --manifest FILE [--baseline FILE] --output DIR | holdout --manifest FILE [--split holdout|development|all] [--candidate-list] | ocr-probe --image FILE --steps ocr,ocr [--level fast] [--correction off] [--detect-language off] [--languages en-US] [--width N] [--device cpu|gpu|neuralengine]")
-        }
-        let repetitions = max(1, min(100, Int(option("--repeat") ?? "1") ?? 1))
-        let inputURL = URL(fileURLWithPath: input)
-        let outputURL = URL(fileURLWithPath: output, isDirectory: true)
-        try FileManager.default.createDirectory(at: outputURL, withIntermediateDirectories: true)
-        let image = try PNG.read(inputURL)
-        var fixture: Fixture?
-        if let path = option("--manifest") {
-            fixture = try JSONDecoder().decode([Fixture].self, from: Data(contentsOf: URL(fileURLWithPath: path))).first { $0.file == inputURL.lastPathComponent }
-        }
-        if let fixture, image.width != fixture.pixelWidth || image.height != fixture.pixelHeight {
-            throw BenchError.message("Fixture pixel dimensions do not match the labeled manifest")
-        }
-        var times: [Double] = []
-        var candidates: [Candidate] = []
-        var failure: String?
-        for _ in 0..<repetitions {
-            do {
-                let report = try await Task.detached { try await Detection.run(detector, image: image) }.value
-                times.append(report.elapsedMilliseconds)
-                candidates = report.candidates
-            } catch { failure = String(describing: error); break }
-        }
-        let extent = CGRect(x: 0, y: 0, width: image.width, height: image.height)
-        let anchor = fixture?.anchor ?? CGPoint(x: extent.midX, y: extent.midY)
-        let session = SelectionSession(candidates: candidates, extent: extent, anchor: anchor)
-        let target = fixture?.target
-        let best = target.flatMap { target in candidates.max { Detection.overlap($0.bounds, target) < Detection.overlap($1.bounds, target) } }
-        func edgesMatch(_ a: CGRect, _ b: CGRect) -> Bool {
-            max(abs(a.minX - b.minX), abs(a.maxX - b.maxX), abs(a.minY - b.minY), abs(a.maxY - b.maxY)) <= 8
-        }
-        var minimumCorrections: Int?
-        if let target {
-            var frontier = [session]
-            for depth in 0...2 {
-                if frontier.contains(where: { edgesMatch($0.selected?.bounds ?? .zero, target) }) {
-                    minimumCorrections = depth
-                    break
-                }
-                frontier = frontier.flatMap { state in
-                    (0..<4).map { action in
-                        var next = state
-                        switch action {
-                        case 0: next.cycle()
-                        case 1: next.cycle(backward: true)
-                        case 2: next.expand()
-                        default: next.shrink()
-                        }
-                        return next
-                    }
-                }
-            }
-        }
-        var usage = rusage(); getrusage(RUSAGE_SELF, &usage)
-        let result = BenchmarkResult(file: inputURL.lastPathComponent, pixelWidth: image.width, pixelHeight: image.height, detector: detector, samplesMilliseconds: times,
-            peakProcessRSSBytes: Int64(usage.ru_maxrss), candidateCount: candidates.count,
-            defaultIoU: target.map { Detection.overlap(session.selected?.bounds ?? .zero, $0) },
-            bestCandidateIoU: target.map { Detection.overlap(best?.bounds ?? .zero, $0) },
-            defaultEdgesWithin8Pixels: target.map { edgesMatch(session.selected?.bounds ?? .zero, $0) },
-            bestEdgesWithin8Pixels: target.map { target in candidates.contains { edgesMatch($0.bounds, target) } },
-            minimumKeyboardCorrectionsWithinTwo: minimumCorrections,
-            selected: session.selected, candidates: candidates, error: failure)
-        let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let stem = "\(inputURL.deletingPathExtension().lastPathComponent)-\(detector.rawValue)"
-        try encoder.encode(result).write(to: outputURL.appendingPathComponent("\(stem).json"))
-        try writePreview(image, candidates: candidates, target: target, selected: session.selected, to: outputURL.appendingPathComponent("\(stem).png"))
-        if let selected = session.selected, let crop = image.cropping(to: selected.bounds.integral) {
-            try PNG.write(crop, to: outputURL.appendingPathComponent("\(stem)-crop.png"))
-        }
-        let timing = times.map { String(format: "%.1f", $0) }.joined(separator: ", ")
-        print("\(stem): \(candidates.count) candidates; ms=[\(timing)]; peak RSS=\(usage.ru_maxrss / 1_048_576) MiB; selected IoU=\(result.defaultIoU ?? -1); best IoU=\(result.bestCandidateIoU ?? -1)")
-        if let failure { throw BenchError.message(failure) }
+        throw BenchError.message("Usage: ScreenshotBench fixtures DIR | snap --image FILE --rect x,y,width,height --output DIR [--scale N] | evaluate --labels FILE --results DIR --output FILE | suite --manifest FILE [--baseline FILE] --output DIR | holdout --manifest FILE [--split holdout|development|all] [--candidate-list] (a private manifest with holdout rows: the committed public-suite.json has development rows only, so it needs --split development or all) | ocr-probe --image FILE --steps ocr,ocr [--level fast] [--correction off] [--detect-language off] [--languages en-US] [--width N] [--device cpu|gpu|neuralengine] [--dump]")
     }
 
     @MainActor

@@ -131,7 +131,7 @@ private func caption(_ text: String) -> some View {
 }
 
 /// The app icon and name once, then the developer's card: the headshot, name, a link to hedgertronic.com, a short bio, and the Ko-fi button; then
-/// under General the shortcut, save folder, open at login, sounds, the Text mode switch, the permissions, and the Agent card.
+/// under General the app's settings, the permissions, and the Agent card.
 private struct GeneralPane: View {
     @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0

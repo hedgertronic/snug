@@ -6,3 +6,4 @@ __pycache__/
 notes/
 dist/
 .wrangler/
+.swiftpm/

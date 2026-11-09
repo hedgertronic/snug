@@ -1,5 +1,4 @@
-"""Build and package Snug.app, which embeds Sparkle, its one third-party dependency, for updates. With --lab, also the developer lab app
-(Smart Screenshot Lab), the ScreenshotBench benchmark and its generated fixtures.
+"""Build and package Snug.app, which embeds Sparkle, its one third-party dependency, for updates.
 
 With --release, Snug is also timestamped, zipped, notarized with the snug-notary keychain profile, stapled and zipped again for
 download as build/release/Snug-VERSION.zip, and that zip, signed with the Sparkle EdDSA key in the login keychain, becomes the newest
@@ -42,11 +41,7 @@ root = Path(__file__).resolve().parents[1]
 def parse_arguments(arguments: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build build/Snug.app, or with --release a notarized download and its appcast item.")
     parser.add_argument("--release", action="store_true", help="notarize, zip and add the new version to appcast.xml")
-    parser.add_argument("--lab", action="store_true", help="also build the developer lab app, the benchmark and its fixtures")
-    options = parser.parse_args(arguments)
-    if options.release and options.lab:
-        parser.error("a release builds Snug alone; build the lab separately")
-    return options
+    return parser.parse_args(arguments)
 
 
 def check_feed(feed: str, version: str, build: str) -> None:
@@ -155,35 +150,6 @@ def install_binary(source: Path, destination: Path) -> None:
     os.replace(staging, destination)
 
 
-def build_lab(binary_dir: Path) -> None:
-    """The developer lab app at build/Smart Screenshot Lab.app, ad-hoc signed, and the benchmark at build/ScreenshotBench with its fixtures."""
-    app = root / "build/Smart Screenshot Lab.app"
-    contents = app / "Contents"
-    (contents / "MacOS").mkdir(parents=True, exist_ok=True)
-    (contents / "Resources").mkdir(exist_ok=True)
-    install_binary(binary_dir / "ScreenshotLab", contents / "MacOS/ScreenshotLab")
-    install_binary(binary_dir / "ScreenshotBench", root / "build/ScreenshotBench")
-    subprocess.run([str(root / "build/ScreenshotBench"), "fixtures", str(root / "build/fixtures")], check=True)
-    shutil.copy2(root / "build/fixtures/grid-table.png", contents / "Resources/Demo.png")
-    info = {
-        "CFBundleExecutable": "ScreenshotLab",
-        "CFBundleIdentifier": "local.smartscreenshot.lab",
-        "CFBundleName": "Smart Screenshot Lab",
-        "CFBundleDisplayName": "Smart Screenshot Lab",
-        "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "0.1.0",
-        "CFBundleVersion": "1",
-        "LSMinimumSystemVersion": MINIMUM_SYSTEM,
-        "NSPrincipalClass": "NSApplication",
-        "NSHighResolutionCapable": True,
-        "NSScreenCaptureUsageDescription": "Capture the chosen display to select and copy a screenshot region.",
-    }
-    with (contents / "Info.plist").open("wb") as stream:
-        plistlib.dump(info, stream)
-    subprocess.run(["codesign", "--force", "--sign", "-", str(app)], check=True)
-    subprocess.run(["codesign", "--verify", "--strict", str(app)], check=True)
-
-
 def main() -> None:
     options = parse_arguments(sys.argv[1:])
     release = options.release
@@ -197,12 +163,10 @@ def main() -> None:
         check_feed(read_feed(appcast), VERSION, BUILD)
         check_release_tools(signing_identity, env)
     # One universal binary for Apple silicon and Intel Macs.
-    command = ["swift", "build", "--disable-sandbox", "-c", "release", "--arch", "arm64", "--arch", "x86_64", *([] if options.lab else ["--product", "Snug"])]
+    command = ["swift", "build", "--disable-sandbox", "-c", "release", "--arch", "arm64", "--arch", "x86_64", "--product", "Snug"]
     subprocess.run(command, cwd=root, env=env, check=True)
     result = subprocess.run(command + ["--show-bin-path"], cwd=root, env=env, check=True, text=True, capture_output=True)
     binary_dir = Path(result.stdout.strip().splitlines()[-1])
-    if options.lab:
-        build_lab(binary_dir)
 
     # A release builds its own copy, so the everyday build/Snug.app keeps its signature and permissions.
     snug = root / ("build/release/Snug.app" if release else "build/Snug.app")
@@ -291,9 +255,6 @@ def main() -> None:
         print(f"Release: {archive}")
         print(f"Appcast: {appcast}")
     print(f"Snug: {archive if release else snug}")
-    if options.lab:
-        print(f"Lab: {root / 'build/Smart Screenshot Lab.app'}")
-        print(f"Benchmark: {root / 'build/ScreenshotBench'}")
 
 
 if __name__ == "__main__":

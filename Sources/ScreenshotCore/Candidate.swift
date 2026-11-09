@@ -2,7 +2,7 @@ import Foundation
 import CoreGraphics
 import os
 
-private let detectionSignposter = OSSignposter(subsystem: "local.smartscreenshot.lab", category: "pipeline")
+private let detectionSignposter = OSSignposter(subsystem: "com.hedgertronic.snug", category: "pipeline")
 
 /// The source or visual role of a proposed screenshot region.
 public enum CandidateKind: String, Codable, Sendable {

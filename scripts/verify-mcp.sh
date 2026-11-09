@@ -3,7 +3,7 @@
 # `--verify-agent-ui` check copies for an agent twice into a new temporary folder, so only the second bundle is left; JSON-RPC lines
 # then go into `Snug --mcp -SnugAgentFolder FOLDER`, once with that bundle and once after it is removed.
 # Prints each request and response (image data cut short) and exits non-zero when a response is not the expected one.
-# Needs jq. Run it inside the debug lock, like any debug Snug run.
+# Needs jq.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 snug=.build/debug/Snug
