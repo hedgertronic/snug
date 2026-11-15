@@ -1,13 +1,14 @@
 import Foundation
 import ScreenshotBench
-import XCTest
+import Testing
 
 /// Runs the public bench suite against its frozen baseline. The suite measures `Detection.run` (geometry or Vision detection on the
 /// full-size image), not the app's hover pipeline, which runs `GeometryDetector` on a downsampled capture alongside Accessibility
 /// (`OverlayController+Extras.swift`), so a pass here does not cover hover in the app.
-final class ScreenshotBenchSuiteTests: XCTestCase {
+struct ScreenshotBenchSuiteTests {
+    /// The public fixture suite meets its frozen baseline and writes both result files.
     @MainActor
-    func testPublicSuiteAgainstFrozenBaseline() async throws {
+    @Test func publicSuiteAgainstFrozenBaseline() async throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -19,7 +20,7 @@ final class ScreenshotBenchSuiteTests: XCTestCase {
             baselineURL: root.appendingPathComponent("Tests/Fixtures/evaluation/baselines/public-suite.json"),
             outputURL: output
         )
-        XCTAssertTrue(FileManager.default.fileExists(atPath: output.appendingPathComponent("results.json").path))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: output.appendingPathComponent("review.html").path))
+        #expect(FileManager.default.fileExists(atPath: output.appendingPathComponent("results.json").path))
+        #expect(FileManager.default.fileExists(atPath: output.appendingPathComponent("review.html").path))
     }
 }

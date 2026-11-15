@@ -1,30 +1,34 @@
 import CoreGraphics
+import Foundation
 import ImageIO
-import XCTest
+import Testing
 @testable import ScreenshotCore
 
-final class GeometryDetectorTests: XCTestCase {
-    func testFindsNestedCardAndTableInSourceCoordinates() async throws {
+/// Checks geometric proposals and their selection behavior on synthetic and bundled images.
+struct GeometryDetectorTests {
+    /// Nested cards and tables retain source coordinates and deterministic ordering within the proposal limit.
+    @Test func findsNestedCardAndTableInSourceCoordinates() async throws {
         let image = makeDashboard(width: 400, height: 300, scale: 1)
         let candidates = try await GeometryDetector().detect(in: image)
 
-        XCTAssertFalse(candidates.isEmpty)
-        XCTAssertLessThanOrEqual(candidates.count, 450)
-        XCTAssertTrue(candidates.contains { candidate in
+        #expect(!candidates.isEmpty)
+        #expect(candidates.count <= 450)
+        #expect(candidates.contains { candidate in
             candidate.kind == .region && near(candidate.bounds, CGRect(x: 40, y: 30, width: 320, height: 220), tolerance: 6)
         })
-        XCTAssertTrue(candidates.contains { candidate in
+        #expect(candidates.contains { candidate in
             candidate.kind == .table && near(candidate.bounds, CGRect(x: 70, y: 90, width: 250, height: 120), tolerance: 8)
         })
         let highestScoringTable = candidates.filter { $0.kind == .table }.max { $0.score < $1.score }
-        XCTAssertNotNil(highestScoringTable)
-        XCTAssertTrue(near(highestScoringTable!.bounds, CGRect(x: 70, y: 90, width: 250, height: 120), tolerance: 8))
+        #expect(highestScoringTable != nil)
+        #expect(near(highestScoringTable!.bounds, CGRect(x: 70, y: 90, width: 250, height: 120), tolerance: 8))
 
         let repeated = try await GeometryDetector().detect(in: image)
-        XCTAssertEqual(candidates, repeated)
+        #expect(candidates == repeated)
     }
 
-    func testFindsTheCellsOfAOneRowStrip() async throws {
+    /// A single row of alternating squares produces its eight cells and the whole strip.
+    @Test func findsTheCellsOfAOneRowStrip() async throws {
         // A board rank: 8 alternating green squares in one row on a dark page, too short for the whole-image column profile.
         let context = CGContext(data: nil, width: 1000, height: 680, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
@@ -37,11 +41,12 @@ final class GeometryDetectorTests: XCTestCase {
         }
         let candidates = try await GeometryDetector().detect(in: context.makeImage()!)
         let cells = candidates.filter { $0.kind == .cell && near($0.bounds, CGRect(x: $0.bounds.minX, y: 51, width: 47, height: 33), tolerance: 3) }
-        XCTAssertEqual(cells.count, 8, "\(candidates.map(\.bounds))")
-        XCTAssertTrue(candidates.contains { near($0.bounds, CGRect(x: 520, y: 51, width: 376, height: 33), tolerance: 3) })
+        #expect(cells.count == 8, "\(candidates.map(\.bounds))")
+        #expect(candidates.contains { near($0.bounds, CGRect(x: 520, y: 51, width: 376, height: 33), tolerance: 3) })
     }
 
-    func testARegularGridKeepsOnlyItsCellsRowsAndWhole() async throws {
+    /// A regular board keeps its cells, rows, and whole extent, with keyboard expansion through that hierarchy.
+    @Test func aRegularGridKeepsOnlyItsCellsRowsAndWhole() async throws {
         // An 8x8 board of 60 px squares on a dark page: no subrectangle of squares survives, and Up walks square, rank, board.
         let context = CGContext(data: nil, width: 1000, height: 680, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
@@ -56,35 +61,37 @@ final class GeometryDetectorTests: XCTestCase {
         }
         let board = CGRect(x: 480, y: 100, width: 480, height: 480)
         let candidates = try await GeometryDetector().detect(in: context.makeImage()!)
-        XCTAssertTrue(candidates.contains { near($0.bounds, board, tolerance: 3) }, "\(candidates.map(\.bounds))")
-        XCTAssertEqual(candidates.filter { $0.label == GeometryDetector.gridCellLabel }.count, 64)
+        #expect(candidates.contains { near($0.bounds, board, tolerance: 3) }, "\(candidates.map(\.bounds))")
+        #expect(candidates.filter { $0.label == GeometryDetector.gridCellLabel }.count == 64)
         let inside = candidates.filter { $0.kind != .cell && board.insetBy(dx: -3, dy: -3).contains($0.bounds) && !near($0.bounds, board, tolerance: 3) }
-        XCTAssertTrue(inside.allSatisfy { abs($0.bounds.width - 480) <= 3 && abs($0.bounds.height - 60) <= 3 }, "\(inside.map(\.bounds))")
+        #expect(inside.allSatisfy { abs($0.bounds.width - 480) <= 3 && abs($0.bounds.height - 60) <= 3 }, "\(inside.map(\.bounds))")
 
         let page = Candidate(id: "ax-page", label: "Group", bounds: CGRect(x: 0, y: 0, width: 1000, height: 680), score: 2, kind: .element)
         var session = SelectionSession(candidates: candidates + [page], extent: CGRect(x: 0, y: 0, width: 1000, height: 680), anchor: CGPoint(x: 630, y: 250))
-        XCTAssertTrue(near(session.selected!.bounds, CGRect(x: 600, y: 220, width: 60, height: 60), tolerance: 3), "\(session.selected!)")
+        #expect(near(session.selected!.bounds, CGRect(x: 600, y: 220, width: 60, height: 60), tolerance: 3), "\(session.selected!)")
         session.expand()
-        XCTAssertTrue(near(session.selected!.bounds, CGRect(x: 480, y: 220, width: 480, height: 60), tolerance: 3), "\(session.selected!)")
+        #expect(near(session.selected!.bounds, CGRect(x: 480, y: 220, width: 480, height: 60), tolerance: 3), "\(session.selected!)")
         session.expand()
-        XCTAssertTrue(near(session.selected!.bounds, board, tolerance: 3), "\(session.selected!)")
+        #expect(near(session.selected!.bounds, board, tolerance: 3), "\(session.selected!)")
     }
 
-    func testMapsDownscaledAnalysisBackToOriginalPixels() async throws {
+    /// Downscaled analysis maps the detected card back to the original image coordinates.
+    @Test func mapsDownscaledAnalysisBackToOriginalPixels() async throws {
         let image = makeDashboard(width: 1600, height: 1200, scale: 4)
         let candidates = try await GeometryDetector().detect(in: image)
-        XCTAssertTrue(candidates.contains { candidate in
+        #expect(candidates.contains { candidate in
             candidate.kind == .region && near(candidate.bounds, CGRect(x: 160, y: 120, width: 1280, height: 880), tolerance: 28)
         })
     }
 
-    func testFullSidebarIsReachableFromHoverAndKeyboard() async throws {
+    /// Sidebars on either edge remain proposals reachable by cycling the hover selection.
+    @Test func fullSidebarIsReachableFromHoverAndKeyboard() async throws {
         for rightSide in [false, true] {
             for top in [0, 24] {
                 let expected = CGRect(x: rightSide ? 320 : 0, y: top, width: 80, height: 300 - top)
                 let image = makeDashboard(width: 400, height: 300, scale: 1, sidebar: expected)
                 let candidates = try await GeometryDetector().detect(in: image)
-                XCTAssertTrue(candidates.contains { near($0.bounds, expected, tolerance: 3) })
+                #expect(candidates.contains { near($0.bounds, expected, tolerance: 3) })
                 var session = SelectionSession(candidates: candidates,
                     extent: CGRect(x: 0, y: 0, width: 400, height: 300),
                     anchor: CGPoint(x: expected.midX, y: 150))
@@ -95,32 +102,34 @@ final class GeometryDetectorTests: XCTestCase {
                     }
                     session.cycle()
                 }
-                XCTAssertTrue(reachable, "Full sidebar must be in the keyboard shortlist")
+                #expect(reachable, "Full sidebar must be in the keyboard shortlist")
             }
         }
     }
 
-    func testDemoSidebarSurvivesTableProposalLimit() async throws {
-        let url = try XCTUnwrap(Bundle.module.url(forResource: "Sidebar", withExtension: "png", subdirectory: "Fixtures"))
-        let source = try XCTUnwrap(CGImageSourceCreateWithURL(url as CFURL, nil))
-        let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
+    /// The bundled sidebar survives table filtering while the table keeps its 32 cells.
+    @Test func demoSidebarSurvivesTableProposalLimit() async throws {
+        let url = try #require(Bundle.module.url(forResource: "Sidebar", withExtension: "png", subdirectory: "Fixtures"))
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         let candidates = try await GeometryDetector().detect(in: image)
         let spurious = CGRect(x: 220, y: 96, width: 942, height: 506)
-        XCTAssertFalse(candidates.contains { near($0.bounds, spurious, tolerance: 5) })
+        #expect(!candidates.contains { near($0.bounds, spurious, tolerance: 5) })
         let tableExtent = CGRect(x: 277, y: 195, width: 890, height: 412)
-        XCTAssertTrue(candidates.filter { $0.kind == .table }.allSatisfy { tableExtent.contains($0.bounds) })
+        #expect(candidates.filter { $0.kind == .table }.allSatisfy { tableExtent.contains($0.bounds) })
         let cells = candidates.filter { $0.kind == .cell }
-        XCTAssertEqual(cells.count, 32)
-        XCTAssertTrue(cells.allSatisfy { abs($0.bounds.width - 220) <= 5 && abs($0.bounds.height - 50) <= 5 })
-        let cell = try XCTUnwrap(candidates.first { $0.kind == .cell && $0.bounds.contains(CGPoint(x: 350, y: 275)) })
-        XCTAssertTrue(near(cell.bounds, CGRect(x: 280, y: 250, width: 220, height: 50), tolerance: 5))
+        #expect(cells.count == 32)
+        #expect(cells.allSatisfy { abs($0.bounds.width - 220) <= 5 && abs($0.bounds.height - 50) <= 5 })
+        let cell = try #require(candidates.first { $0.kind == .cell && $0.bounds.contains(CGPoint(x: 350, y: 275)) })
+        #expect(near(cell.bounds, CGRect(x: 280, y: 250, width: 220, height: 50), tolerance: 5))
         let expected = CGRect(x: 0, y: 0, width: 220, height: 800)
         let session = SelectionSession(candidates: candidates,
             extent: CGRect(x: 0, y: 0, width: image.width, height: image.height),
             anchor: CGPoint(x: 100, y: 400))
-        XCTAssertTrue(near(try XCTUnwrap(session.selected).bounds, expected, tolerance: 2))
+        #expect(near(try #require(session.selected).bounds, expected, tolerance: 2))
     }
 
+    /// Whether both origins and sizes differ by at most the supplied tolerance.
     private func near(_ actual: CGRect, _ expected: CGRect, tolerance: CGFloat) -> Bool {
         abs(actual.minX - expected.minX) <= tolerance &&
             abs(actual.minY - expected.minY) <= tolerance &&
@@ -128,11 +137,13 @@ final class GeometryDetectorTests: XCTestCase {
             abs(actual.height - expected.height) <= tolerance
     }
 
+    /// Draws a nested card and table, with an optional sidebar, at the requested pixel scale.
     private func makeDashboard(width: Int, height: Int, scale: Int, sidebar: CGRect? = nil) -> CGImage {
         var bytes = [UInt8](repeating: 246, count: width * height * 4)
         for pixel in 0..<(width * height) {
             bytes[pixel * 4 + 3] = 255
         }
+        /// Fills a clipped rectangle with an opaque gray shade.
         func fill(_ x: Int, _ y: Int, _ w: Int, _ h: Int, _ value: UInt8) {
             for row in max(0, y)..<min(height, y + h) {
                 for column in max(0, x)..<min(width, x + w) {
@@ -144,6 +155,7 @@ final class GeometryDetectorTests: XCTestCase {
                 }
             }
         }
+        /// Draws a dark border two scaled pixels thick inside a rectangle.
         func border(_ x: Int, _ y: Int, _ w: Int, _ h: Int) {
             let line = 2 * scale
             fill(x, y, w, line, 35)
