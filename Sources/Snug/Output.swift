@@ -224,9 +224,9 @@ enum Output {
             .appendingPathExtension("png")
     }
 
-    /// Copies a PNG to the pasteboard or saves it, and shows a toast; returns the toast's message and detail. `detail` is the toast's
-    /// pixel size line, saved or not. A save goes to `destination` (Save As, which the panel already confirmed) or the usual file, named for
-    /// `context` (the app and window title), which takes a numbered name when its own is taken. With AI names on, a file saved under the
+    /// Copies a PNG to the pasteboard or saves it, and shows a toast; returns the toast's message and detail. The detail is the saved
+    /// file's name with extension, or `detail` (the pixel size) when nothing was saved. A save goes to `destination` (Save As, which the
+    /// panel already confirmed) or the usual file, named for `context` (the app and window title), which takes a numbered name when its own is taken. With AI names on, a file saved under the
     /// usual name is renamed once the on-device model describes it (`CaptureNamer`). A write that fails (the pasteboard refusing the image, an unwritable folder) shows a red toast
     /// with its reason and keeps the capture in it: "Copy failed" or "Save failed"; a capture that lands plays the capture sound. Otherwise a `warning` (a capture that may be wrong)
     /// takes the detail line and an orange mark. The file is written off the main thread; the pasteboard and the toast stay on it.
@@ -256,7 +256,7 @@ enum Output {
         let message = message(copy: copy, save: save, copied: copied, saved: saveError == nil, folder: folder)
         let failed = !copied || saveError != nil
         let reason = saveError.map { ($0 as NSError).localizedFailureReason ?? $0.localizedDescription } ?? "The pasteboard did not accept the image."
-        let detail = failed ? reason : warning ?? detail
+        let detail = failed ? reason : warning ?? file?.lastPathComponent ?? detail
         Toast.show(png: png, message: message, detail: detail, file: file, color: failed ? .systemRed : warning.map { _ in .systemOrange },
                    name: context == nil ? nil : base, defaults: defaults, pasteboard: pasteboard)
         if !failed { Sound.capture.play(defaults: defaults) }

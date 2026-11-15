@@ -901,6 +901,8 @@ extension DebugRun {
             return try await Output.png(context.makeImage()!)
         }
         let tall = try await tiled(1280, 9000, band: true), wide = try await tiled(7200, 800, band: false)
+        let saved = URL(fileURLWithPath: "/tmp/Snug 2026-10-22 at 14.03.11.png")
+        let longSaved = URL(fileURLWithPath: "/tmp/Safari - Lisbon flight confirmation and itinerary for review 2026-10-22 at 14.03.11.png")
         let movie = URL(fileURLWithPath: "/tmp/Snug 2026-10-22 at 14.03.11.mov")
         let longMovie = URL(fileURLWithPath: "/tmp/Snug 2026-10-22 at 14.03.11 onboarding walkthrough for review 11.mov")
         let swatch = NSColor(srgbRed: 0x3A / 255, green: 0x7B / 255, blue: 0xD5 / 255, alpha: 1)
@@ -916,8 +918,9 @@ extension DebugRun {
             ("hover", true, false, { Toast(png: screenshot, message: "Copied", detail: "1280 x 800", file: nil, color: nil, defaults: defaults) }),
             ("preview", true, true, { Toast(png: screenshot, message: "Copied", detail: "1280 x 800", file: nil, color: nil, defaults: defaults) }),
             ("preview-top-right", true, true, { Toast(png: screenshot, message: "Copied", detail: "1280 x 800", file: nil, color: nil, defaults: topRight) }),
-            ("saved-hover", true, false, { Toast(png: screenshot, message: "Saved to Desktop", detail: "1280 x 800",
-                                                 file: URL(fileURLWithPath: "/tmp/Snug 2026-10-22 at 14.03.11.png"), color: nil, defaults: defaults) }),
+            ("saved", false, false, { Toast(png: screenshot, message: "Saved to Desktop", detail: saved.lastPathComponent, file: saved, color: nil, defaults: defaults) }),
+            ("saved-hover", true, false, { Toast(png: screenshot, message: "Saved to Desktop", detail: saved.lastPathComponent, file: saved, color: nil, defaults: defaults) }),
+            ("saved-long-filename", false, false, { Toast(png: screenshot, message: "Saved to Desktop", detail: longSaved.lastPathComponent, file: longSaved, color: nil, defaults: defaults) }),
             ("text", false, false, { Toast(png: nil, message: "Copied 3 lines", detail: "", file: nil, color: nil,
                                            text: "\nShip v1.0 settings pane and move the toast lifetime picker under General\nFix toast on second display\nDraft the release notes", defaults: defaults) }),
             ("text-hover", true, false, { Toast(png: nil, message: "Copied 3 lines", detail: "", file: nil, color: nil, text: "Ship v1.0 settings pane\nFix toast", defaults: defaults) }),
@@ -934,8 +937,8 @@ extension DebugRun {
             ("failure-capture", false, false, { Toast(png: screenshot, message: "Save failed", detail: "You do not have permission to save in Desktop.", file: nil,
                                                       color: .systemRed, defaults: defaults) }),
             ("long-filename", false, false, { Toast(png: screenshot, message: "Copied, saved to Desktop", detail: longMovie.lastPathComponent, file: longMovie, color: nil, defaults: defaults) }),
-            ("long-message", false, false, { Toast(png: screenshot, message: "Saved to Design Review Screenshots 2026", detail: "1280 x 800",
-                                                   file: URL(fileURLWithPath: "/tmp/Snug 2026-10-22 at 14.03.11.png"), color: nil, defaults: defaults) }),
+            ("long-message", false, false, { Toast(png: screenshot, message: "Saved to Design Review Screenshots 2026", detail: saved.lastPathComponent,
+                                                   file: saved, color: nil, defaults: defaults) }),
             ("tall", true, true, { Toast(png: tall, message: "Copied", detail: "1280 x 9000", file: nil, color: nil, defaults: defaults) }),
             ("wide", true, true, { Toast(png: wide, message: "Copied", detail: "7200 x 800", file: nil, color: nil, defaults: defaults) })
         ]
@@ -968,8 +971,8 @@ extension DebugRun {
                     require((toast.lead as! NSImageView).symbolConfiguration == NSImage.SymbolConfiguration(pointSize: 27, weight: .regular)
                                 .applying(.init(paletteColors: [.black, Highlight.color(hex: "#FFC600")])),
                             "the text glyph is black on the yellow highlight color")
-                case "long-filename":
-                    require(toast.detail.lineBreakMode == .byTruncatingMiddle && toast.detail.toolTip == longMovie.lastPathComponent && toast.card.frame.width == 360,
+                case "long-filename", "saved-long-filename":
+                    require(toast.detail.lineBreakMode == .byTruncatingMiddle && toast.detail.toolTip == toast.file?.lastPathComponent && toast.card.frame.width == 360,
                             "a long file name is cut in the middle with the full name as its tooltip")
                 case "recording-hover":
                     require(toast.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! } == ["Copy", "Rename", "Move to Trash", "Open in \(Toast.appName(toOpen: .quickTimeMovie))", "Show in Finder", "Share"],
@@ -1007,7 +1010,7 @@ extension DebugRun {
         for (look, backdrop) in [(NSAppearance.Name.aqua, NSColor(srgbRed: 0.84, green: 0.87, blue: 0.93, alpha: 1)), (.darkAqua, NSColor(srgbRed: 0.13, green: 0.15, blue: 0.22, alpha: 1))] {
             NSApp.appearance = NSAppearance(named: look)
             let stacked = [Toast(png: tall, message: "Copied", detail: "1280 x 9000", file: nil, color: nil, defaults: defaults),
-                           Toast(png: screenshot, message: "Saved to Desktop", detail: "1280 x 800", file: URL(fileURLWithPath: "/tmp/Snug.png"), color: nil, defaults: defaults),
+                           Toast(png: screenshot, message: "Saved to Desktop", detail: "Snug.png", file: URL(fileURLWithPath: "/tmp/Snug.png"), color: nil, defaults: defaults),
                            Toast(png: nil, message: "Copied", detail: "#3A7BD5", file: nil, color: swatch, text: "#3A7BD5", defaults: defaults)]
             for toast in stacked { Toast.stack(toast) }
             try renderPanels(stacked + [stacked[1].preview!], on: backdrop, to: directory.appending(path: "toast-stack-\(look == .aqua ? "light" : "dark").png"))

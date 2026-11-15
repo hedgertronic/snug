@@ -634,7 +634,12 @@ extension DebugRun {
         require(saved.count == 4 && contents == ["taken", "first", "second", "third"], "saves in one second keep every capture: \(saved)")
         require(saved.contains { $0.hasSuffix(" 2.png") }, "a taken default name gets \" 2\" before the extension: \(saved)")
         let savedToast = await Output.publish(png: Data("fourth".utf8), detail: "1 x 1", copy: false, save: true, pasteboard: pasteboard, defaults: defaults)
-        require(savedToast.detail == "1 x 1", "a saved capture's toast keeps the pixel size as its detail, not the file name: \(savedToast)")
+        let fourth = try Set(FileManager.default.contentsOfDirectory(atPath: outputFolder.path)).subtracting(saved)
+        require(fourth.count == 1 && fourth.first == savedToast.detail && savedToast.detail.hasSuffix(".png"),
+                "a saved capture's toast shows the saved file's name with extension: \(savedToast)")
+        let warned = await Output.publish(png: Data("warning".utf8), detail: "1 x 1", copy: false, save: true, warning: "Check the stitch",
+                                          pasteboard: pasteboard, defaults: defaults)
+        require(warned.detail == "Check the stitch", "a saved capture's warning keeps its detail: \(warned)")
 
         let blocked = folder.appending(path: "blocked")
         try FileManager.default.createDirectory(at: blocked, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o500])
@@ -685,7 +690,11 @@ extension DebugRun {
         Pref.register(in: defaults)
         require(defaults.string(forKey: Pref.fileNamePattern) == CaptureName.defaultPattern, "an empty pattern is replaced by the default")
         defaults.set(names.path, forKey: Pref.saveFolder)
-        let renaming = Toast(png: Data("named".utf8), message: "Saved to names", detail: "1 x 1", file: savedFile, color: nil, defaults: defaults, pasteboard: pasteboard)
+        let renaming = Toast(png: Data("named".utf8), message: "Saved to names", detail: savedFile.lastPathComponent, file: savedFile, color: nil, defaults: defaults, pasteboard: pasteboard)
+        let renameCard = renaming.card.frame
+        let renameBox = renaming.textBox.frame
+        require(renaming.detail.lineBreakMode == .byTruncatingMiddle && renaming.detail.toolTip == savedFile.lastPathComponent,
+                "a saved capture's file name is middle-truncated with its full name as the tooltip")
         require(!renaming.renameButton.isHidden && renaming.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! }.contains("Rename"),
                 "a saved capture's toast offers Rename")
         renaming.renameButton.performClick(nil)
@@ -699,6 +708,10 @@ extension DebugRun {
         require(renaming.file == renamed && FileManager.default.fileExists(atPath: renamed.path) && !FileManager.default.fileExists(atPath: savedFile.path)
                     && renaming.message.stringValue == "Saved to names",
                 "Return renames the file in its folder and keeps the extension once: \(String(describing: renaming.file?.lastPathComponent))")
+        require(renaming.detail.stringValue == renamed.lastPathComponent && renaming.detail.toolTip == renamed.lastPathComponent
+                    && renaming.detail.lineBreakMode == .byTruncatingMiddle && renaming.card.frame == renameCard && renaming.textBox.frame == renameBox
+                    && renaming.textBox.bounds.contains(renaming.detail.frame) && renaming.detail.frame.width > 0,
+                "renaming a saved capture updates its detail and tooltip within the fixed text box and card")
         renaming.commitRename("flight to lisbon")
         let recased = try FileManager.default.contentsOfDirectory(atPath: names.path)
         require(recased == ["flight to lisbon.png"] && renaming.file?.lastPathComponent == "flight to lisbon.png",
@@ -744,14 +757,29 @@ extension DebugRun {
             }
         }
         func aiFiles() throws -> [String] { try FileManager.default.contentsOfDirectory(atPath: ai.path).filter { !$0.hasPrefix(".") }.sorted() }
-        describing("Flight Confirmation")
-        await Output.publish(png: Data("ai".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
+        describing("Flight Confirmation", after: .milliseconds(50))
+        let aiDetail = await Output.publish(png: Data("ai".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
+        let aiFile = ai.appending(path: aiDetail.detail)
+        let aiToast = Toast(png: Data("ai".utf8), message: aiDetail.message, detail: aiDetail.detail, file: aiFile, color: nil, defaults: defaults, pasteboard: pasteboard)
+        let aiWarning = Toast(png: Data("ai".utf8), message: aiDetail.message, detail: "Check the stitch", file: aiFile, color: .systemOrange, defaults: defaults, pasteboard: pasteboard)
+        let aiCard = aiToast.card.frame
+        let aiBox = aiToast.textBox.frame
+        Toast.stack(aiToast)
+        Toast.stack(aiWarning)
         let aiRenamed = await CaptureNamer.lastRename?.value
         let afterAI = try aiFiles()
         require(described == 1 && afterAI.count == 1 && afterAI[0].hasPrefix("Safari - Flight Confirmation 20") && aiRenamed?.lastPathComponent == afterAI[0],
                 "with AI names on, a saved capture is renamed to the model's description after its app: \(afterAI)")
         require(afterAI[0].wholeMatch(of: /Safari - Flight Confirmation \d{4}-\d{2}-\d{2} at \d{2}\.\d{2}\.\d{2}\.png/) != nil,
                 "the AI name keeps the stamp and extension: \(afterAI[0])")
+        require(aiToast.file == aiRenamed && aiToast.detail.stringValue == afterAI[0] && aiToast.detail.toolTip == afterAI[0]
+                    && aiToast.detail.lineBreakMode == .byTruncatingMiddle && aiToast.card.frame == aiCard && aiToast.textBox.frame == aiBox
+                    && aiToast.textBox.bounds.contains(aiToast.detail.frame) && aiToast.detail.frame.width > 0,
+                "an AI rename updates the saved capture's detail and tooltip within the fixed text box and card")
+        require(aiWarning.file == aiRenamed && aiWarning.detail.stringValue == "Check the stitch",
+                "an AI rename follows the saved file without replacing its warning detail")
+        aiToast.dismiss()
+        aiWarning.dismiss()
         try FileManager.default.removeItem(at: ai.appending(path: afterAI[0]))
         defaults.set("{date} {title}", forKey: Pref.fileNamePattern)
         await Output.publish(png: Data("ai".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
@@ -770,7 +798,7 @@ extension DebugRun {
         describing("Slow Title", after: .milliseconds(300))
         await Output.publish(png: Data("ai".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
         let first = ai.appending(path: try aiFiles()[0])
-        let mine = Toast(png: Data("ai".utf8), message: "Saved to ai", detail: "1 x 1", file: first, color: nil, defaults: defaults, pasteboard: pasteboard)
+        let mine = Toast(png: Data("ai".utf8), message: "Saved to ai", detail: first.lastPathComponent, file: first, color: nil, defaults: defaults, pasteboard: pasteboard)
         mine.commitRename("Mine")
         let late = await CaptureNamer.lastRename?.value
         let afterMine = try aiFiles()
