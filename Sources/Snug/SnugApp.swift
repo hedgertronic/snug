@@ -22,7 +22,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
     }
     /// The stopped recording's finish: its stop, the file's move to its name and the delivery. Quit waits for it; nil once it ends.
     private var finishing: Task<Void, Never>?
-    private var iconObservations: [NSKeyValueObservation] = []
+    /// Keeps the status item's icon in sync with the menu bar's light or dark appearance.
+    private var iconObservation: NSKeyValueObservation?
     /// Sparkle's updater, made only when Snug launches for real, so debug runs never check for updates or ask about automatic checks.
     /// Settings' General pane switches its automatic checks.
     private(set) var updater: SPUStandardUpdaterController?
@@ -214,7 +215,7 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     private func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        iconObservations = Self.observeMenuBarIcon(on: item.button!, defaults: .standard)
+        iconObservation = Self.observeMenuBarIcon(on: item.button!)
         let menu = Self.makeMenu(defaults: .standard)
         captureItem = menu.items[0]
         // The updater enables Check for Updates while it can check.
@@ -223,44 +224,31 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         statusItem = item
     }
 
-    /// Keeps `button` showing the icon variant in `SnugMenuBarIcon` for the menu bar's light or dark appearance, redrawn as soon as the
-    /// default changes, including from `defaults write` in another process, or the menu bar turns light or dark.
+    /// Keeps `button` showing the icon for the menu bar's light or dark appearance, redrawn when the menu bar turns light or dark.
     /// The status item sets the button's appearance and back for each menu bar's snapshot, and a new image takes new snapshots, so the button
-    /// keeps its image unless the variant or the menu bar's light or dark changed.
-    static func observeMenuBarIcon(on button: NSButton, defaults: UserDefaults) -> [NSKeyValueObservation] {
-        var drawn: (variant: String, dark: Bool)?
-        // A variant written while Snug runs is not sanitized at launch; an unknown one draws the default.
+    /// keeps its image unless the menu bar's light or dark changed.
+    static func observeMenuBarIcon(on button: NSButton) -> NSKeyValueObservation {
+        var drawn: Bool?
         let update = { @MainActor in
-            let variant = defaults.string(forKey: Pref.menuBarIcon).flatMap { Pref.menuBarIcons.contains($0) ? $0 : nil } ?? "q"
             let dark = isDark(button)
-            guard drawn == nil || drawn! != (variant, dark) else { return }
-            drawn = (variant, dark)
-            button.image = menuBarIcon(variant, dark: dark)
+            guard drawn != dark else { return }
+            drawn = dark
+            button.image = menuBarIcon(dark: dark)
         }
-        return [defaults.observe(\.SnugMenuBarIcon, options: [.initial]) { _, _ in Task { @MainActor in update() } },
-                button.observe(\.effectiveAppearance) { _, _ in Task { @MainActor in update() } }]
+        return button.observe(\.effectiveAppearance, options: [.initial]) { _, _ in Task { @MainActor in update() } }
     }
 
+    /// Whether `view` uses a dark appearance.
     static func isDark(_ view: NSView) -> Bool {
         view.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
     }
 
     /// The menu bar logo as a template image, drawn in an 18 pt space into a 1x and a 2x bitmap so each display scale gets pixels placed for it.
-    /// "a": the app tile, solid, with five arch dots and the band cut out. The dots sit on whole points, 2 x 2 squares at 1x and circles at 2x,
-    /// and the band's curve is a 1 px step at 1x.
-    /// "h": the app tile, solid, in the logo's proportions, with its dashed arch and the band's curve cut out; the band's top sits
-    /// at about half the tile's height in the middle and 53% from the top at the sides. At 2x the arch's round-capped dashes mirror around
-    /// one centered on top; at 1x they are 2 px on top and 2 px down each leg with 1 px gaps, and the curve is a 1 px step.
-    /// "p": "h" in three opacities, the tile solid, the blanket below the band's cut at 70% and the pillow, the part of the tile inside
-    /// the arch, at 40%. At 2x the pillow is the arch's centerline closed into a rounded rect. Template images keep
-    /// partial alpha, so the blanket and pillow show as lighter patches. The band sits lower than the app icon's so the blanket takes less of
-    /// the glyph: at 2x its top is 56% down the tile in the middle and 63% at the sides; at 1x it is "h"'s step a pixel lower, with the
-    /// pillow, x 5-12, y 8-13, reaching it.
-    /// "q", the default: drawn to look like macOS's monochrome app icons on either menu bar, a mid-gray tile, a lighter pillow, a lighter
+    /// Drawn to look like macOS's monochrome app icons on either menu bar, a mid-gray tile, a lighter pillow, a lighter
     /// blanket still, and the brightest arch dashes and band. On a `dark` menu bar the template's white is the light: the tile at 25%, the
     /// pillow at 60%, the blanket at 85%, and the dashes and band solid. On a light one its black is the dark: the tile at 66%, the pillow at
     /// 33%, the blanket at 16%, and the dashes and band cut out.
-    static func menuBarIcon(_ variant: String, dark: Bool = false) -> NSImage {
+    static func menuBarIcon(dark: Bool = false) -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18))
         for scale in [1, 2] {
             let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 18 * scale, pixelsHigh: 18 * scale, bitsPerSample: 8, samplesPerPixel: 4,
@@ -268,137 +256,81 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             rep.size = NSSize(width: 18, height: 18)
             NSGraphicsContext.saveGraphicsState()
             NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-            switch variant {
-            case "a":
-                NSBezierPath(roundedRect: CGRect(x: 1, y: 1, width: 16, height: 16), xRadius: 4, yRadius: 4).fill()
-                NSGraphicsContext.current!.compositingOperation = .clear
-                for center in [CGPoint(x: 5, y: 9), CGPoint(x: 5, y: 13), CGPoint(x: 9, y: 14), CGPoint(x: 13, y: 13), CGPoint(x: 13, y: 9)] {
-                    let dot = CGRect(x: center.x - 1, y: center.y - 1, width: 2, height: 2)
-                    if scale == 1 { dot.fill() } else { NSBezierPath(ovalIn: dot).fill() }
-                }
-                if scale == 1 {
-                    // The band's curve as a 1 px step.
-                    CGRect(x: 1, y: 5, width: 3, height: 1).fill()
-                    CGRect(x: 4, y: 6, width: 10, height: 1).fill()
-                    CGRect(x: 14, y: 5, width: 3, height: 1).fill()
-                } else {
-                    // Low enough that the bottom dots keep a pixel of tile between them and the cut.
-                    let band = NSBezierPath()
-                    band.move(to: CGPoint(x: 0, y: 5))
-                    band.curve(to: CGPoint(x: 18, y: 5), controlPoint1: CGPoint(x: 5.4, y: 7.25), controlPoint2: CGPoint(x: 12.6, y: 7.25))
-                    band.lineWidth = 1.5
-                    band.stroke()
-                }
-            case "h":
-                NSBezierPath(roundedRect: CGRect(x: 1, y: 1, width: 16, height: 16), xRadius: 4, yRadius: 4).fill()
-                NSGraphicsContext.current!.compositingOperation = .clear
-                if scale == 1 {
-                    // The arch as 2 x 1 px dashes on top and 1 x 2 px dashes down each leg, with 1 px gaps; the band's curve as a 1 px step.
-                    for x: CGFloat in [5, 8, 11] { CGRect(x: x, y: 14, width: 2, height: 1).fill() }
-                    for x: CGFloat in [4, 13] { CGRect(x: x, y: 11, width: 1, height: 2).fill() }
-                    CGRect(x: 1, y: 7, width: 3, height: 1).fill()
-                    CGRect(x: 4, y: 8, width: 10, height: 1).fill()
-                    CGRect(x: 14, y: 7, width: 3, height: 1).fill()
-                } else {
-                    // Each half of the arch runs from the top center down a leg: 2 pt of top, a 2.25 pt radius corner, 2 pt of leg. Dashes
-                    // mirror around one centered on top, and each leg ends in a gap above the band.
-                    for side: CGFloat in [-1, 1] {
-                        let half = NSBezierPath()
-                        half.move(to: CGPoint(x: 9, y: 14.25))
-                        half.line(to: CGPoint(x: 9 + 2 * side, y: 14.25))
-                        half.appendArc(withCenter: CGPoint(x: 9 + 2 * side, y: 12), radius: 2.25, startAngle: 90, endAngle: side < 0 ? 180 : 0, clockwise: side > 0)
-                        half.line(to: CGPoint(x: 9 + 4.25 * side, y: 10))
-                        half.lineWidth = 1.25
-                        half.lineCapStyle = .round
-                        half.setLineDash([0.25, 1.85, 0.5, 1.85, 0.5, 1.85, 0.5, 10], count: 8, phase: 0)
-                        half.stroke()
+            // On a dark menu bar the arch's dashes and the band are solid instead of cut out, over a faint tile.
+            let marked = dark
+            let (tileAlpha, pillowAlpha, blanketAlpha): (CGFloat, CGFloat, CGFloat) =
+                marked ? (0.25, 0.6, 0.85) : (0.66, 0.33, 0.16)
+            let tile = NSBezierPath(roundedRect: CGRect(x: 1, y: 1, width: 16, height: 16), xRadius: 4, yRadius: 4)
+            let context = NSGraphicsContext.current!
+            if scale == 1 {
+                // Each tile pixel takes its part's alpha; the tile's own 1x coverage comes from filling it into a mask.
+                let mask = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 18, pixelsHigh: 18, bitsPerSample: 8, samplesPerPixel: 4,
+                                            hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+                NSGraphicsContext.saveGraphicsState()
+                NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: mask)
+                tile.fill()
+                NSGraphicsContext.restoreGraphicsState()
+                context.compositingOperation = .copy
+                for x in 0..<18 {
+                    for y in 0..<18 {
+                        let coverage = mask.colorAt(x: x, y: 17 - y)!.alphaComponent
+                        guard coverage > 0 else { continue }
+                        let part = (5...12).contains(x) && (8...13).contains(y) ? pillowAlpha : y < ((4...13).contains(x) ? 7 : 6) ? blanketAlpha : tileAlpha
+                        NSColor(white: 0, alpha: part * coverage).setFill()
+                        CGRect(x: x, y: y, width: 1, height: 1).fill()
                     }
-                    let cut = NSBezierPath()
-                    cut.move(to: CGPoint(x: 0, y: 7.6))
-                    cut.curve(to: CGPoint(x: 18, y: 7.6), controlPoint1: CGPoint(x: 5.4, y: 9.6), controlPoint2: CGPoint(x: 12.6, y: 9.6))
-                    // As heavy as the arch's dashes.
-                    cut.lineWidth = 1
-                    cut.stroke()
                 }
-            case "p", "q":
-                // "q" on a dark menu bar draws the arch's dashes and the band solid instead of cutting them out, over a faint tile.
-                let marked = variant == "q" && dark
-                let (tileAlpha, pillowAlpha, blanketAlpha): (CGFloat, CGFloat, CGFloat) =
-                    variant == "p" ? (1, 0.4, 0.7) : marked ? (0.25, 0.6, 0.85) : (0.66, 0.33, 0.16)
-                let tile = NSBezierPath(roundedRect: CGRect(x: 1, y: 1, width: 16, height: 16), xRadius: 4, yRadius: 4)
-                let context = NSGraphicsContext.current!
-                if scale == 1 {
-                    // Each tile pixel takes its part's alpha; the tile's own 1x coverage comes from filling it into a mask.
-                    let mask = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 18, pixelsHigh: 18, bitsPerSample: 8, samplesPerPixel: 4,
-                                                hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
-                    NSGraphicsContext.saveGraphicsState()
-                    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: mask)
-                    tile.fill()
-                    NSGraphicsContext.restoreGraphicsState()
-                    context.compositingOperation = .copy
-                    for x in 0..<18 {
-                        for y in 0..<18 {
-                            let coverage = mask.colorAt(x: x, y: 17 - y)!.alphaComponent
-                            guard coverage > 0 else { continue }
-                            let part = (5...12).contains(x) && (8...13).contains(y) ? pillowAlpha : y < ((4...13).contains(x) ? 7 : 6) ? blanketAlpha : tileAlpha
-                            NSColor(white: 0, alpha: part * coverage).setFill()
-                            CGRect(x: x, y: y, width: 1, height: 1).fill()
-                        }
-                    }
-                    context.compositingOperation = marked ? .copy : .clear
-                    NSColor.black.setFill()
-                    for x: CGFloat in [5, 8, 11] { CGRect(x: x, y: 14, width: 2, height: 1).fill() }
-                    for x: CGFloat in [4, 13] { CGRect(x: x, y: 11, width: 1, height: 2).fill() }
-                    CGRect(x: 1, y: 6, width: 3, height: 1).fill()
-                    CGRect(x: 4, y: 7, width: 10, height: 1).fill()
-                    CGRect(x: 14, y: 6, width: 3, height: 1).fill()
-                } else {
-                    // The tile's alpha over the whole square, then the pillow and the blanket, then everything outside the tile cleared so its
-                    // edge keeps the tile's coverage.
-                    context.compositingOperation = .copy
-                    NSColor(white: 0, alpha: tileAlpha).setFill()
-                    CGRect(x: 0, y: 0, width: 18, height: 18).fill()
-                    NSColor(white: 0, alpha: pillowAlpha).setFill()
-                    NSBezierPath(roundedRect: CGRect(x: 4.75, y: 2, width: 8.5, height: 12.25), xRadius: 2.25, yRadius: 2.25).fill()
-                    // The blanket below the band's cut, between the pillow and the tile.
-                    let blanket = NSBezierPath()
-                    blanket.move(to: CGPoint(x: 0, y: 6.5))
-                    blanket.curve(to: CGPoint(x: 18, y: 6.5), controlPoint1: CGPoint(x: 5.4, y: 7.94), controlPoint2: CGPoint(x: 12.6, y: 7.94))
-                    blanket.line(to: CGPoint(x: 18, y: 0))
-                    blanket.line(to: CGPoint(x: 0, y: 0))
-                    blanket.close()
-                    NSColor(white: 0, alpha: blanketAlpha).setFill()
-                    blanket.fill()
-                    let outside = NSBezierPath(rect: CGRect(x: 0, y: 0, width: 18, height: 18))
-                    outside.append(tile)
-                    outside.windingRule = .evenOdd
-                    context.compositingOperation = .clear
-                    outside.fill()
-                    if marked {
-                        // Drawn over, inside the tile, where the band would otherwise run past its sides.
-                        context.compositingOperation = .sourceOver
-                        NSColor.black.setStroke()
-                        tile.addClip()
-                    }
-                    for side: CGFloat in [-1, 1] {
-                        let half = NSBezierPath()
-                        half.move(to: CGPoint(x: 9, y: 14.25))
-                        half.line(to: CGPoint(x: 9 + 2 * side, y: 14.25))
-                        half.appendArc(withCenter: CGPoint(x: 9 + 2 * side, y: 12), radius: 2.25, startAngle: 90, endAngle: side < 0 ? 180 : 0, clockwise: side > 0)
-                        half.line(to: CGPoint(x: 9 + 4.25 * side, y: 10))
-                        half.lineWidth = 1.25
-                        half.lineCapStyle = .round
-                        half.setLineDash([0.25, 1.85, 0.5, 1.85, 0.5, 1.85, 0.5, 10], count: 8, phase: 0)
-                        half.stroke()
-                    }
-                    let cut = NSBezierPath()
-                    cut.move(to: CGPoint(x: 0, y: 6.5))
-                    cut.curve(to: CGPoint(x: 18, y: 6.5), controlPoint1: CGPoint(x: 5.4, y: 7.94), controlPoint2: CGPoint(x: 12.6, y: 7.94))
-                    cut.lineWidth = 1
-                    cut.stroke()
+                context.compositingOperation = marked ? .copy : .clear
+                NSColor.black.setFill()
+                for x: CGFloat in [5, 8, 11] { CGRect(x: x, y: 14, width: 2, height: 1).fill() }
+                for x: CGFloat in [4, 13] { CGRect(x: x, y: 11, width: 1, height: 2).fill() }
+                CGRect(x: 1, y: 6, width: 3, height: 1).fill()
+                CGRect(x: 4, y: 7, width: 10, height: 1).fill()
+                CGRect(x: 14, y: 6, width: 3, height: 1).fill()
+            } else {
+                // The tile's alpha over the whole square, then the pillow and the blanket, then everything outside the tile cleared so its
+                // edge keeps the tile's coverage.
+                context.compositingOperation = .copy
+                NSColor(white: 0, alpha: tileAlpha).setFill()
+                CGRect(x: 0, y: 0, width: 18, height: 18).fill()
+                NSColor(white: 0, alpha: pillowAlpha).setFill()
+                NSBezierPath(roundedRect: CGRect(x: 4.75, y: 2, width: 8.5, height: 12.25), xRadius: 2.25, yRadius: 2.25).fill()
+                // The blanket below the band's cut, between the pillow and the tile.
+                let blanket = NSBezierPath()
+                blanket.move(to: CGPoint(x: 0, y: 6.5))
+                blanket.curve(to: CGPoint(x: 18, y: 6.5), controlPoint1: CGPoint(x: 5.4, y: 7.94), controlPoint2: CGPoint(x: 12.6, y: 7.94))
+                blanket.line(to: CGPoint(x: 18, y: 0))
+                blanket.line(to: CGPoint(x: 0, y: 0))
+                blanket.close()
+                NSColor(white: 0, alpha: blanketAlpha).setFill()
+                blanket.fill()
+                let outside = NSBezierPath(rect: CGRect(x: 0, y: 0, width: 18, height: 18))
+                outside.append(tile)
+                outside.windingRule = .evenOdd
+                context.compositingOperation = .clear
+                outside.fill()
+                if marked {
+                    // Drawn over, inside the tile, where the band would otherwise run past its sides.
+                    context.compositingOperation = .sourceOver
+                    NSColor.black.setStroke()
+                    tile.addClip()
                 }
-            default:
-                preconditionFailure("SnugMenuBarIcon is a, h, p or q: \(variant)")
+                for side: CGFloat in [-1, 1] {
+                    let half = NSBezierPath()
+                    half.move(to: CGPoint(x: 9, y: 14.25))
+                    half.line(to: CGPoint(x: 9 + 2 * side, y: 14.25))
+                    half.appendArc(withCenter: CGPoint(x: 9 + 2 * side, y: 12), radius: 2.25, startAngle: 90, endAngle: side < 0 ? 180 : 0, clockwise: side > 0)
+                    half.line(to: CGPoint(x: 9 + 4.25 * side, y: 10))
+                    half.lineWidth = 1.25
+                    half.lineCapStyle = .round
+                    half.setLineDash([0.25, 1.85, 0.5, 1.85, 0.5, 1.85, 0.5, 10], count: 8, phase: 0)
+                    half.stroke()
+                }
+                let cut = NSBezierPath()
+                cut.move(to: CGPoint(x: 0, y: 6.5))
+                cut.curve(to: CGPoint(x: 18, y: 6.5), controlPoint1: CGPoint(x: 5.4, y: 7.94), controlPoint2: CGPoint(x: 12.6, y: 7.94))
+                cut.lineWidth = 1
+                cut.stroke()
             }
             NSGraphicsContext.restoreGraphicsState()
             image.addRepresentation(rep)
@@ -644,11 +576,6 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         firstRunWindow!.center()
         firstRunWindow!.makeKeyAndOrderFront(nil)
     }
-}
-
-extension UserDefaults {
-    /// `Pref.menuBarIcon` for key-value observing, which needs a property named like the defaults key.
-    @objc dynamic var SnugMenuBarIcon: String? { string(forKey: Pref.menuBarIcon) }
 }
 
 extension NSMenuItem {
