@@ -61,6 +61,18 @@ struct CaptureNameTests {
         #expect(CaptureName.description(fromWindowTitle: "josh@mac: ~/Developer/tools", app: "Terminal") == "josh@mac- ~-Developer-tools")
         #expect(CaptureName.description(fromWindowTitle: "..hidden\nline", app: nil) == "hidden line")
         #expect(CaptureName.sanitized("  a\t\tb  ") == "a b")
+        #expect(CaptureName.sanitized(". .capture") == "capture", "dots and spaces in any mix never leave a hidden name")
+        #expect(name("-.capture", app: nil, description: nil) == "capture", "trimmed separators never bare a leading dot")
+        #expect(CaptureName.renamed(URL(fileURLWithPath: "/tmp/a.png"), to: ". .capture") == URL(fileURLWithPath: "/tmp/capture.png"))
+    }
+
+    @Test func namesFitAFileName() {
+        let title = String(repeating: "Lisbon flight ", count: 4)
+        let long = name("{title} {title} {title} {title} {title} {date}", app: "Safari", description: title)
+        #expect(long.utf8.count <= CaptureName.maxNameBytes && long.hasPrefix("Lisbon flight"))
+        #expect(!long.hasSuffix(" ") && !long.hasSuffix("-"))
+        let wide = name(String(repeating: "é", count: 150) + " {date}", app: nil, description: nil)
+        #expect(wide.utf8.count <= CaptureName.maxNameBytes, "the limit counts bytes, not characters")
     }
 
     @Test func longTitlesAreCutAtAWordBreak() {

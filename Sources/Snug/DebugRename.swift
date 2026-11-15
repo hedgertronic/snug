@@ -102,6 +102,15 @@ extension DebugRun {
         stillBehind(escaping, "after Esc")
 
         try await openRename(escaping)
+        type(escaping, "partial")
+        // ⌘A goes through NSApp's key-equivalent routing, as a real press does; Snug has no Edit menu, so Rename's field handles it.
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            NSApp.sendEvent(NSEvent.keyEvent(with: type, location: .zero, modifierFlags: .command, timestamp: ProcessInfo.processInfo.systemUptime,
+                                             windowNumber: escaping.windowNumber, context: nil, characters: "a", charactersIgnoringModifiers: "a",
+                                             isARepeat: false, keyCode: 0)!)
+        }
+        require(escaping.nameField?.currentEditor()?.selectedRange == NSRange(location: 0, length: "partial".utf16.count),
+                "⌘A selects the whole name in Rename's field: \(String(describing: escaping.nameField?.currentEditor()?.selectedRange))")
         type(escaping, "Clicked away")
         // A click in another app takes the keyboard from the toast; resignKey is what AppKit calls then.
         escaping.resignKey()
