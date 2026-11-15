@@ -10,11 +10,11 @@ Audited 2026-10-26. Paths are relative to `Tests/`. "Synthetic" means generated 
 | `Fixtures/real-web/wiki-test.png` | Wikipedia, "Comparison of web browsers" (en.wikipedia.org), light theme |
 | `Fixtures/evaluation/public-suite.json`, `Fixtures/evaluation/baselines/public-suite.json` | Labels and frozen baseline for the four real-web pages above; created for this project |
 | `Fixtures/scroll-savant-tooltip-repeats.png` | Baseball Savant player page (baseballsavant.mlb.com), a public stats page, with repeated macOS accessibility tooltips drawn over it by a scrolling capture |
-| `ScreenshotCoreTests/Fixtures/SafariLightPage.png` | Safari showing the ko-fi.com home page (public marketing page); other tab titles blanked |
-| `ScreenshotCoreTests/Fixtures/LeftDockBesideSafari.png` | Left-edge crop of a macOS desktop: the Dock (third-party icons covered with copies of Apple icons) beside Safari showing the Baseball Savant page |
-| `ScreenshotCoreTests/Fixtures/SlackComposerRow.png` | Crop of the empty Slack message composer (toolbar and placeholder text only); no messages or names |
-| `ScreenshotCoreTests/Fixtures/Sidebar.png` | Synthetic: a web page rendered for this project ("Screenshot Lab", sample team table) |
-| `ScreenshotCoreTests/Fixtures/StageManagerThumbnails.png` | Synthetic: drawn bars standing in for window thumbnails, with colored app badges |
+| `Fixtures/SafariLightPage.png` | Safari showing the ko-fi.com home page (public marketing page); other tab titles blanked |
+| `Fixtures/LeftDockBesideSafari.png` | Left-edge crop of a macOS desktop: the Dock (third-party icons covered with copies of Apple icons) beside Safari showing the Baseball Savant page |
+| `Fixtures/SlackComposerRow.png` | Crop of the empty Slack message composer (toolbar and placeholder text only); no messages or names |
+| `Fixtures/Sidebar.png` | Synthetic: a web page rendered for this project ("Screenshot Lab", sample team table) |
+| `Fixtures/StageManagerThumbnails.png` | Synthetic: drawn bars standing in for window thumbnails, with colored app badges |
 | `Fixtures/finder-window.png` | Synthetic: a drawn Finder-style column view with invented folder and app names |
 | `Fixtures/finder-toolbar-capsules.png` | Crop of the macOS Finder toolbar view-switcher capsules (system UI only) |
 | `Fixtures/dark-window-corners.png` | Synthetic: a drawn dark window with placeholder bars on a dark purple backdrop |

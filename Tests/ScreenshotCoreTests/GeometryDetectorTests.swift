@@ -109,7 +109,7 @@ struct GeometryDetectorTests {
 
     /// The bundled sidebar survives table filtering while the table keeps its 32 cells.
     @Test func demoSidebarSurvivesTableProposalLimit() async throws {
-        let url = try #require(Bundle.module.url(forResource: "Sidebar", withExtension: "png", subdirectory: "Fixtures"))
+        let url = fixtureURL("Sidebar.png")
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         let candidates = try await GeometryDetector().detect(in: image)

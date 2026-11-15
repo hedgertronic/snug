@@ -8,7 +8,7 @@ import Testing
 struct DetectionCancellationTests {
     /// An immediately cancelled detection task throws a cancellation error instead of returning a report.
     @Test func runThrowsWhenCancelledImmediately() async throws {
-        let url = try #require(Bundle.module.url(forResource: "Sidebar", withExtension: "png", subdirectory: "Fixtures"))
+        let url = fixtureURL("Sidebar.png")
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         let task = Task { try await Detection.run(.geometry, image: image) }

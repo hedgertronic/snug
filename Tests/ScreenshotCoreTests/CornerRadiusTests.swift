@@ -145,7 +145,7 @@ struct CornerRadiusTests {
     @Test func aCropCornerOnSlacksContentPanelFollowsThePanelsArc() throws {
         // The user's Slack composer crop: its bottom-right corner sits on the corner of Slack's dark content panel, whose arc shows the
         // teal of Slack's frame past it. The other three corners are on plain panel or the composer's border.
-        let url = try #require(Bundle.module.url(forResource: "SlackComposerRow", withExtension: "png", subdirectory: "Fixtures"))
+        let url = fixtureURL("SlackComposerRow.png")
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         let arcs = cornerArcs(in: image, rect: CGRect(x: 0, y: 0, width: 1680, height: 284))

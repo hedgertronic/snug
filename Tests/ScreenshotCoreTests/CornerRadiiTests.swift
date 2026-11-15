@@ -132,7 +132,7 @@ struct CornerRadiiTests {
         // The user's capture of the Slack composer's row (962, 1648, 1680 x 284 px, as logged), 10 px inside the bottom-right corner of the
         // Slack window (168, 88, 2484 x 1854), whose arc fits a 58.5 px circle. The crop's corner sits on the corner of Slack's dark content
         // panel; the teal past the panel's arc is Slack's own frame. The corner takes the panel's arc, not the window's arc less the inset.
-        let url = try #require(Bundle.module.url(forResource: "SlackComposerRow", withExtension: "png", subdirectory: "Fixtures"))
+        let url = fixtureURL("SlackComposerRow.png")
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         let crop = CGRect(x: 0, y: 0, width: 1680, height: 284), window = CGRect(x: 168 - 962, y: 88 - 1648, width: 2484, height: 1854)
