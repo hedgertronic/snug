@@ -1027,88 +1027,54 @@ extension DebugRun {
         NSApp.appearance = nil
     }
 
-    /// `--render-menubar-icons DIR`: every menu bar icon variant drawn from `SnugApp.menuBarIcon` the way the status item draws it (an 18 pt
+    /// `--render-menubar-icons DIR`: the menu bar icon drawn from `SnugApp.menuBarIcon` the way the status item draws it (an 18 pt
     /// template image picking its 1x or 2x representation), tinted for a light (#F6F6F6) and a dark (#1E1E1E) menu bar, at true size above
-    /// an 8x nearest-neighbor zoom, one row per variant in `menubar-icons.png`. Then checks that the status item's observer switches icons
-    /// when another process writes `SnugMenuBarIcon`, and keeps its icon when the button's appearance is set again without turning light or dark.
+    /// an 8x nearest-neighbor zoom in `menubar-icons.png`. The individual PNGs use the `q` prefix. Then checks that the status item's
+    /// observer draws the icon initially and keeps it when the button's appearance is set again without turning light or dark.
     static func renderMenuBarIcons(into directory: URL) async throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let variants = ["q", "p", "h", "a"]
         let cells: [(scale: Int, dark: Bool)] = [(1, false), (2, false), (1, true), (2, true)]
-        let sheet = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 40 + 304 * cells.count, pixelsHigh: 348 * variants.count, bitsPerSample: 8,
+        let sheet = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 40 + 304 * cells.count, pixelsHigh: 348, bitsPerSample: 8,
                                      samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: sheet)
         NSGraphicsContext.current!.imageInterpolation = .none
         NSColor.white.setFill()
         CGRect(x: 0, y: 0, width: sheet.pixelsWide, height: sheet.pixelsHigh).fill()
-        for (row, variant) in variants.enumerated() {
-            let top = CGFloat(sheet.pixelsHigh - 348 * row)
-            variant.draw(at: CGPoint(x: 14, y: top - 30), withAttributes: [.font: NSFont.boldSystemFont(ofSize: 18)])
-            for (column, cell) in cells.enumerated() {
-                let icon = SnugApp.menuBarIcon(variant, dark: cell.dark)
-                let pixels = 18 * cell.scale
-                let small = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels, bitsPerSample: 8, samplesPerPixel: 4,
-                                             hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
-                small.size = icon.size
-                NSGraphicsContext.saveGraphicsState()
-                NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: small)
-                icon.draw(in: CGRect(origin: .zero, size: icon.size))
-                (cell.dark ? NSColor.white : NSColor.black).set()
-                CGRect(origin: .zero, size: icon.size).fill(using: .sourceIn)
-                NSGraphicsContext.restoreGraphicsState()
-                try small.representation(using: .png, properties: [:])!.write(to: directory.appending(path: "\(variant)-\(cell.scale)x-\(cell.dark ? "dark" : "light").png"))
-                let tinted = NSImage(size: CGSize(width: pixels, height: pixels))
-                tinted.addRepresentation(small)
-                let x = CGFloat(40 + 304 * column)
-                NSColor(srgbRed: cell.dark ? 0x1E / 255 : 0xF6 / 255, green: cell.dark ? 0x1E / 255 : 0xF6 / 255, blue: cell.dark ? 0x1E / 255 : 0xF6 / 255, alpha: 1).setFill()
-                CGRect(x: x, y: top - 344, width: 300, height: 340).fill()
-                tinted.draw(in: CGRect(x: x + 8, y: top - 12 - CGFloat(pixels), width: CGFloat(pixels), height: CGFloat(pixels)))
-                tinted.draw(in: CGRect(x: x + 8, y: top - 340, width: CGFloat(pixels * 8), height: CGFloat(pixels * 8)))
-            }
+        let top = CGFloat(sheet.pixelsHigh)
+        "q".draw(at: CGPoint(x: 14, y: top - 30), withAttributes: [.font: NSFont.boldSystemFont(ofSize: 18)])
+        for (column, cell) in cells.enumerated() {
+            let icon = SnugApp.menuBarIcon(dark: cell.dark)
+            let pixels = 18 * cell.scale
+            let small = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels, bitsPerSample: 8, samplesPerPixel: 4,
+                                         hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+            small.size = icon.size
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: small)
+            icon.draw(in: CGRect(origin: .zero, size: icon.size))
+            (cell.dark ? NSColor.white : NSColor.black).set()
+            CGRect(origin: .zero, size: icon.size).fill(using: .sourceIn)
+            NSGraphicsContext.restoreGraphicsState()
+            try small.representation(using: .png, properties: [:])!.write(to: directory.appending(path: "q-\(cell.scale)x-\(cell.dark ? "dark" : "light").png"))
+            let tinted = NSImage(size: CGSize(width: pixels, height: pixels))
+            tinted.addRepresentation(small)
+            let x = CGFloat(40 + 304 * column)
+            NSColor(srgbRed: cell.dark ? 0x1E / 255 : 0xF6 / 255, green: cell.dark ? 0x1E / 255 : 0xF6 / 255, blue: cell.dark ? 0x1E / 255 : 0xF6 / 255, alpha: 1).setFill()
+            CGRect(x: x, y: top - 344, width: 300, height: 340).fill()
+            tinted.draw(in: CGRect(x: x + 8, y: top - 12 - CGFloat(pixels), width: CGFloat(pixels), height: CGFloat(pixels)))
+            tinted.draw(in: CGRect(x: x + 8, y: top - 340, width: CGFloat(pixels * 8), height: CGFloat(pixels * 8)))
         }
         NSGraphicsContext.restoreGraphicsState()
         let file = directory.appending(path: "menubar-icons.png")
         try sheet.representation(using: .png, properties: [:])!.write(to: file)
         print(file.path)
 
-        // At 1x, variant a's five dots are fully clear 2 x 2 cells (top-left pixel listed, rows from the top) inside a ring of solid tile.
-        let small = SnugApp.menuBarIcon("a").representations.first { $0.pixelsWide == 18 } as! NSBitmapImageRep
-        for (x, y) in [(4, 8), (4, 4), (8, 3), (12, 4), (12, 8)] {
-            for column in x - 1...x + 2 {
-                for row in y - 1...y + 2 {
-                    let inside = (x...x + 1).contains(column) && (y...y + 1).contains(row)
-                    precondition(small.colorAt(x: column, y: row)!.alphaComponent == (inside ? 0 : 1), "1x dot at \(x), \(y): pixel \(column), \(row)")
-                }
-            }
-        }
-
-        // At 1x, variant h's arch dashes and band step are fully clear (top-left pixel and size, rows from the top) and the tile between them solid.
-        let solidTile = SnugApp.menuBarIcon("h").representations.first { $0.pixelsWide == 18 } as! NSBitmapImageRep
-        let clear = [(5, 3, 2, 1), (8, 3, 2, 1), (11, 3, 2, 1), (4, 5, 1, 2), (13, 5, 1, 2), (1, 10, 3, 1), (4, 9, 10, 1), (14, 10, 3, 1)]
-        for (x, y, width, height) in clear {
-            for column in x..<x + width {
-                for row in y..<y + height { precondition(solidTile.colorAt(x: column, y: row)!.alphaComponent == 0, "1x h: pixel \(column), \(row) is clear") }
-            }
-        }
-        for (column, row) in [(7, 3), (10, 3), (4, 4), (4, 7), (13, 4), (4, 8), (9, 7), (9, 10), (2, 9), (2, 11)] {
-            precondition(solidTile.colorAt(x: column, y: row)!.alphaComponent == 1, "1x h: pixel \(column), \(row) is solid")
-        }
-
-        let suite = FileManager.default.temporaryDirectory.appending(path: "snug-icon-\(UUID().uuidString)").path
-        let defaults = UserDefaults(suiteName: suite)!
-        Pref.register(in: defaults)
         let button = NSButton()
-        let observation = SnugApp.observeMenuBarIcon(on: button, defaults: defaults)
-        // "q" is the registered default, so it goes last to make every write a real change.
-        for variant in variants.reversed() {
-            let writer = try Process.run(URL(fileURLWithPath: "/usr/bin/defaults"), arguments: ["write", suite, Pref.menuBarIcon, variant])
-            writer.waitUntilExit()
-            let expected = SnugApp.menuBarIcon(variant, dark: SnugApp.isDark(button)).tiffRepresentation
-            for _ in 0..<500 where button.image?.tiffRepresentation != expected { try await Task.sleep(for: .milliseconds(10)) }
-            precondition(button.image?.tiffRepresentation == expected, "`defaults write \(Pref.menuBarIcon) \(variant)` from another process switches the icon")
-            print("defaults write \(Pref.menuBarIcon) \(variant): the status item shows variant \(variant)")
-        }
+        let observation = SnugApp.observeMenuBarIcon(on: button)
+        let expected = SnugApp.menuBarIcon(dark: SnugApp.isDark(button)).tiffRepresentation
+        for _ in 0..<500 where button.image?.tiffRepresentation != expected { try await Task.sleep(for: .milliseconds(10)) }
+        precondition(button.image?.tiffRepresentation == expected, "the status item initially shows the menu bar icon")
+        print("the status item initially shows the menu bar icon")
         // The status item's snapshots set the button's appearance and back; the image stays until light or dark actually changes.
         let pairs: [(NSAppearance.Name, NSAppearance.Name)] = [(.aqua, .vibrantLight), (.darkAqua, .vibrantDark)]
         for (name, alike) in SnugApp.isDark(button) ? pairs : pairs.reversed() {
@@ -1123,7 +1089,7 @@ extension DebugRun {
             precondition(button.image === drawn, "\(alike.rawValue) and back keeps the \(name.rawValue) icon")
         }
         print("a vibrant appearance and back keeps the status item's icon; light to dark redraws it")
-        observation.forEach { $0.invalidate() }
+        observation.invalidate()
     }
 }
 #endif

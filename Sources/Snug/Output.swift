@@ -79,9 +79,6 @@ enum Pref {
     /// The modification date of the Snug binary whose `--warm-vision` child ran past `OverlayController.warmUpTimeout` and was stopped;
     /// launches of that binary start no warm-up, and OCR compiles its models on first use.
     static let visionWarmUpGaveUpBuild = "SnugVisionWarmUpGaveUpBuild"
-    /// The menu bar icon variant, "q", "p", "h" or "a" (see `SnugApp.menuBarIcon`). The status item redraws as soon as it changes, so
-    /// `defaults write com.hedgertronic.snug SnugMenuBarIcon a` switches the icon live.
-    static let menuBarIcon = "SnugMenuBarIcon"
 
     /// Appends `line` to the diagnostic log `name` when `key` is on. Logging is best effort: a line that cannot be written is dropped.
     static func logHoverLine(_ line: String, key: String = logHover, file name: String = "hover.log") {
@@ -133,7 +130,6 @@ enum Pref {
             playSounds: true,
             roundCorners: true,
             chromiumText: true,
-            menuBarIcon: "q",
             cutoutCrop: false,
             recordCountIn: 3,
             recordCursor: true
@@ -143,7 +139,6 @@ enum Pref {
 
     /// The values each constrained preference may hold; `register` removes any other stored value, so its default answers instead.
     static var rules: [String: PreferenceRule] { [
-        menuBarIcon: .oneOf(menuBarIcons),
         colorFormat: .oneOf(Set(ColorFormat.allCases.map(\.rawValue))),
         guidesAnimation: .oneOf(["fade", "slide", "none"]),
         overlayAppearance: .oneOf(["system", "light", "dark"]),
@@ -166,9 +161,6 @@ enum Pref {
         saveFolder: .nonEmptyString,
         fileNamePattern: .nonEmptyString,
     ] }
-
-    /// The menu bar icon variants `SnugApp.menuBarIcon` draws.
-    static let menuBarIcons: Set<String> = ["q", "p", "h", "a"]
 }
 
 /// Crops, styles, encodes, and delivers captures.
