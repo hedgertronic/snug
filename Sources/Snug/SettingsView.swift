@@ -154,7 +154,7 @@ private struct GeneralPane: View {
                     Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 60, height: 60)
                     VStack(alignment: .leading, spacing: 2) {
                         Wordmark(size: 28)
-                        Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as! String)")
+                        Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")")
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                     }
