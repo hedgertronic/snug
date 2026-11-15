@@ -17,7 +17,7 @@ Open it and allow Screen Recording. Accessibility permission helps Snug find ele
 
 Press **Control-Shift-Space** to capture the display under your pointer. Hover and click or press Return to copy, or drag an area. Hold Option while dragging for an exact crop. Change the capture shortcut in Settings → General.
 
-Saved captures are named for the app and window they came from, such as `Safari - Lisbon flight 2026-11-14 at 18.03.12.png`. Change the pattern in Settings → General → File names with `{app}`, `{title}`, `{date}` and `{time}`. To rename a capture yourself, point at its toast and click Rename.
+Saved captures are named for the app and window they came from, such as `Safari - Lisbon flight 2026-11-14 at 18.03.12.png`. Change the pattern in Settings → General → File names with `{app}`, `{title}`, `{date}` and `{time}`. To name captures for what they show instead of the window's title, turn on Name with Apple Intelligence there; it runs on your Mac and needs Apple Intelligence turned on. To rename a capture yourself, point at its toast and click Rename.
 
 ## Keys
 
@@ -87,6 +87,6 @@ uv run python -m unittest discover -s scripts -p 'test_*.py'
 
 ## Privacy, license, and credit
 
-Capture processing, OCR, and subject cutouts run on-device. Snug does not upload captures. It uses Sparkle to check for and download updates. If you connect an agent, that agent can read your latest handoff and handles it under its own data policies.
+Capture processing, OCR, subject cutouts, and Apple Intelligence file names run on-device. Snug does not upload captures. It uses Sparkle to check for and download updates. If you connect an agent, that agent can read your latest handoff and handles it under its own data policies.
 
 [MIT licensed](LICENSE). Made by [Josh Hejka](https://hedgertronic.com/), with [Sparkle](https://sparkle-project.org/) for updates and [Fredoka](brand/fonts/OFL.txt) for the wordmark. Their license notices ship inside the app, in `Snug.app/Contents/Resources/Licenses`.

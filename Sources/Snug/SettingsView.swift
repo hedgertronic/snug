@@ -136,6 +136,7 @@ private struct GeneralPane: View {
     @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
     @AppStorage(Pref.saveFolder) private var saveFolder = ""
+    @AppStorage(Pref.aiNames) private var aiNames = false
     @AppStorage(Pref.fileNamePattern) private var fileNamePattern = CaptureName.defaultPattern
     @AppStorage(Pref.chromiumText) private var chromiumText = true
     @AppStorage(Pref.playSounds) private var playSounds = true
@@ -240,6 +241,14 @@ private struct GeneralPane: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.vertical, 10)
+                    LabeledContent {
+                        Toggle("Name with Apple Intelligence", isOn: $aiNames).labelsHidden().toggleStyle(.switch)
+                    } label: {
+                        // The model's availability is observable, so the line follows Apple Intelligence turning on or finishing its download.
+                        detailed("Name with Apple Intelligence", CaptureNamer.unavailableReason.map { "\($0) Until then, {title} is the window's title." }
+                                 ?? "Fills {title} with what a saved capture shows, on this Mac. Off, {title} is the window's title.")
+                    }
+                    .padding(.vertical, 4)
                 }
                 caption("Text mode")
                 Card {

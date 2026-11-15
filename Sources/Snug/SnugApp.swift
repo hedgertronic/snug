@@ -74,6 +74,22 @@ final class SnugApp: NSObject, NSApplicationDelegate {
             try! DebugRun.renderSettings(into: URL(fileURLWithPath: arguments[index + 1]))
             exit(EXIT_SUCCESS)
         }
+        // `--name-capture PATH [APP] [TITLE]`: prints the on-device model's description of an image and the file name it gives (`CaptureNamer`).
+        if let index = arguments.firstIndex(of: "--name-capture") {
+            Task {
+                let png = try! Data(contentsOf: URL(fileURLWithPath: arguments[index + 1]))
+                let extra = arguments.dropFirst(index + 2).prefix { !$0.hasPrefix("--") }
+                let context = extra.isEmpty ? nil : CaptureContext(app: extra.first, title: extra.dropFirst().first)
+                print("model: \(CaptureNamer.unavailableReason ?? "available")")
+                let started = ContinuousClock.now
+                let description = await CaptureNamer.describe(png: png, context: context)
+                print("description: \(description ?? "none") (\(Int(started.duration(to: .now).milliseconds)) ms)")
+                print("context name: \(Output.baseName(context: context, defaults: .standard))")
+                print("AI name: \(CaptureName.name(pattern: UserDefaults.standard.string(forKey: Pref.fileNamePattern) ?? "", app: context?.app, description: description, date: .now))")
+                exit(EXIT_SUCCESS)
+            }
+            return
+        }
         if arguments.contains("--verify-settings-capture") {
             Task { try! await DebugRun.verifySettingsCapture(overlay: overlay) }
             return

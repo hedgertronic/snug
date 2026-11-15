@@ -60,6 +60,16 @@ struct CaptureNameTests {
         #expect(CaptureName.description(fromWindowTitle: unbroken, app: nil)!.count == CaptureName.maxDescription)
     }
 
+    @Test func modelRepliesAreCleanedOrRejected() {
+        #expect(CaptureName.description(fromModel: "\"Lisbon Flight Confirmation\"") == "Lisbon Flight Confirmation")
+        #expect(CaptureName.description(fromModel: "Title: Harbor Street Coffee Order.") == "Harbor Street Coffee Order")
+        #expect(CaptureName.description(fromModel: "\n**Build Errors in Xcode**\n\nThis screenshot shows...") == "Build Errors in Xcode")
+        #expect(CaptureName.description(fromModel: "settings-panel.png") == "settings-panel")
+        #expect(CaptureName.description(fromModel: "   ") == nil)
+        #expect(CaptureName.description(fromModel: "This screenshot shows a web page with a list of flights from Lisbon to New York on Friday") == nil,
+                "a sentence is not a title")
+    }
+
     @Test func typedNamesKeepTheFolderAndExtension() {
         let file = URL(fileURLWithPath: "/Users/me/Desktop/Safari \(stamp).png")
         #expect(CaptureName.renamed(file, to: "Flight") == URL(fileURLWithPath: "/Users/me/Desktop/Flight.png"))

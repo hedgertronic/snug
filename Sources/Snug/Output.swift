@@ -27,6 +27,9 @@ enum Pref {
     static let frameShadowAngle = "SnugFrameShadowAngle"
     static let frameShadowColor = "SnugFrameShadowColor"
     static let saveFolder = "SnugSaveFolder"
+    /// Whether a saved capture is renamed to the on-device model's description of it when Apple Intelligence is available
+    /// (Settings > General > File names). Off, or without the model, files keep their app and window title name (`CaptureName`).
+    static let aiNames = "SnugAINames"
     /// The pattern saved captures and recordings are named with: text and the tokens {app}, {title}, {date} and {time}
     /// (`CaptureName`; Settings > General > File names).
     static let fileNamePattern = "SnugFileNamePattern"
@@ -114,6 +117,7 @@ enum Pref {
             frameShadowAngle: 270,
             frameShadowColor: "#000000",
             saveFolder: NSHomeDirectory() + "/Desktop",
+            aiNames: false,
             fileNamePattern: CaptureName.defaultPattern,
             hotKeyCode: defaultHotKey.code,
             hotKeyModifiers: defaultHotKey.modifiers,
@@ -222,7 +226,8 @@ enum Output {
 
     /// Copies a PNG to the pasteboard or saves it, and shows a toast; returns the toast's message and detail. `detail` is the toast's
     /// pixel size line, saved or not. A save goes to `destination` (Save As, which the panel already confirmed) or the usual file, named for
-    /// `context` (the app and window title), which takes a numbered name when its own is taken. A write that fails (the pasteboard refusing the image, an unwritable folder) shows a red toast
+    /// `context` (the app and window title), which takes a numbered name when its own is taken. With AI names on, a file saved under the
+    /// usual name is renamed once the on-device model describes it (`CaptureNamer`). A write that fails (the pasteboard refusing the image, an unwritable folder) shows a red toast
     /// with its reason and keeps the capture in it: "Copy failed" or "Save failed"; a capture that lands plays the capture sound. Otherwise a `warning` (a capture that may be wrong)
     /// takes the detail line and an orange mark. The file is written off the main thread; the pasteboard and the toast stay on it.
     @MainActor
@@ -255,6 +260,10 @@ enum Output {
         Toast.show(png: png, message: message, detail: detail, file: file, color: failed ? .systemRed : warning.map { _ in .systemOrange },
                    name: context == nil ? nil : base, defaults: defaults, pasteboard: pasteboard)
         if !failed { Sound.capture.play(defaults: defaults) }
+        if let file, destination == nil, defaults.bool(forKey: Pref.aiNames) {
+            CaptureNamer.rename(file, png: png, context: context, date: date, pattern: defaults.string(forKey: Pref.fileNamePattern) ?? "",
+                                pasteboard: pasteboard)
+        }
         return (message, detail)
     }
 
