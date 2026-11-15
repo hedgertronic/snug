@@ -17,6 +17,8 @@ Open it and allow Screen Recording. Accessibility permission helps Snug find ele
 
 Press **Control-Shift-Space** to capture the display under your pointer. Hover and click or press Return to copy, or drag an area. Hold Option while dragging for an exact crop. Change the capture shortcut in Settings → General.
 
+Saved captures are named for the app and window they came from, such as `Safari - Lisbon flight 2026-11-14 at 18.03.12.png`. Change the pattern in Settings → General → File names with `{app}`, `{title}`, `{date}` and `{time}`.
+
 ## Keys
 
 Press `?` in the overlay for the full list.

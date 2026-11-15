@@ -56,6 +56,8 @@ final class Toast: NSPanel, NSDraggingSource {
     private(set) var file: URL?
     /// The capture or copied text written to a file of its own for Open, Share and drag, when there is no saved file.
     private var scratchFile: URL?
+    /// The name, without extension, the capture's own file takes when there is no saved file; nil is "Snug".
+    private let name: String?
     /// What Copy puts on the pasteboard for a toast without a capture: the copied text or color value.
     private let text: String?
     private(set) var dismissal: Task<Void, any Error>?
@@ -105,10 +107,10 @@ final class Toast: NSPanel, NSDraggingSource {
     /// A color toast passes the swatch `color` (red is a failure, orange a warning); a text toast passes the copied `text`, and a color
     /// toast its value to copy again. `pasteboard` is where Copy writes and Trash looks for the capture. A failure beeps.
     static func show(png: Data? = nil, message: String, detail: String = "", file: URL? = nil, color: NSColor? = nil, text: String? = nil,
-                     defaults: UserDefaults = .standard, pasteboard: NSPasteboard = .general) {
+                     name: String? = nil, defaults: UserDefaults = .standard, pasteboard: NSPasteboard = .general) {
         guard !isSuppressed, defaults.integer(forKey: Pref.toastLifetime) != 0 || color == .systemRed || color == .systemOrange else { return }
         if color == .systemRed { NSSound.beep() }
-        let toast = Toast(png: png, message: message, detail: detail, file: file, color: color, text: text, defaults: defaults, pasteboard: pasteboard)
+        let toast = Toast(png: png, message: message, detail: detail, file: file, color: color, text: text, name: name, defaults: defaults, pasteboard: pasteboard)
         stack(toast)
         toast.orderFrontRegardless()
         toast.scheduleDismissal()
@@ -168,11 +170,12 @@ final class Toast: NSPanel, NSDraggingSource {
         preview = nil
     }
 
-    init(png: Data?, message messageText: String, detail detailText: String, file: URL?, color: NSColor?, text: String? = nil, defaults: UserDefaults,
-         pasteboard: NSPasteboard = .general) {
+    init(png: Data?, message messageText: String, detail detailText: String, file: URL?, color: NSColor?, text: String? = nil, name: String? = nil,
+         defaults: UserDefaults, pasteboard: NSPasteboard = .general) {
         self.png = png
         self.file = file
         self.text = text
+        self.name = name
         self.defaults = defaults
         self.pasteboard = pasteboard
         let seconds = defaults.integer(forKey: Pref.toastLifetime)
@@ -450,7 +453,7 @@ final class Toast: NSPanel, NSDraggingSource {
 
     @objc private func closeClicked() { dismiss() }
 
-    /// The saved file, or else this toast's own temporary file, written once: the capture as Snug.png, or the copied text as UTF-8. Each
+    /// The saved file, or else this toast's own temporary file, written once: the capture as its name (Snug.png without one), or the copied text as UTF-8. Each
     /// toast's file is in a folder of its own, so another toast's capture never replaces it while an app has it open. The files stay
     /// after the toast closes, since a drag's receiver may read its file later.
     private func fileOnDisk() throws -> URL {
@@ -459,7 +462,7 @@ final class Toast: NSPanel, NSDraggingSource {
         let folder = FileManager.default.temporaryDirectory.appending(path: "Snug")
         let written: URL
         if let png {
-            written = try UniqueFile.scratch(png, named: "Snug.png", under: folder)
+            written = try UniqueFile.scratch(png, named: "\(name ?? "Snug").png", under: folder)
         } else {
             let format = DateFormatter()
             format.dateFormat = "yyyy-MM-dd HH.mm.ss"
@@ -540,7 +543,7 @@ final class Toast: NSPanel, NSDraggingSource {
         let level = self.level
         self.level = .floating
         preview?.level = .floating
-        let chosen = Toast.chooseSaveURL(Output.defaultFile(defaults: defaults))
+        let chosen = Toast.chooseSaveURL(Output.defaultFile(defaults: defaults, base: name))
         self.level = level
         preview?.level = level
         holding = false
