@@ -59,4 +59,15 @@ struct CaptureNameTests {
         let unbroken = String(repeating: "x", count: 80)
         #expect(CaptureName.description(fromWindowTitle: unbroken, app: nil)!.count == CaptureName.maxDescription)
     }
+
+    @Test func typedNamesKeepTheFolderAndExtension() {
+        let file = URL(fileURLWithPath: "/Users/me/Desktop/Safari \(stamp).png")
+        #expect(CaptureName.renamed(file, to: "Flight") == URL(fileURLWithPath: "/Users/me/Desktop/Flight.png"))
+        #expect(CaptureName.renamed(file, to: "Flight.png") == URL(fileURLWithPath: "/Users/me/Desktop/Flight.png"), "a typed extension is not doubled")
+        #expect(CaptureName.renamed(file, to: "a/b: c") == URL(fileURLWithPath: "/Users/me/Desktop/a-b- c.png"))
+        #expect(CaptureName.renamed(file, to: "  ") == nil)
+        #expect(CaptureName.renamed(file, to: "Safari \(stamp)") == nil, "an unchanged name renames nothing")
+        let movie = URL(fileURLWithPath: "/tmp/Snug \(stamp).mov")
+        #expect(CaptureName.renamed(movie, to: "Demo") == URL(fileURLWithPath: "/tmp/Demo.mov"))
+    }
 }

@@ -658,8 +658,8 @@ extension DebugRun {
         toast.dismiss()
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: blocked.path)
 
-        // File names: a capture of a live window is named for its app and title, and a toast for an unsaved capture drags out a file
-        // under the same name.
+        // File names: a capture of a live window is named for its app and title, the toast renames the saved file in place, and a toast
+        // for an unsaved capture drags out a file under the same name.
         let names = folder.appending(path: "names")
         try FileManager.default.createDirectory(at: names, withIntermediateDirectories: true)
         defaults.set(names.path, forKey: Pref.saveFolder)
@@ -668,6 +668,7 @@ extension DebugRun {
         let named = try FileManager.default.contentsOfDirectory(atPath: names.path)
         require(named.count == 1 && named[0].hasPrefix("Safari - Lisbon flight 20") && named[0].hasSuffix(".png"),
                 "a saved capture is named for its app and window title: \(named)")
+        let savedFile = names.appending(path: named[0])
         let suggested = Output.defaultFile(defaults: defaults, context: context)
         require(suggested.deletingLastPathComponent().path == names.path && suggested.lastPathComponent.hasPrefix("Safari - Lisbon flight 20"),
                 "Save As offers the same name: \(suggested.lastPathComponent)")
@@ -684,8 +685,44 @@ extension DebugRun {
         Pref.register(in: defaults)
         require(defaults.string(forKey: Pref.fileNamePattern) == CaptureName.defaultPattern, "an empty pattern is replaced by the default")
         defaults.set(names.path, forKey: Pref.saveFolder)
+        let renaming = Toast(png: Data("named".utf8), message: "Saved to names", detail: "1 x 1", file: savedFile, color: nil, defaults: defaults, pasteboard: pasteboard)
+        require(!renaming.renameButton.isHidden && renaming.actions.arrangedSubviews.filter { !$0.isHidden }.map { $0.toolTip! }.contains("Rename"),
+                "a saved capture's toast offers Rename")
+        renaming.renameButton.performClick(nil)
+        require(renaming.nameField?.stringValue == savedFile.deletingPathExtension().lastPathComponent && renaming.textBox.isHidden && !renaming.isKeyWindow,
+                "Rename opens a field with the file's name, and a debug run's toast takes no keys")
+        renaming.cancelRename()
+        require(renaming.nameField == nil && !renaming.textBox.isHidden && renaming.file == savedFile && FileManager.default.fileExists(atPath: savedFile.path),
+                "Esc closes the field and renames nothing")
+        renaming.commitRename("Flight to Lisbon.png")
+        let renamed = names.appending(path: "Flight to Lisbon.png")
+        require(renaming.file == renamed && FileManager.default.fileExists(atPath: renamed.path) && !FileManager.default.fileExists(atPath: savedFile.path)
+                    && renaming.message.stringValue == "Saved to names",
+                "Return renames the file in its folder and keeps the extension once: \(String(describing: renaming.file?.lastPathComponent))")
+        renaming.commitRename("flight to lisbon")
+        let recased = try FileManager.default.contentsOfDirectory(atPath: names.path)
+        require(recased == ["flight to lisbon.png"] && renaming.file?.lastPathComponent == "flight to lisbon.png",
+                "a change of case alone renames the file: \(recased)")
+        try Data("other".utf8).write(to: names.appending(path: "Other.png"))
+        renaming.commitRename("Other")
+        require(renaming.message.stringValue == "Rename failed" && renaming.detail.stringValue.contains("already exists")
+                    && renaming.file?.lastPathComponent == "flight to lisbon.png" && (try? String(contentsOf: names.appending(path: "Other.png"), encoding: .utf8)) == "other",
+                "a taken name replaces nothing and says so in red: \(renaming.detail.stringValue)")
+        renaming.dismiss()
+        let movie = names.appending(path: "Snug clip.mov")
+        try Data("movie".utf8).write(to: movie)
+        pasteboard.clearContents()
+        pasteboard.writeObjects([movie as NSURL])
+        let movieToast = Toast(png: Data("frame".utf8), message: "Copied, saved to names", detail: movie.lastPathComponent, file: movie, color: nil,
+                               defaults: defaults, pasteboard: pasteboard)
+        movieToast.commitRename("Demo")
+        let demo = names.appending(path: "Demo.mov")
+        require(movieToast.file == demo && movieToast.detail.stringValue == "Demo.mov" && (pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL]) == [demo],
+                "renaming a recording renames its detail and the copied file URL: \(movieToast.detail.stringValue)")
+        movieToast.dismiss()
         let unsaved = Toast(png: Data("named".utf8), message: "Copied", detail: "1 x 1", file: nil, color: nil, name: "Safari - Lisbon flight", defaults: defaults,
                             pasteboard: pasteboard)
+        require(unsaved.renameButton.isHidden, "an unsaved capture has no Rename")
         unsaved.openButton.performClick(nil)
         require(Toast.opened?.file.lastPathComponent == "Safari - Lisbon flight.png", "an unsaved capture's own file takes its name: \(String(describing: Toast.opened))")
         unsaved.dismiss()
