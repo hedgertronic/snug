@@ -3,6 +3,14 @@
     <channel>
         <title>Snug</title>
         <item>
+            <title>1.1.0</title>
+            <pubDate>Sun, 15 Nov 2026 19:30:17 -0000</pubDate>
+            <sparkle:version>5</sparkle:version>
+            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/hedgertronic/snug/releases/download/v1.1.0/Snug-1.1.0.zip" sparkle:edSignature="uT4psNUc0NfbLQnRcmua78xLskUaqlKo6pqvz3disTJc65RE+isqBJNa1iozExhb23NEqZ5NcimkOxLmz0i6AQ==" length="4995525" type="application/octet-stream"/>
+        </item>
+        <item>
             <title>1.0.2</title>
             <pubDate>Mon, 09 Nov 2026 06:28:56 -0000</pubDate>
             <sparkle:version>4</sparkle:version>
