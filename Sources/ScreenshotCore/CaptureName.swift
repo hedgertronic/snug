@@ -94,6 +94,18 @@ public enum CaptureName {
         return shortened(title)
     }
 
+    /// The file a typed name renames `file` to, in the same folder with the same extension; nil when the name is empty or unchanged. A
+    /// typed extension matching the file's is dropped, and characters a file name cannot hold are replaced.
+    public static func renamed(_ file: URL, to typed: String) -> URL? {
+        var name = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        let ext = file.pathExtension
+        if !ext.isEmpty, name.lowercased().hasSuffix("." + ext.lowercased()) { name = String(name.dropLast(ext.count + 1)) }
+        name = sanitized(name)
+        guard !name.isEmpty, name != file.deletingPathExtension().lastPathComponent else { return nil }
+        let target = file.deletingLastPathComponent().appending(path: name)
+        return ext.isEmpty ? target : target.appendingPathExtension(ext)
+    }
+
     /// `text` fit for a file name: "/" and ":" become "-", control characters and line breaks become spaces, runs of spaces collapse, and
     /// leading dots (which would hide the file) and spaces are dropped.
     public static func sanitized(_ text: String) -> String {

@@ -85,7 +85,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
         }
         #if DEBUG
         let imageRuns = ["--verify-area-ui", "--verify-extras-ui", "--verify-toast-trash", "--verify-text-ui", "--measure", "--render-states",
-                         "--loupe-frames", "--memory-steps", "--verify-agent-ui", "--render-toasts", "--verify-screen-text-ui", "--verify-lifecycle-ui"]
+                         "--loupe-frames", "--memory-steps", "--verify-agent-ui", "--render-toasts", "--verify-screen-text-ui", "--verify-lifecycle-ui",
+                         "--verify-rename-live"]
         if let image, imageRuns.contains(where: arguments.contains) {
             let frame = imageFrame(for: image)
             Task {
@@ -109,6 +110,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                         try await DebugRun.verifyScreenText(image: image, frame: frame, overlay: overlay)
                     } else if arguments.contains("--verify-text-ui") {
                         try await DebugRun.verifyText(image: image, frame: frame, overlay: overlay)
+                    } else if arguments.contains("--verify-rename-live") {
+                        try await DebugRun.verifyRenameLive(image: image)
                     } else if arguments.contains("--verify-toast-trash") {
                         try await DebugRun.verifyToastTrash(image: image)
                     } else if arguments.contains("--verify-extras-ui") {

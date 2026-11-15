@@ -8,9 +8,10 @@ import UniformTypeIdentifiers
 /// and place for its whole life: its text box is as wide as the wider of the resting text and the actions, and on hover the text
 /// cross-fades to the actions in the same box, both centered in it. The close button fades in on the top-left corner. Copy puts the
 /// capture (or the recording's file, or the text) on the pasteboard again; Save As (an unsaved capture: a save panel, and the toast closes
-/// once it is saved) or Trash (a saved file), Open
+/// once it is saved) or Rename and Trash (a saved file), Open
 /// (in the default app for the file, named in its tooltip), Show in Finder (a saved file) and Share act on the capture; copied text has
-/// Open (in the default app for plain text, from a temporary file) and Share. The toast takes no keys.
+/// Open (in the default app for plain text, from a temporary file) and Share. Rename swaps the text for a field holding the file's name:
+/// Return or a click away renames the file, Esc leaves it. The toast takes keys only while that field is open.
 /// Pointing at the thumbnail grows the capture out of it in its own panel, a margin above the card (below it at the top right); the
 /// pointer can cross to it without either closing. Drag the thumbnail or the preview to drop the image, or click either to open it as
 /// Open does; a click elsewhere closes the toast. It goes away after the lifetime setting (4 s unless changed) while the pointer is elsewhere, and
@@ -58,6 +59,8 @@ final class Toast: NSPanel, NSDraggingSource {
     private var scratchFile: URL?
     /// The name, without extension, the capture's own file takes when there is no saved file; nil is "Snug".
     private let name: String?
+    /// Rename's field, in place of the text and actions while it is open.
+    private(set) var nameField: NSTextField?
     /// What Copy puts on the pasteboard for a toast without a capture: the copied text or color value.
     private let text: String?
     private(set) var dismissal: Task<Void, any Error>?
@@ -80,6 +83,7 @@ final class Toast: NSPanel, NSDraggingSource {
     let closeButton: NSButton
     let copyButton: NSButton
     let saveButton: NSButton
+    let renameButton: NSButton
     let trashButton: NSButton
     let openButton: NSButton
     let revealButton: NSButton
@@ -244,17 +248,19 @@ final class Toast: NSPanel, NSDraggingSource {
         }
         copyButton = button("doc.on.doc", "Copy")
         saveButton = button("square.and.arrow.down", "Save As…")
+        renameButton = button("pencil", "Rename")
         trashButton = button("trash", "Move to Trash")
         openButton = button(copiedText != nil ? "doc.text" : "arrow.up.forward.app", openTip)
         revealButton = button("folder", "Show in Finder")
         shareButton = button("square.and.arrow.up", "Share")
         copyButton.isHidden = png == nil && text == nil
         saveButton.isHidden = png == nil || file != nil
+        renameButton.isHidden = file == nil
         trashButton.isHidden = file == nil
         openButton.isHidden = png == nil && copiedText == nil
         revealButton.isHidden = file == nil
         shareButton.isHidden = png == nil && copiedText == nil
-        actions = NSStackView(views: [copyButton, saveButton, trashButton, openButton, revealButton, shareButton])
+        actions = NSStackView(views: [copyButton, saveButton, renameButton, trashButton, openButton, revealButton, shareButton])
         actions.spacing = 4
         actions.isHidden = true
 
@@ -266,7 +272,7 @@ final class Toast: NSPanel, NSDraggingSource {
         isReleasedWhenClosed = false
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         for (button, action) in [(closeButton, #selector(closeClicked)), (copyButton, #selector(copyClicked)), (saveButton, #selector(saveClicked)),
-                                 (trashButton, #selector(trashClicked)), (openButton, #selector(openClicked)), (revealButton, #selector(revealClicked)),
+                                 (renameButton, #selector(renameClicked)), (trashButton, #selector(trashClicked)), (openButton, #selector(openClicked)), (revealButton, #selector(revealClicked)),
                                  (shareButton, #selector(shareClicked))] {
             button.target = self
             button.action = action
@@ -405,7 +411,7 @@ final class Toast: NSPanel, NSDraggingSource {
     /// Cross-fades the text and the actions (when there are any) and fades the close button, over 0.15 s; nothing moves or resizes.
     /// The side fading out is hidden once the fade ends, so it takes no clicks.
     func setHovering(_ hovering: Bool) {
-        guard hovering != isHovering else { return }
+        guard hovering != isHovering, nameField == nil else { return }
         isHovering = hovering
         let swaps = actions.arrangedSubviews.contains { !$0.isHidden }
         let shown: [NSView] = swaps ? [closeButton, actions] : [closeButton], faded: [NSView] = swaps ? [textBox] : []
@@ -556,6 +562,105 @@ final class Toast: NSPanel, NSDraggingSource {
         dismiss()
     }
 
+    /// Opens Rename's field over the text with the saved file's name (without its extension) selected. The toast holds, and takes keys,
+    /// until the field closes.
+    @objc private func renameClicked() {
+        guard let file, nameField == nil else { return }
+        dismissal?.cancel()
+        settle?.cancel()
+        holding = true
+        let field = NSTextField(string: file.deletingPathExtension().lastPathComponent)
+        field.font = .systemFont(ofSize: 12)
+        field.bezelStyle = .roundedBezel
+        field.cell!.isScrollable = true
+        field.cell!.wraps = false
+        field.delegate = self
+        field.toolTip = "Return renames, Esc cancels"
+        field.frame = CGRect(x: textBox.frame.minX, y: ((card.frame.height - 22) / 2).rounded(), width: textBox.frame.width, height: 22)
+        card.addSubview(field)
+        nameField = field
+        for view in [textBox, actions, closeButton] { view.isHidden = true }
+        guard !Toast.isSuppressed else { return }
+        makeKey()
+        makeFirstResponder(field)
+        field.currentEditor()?.selectAll(nil)
+    }
+
+    /// Closes Rename's field and renames the saved file to `typed` in its folder, keeping its extension (`CaptureName.renamed`). An empty
+    /// or unchanged name renames nothing; a name another file has, or a move that fails, shows why in the toast in red. Other toasts
+    /// showing the file, and a pasteboard holding it, follow the rename.
+    func commitRename(_ typed: String) {
+        endRenaming()
+        guard let old = file, let target = CaptureName.renamed(old, to: typed) else { return scheduleDismissal() }
+        do {
+            try Toast.move(old, to: target)
+        } catch {
+            return showFailure("Rename failed", error)
+        }
+        follow(old, to: target)
+        Toast.fileMoved(from: old, to: target, pasteboard: pasteboard)
+        scheduleDismissal()
+    }
+
+    /// Closes Rename's field without renaming.
+    func cancelRename() {
+        endRenaming()
+        scheduleDismissal()
+    }
+
+    /// Removes Rename's field and shows the text again. A toast that took the keyboard orders out and back in, so the keyboard returns
+    /// to the app in front.
+    private func endRenaming() {
+        guard let field = nameField else { return }
+        nameField = nil
+        field.delegate = nil
+        field.removeFromSuperview()
+        holding = false
+        isHovering = false
+        textBox.alphaValue = 1
+        textBox.isHidden = false
+        actions.isHidden = true
+        closeButton.isHidden = true
+        if isKeyWindow {
+            orderOut(nil)
+            orderFrontRegardless()
+        }
+        invalidateShadow()
+    }
+
+    /// Moves `file` to `target`, refusing a name another file has. A change of case alone, the same file on a case-insensitive volume,
+    /// goes through a temporary name.
+    static func move(_ file: URL, to target: URL) throws {
+        guard FileManager.default.fileExists(atPath: target.path) else { return try FileManager.default.moveItem(at: file, to: target) }
+        let identity = { (url: URL) in try? url.resourceValues(forKeys: [.fileResourceIdentifierKey]).fileResourceIdentifier }
+        guard let own = identity(file), let other = identity(target), own.isEqual(other) else {
+            throw NSError(domain: NSCocoaErrorDomain, code: CocoaError.fileWriteFileExists.rawValue,
+                          userInfo: [NSLocalizedFailureReasonErrorKey: "\u{201C}\(target.lastPathComponent)\u{201D} already exists."])
+        }
+        let temporary = UniqueFile.temporary(beside: file)
+        try FileManager.default.moveItem(at: file, to: temporary)
+        try FileManager.default.moveItem(at: temporary, to: target)
+    }
+
+    /// Points the toasts showing `old` at `new` after the file moved, and a pasteboard holding `old` as a file (a recording) at `new`.
+    static func fileMoved(from old: URL, to new: URL, pasteboard: NSPasteboard) {
+        for toast in shown { toast.follow(old, to: new) }
+        if (pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL])?.first == old {
+            pasteboard.clearContents()
+            pasteboard.writeObjects([new as NSURL])
+        }
+    }
+
+    /// Points this toast at `new` when its file was `old`: the file, and the detail when it is the file's name (a recording).
+    private func follow(_ old: URL, to new: URL) {
+        guard file == old else { return }
+        file = new
+        guard detail.stringValue == old.lastPathComponent else { return }
+        detail.stringValue = new.lastPathComponent
+        detail.toolTip = new.lastPathComponent
+        layoutText()
+    }
+
     /// Shows `title` and the error's reason in the toast, in red, and restarts its timer; the toast and its buttons stay.
     private func showFailure(_ title: String, _ error: any Error) {
         message.stringValue = title
@@ -593,14 +698,21 @@ final class Toast: NSPanel, NSDraggingSource {
         settle = Task {
             try await Task.sleep(for: .milliseconds(150))
             if !overThumbnail && !overPreview { setPeeking(false) }
-            guard !overCapsule && !overPreview && !holding else { return }
+            guard !overCapsule && !overPreview && !holding && nameField == nil else { return }
             setHovering(false)
             scheduleDismissal()
         }
     }
 
-    override var canBecomeKey: Bool { false }
+    /// Only Rename's field takes keys, so the toast never takes the keyboard from the app in front otherwise.
+    override var canBecomeKey: Bool { nameField != nil }
     override var canBecomeMain: Bool { false }
+
+    /// Clicking into another app with Rename's field open renames, as Finder does.
+    override func resignKey() {
+        super.resignKey()
+        if let nameField { commitRename(nameField.stringValue) }
+    }
 
     /// A drag starts on the thumbnail or the preview, whose mouse events come here too.
     override func mouseDown(with event: NSEvent) {
@@ -609,12 +721,13 @@ final class Toast: NSPanel, NSDraggingSource {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if let nameField { return commitRename(nameField.stringValue) }
         if dragStart != nil { return openClicked() }
         dismiss()
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let png, let start = dragStart, hypot(event.locationInWindow.x - start.x, event.locationInWindow.y - start.y) > 4 else { return }
+        guard nameField == nil, let png, let start = dragStart, hypot(event.locationInWindow.x - start.x, event.locationInWindow.y - start.y) > 4 else { return }
         dragStart = nil
         dismissal?.cancel()
         let view = event.window!.contentView!
@@ -634,6 +747,18 @@ final class Toast: NSPanel, NSDraggingSource {
 
 /// The toast's preview panel. It takes no keys; its mouse events go to the toast.
 final class ToastPreview: NSPanel {}
+
+extension Toast: NSTextFieldDelegate {
+    /// Return renames, Esc closes the field without renaming.
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        switch selector {
+        case #selector(NSResponder.insertNewline(_:)): commitRename(control.stringValue)
+        case #selector(NSResponder.cancelOperation(_:)): cancelRename()
+        default: return false
+        }
+        return true
+    }
+}
 
 extension Toast: NSSharingServicePickerDelegate {
     nonisolated func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker, didChoose service: NSSharingService?) {
