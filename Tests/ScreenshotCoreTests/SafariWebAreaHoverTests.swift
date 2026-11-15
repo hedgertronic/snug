@@ -10,7 +10,7 @@ struct SafariWebAreaHoverTests {
     /// 146 px, then the light page. Pixel geometry, as hover runs it (half size, then scaled back), finds the page as its own
     /// panel, and a hover anywhere on the page selects it with the window as its parent.
     @Test func geometryFindsTheLightPageUnderTheTabBar() async throws {
-        let url = try #require(Bundle.module.url(forResource: "SafariLightPage", withExtension: "png", subdirectory: "Fixtures"))
+        let url = fixtureURL("SafariLightPage.png")
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
         let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
         let found = try await GeometryDetector().detect(in: Detection.downsampled(image, by: 2)).map { $0.scaled(by: 2) }

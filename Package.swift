@@ -19,6 +19,6 @@ let package = Package(
         .executableTarget(name: "Snug", dependencies: ["ScreenshotCore", "Sparkle"],
                          // Snug.app embeds Sparkle.framework in Contents/Frameworks.
                          linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]),
-        .testTarget(name: "ScreenshotCoreTests", dependencies: ["ScreenshotCore", "ScreenshotBench"], resources: [.copy("Fixtures")])
+        .testTarget(name: "ScreenshotCoreTests", dependencies: ["ScreenshotCore", "ScreenshotBench"])
     ]
 )
