@@ -17,7 +17,7 @@ Open it and allow Screen Recording. Accessibility permission helps Snug find ele
 
 Press **Control-Shift-Space** to capture the display under your pointer. Hover and click or press Return to copy, or drag an area. Hold Option while dragging for an exact crop. Change the capture shortcut in Settings → General.
 
-Saved captures are named for the app and window they came from, such as `Safari - Lisbon flight 2026-11-14 at 18.03.12.png`. Change the pattern in Settings → General → File names with `{app}`, `{title}`, `{date}` and `{time}`. To name captures for what they show instead of the window's title, turn on Name with Apple Intelligence there; it runs on your Mac and needs Apple Intelligence turned on. To rename a capture yourself, point at its toast and click Rename.
+Saved captures are named like `Snug 2026-11-14 at 18.03.12.png`. To name them for the app and window they came from, such as `Safari - Lisbon flight 2026-11-14 at 18.03.12.png`, choose App and window title in Settings → General → File names, or Custom to write your own pattern with `{app}`, `{title}`, `{date}` and `{time}`. With a title in the name, Name with Apple Intelligence names captures for what they show instead of the window's title; it runs on your Mac and needs Apple Intelligence turned on. To rename a capture yourself, point at its toast and click Rename.
 
 ## Keys
 

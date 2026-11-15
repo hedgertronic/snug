@@ -138,6 +138,9 @@ private struct GeneralPane: View {
     @AppStorage(Pref.saveFolder) private var saveFolder = ""
     @AppStorage(Pref.aiNames) private var aiNames = false
     @AppStorage(Pref.fileNamePattern) private var fileNamePattern = CaptureName.defaultPattern
+    /// Whether the pattern field shows: chosen as Custom, or a pattern that is neither preset.
+    @State private var customName = ![CaptureName.defaultPattern, CaptureName.contextPattern]
+        .contains(UserDefaults.standard.string(forKey: Pref.fileNamePattern) ?? CaptureName.defaultPattern)
     @AppStorage(Pref.chromiumText) private var chromiumText = true
     @AppStorage(Pref.playSounds) private var playSounds = true
     @State private var opensAtLogin = SMAppService.mainApp.status == .enabled
@@ -219,36 +222,52 @@ private struct GeneralPane: View {
                 }
                 caption("File names")
                 Card {
-                    // The pattern, its example for a Safari window, and Reset back to the default.
+                    // A preset or Custom, the pattern field for Custom, and an example for a Safari window.
                     VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("Name files")
-                            Spacer(minLength: 8)
-                            Button("Reset") { UserDefaults.standard.removeObject(forKey: Pref.fileNamePattern) }
-                                .disabled(fileNamePattern == CaptureName.defaultPattern)
-                        }
-                        TextField("File name pattern", text: $fileNamePattern, prompt: Text(CaptureName.defaultPattern))
+                        LabeledContent("Name files") {
+                            Picker("Name files", selection: Binding(
+                                get: { customName ? "custom" : fileNamePattern == CaptureName.contextPattern ? "context" : "snug" },
+                                set: { choice in
+                                    customName = choice == "custom"
+                                    if choice == "snug" { UserDefaults.standard.removeObject(forKey: Pref.fileNamePattern) }
+                                    if choice == "context" { fileNamePattern = CaptureName.contextPattern }
+                                })) {
+                                Text("Snug and date").tag("snug")
+                                Text("App and window title").tag("context")
+                                Text("Custom").tag("custom")
+                            }
                             .labelsHidden()
-                            .font(.system(size: 12, design: .monospaced))
+                            .fixedSize()
+                        }
+                        if customName {
+                            TextField("File name pattern", text: $fileNamePattern, prompt: Text(CaptureName.contextPattern))
+                                .labelsHidden()
+                                .font(.system(size: 12, design: .monospaced))
+                        }
                         Text("Example: " + CaptureName.name(pattern: fileNamePattern, app: "Safari", description: "Lisbon flight", date: .now) + ".png")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
-                        Text("Use {app}, {title}, {date} and {time}. A capture without a title leaves {title} out.")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        if customName {
+                            Text("Use {app}, {title}, {date} and {time}. A capture without a title leaves {title} out.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     .padding(.vertical, 10)
-                    LabeledContent {
-                        Toggle("Name with Apple Intelligence", isOn: $aiNames).labelsHidden().toggleStyle(.switch)
-                    } label: {
-                        // The model's availability is observable, so the line follows Apple Intelligence turning on or finishing its download.
-                        detailed("Name with Apple Intelligence", CaptureNamer.unavailableReason.map { "\($0) Until then, {title} is the window's title." }
-                                 ?? "Fills {title} with what a saved capture shows, on this Mac. Off, {title} is the window's title.")
+                    // Apple Intelligence writes the title, so it shows only for names that hold one.
+                    if CaptureName.usesTitle(fileNamePattern) {
+                        LabeledContent {
+                            Toggle("Name with Apple Intelligence", isOn: $aiNames).labelsHidden().toggleStyle(.switch)
+                        } label: {
+                            // The model's availability is observable, so the line follows Apple Intelligence turning on or finishing its download.
+                            detailed("Name with Apple Intelligence", CaptureNamer.unavailableReason.map { "\($0) Until then, names use the window's title." }
+                                     ?? "Titles a saved capture with what it shows, worked out on this Mac. Off, names use the window's title.")
+                        }
+                        .padding(.vertical, 4)
                     }
-                    .padding(.vertical, 4)
                 }
                 caption("Text mode")
                 Card {

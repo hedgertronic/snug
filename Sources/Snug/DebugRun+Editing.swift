@@ -670,6 +670,12 @@ extension DebugRun {
         defaults.set(names.path, forKey: Pref.saveFolder)
         let context = CaptureContext(app: "Safari", title: "(2) Lisbon flight — Safari")
         await Output.publish(png: Data("named".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
+        let usual = try FileManager.default.contentsOfDirectory(atPath: names.path)
+        require(usual.count == 1 && usual[0].wholeMatch(of: /Snug \d{4}-\d{2}-\d{2} at \d{2}\.\d{2}\.\d{2}\.png/) != nil,
+                "by default a saved capture is named Snug and its date, whatever its window: \(usual)")
+        try FileManager.default.removeItem(at: names.appending(path: usual[0]))
+        defaults.set(CaptureName.contextPattern, forKey: Pref.fileNamePattern)
+        await Output.publish(png: Data("named".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
         let named = try FileManager.default.contentsOfDirectory(atPath: names.path)
         require(named.count == 1 && named[0].hasPrefix("Safari - Lisbon flight 20") && named[0].hasSuffix(".png"),
                 "a saved capture is named for its app and window title: \(named)")
@@ -689,6 +695,7 @@ extension DebugRun {
         defaults.set("", forKey: Pref.fileNamePattern)
         Pref.register(in: defaults)
         require(defaults.string(forKey: Pref.fileNamePattern) == CaptureName.defaultPattern, "an empty pattern is replaced by the default")
+        defaults.set(CaptureName.contextPattern, forKey: Pref.fileNamePattern)
         defaults.set(names.path, forKey: Pref.saveFolder)
         let renaming = Toast(png: Data("named".utf8), message: "Saved to names", detail: savedFile.lastPathComponent, file: savedFile, color: nil, defaults: defaults, pasteboard: pasteboard)
         let renameCard = renaming.card.frame
@@ -789,6 +796,13 @@ extension DebugRun {
                 "an AI name fills {title} in a custom pattern: \(patternedAI)")
         try FileManager.default.removeItem(at: ai.appending(path: patternedAI[0]))
         defaults.removeObject(forKey: Pref.fileNamePattern)
+        describing("Never Asked")
+        await Output.publish(png: Data("ai".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
+        let untitledPattern = try aiFiles()
+        require(described == 2 && untitledPattern.count == 1 && untitledPattern[0].hasPrefix("Snug 20"),
+                "names without {title} (the default) never ask the model: \(described) asked, \(untitledPattern)")
+        try FileManager.default.removeItem(at: ai.appending(path: untitledPattern[0]))
+        defaults.set(CaptureName.contextPattern, forKey: Pref.fileNamePattern)
         describing(nil)
         await Output.publish(png: Data("ai".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
         let untitled = await CaptureNamer.lastRename?.value
@@ -804,6 +818,49 @@ extension DebugRun {
         let afterMine = try aiFiles()
         require(late == nil && afterMine == ["Mine.png"], "a name typed before the model answers stands: \(afterMine)")
         mine.dismiss()
+        try FileManager.default.removeItem(at: ai.appending(path: "Mine.png"))
+        // Rename that only changes case (the old path still answers on this volume) and Share both keep the model's name off the file.
+        await Output.publish(png: Data("ai".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
+        let cased = ai.appending(path: try aiFiles()[0])
+        let casing = Toast(png: Data("ai".utf8), message: "Saved to ai", detail: cased.lastPathComponent, file: cased, color: nil, defaults: defaults, pasteboard: pasteboard)
+        casing.renameButton.performClick(nil)
+        casing.commitRename(cased.deletingPathExtension().lastPathComponent.uppercased())
+        let afterCase = await CaptureNamer.lastRename?.value
+        let upper = try aiFiles()
+        require(afterCase == nil && upper == [cased.lastPathComponent.uppercased().replacingOccurrences(of: ".PNG", with: ".png")] && casing.file?.lastPathComponent == upper.first,
+                "a case-only rename from the toast stands against a later model name: \(upper)")
+        casing.dismiss()
+        try FileManager.default.removeItem(at: ai.appending(path: upper[0]))
+        await Output.publish(png: Data("ai".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
+        let shared = ai.appending(path: try aiFiles()[0])
+        let sharing = Toast(png: Data("ai".utf8), message: "Saved to ai", detail: shared.lastPathComponent, file: shared, color: nil, defaults: defaults, pasteboard: pasteboard)
+        sharing.shareButton.performClick(nil)
+        let afterShare = await CaptureNamer.lastRename?.value
+        let sharedNames = try aiFiles()
+        require(afterShare == nil && sharedNames == [shared.lastPathComponent], "a file handed to Share keeps its name: \(sharedNames)")
+        sharing.dismiss()
+        try FileManager.default.removeItem(at: shared)
+        // A pasteboard of several files keeps them all when one is renamed.
+        let others = [URL(fileURLWithPath: "/tmp/a.png"), URL(fileURLWithPath: "/tmp/b.png")]
+        let moving = URL(fileURLWithPath: "/tmp/old.png"), movedTo = URL(fileURLWithPath: "/tmp/new.png")
+        pasteboard.clearContents()
+        pasteboard.writeObjects([others[0], moving, others[1]] as [NSURL])
+        Toast.fileMoved(from: moving, to: movedTo, pasteboard: pasteboard)
+        let held = pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL]
+        require(held == [others[0], movedTo, others[1]], "a renamed file on the pasteboard is replaced in place among the others: \(String(describing: held))")
+        // A rename that works after one that failed shows the toast as it was, with the new name.
+        let retried = ai.appending(path: "Retry.png")
+        try Data("ai".utf8).write(to: retried)
+        try Data("taken".utf8).write(to: ai.appending(path: "Taken.png"))
+        let retrying = Toast(png: Data("ai".utf8), message: "Saved to ai", detail: retried.lastPathComponent, file: retried, color: nil, defaults: defaults, pasteboard: pasteboard)
+        retrying.commitRename("Taken")
+        require(retrying.message.stringValue == "Rename failed" && retrying.file == retried, "a name another file has fails in the toast")
+        retrying.commitRename("Free")
+        require(retrying.message.stringValue == "Saved to ai" && retrying.detail.stringValue == "Free.png" && retrying.detail.textColor == .secondaryLabelColor
+                    && retrying.file == ai.appending(path: "Free.png"),
+                "a rename that works after a failure clears the failure: \(retrying.message.stringValue) / \(retrying.detail.stringValue)")
+        retrying.dismiss()
+        for name in ["Free.png", "Taken.png"] { try FileManager.default.removeItem(at: ai.appending(path: name)) }
         let calls = described
         _ = await Output.publish(png: Data("ai".utf8), detail: "1 x 1", copy: false, save: true, destination: ai.appending(path: "Chosen.png"), context: context,
                                  pasteboard: pasteboard, defaults: defaults)

@@ -7,11 +7,23 @@ struct CaptureNameTests {
     let date = Date(timeIntervalSince1970: 1_794_679_392) // 2026-11-14 18:03:12 UTC
     let utc = TimeZone(identifier: "UTC")!
 
-    func name(_ pattern: String = CaptureName.defaultPattern, app: String?, description: String?) -> String {
+    func name(_ pattern: String = CaptureName.contextPattern, app: String?, description: String?) -> String {
         CaptureName.name(pattern: pattern, app: app, description: description, date: date, timeZone: utc)
     }
 
-    @Test func theDefaultPatternJoinsAppAndDescriptionBeforeTheMacOSStamp() {
+    @Test func theDefaultPatternIsSnugAndTheMacOSStamp() {
+        #expect(name(CaptureName.defaultPattern, app: "Safari", description: "Lisbon flight") == "Snug \(stamp)")
+        #expect(name(CaptureName.defaultPattern, app: nil, description: nil) == "Snug \(stamp)")
+    }
+
+    @Test func onlyPatternsWithATitleUseOne() {
+        #expect(!CaptureName.usesTitle(CaptureName.defaultPattern))
+        #expect(!CaptureName.usesTitle(""), "an empty pattern means the default")
+        #expect(CaptureName.usesTitle(CaptureName.contextPattern))
+        #expect(CaptureName.usesTitle("{date} {title}"))
+    }
+
+    @Test func theContextPatternJoinsAppAndDescriptionBeforeTheMacOSStamp() {
         #expect(name(app: "Safari", description: "Lisbon flight confirmation") == "Safari - Lisbon flight confirmation \(stamp)")
         #expect(name(app: "Safari", description: nil) == "Safari \(stamp)", "a missing title drops its separator too")
         #expect(name(app: "Safari", description: "safari") == "Safari \(stamp)", "a description that repeats the app is dropped")
@@ -30,9 +42,9 @@ struct CaptureNameTests {
     }
 
     @Test func anEmptyPatternFallsBackToTheDefault() {
-        #expect(name("", app: "Safari", description: "Flight") == "Safari - Flight \(stamp)")
-        #expect(name("{title}", app: "Safari", description: nil) == "Safari \(stamp)", "a pattern that renders to nothing uses the default")
-        #expect(name(" - ", app: "Safari", description: nil) == "Safari \(stamp)")
+        #expect(name("", app: "Safari", description: "Flight") == "Snug \(stamp)")
+        #expect(name("{title}", app: "Safari", description: nil) == "Snug \(stamp)", "a pattern that renders to nothing uses the default")
+        #expect(name(" - ", app: "Safari", description: nil) == "Snug \(stamp)")
     }
 
     @Test func windowTitlesLoseUnreadCountsAndTheAppSuffix() {
@@ -49,6 +61,18 @@ struct CaptureNameTests {
         #expect(CaptureName.description(fromWindowTitle: "josh@mac: ~/Developer/tools", app: "Terminal") == "josh@mac- ~-Developer-tools")
         #expect(CaptureName.description(fromWindowTitle: "..hidden\nline", app: nil) == "hidden line")
         #expect(CaptureName.sanitized("  a\t\tb  ") == "a b")
+        #expect(CaptureName.sanitized(". .capture") == "capture", "dots and spaces in any mix never leave a hidden name")
+        #expect(name("-.capture", app: nil, description: nil) == "capture", "trimmed separators never bare a leading dot")
+        #expect(CaptureName.renamed(URL(fileURLWithPath: "/tmp/a.png"), to: ". .capture") == URL(fileURLWithPath: "/tmp/capture.png"))
+    }
+
+    @Test func namesFitAFileName() {
+        let title = String(repeating: "Lisbon flight ", count: 4)
+        let long = name("{title} {title} {title} {title} {title} {date}", app: "Safari", description: title)
+        #expect(long.utf8.count <= CaptureName.maxNameBytes && long.hasPrefix("Lisbon flight"))
+        #expect(!long.hasSuffix(" ") && !long.hasSuffix("-"))
+        let wide = name(String(repeating: "é", count: 150) + " {date}", app: nil, description: nil)
+        #expect(wide.utf8.count <= CaptureName.maxNameBytes, "the limit counts bytes, not characters")
     }
 
     @Test func longTitlesAreCutAtAWordBreak() {

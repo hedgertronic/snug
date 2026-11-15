@@ -38,16 +38,27 @@ enum CaptureNamer {
     @MainActor static var describer: @Sendable (Data, CaptureContext?) async -> String? = { await describe(png: $0, context: $1) }
     /// The latest `rename`, which debug runs await; its value is the file renamed to, or nil when nothing was renamed.
     @MainActor private(set) static var lastRename: Task<URL?, Never>?
+    /// The renames still waiting on the model, by the file each renames; a rename runs only while its file's token is still here.
+    @MainActor private static var pending: [URL: UUID] = [:]
+
+    /// Drops the pending rename of `file`, once the user acts on it (Rename, Trash, Share or a drag from its toast), so the file keeps
+    /// the name and place they handed on.
+    @MainActor static func cancelRename(of file: URL) { pending[file] = nil }
 
     /// Renames the saved `file` to what `pattern` gives with the model's description of `png` as its title, keeping the app and `date`.
-    /// Nothing happens when the
-    /// model is unavailable, slow, declines or gives no title, or when the file was renamed, moved or trashed meanwhile. A toast showing
-    /// the file, and a pasteboard holding it, follow the rename.
+    /// Nothing happens when the model is unavailable, slow, declines or gives no title, when the user acted on the file from its toast
+    /// meanwhile (`cancelRename`), or when the file was renamed, moved or trashed. A toast showing the file, and a pasteboard holding
+    /// it, follow the rename.
     @MainActor
     static func rename(_ file: URL, png: Data, context: CaptureContext?, date: Date, pattern: String, pasteboard: NSPasteboard) {
         let describe = describer
+        let token = UUID()
+        pending[file] = token
         lastRename = Task {
-            guard let description = await describe(png, context) else { return nil }
+            let description = await describe(png, context)
+            guard pending[file] == token else { return nil }
+            pending[file] = nil
+            guard let description else { return nil }
             let base = CaptureName.name(pattern: pattern, app: context?.app, description: description, date: date)
             let target = file.deletingLastPathComponent().appending(path: base).appendingPathExtension(file.pathExtension)
             guard target != file, FileManager.default.fileExists(atPath: file.path) else { return nil }

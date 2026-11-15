@@ -12,13 +12,18 @@ public struct CaptureContext: Sendable, Equatable {
 }
 
 /// File names for captures, from a pattern of literal text and tokens: {app} (the app's name), {title} (the window's title, or the title
-/// the on-device model wrote), {date} (yyyy-MM-dd) and {time} (HH.mm.ss). The default, "{app} - {title} {date} at {time}", gives
-/// "Safari - Lisbon flight 2026-11-14 at 18.03.12"; a capture with neither app nor title takes "Snug" for its app.
+/// the on-device model wrote), {date} (yyyy-MM-dd) and {time} (HH.mm.ss). The default, "Snug {date} at {time}", gives
+/// "Snug 2026-11-14 at 18.03.12"; `contextPattern` gives "Safari - Lisbon flight 2026-11-14 at 18.03.12", and a capture with neither
+/// app nor title takes "Snug" for its app.
 public enum CaptureName {
     /// The longest description kept, in characters; a longer one is cut at a word break.
     public static let maxDescription = 60
+    /// The longest name a pattern gives, in UTF-8 bytes: macOS volumes hold 255, which leaves room for " 2" and the extension.
+    public static let maxNameBytes = 200
     /// The pattern Snug names files with unless another is set (Settings > General > File names).
-    public static let defaultPattern = "{app} - {title} {date} at {time}"
+    public static let defaultPattern = "Snug {date} at {time}"
+    /// The pattern that names a capture for its app and window title (Settings > General > File names > App and window title).
+    public static let contextPattern = "{app} - {title} {date} at {time}"
     /// The tokens a pattern can hold.
     public static let tokens = ["app", "title", "date", "time"]
     /// Characters that only separate tokens: dropped next to an empty token and trimmed from the ends of a name.
@@ -39,7 +44,20 @@ public enum CaptureName {
         format.dateFormat = "HH.mm.ss"
         let values = ["app": app ?? (description == nil ? "Snug" : ""), "title": description ?? "", "date": day, "time": format.string(from: date)]
         let rendered = render(pattern, values: values)
-        return rendered.isEmpty ? render(defaultPattern, values: values) : rendered
+        return capped(rendered.isEmpty ? render(defaultPattern, values: values) : rendered)
+    }
+
+    /// `name` cut to `maxNameBytes`, without trailing separators.
+    static func capped(_ name: String) -> String {
+        guard name.utf8.count > maxNameBytes else { return name }
+        var result = name
+        while result.utf8.count > maxNameBytes { result.removeLast() }
+        return result.trimmingCharacters(in: separators)
+    }
+
+    /// Whether names from `pattern` hold a title (the window's, or one the on-device model writes); an empty pattern means `defaultPattern`.
+    public static func usesTitle(_ pattern: String) -> Bool {
+        (pattern.isEmpty ? defaultPattern : pattern).contains("{title}")
     }
 
     /// `pattern` with each known token replaced by its value. An empty value drops its token together with the separator-only text
@@ -78,7 +96,10 @@ public enum CaptureName {
             case let .token(token): sanitized(values[token, default: ""])
             }
         }.joined()
-        return sanitized(joined).trimmingCharacters(in: separators)
+        // Trimming separators can bare a leading dot ("-.png"), so sanitize and trim until neither changes the name.
+        var name = sanitized(joined)
+        while case let next = sanitized(name.trimmingCharacters(in: separators)), next != name { name = next }
+        return name
     }
 
     /// The description a window title gives: unread counts ("(3) ", "• ") and a trailing " - App" dropped, cut to `maxDescription`.
@@ -121,15 +142,15 @@ public enum CaptureName {
     }
 
     /// `text` fit for a file name: "/" and ":" become "-", control characters and line breaks become spaces, runs of spaces collapse, and
-    /// leading dots (which would hide the file) and spaces are dropped.
+    /// leading dots (which would hide the file) and spaces are dropped, in any mix.
     public static func sanitized(_ text: String) -> String {
         var result = String(text.unicodeScalars.map { scalar -> Character in
             if scalar == "/" || scalar == ":" { return "-" }
             if CharacterSet.controlCharacters.contains(scalar) || CharacterSet.newlines.contains(scalar) { return " " }
             return Character(scalar)
         })
-        result = result.replacing(/\s+/, with: " ").trimmingCharacters(in: .whitespaces)
-        while result.hasPrefix(".") { result.removeFirst() }
+        result = result.replacing(/\s+/, with: " ")
+        while let first = result.first, first == "." || first == " " { result.removeFirst() }
         return result.trimmingCharacters(in: .whitespaces)
     }
 

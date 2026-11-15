@@ -260,9 +260,9 @@ enum Output {
         Toast.show(png: png, message: message, detail: detail, file: file, color: failed ? .systemRed : warning.map { _ in .systemOrange },
                    name: context == nil ? nil : base, defaults: defaults, pasteboard: pasteboard)
         if !failed { Sound.capture.play(defaults: defaults) }
-        if let file, destination == nil, defaults.bool(forKey: Pref.aiNames) {
-            CaptureNamer.rename(file, png: png, context: context, date: date, pattern: defaults.string(forKey: Pref.fileNamePattern) ?? "",
-                                pasteboard: pasteboard)
+        let pattern = defaults.string(forKey: Pref.fileNamePattern) ?? ""
+        if let file, destination == nil, defaults.bool(forKey: Pref.aiNames), CaptureName.usesTitle(pattern) {
+            CaptureNamer.rename(file, png: png, context: context, date: date, pattern: pattern, pasteboard: pasteboard)
         }
         return (message, detail)
     }

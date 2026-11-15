@@ -57,6 +57,8 @@ final class Toast: NSPanel, NSDraggingSource {
     private(set) var file: URL?
     /// The capture or copied text written to a file of its own for Open, Share and drag, when there is no saved file.
     private var scratchFile: URL?
+    /// The message and detail as they were before `showFailure` replaced them, until `clearFailure` puts them back.
+    private var beforeFailure: (message: String, detail: String, font: NSFont?, color: NSColor?, lineBreak: NSLineBreakMode, toolTip: String?, hidden: Bool)?
     /// The name, without extension, the capture's own file takes when there is no saved file; nil is "Snug".
     private let name: String?
     /// Rename's field, in place of the text and actions while it is open.
@@ -518,6 +520,7 @@ final class Toast: NSPanel, NSDraggingSource {
     @objc private func shareClicked() {
         let item: Any
         do { item = png == nil ? text! : try fileOnDisk() } catch { return showFailure("Share failed", error) }
+        if let file { CaptureNamer.cancelRename(of: file) }
         guard !Toast.isSuppressed else { return }
         holding = true
         dismissal?.cancel()
@@ -530,6 +533,7 @@ final class Toast: NSPanel, NSDraggingSource {
     /// cannot be trashed (already gone, a read-only folder) shows why in the toast and leaves the pasteboard as it is.
     @objc private func trashClicked() {
         guard let file else { return }
+        CaptureNamer.cancelRename(of: file)
         let holdsCapture = pasteboard.data(forType: .png) == png || (pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL])?.first == file
         do {
             try FileManager.default.trashItem(at: file, resultingItemURL: nil)
@@ -566,10 +570,11 @@ final class Toast: NSPanel, NSDraggingSource {
     /// until the field closes.
     @objc private func renameClicked() {
         guard let file, nameField == nil else { return }
+        CaptureNamer.cancelRename(of: file)
         dismissal?.cancel()
         settle?.cancel()
         holding = true
-        let field = NSTextField(string: file.deletingPathExtension().lastPathComponent)
+        let field = RenameField(string: file.deletingPathExtension().lastPathComponent)
         field.font = .systemFont(ofSize: 12)
         field.bezelStyle = .roundedBezel
         field.cell!.isScrollable = true
@@ -597,6 +602,7 @@ final class Toast: NSPanel, NSDraggingSource {
         } catch {
             return showFailure("Rename failed", error)
         }
+        clearFailure()
         follow(old, to: target)
         Toast.fileMoved(from: old, to: target, pasteboard: pasteboard)
         scheduleDismissal()
@@ -642,13 +648,13 @@ final class Toast: NSPanel, NSDraggingSource {
         try FileManager.default.moveItem(at: temporary, to: target)
     }
 
-    /// Points the toasts showing `old` at `new` after the file moved, and a pasteboard holding `old` as a file (a recording) at `new`.
+    /// Points the toasts showing `old` at `new` after the file moved, and a pasteboard holding `old` as a file (a recording, or files copied
+    /// in Finder) at `new`, keeping the other files it holds.
     static func fileMoved(from old: URL, to new: URL, pasteboard: NSPasteboard) {
         for toast in shown { toast.follow(old, to: new) }
-        if (pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL])?.first == old {
-            pasteboard.clearContents()
-            pasteboard.writeObjects([new as NSURL])
-        }
+        guard let files = pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL], files.contains(old) else { return }
+        pasteboard.clearContents()
+        pasteboard.writeObjects(files.map { ($0 == old ? new : $0) as NSURL })
     }
 
     /// Points this toast at `new` when its file was `old`: the file, and the detail when it is the saved capture's or recording's name.
@@ -663,6 +669,9 @@ final class Toast: NSPanel, NSDraggingSource {
 
     /// Shows `title` and the error's reason in the toast, in red, and restarts its timer; the toast and its buttons stay.
     private func showFailure(_ title: String, _ error: any Error) {
+        if beforeFailure == nil {
+            beforeFailure = (message.stringValue, detail.stringValue, detail.font, detail.textColor, detail.lineBreakMode, detail.toolTip, detail.isHidden)
+        }
         message.stringValue = title
         detail.stringValue = (error as NSError).localizedFailureReason ?? error.localizedDescription
         detail.font = .systemFont(ofSize: 12)
@@ -672,6 +681,20 @@ final class Toast: NSPanel, NSDraggingSource {
         detail.isHidden = false
         layoutText()
         scheduleDismissal()
+    }
+
+    /// Puts back the message and detail `showFailure` replaced.
+    private func clearFailure() {
+        guard let shown = beforeFailure else { return }
+        beforeFailure = nil
+        message.stringValue = shown.message
+        detail.stringValue = shown.detail
+        detail.font = shown.font
+        detail.textColor = shown.color
+        detail.lineBreakMode = shown.lineBreak
+        detail.toolTip = shown.toolTip
+        detail.isHidden = shown.hidden
+        layoutText()
     }
 
     override func mouseEntered(with event: NSEvent) { track(event, inside: true) }
@@ -733,6 +756,7 @@ final class Toast: NSPanel, NSDraggingSource {
         let view = event.window!.contentView!
         let url: URL
         do { url = try fileOnDisk() } catch { return showFailure("Drag failed", error) }
+        if let file { CaptureNamer.cancelRename(of: file) }
         let item = NSDraggingItem(pasteboardWriter: url as NSURL)
         item.setDraggingFrame(event.window === preview ? view.bounds : view.convert(lead.bounds, from: lead), contents: NSImage(data: png))
         view.beginDraggingSession(with: [item], event: event, source: self)
@@ -747,6 +771,25 @@ final class Toast: NSPanel, NSDraggingSource {
 
 /// The toast's preview panel. It takes no keys; its mouse events go to the toast.
 final class ToastPreview: NSPanel {}
+
+/// Rename's field. Snug has no Edit menu to turn ⌘A, ⌘C, ⌘X, ⌘V, ⌘Z and ⇧⌘Z into editing actions, so the field does it while it edits.
+final class RenameField: NSTextField {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        guard currentEditor() != nil, flags == .command || flags == [.command, .shift] else { return super.performKeyEquivalent(with: event) }
+        let action: Selector? = switch (event.charactersIgnoringModifiers?.lowercased(), flags == .command) {
+        case ("a", true): #selector(NSText.selectAll(_:))
+        case ("c", true): #selector(NSText.copy(_:))
+        case ("x", true): #selector(NSText.cut(_:))
+        case ("v", true): #selector(NSText.paste(_:))
+        case ("z", true): Selector(("undo:"))
+        case ("z", false): Selector(("redo:"))
+        default: nil
+        }
+        guard let action else { return super.performKeyEquivalent(with: event) }
+        return NSApp.sendAction(action, to: nil, from: self)
+    }
+}
 
 extension Toast: NSTextFieldDelegate {
     /// Return renames, Esc closes the field without renaming.
