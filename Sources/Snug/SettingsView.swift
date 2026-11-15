@@ -136,6 +136,7 @@ private struct GeneralPane: View {
     @AppStorage(Pref.hotKeyCode) private var hotKeyCode = 0
     @AppStorage(Pref.hotKeyModifiers) private var hotKeyModifiers = 0
     @AppStorage(Pref.saveFolder) private var saveFolder = ""
+    @AppStorage(Pref.fileNamePattern) private var fileNamePattern = CaptureName.defaultPattern
     @AppStorage(Pref.chromiumText) private var chromiumText = true
     @AppStorage(Pref.playSounds) private var playSounds = true
     @State private var opensAtLogin = SMAppService.mainApp.status == .enabled
@@ -214,6 +215,31 @@ private struct GeneralPane: View {
                         }
                         .onChange(of: checksForUpdates) { _, on in updater.automaticallyChecksForUpdates = on }
                     }
+                }
+                caption("File names")
+                Card {
+                    // The pattern, its example for a Safari window, and Reset back to the default.
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Name files")
+                            Spacer(minLength: 8)
+                            Button("Reset") { UserDefaults.standard.removeObject(forKey: Pref.fileNamePattern) }
+                                .disabled(fileNamePattern == CaptureName.defaultPattern)
+                        }
+                        TextField("File name pattern", text: $fileNamePattern, prompt: Text(CaptureName.defaultPattern))
+                            .labelsHidden()
+                            .font(.system(size: 12, design: .monospaced))
+                        Text("Example: " + CaptureName.name(pattern: fileNamePattern, app: "Safari", description: "Lisbon flight", date: .now) + ".png")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Text("Use {app}, {title}, {date} and {time}. A capture without a title leaves {title} out.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 10)
                 }
                 caption("Text mode")
                 Card {

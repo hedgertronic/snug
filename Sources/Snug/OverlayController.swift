@@ -1012,7 +1012,8 @@ final class OverlayController {
         let overlap = windows[..<index].map { $0.intersection(windows[index]) }.reduce(0) { $0 + ($1.isNull ? 0 : $1.width * $1.height) }
         let interior = overlap == 0 ? image?.cropping(to: windows[index]) : nil
         Pref.logHoverLine("window \(id) rect \(windows[index]) overlap in front \(overlap) -> " + (interior == nil ? "captured pixels" : "frozen interior"))
-        let destination = saveAs ? askSaveURL() : nil
+        let context = captureContext(for: rect, window: index)
+        let destination = saveAs ? askSaveURL(context: context) : nil
         guard !saveAs || destination != nil else { return }
         let (shadow, padding, scale) = (framed ? frameShadow : nil, framePadding, scale)
         dismiss()
@@ -1026,11 +1027,20 @@ final class OverlayController {
                     (png: try await Output.png(image), width: image.width, height: image.height)
                 }
                 await Output.publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save, destination: destination,
-                                     pasteboard: pasteboard, defaults: defaults)
+                                     context: context, pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
             }
         }
+    }
+
+    /// The app and title of the window at `index`, or else of the frontmost window under the center of `crop`, for the capture's file
+    /// name (`Output.baseName`). Nil in a frozen-image or debug run, whose windows are not live.
+    func captureContext(for crop: CGRect, window index: Int? = nil) -> CaptureContext? {
+        guard displayID != nil, !isHeadless else { return nil }
+        let center = CGPoint(x: crop.midX, y: crop.midY)
+        guard let index = index ?? windows.firstIndex(where: { $0.contains(center) }), windowIDs.indices.contains(index) else { return nil }
+        return CaptureSource.context(windowID: windowIDs[index])
     }
 
     /// The downsampled capture, started on first use.
@@ -1090,14 +1100,14 @@ final class OverlayController {
         editedRadii[rect] = radii.moving(focusedCorner ?? .topLeft, by: points * scale, alone: focusedCorner != nil, in: rect.size)
     }
 
-    /// Asks where Save As writes, with the overlay still up: canceling the panel leaves the overlay and its selection as they were, and
+    /// Asks where Save As writes, offering the usual name for `context`, with the overlay still up: canceling the panel leaves the overlay and its selection as they were, and
     /// only a chosen file closes it. While the panel runs, the overlay drops from the screen saver level to floating, under the modal
     /// panel whatever level the panel keeps, and the Esc hot key is let go, so Esc cancels the panel, not the overlay.
-    private func askSaveURL() -> URL? {
+    private func askSaveURL(context: CaptureContext?) -> URL? {
         escape?.unregister()
         let level = window.level
         window.level = .floating
-        let url = chooseSaveURL(Output.defaultFile(defaults: defaults))
+        let url = chooseSaveURL(Output.defaultFile(defaults: defaults, context: context))
         window.level = level
         if url == nil, !isHeadless {
             try! escape!.register(keyCode: 53, modifiers: [])
@@ -1109,7 +1119,8 @@ final class OverlayController {
     /// Asks for the Save As file when asked to, then closes the overlay, encodes off main and delivers.
     func finish(crop: CGRect, framed: Bool? = nil, copy: Bool, save: Bool, saveAs: Bool = false) {
         guard let image else { return }
-        let destination = saveAs ? askSaveURL() : nil
+        let context = captureContext(for: crop)
+        let destination = saveAs ? askSaveURL(context: context) : nil
         guard !saveAs || destination != nil else { return }
         let padding = (framed ?? self.framed) ? framePadding : nil, scale = scale, shadow = frameShadow
         let container = container(of: crop)
@@ -1126,7 +1137,7 @@ final class OverlayController {
                     radii = radii.replacingCorners(sharedWith: container, in: crop, with: windowRadius, arcs: measured.arcs)
                 }
                 try await Output.deliver(image, crop: crop, padding: padding, scale: scale, cornerRadii: rounds ? edited ?? radii : .zero, shadow: shadow, copy: copy, save: save,
-                                         destination: destination, pasteboard: pasteboard, defaults: defaults)
+                                         destination: destination, context: context, pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
             }

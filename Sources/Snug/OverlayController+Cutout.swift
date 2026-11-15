@@ -148,13 +148,14 @@ extension OverlayController {
         let (bounds, radii) = (preview.cropped ? subject.bounds : nil, preview.radii)
         let (framed, scale, shadow, padding) = (framed, scale, frameShadow, framePadding)
         let (pasteboard, defaults) = (pasteboard, defaults)
+        let context = captureContext(for: preview.rect)
         dismiss()
         commitTask = Task {
             do {
                 let output = try await Output.encodeCutout(subject.image, bounds: bounds, cornerRadii: radii, framed: framed, scale: scale,
                                                              shadow: shadow, padding: padding)
                 await Output.publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save,
-                                     pasteboard: pasteboard, defaults: defaults)
+                                     context: context, pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
             }

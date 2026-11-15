@@ -27,6 +27,9 @@ enum Pref {
     static let frameShadowAngle = "SnugFrameShadowAngle"
     static let frameShadowColor = "SnugFrameShadowColor"
     static let saveFolder = "SnugSaveFolder"
+    /// The pattern saved captures and recordings are named with: text and the tokens {app}, {title}, {date} and {time}
+    /// (`CaptureName`; Settings > General > File names).
+    static let fileNamePattern = "SnugFileNamePattern"
     static let hotKeyCode = "SnugHotKeyCode"
     static let hotKeyModifiers = "SnugHotKeyModifiers"
     /// The capture shortcut until another is recorded: Control-Shift-Space.
@@ -111,6 +114,7 @@ enum Pref {
             frameShadowAngle: 270,
             frameShadowColor: "#000000",
             saveFolder: NSHomeDirectory() + "/Desktop",
+            fileNamePattern: CaptureName.defaultPattern,
             hotKeyCode: defaultHotKey.code,
             hotKeyModifiers: defaultHotKey.modifiers,
             colorFormat: ColorFormat.hex.rawValue,
@@ -156,6 +160,7 @@ enum Pref {
         hotKeyCode: .integerIn(Set([-1] + Array(Shortcut.keyNames.keys) + Array(Shortcut.functionKeys.keys))),
         hotKeyModifiers: .flags(mask: Int(NSEvent.ModifierFlags([.control, .option, .command, .shift]).rawValue)),
         saveFolder: .nonEmptyString,
+        fileNamePattern: .nonEmptyString,
     ] }
 
     /// The menu bar icon variants `SnugApp.menuBarIcon` draws.
@@ -193,30 +198,39 @@ enum Output {
     /// Encodes a crop, then copies it to the pasteboard or saves it, and shows a toast (see `publish`).
     @MainActor
     static func deliver(_ image: CGImage, crop: CGRect, padding: CGFloat?, scale: CGFloat, cornerRadii: CornerRadii = .zero, shadow: OutputFrame.Shadow? = nil,
-                        copy: Bool, save: Bool, destination: URL? = nil, warning: String? = nil, pasteboard: NSPasteboard, defaults: UserDefaults) async throws {
+                        copy: Bool, save: Bool, destination: URL? = nil, warning: String? = nil, context: CaptureContext? = nil, pasteboard: NSPasteboard,
+                        defaults: UserDefaults) async throws {
         let id = signposter.beginInterval("encode")
         let output = try await encode(image, crop: crop, padding: padding, scale: scale, cornerRadii: cornerRadii, shadow: shadow)
         signposter.endInterval("encode", id)
         await publish(png: output.png, detail: "\(output.width) x \(output.height)", copy: copy, save: save, destination: destination,
-                      warning: warning, pasteboard: pasteboard, defaults: defaults)
+                      warning: warning, context: context, pasteboard: pasteboard, defaults: defaults)
     }
 
-    /// The usual file for a saved capture: the save folder and a timestamped name.
-    static func defaultFile(defaults: UserDefaults) -> URL {
-        let format = DateFormatter()
-        format.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
-        return URL(fileURLWithPath: defaults.string(forKey: Pref.saveFolder)!).appending(path: "Snug \(format.string(from: .now)).png")
+    /// The name, without extension, the file name pattern gives a capture of `context` (its app and cleaned window title) taken at `date`
+    /// (`CaptureName.name`).
+    static func baseName(context: CaptureContext?, date: Date = .now, defaults: UserDefaults) -> String {
+        CaptureName.name(pattern: defaults.string(forKey: Pref.fileNamePattern) ?? "", app: context?.app,
+                         description: CaptureName.description(fromWindowTitle: context?.title, app: context?.app), date: date)
+    }
+
+    /// The usual file for a saved capture: the save folder and `base` (by default the name for `context`, `baseName`) as a PNG.
+    static func defaultFile(defaults: UserDefaults, context: CaptureContext? = nil, base: String? = nil) -> URL {
+        URL(fileURLWithPath: defaults.string(forKey: Pref.saveFolder)!).appending(path: base ?? baseName(context: context, defaults: defaults))
+            .appendingPathExtension("png")
     }
 
     /// Copies a PNG to the pasteboard or saves it, and shows a toast; returns the toast's message and detail. `detail` is the toast's
-    /// pixel size line, saved or not. A save goes to `destination` (Save As, which the panel already confirmed) or the usual file, which takes a
-    /// numbered name when its own is taken. A write that fails (the pasteboard refusing the image, an unwritable folder) shows a red toast
+    /// pixel size line, saved or not. A save goes to `destination` (Save As, which the panel already confirmed) or the usual file, named for
+    /// `context` (the app and window title), which takes a numbered name when its own is taken. A write that fails (the pasteboard refusing the image, an unwritable folder) shows a red toast
     /// with its reason and keeps the capture in it: "Copy failed" or "Save failed"; a capture that lands plays the capture sound. Otherwise a `warning` (a capture that may be wrong)
     /// takes the detail line and an orange mark. The file is written off the main thread; the pasteboard and the toast stay on it.
     @MainActor
     @discardableResult
-    static func publish(png: Data, detail: String, copy: Bool, save: Bool, destination: URL? = nil, warning: String? = nil, pasteboard: NSPasteboard,
-                        defaults: UserDefaults) async -> (message: String, detail: String) {
+    static func publish(png: Data, detail: String, copy: Bool, save: Bool, destination: URL? = nil, warning: String? = nil, context: CaptureContext? = nil,
+                        pasteboard: NSPasteboard, defaults: UserDefaults) async -> (message: String, detail: String) {
+        let date = Date.now
+        let base = baseName(context: context, date: date, defaults: defaults)
         var copied = !copy
         if copy {
             let id = signposter.beginInterval("pasteboard")
@@ -228,7 +242,7 @@ enum Output {
         var saveError: (any Error)?
         if save {
             do {
-                file = try await write(png, to: destination ?? defaultFile(defaults: defaults), unique: destination == nil)
+                file = try await write(png, to: destination ?? defaultFile(defaults: defaults, base: base), unique: destination == nil)
             } catch {
                 saveError = error
             }
@@ -239,7 +253,7 @@ enum Output {
         let reason = saveError.map { ($0 as NSError).localizedFailureReason ?? $0.localizedDescription } ?? "The pasteboard did not accept the image."
         let detail = failed ? reason : warning ?? detail
         Toast.show(png: png, message: message, detail: detail, file: file, color: failed ? .systemRed : warning.map { _ in .systemOrange },
-                   defaults: defaults, pasteboard: pasteboard)
+                   name: context == nil ? nil : base, defaults: defaults, pasteboard: pasteboard)
         if !failed { Sound.capture.play(defaults: defaults) }
         return (message, detail)
     }

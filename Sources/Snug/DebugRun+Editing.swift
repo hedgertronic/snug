@@ -657,6 +657,39 @@ extension DebugRun {
                 "the toast's Save As into an unwritable folder reports in the toast and keeps the button")
         toast.dismiss()
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: blocked.path)
+
+        // File names: a capture of a live window is named for its app and title, and a toast for an unsaved capture drags out a file
+        // under the same name.
+        let names = folder.appending(path: "names")
+        try FileManager.default.createDirectory(at: names, withIntermediateDirectories: true)
+        defaults.set(names.path, forKey: Pref.saveFolder)
+        let context = CaptureContext(app: "Safari", title: "(2) Lisbon flight — Safari")
+        await Output.publish(png: Data("named".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
+        let named = try FileManager.default.contentsOfDirectory(atPath: names.path)
+        require(named.count == 1 && named[0].hasPrefix("Safari - Lisbon flight 20") && named[0].hasSuffix(".png"),
+                "a saved capture is named for its app and window title: \(named)")
+        let suggested = Output.defaultFile(defaults: defaults, context: context)
+        require(suggested.deletingLastPathComponent().path == names.path && suggested.lastPathComponent.hasPrefix("Safari - Lisbon flight 20"),
+                "Save As offers the same name: \(suggested.lastPathComponent)")
+        // A custom pattern names saves, and an empty one falls back to the default once preferences are checked.
+        let patterned = folder.appending(path: "pattern")
+        try FileManager.default.createDirectory(at: patterned, withIntermediateDirectories: true)
+        defaults.set(patterned.path, forKey: Pref.saveFolder)
+        defaults.set("{title} ({app}) {date}", forKey: Pref.fileNamePattern)
+        await Output.publish(png: Data("pattern".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
+        let byPattern = try FileManager.default.contentsOfDirectory(atPath: patterned.path)
+        require(byPattern.count == 1 && byPattern[0].wholeMatch(of: /Lisbon flight \(Safari\) \d{4}-\d{2}-\d{2}\.png/) != nil,
+                "the file name pattern in Settings names a save: \(byPattern)")
+        defaults.set("", forKey: Pref.fileNamePattern)
+        Pref.register(in: defaults)
+        require(defaults.string(forKey: Pref.fileNamePattern) == CaptureName.defaultPattern, "an empty pattern is replaced by the default")
+        defaults.set(names.path, forKey: Pref.saveFolder)
+        let unsaved = Toast(png: Data("named".utf8), message: "Copied", detail: "1 x 1", file: nil, color: nil, name: "Safari - Lisbon flight", defaults: defaults,
+                            pasteboard: pasteboard)
+        unsaved.openButton.performClick(nil)
+        require(Toast.opened?.file.lastPathComponent == "Safari - Lisbon flight.png", "an unsaved capture's own file takes its name: \(String(describing: Toast.opened))")
+        unsaved.dismiss()
+
         defaults.set(folder.path, forKey: Pref.saveFolder)
         return passed
     }

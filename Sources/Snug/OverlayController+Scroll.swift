@@ -129,6 +129,7 @@ extension OverlayController {
     private func finishScroll() {
         guard let stitcher, let scrollArea else { return }
         let (scale, padding, radii, shadow) = (scale, framed ? framePadding : nil, cornerRadii(of: scrollArea), frameShadow)
+        let context = captureContext(for: scrollArea)
         dismiss()
         commitTask = Task { [pasteboard, defaults] in
             do {
@@ -136,7 +137,7 @@ extension OverlayController {
                 try await Output.deliver(image, crop: CGRect(x: 0, y: 0, width: image.width, height: image.height), padding: padding, scale: scale,
                                          cornerRadii: radii, shadow: shadow, copy: true, save: false,
                                          warning: unmatched > 0 ? "Pinned or moving content: \(unmatched) px may repeat" : nil,
-                                         pasteboard: pasteboard, defaults: defaults)
+                                         context: context, pasteboard: pasteboard, defaults: defaults)
             } catch {
                 report(error)
             }

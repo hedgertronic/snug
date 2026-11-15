@@ -501,7 +501,10 @@ final class SnugApp: NSObject, NSApplicationDelegate {
 
     /// Starts the recording and keeps it at once, so the capture hotkey stops it even while the stream is starting.
     private func startRecording(displayID: CGDirectDisplayID, area: CGRect, showsCursor: Bool, capturesAudio: Bool) {
-        let file = Output.defaultFile(defaults: .standard).deletingPathExtension().appendingPathExtension("mov")
+        // The file is named for the window under the area's center, as a saved capture is.
+        let display = CGDisplayBounds(displayID)
+        let context = CaptureSource.context(at: CGPoint(x: display.minX + area.midX, y: display.minY + area.midY))
+        let file = Output.defaultFile(defaults: .standard, context: context).deletingPathExtension().appendingPathExtension("mov")
         let start = Task {
             try await ScreenRecording.start(displayID: displayID, area: area, file: file, showsCursor: showsCursor, capturesAudio: capturesAudio, showsPanels: true, defaults: .standard,
                                             onFailure: { [self] error in
