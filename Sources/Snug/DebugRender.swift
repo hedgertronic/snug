@@ -697,7 +697,14 @@ extension DebugRun {
     }
 
     /// Each Settings tab hosted in an NSHostingView inside a window that is never shown, drawn to a PNG in `directory`.
+    /// A background watchdog fails the run after 30 s even if AppKit blocks the main thread while drawing the shared color panel.
     static func renderSettings(into directory: URL) throws {
+        let watchdog = DispatchWorkItem {
+            FileHandle.standardError.write(Data("Settings render timed out after 30 s: AppKit drawing or layout did not return (including shared color panel checks)\n".utf8))
+            exit(EXIT_FAILURE)
+        }
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 30, execute: watchdog)
+        defer { watchdog.cancel() }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let tabs = SettingsTabs.makeController()
         func descendants<T: NSView>(of view: NSView, _ type: T.Type) -> [T] { view.subviews.flatMap { (($0 as? T).map { [$0] } ?? []) + descendants(of: $0, type) } }
@@ -765,7 +772,8 @@ extension DebugRun {
                     print(scrolled.path)
                 }
                 // The highlight's custom circle and the shadow swatch share the color panel: whichever took it last alone writes a picked color,
-                // even when the other still hears the change. The panel is never ordered in.
+                // even when the other still hears the change. The panel is never ordered in, but creating it can still schedule a system
+                // color wheel draw during the run-loop pump below; the background watchdog bounds that work too.
                 let defaults = UserDefaults.standard, panel = NSColorPanel.shared
                 let swatches = descendants(of: host, NSButton.self).compactMap { $0.target as? ColorSwatch.Coordinator }
                 precondition(swatches.count == 2, "the highlight's custom circle and the custom shadow's swatch: \(swatches.count)")

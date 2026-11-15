@@ -16,6 +16,11 @@ extension DebugRun {
     /// `--verify-extras-ui`: modes, view toggles, color, help, and Capture hover through synthesized events.
     static func verifyExtras(image: CGImage, frame: CGRect, overlay: OverlayController) async throws {
         _ = privateSetup(overlay)
+        // Queued tracking events from the real mouse must not replace the synthesized pointer during a hover delay.
+        guard let monitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .mouseEntered, .mouseExited], handler: { _ in nil }) else {
+            throw CocoaError(.featureUnsupported, userInfo: [NSLocalizedDescriptionKey: "could not isolate the extras suite's pointer events"])
+        }
+        defer { NSEvent.removeMonitor(monitor) }
         let run = ExtrasRun(image: image, frame: frame, overlay: overlay)
         run.checkFixture()
         try await run.modesAndGuides()
@@ -113,11 +118,17 @@ final class ExtrasRun {
         }
         passed.append(message)
     }
+    /// Sends overlay motion to its tracking owner without AppKit's live-pointer dispatch; menus and presses use the window's routing.
     func mouse(_ type: NSEvent.EventType, _ pixel: CGPoint, _ flags: NSEvent.ModifierFlags = []) {
         let point = CGPoint(x: pixel.x / overlay.scale, y: overlay.view.bounds.height - pixel.y / overlay.scale)
-        overlay.window.sendEvent(NSEvent.mouseEvent(with: type, location: point, modifierFlags: flags,
+        let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: flags,
             timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: overlay.window.windowNumber,
-            context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!)
+            context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+        if type == .mouseMoved && chrome.ratioMenu.isHidden && chrome.colorMenu.isHidden {
+            overlay.view.mouseMoved(with: event)
+        } else {
+            overlay.window.sendEvent(event)
+        }
     }
     func key(_ code: UInt16, _ characters: String, _ flags: NSEvent.ModifierFlags = []) {
         for type in [NSEvent.EventType.keyDown, .keyUp] {
@@ -1486,10 +1497,10 @@ final class ExtrasRun {
         require(chrome.strip.subviews.allSatisfy { $0.layer!.animationKeys() == nil } && copyLayer.animationKeys() == nil, "headless, releasing Command animates nothing")
         // Hovering a tool shows its name in a chip under it after a short delay; the chip takes neither the hover nor clicks.
         mouse(.mouseMoved, viewPixel(centerOf(chrome.colors)))
-        require(chrome.toolTip.isHidden, "the tool's name waits for the delay")
+        require(chrome.toolTip.isHidden && chrome.tipButton === chrome.colors && !chrome.tipDue, "the tool's name waits for the delay")
         for _ in 0..<300 where chrome.toolTip.isHidden { try await Task.sleep(for: .milliseconds(10)) }
         let colorsCenter = centerOf(chrome.colors)
-        require(texts(in: chrome.toolTip) == ["Colors"] && chrome.toolTip.frame.maxY <= chrome.strip.frame.minY && abs(chrome.toolTip.frame.midX - colorsCenter.x) <= 1
+        require(chrome.tipButton === chrome.colors && chrome.tipDue && texts(in: chrome.toolTip) == ["Colors"] && chrome.toolTip.frame.maxY <= chrome.strip.frame.minY && abs(chrome.toolTip.frame.midX - colorsCenter.x) <= 1
                     && overlay.view.hitTest(CGPoint(x: chrome.toolTip.frame.midX, y: chrome.toolTip.frame.midY)) !== chrome.toolTip,
                 "the Colors name shows in a chip centered under its button, and passes clicks through: \(texts(in: chrome.toolTip)) \(chrome.toolTip.frame)")
         flags(.command)
