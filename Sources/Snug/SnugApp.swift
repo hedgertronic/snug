@@ -85,7 +85,8 @@ final class SnugApp: NSObject, NSApplicationDelegate {
                 let description = await CaptureNamer.describe(png: png, context: context)
                 print("description: \(description ?? "none") (\(Int(started.duration(to: .now).milliseconds)) ms)")
                 print("context name: \(Output.baseName(context: context, defaults: .standard))")
-                print("AI name: \(CaptureName.name(pattern: UserDefaults.standard.string(forKey: Pref.fileNamePattern) ?? "", app: context?.app, description: description, date: .now))")
+                let pattern = UserDefaults.standard.string(forKey: Pref.fileNamePattern) ?? ""
+                print("AI name: \(CaptureName.name(pattern: CaptureName.usesTitle(pattern) ? pattern : CaptureName.contextPattern, app: context?.app, description: description, date: .now))")
                 exit(EXIT_SUCCESS)
             }
             return

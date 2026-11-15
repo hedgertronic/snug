@@ -670,6 +670,12 @@ extension DebugRun {
         defaults.set(names.path, forKey: Pref.saveFolder)
         let context = CaptureContext(app: "Safari", title: "(2) Lisbon flight — Safari")
         await Output.publish(png: Data("named".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
+        let usual = try FileManager.default.contentsOfDirectory(atPath: names.path)
+        require(usual.count == 1 && usual[0].wholeMatch(of: /Snug \d{4}-\d{2}-\d{2} at \d{2}\.\d{2}\.\d{2}\.png/) != nil,
+                "by default a saved capture is named Snug and its date, whatever its window: \(usual)")
+        try FileManager.default.removeItem(at: names.appending(path: usual[0]))
+        defaults.set(CaptureName.contextPattern, forKey: Pref.fileNamePattern)
+        await Output.publish(png: Data("named".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
         let named = try FileManager.default.contentsOfDirectory(atPath: names.path)
         require(named.count == 1 && named[0].hasPrefix("Safari - Lisbon flight 20") && named[0].hasSuffix(".png"),
                 "a saved capture is named for its app and window title: \(named)")
@@ -689,6 +695,7 @@ extension DebugRun {
         defaults.set("", forKey: Pref.fileNamePattern)
         Pref.register(in: defaults)
         require(defaults.string(forKey: Pref.fileNamePattern) == CaptureName.defaultPattern, "an empty pattern is replaced by the default")
+        defaults.set(CaptureName.contextPattern, forKey: Pref.fileNamePattern)
         defaults.set(names.path, forKey: Pref.saveFolder)
         let renaming = Toast(png: Data("named".utf8), message: "Saved to names", detail: savedFile.lastPathComponent, file: savedFile, color: nil, defaults: defaults, pasteboard: pasteboard)
         let renameCard = renaming.card.frame
@@ -789,6 +796,13 @@ extension DebugRun {
                 "an AI name fills {title} in a custom pattern: \(patternedAI)")
         try FileManager.default.removeItem(at: ai.appending(path: patternedAI[0]))
         defaults.removeObject(forKey: Pref.fileNamePattern)
+        describing("Never Asked")
+        await Output.publish(png: Data("ai".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
+        let untitledPattern = try aiFiles()
+        require(described == 2 && untitledPattern.count == 1 && untitledPattern[0].hasPrefix("Snug 20"),
+                "names without {title} (the default) never ask the model: \(described) asked, \(untitledPattern)")
+        try FileManager.default.removeItem(at: ai.appending(path: untitledPattern[0]))
+        defaults.set(CaptureName.contextPattern, forKey: Pref.fileNamePattern)
         describing(nil)
         await Output.publish(png: Data("ai".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
         let untitled = await CaptureNamer.lastRename?.value

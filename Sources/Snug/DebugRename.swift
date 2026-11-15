@@ -115,6 +115,7 @@ extension DebugRun {
             print("rename-live          skipped the on-device model: \(reason)")
         } else {
             defaults.set(true, forKey: Pref.aiNames)
+            defaults.set(CaptureName.contextPattern, forKey: Pref.fileNamePattern)
             await Output.publish(png: png, detail: "1200 x 700", copy: false, save: true, context: CaptureContext(app: "Safari", title: nil),
                                  pasteboard: board, defaults: defaults)
             let shown = Toast.shown.last!

@@ -12,13 +12,16 @@ public struct CaptureContext: Sendable, Equatable {
 }
 
 /// File names for captures, from a pattern of literal text and tokens: {app} (the app's name), {title} (the window's title, or the title
-/// the on-device model wrote), {date} (yyyy-MM-dd) and {time} (HH.mm.ss). The default, "{app} - {title} {date} at {time}", gives
-/// "Safari - Lisbon flight 2026-11-14 at 18.03.12"; a capture with neither app nor title takes "Snug" for its app.
+/// the on-device model wrote), {date} (yyyy-MM-dd) and {time} (HH.mm.ss). The default, "Snug {date} at {time}", gives
+/// "Snug 2026-11-14 at 18.03.12"; `contextPattern` gives "Safari - Lisbon flight 2026-11-14 at 18.03.12", and a capture with neither
+/// app nor title takes "Snug" for its app.
 public enum CaptureName {
     /// The longest description kept, in characters; a longer one is cut at a word break.
     public static let maxDescription = 60
     /// The pattern Snug names files with unless another is set (Settings > General > File names).
-    public static let defaultPattern = "{app} - {title} {date} at {time}"
+    public static let defaultPattern = "Snug {date} at {time}"
+    /// The pattern that names a capture for its app and window title (Settings > General > File names > App and window title).
+    public static let contextPattern = "{app} - {title} {date} at {time}"
     /// The tokens a pattern can hold.
     public static let tokens = ["app", "title", "date", "time"]
     /// Characters that only separate tokens: dropped next to an empty token and trimmed from the ends of a name.
@@ -40,6 +43,11 @@ public enum CaptureName {
         let values = ["app": app ?? (description == nil ? "Snug" : ""), "title": description ?? "", "date": day, "time": format.string(from: date)]
         let rendered = render(pattern, values: values)
         return rendered.isEmpty ? render(defaultPattern, values: values) : rendered
+    }
+
+    /// Whether names from `pattern` hold a title (the window's, or one the on-device model writes); an empty pattern means `defaultPattern`.
+    public static func usesTitle(_ pattern: String) -> Bool {
+        (pattern.isEmpty ? defaultPattern : pattern).contains("{title}")
     }
 
     /// `pattern` with each known token replaced by its value. An empty value drops its token together with the separator-only text
