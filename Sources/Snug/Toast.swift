@@ -651,7 +651,7 @@ final class Toast: NSPanel, NSDraggingSource {
         }
     }
 
-    /// Points this toast at `new` when its file was `old`: the file, and the detail when it is the file's name (a recording).
+    /// Points this toast at `new` when its file was `old`: the file, and the detail when it is the saved capture's or recording's name.
     private func follow(_ old: URL, to new: URL) {
         guard file == old else { return }
         file = new
