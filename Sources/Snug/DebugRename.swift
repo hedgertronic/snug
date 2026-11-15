@@ -4,7 +4,8 @@ import ScreenshotCore
 
 extension DebugRun {
     /// `--verify-rename-live`: real toasts on screen take typed keys in Rename's field (Return renames, Esc cancels, losing the keyboard
-    /// renames) and give the keyboard back without Snug ever becoming the frontmost app. Unlike the headless runs, this one lets a toast take keys, so
+    /// renames) and give the keyboard back without Snug ever becoming the active app; then, when Apple Intelligence is available, one
+    /// save is renamed by the real on-device model and its toast follows. Unlike the headless runs, this one lets a toast take keys, so
     /// toasts show on screen for a few seconds. It writes only under a temporary folder and uses its own pasteboard and defaults.
     static func verifyRenameLive(image: CGImage) async throws {
         var passed = 0
@@ -74,7 +75,8 @@ extension DebugRun {
             require(toast.nameField != nil && toast.isKeyWindow && NSWorkspace.shared.frontmostApplication == front,
                     "Rename gives the toast the keyboard while \(front?.localizedName ?? "the app in front") stays frontmost: field \(toast.nameField != nil) key \(toast.isKeyWindow) "
                         + "active \(NSApp.isActive) front \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "none") keyWindow \(String(describing: NSApp.keyWindow))")
-            require(toast.nameField?.currentEditor()?.selectedRange == NSRange(location: 0, length: name.utf16.count), "the whole name starts selected")
+            require(toast.nameField?.currentEditor()?.selectedRange == NSRange(location: 0, length: name.utf16.count), "the whole name starts selected: \(String(describing: toast.nameField?.currentEditor()?.selectedRange)) of \(name.utf16.count), "
+                        + "editor \(toast.nameField?.currentEditor() != nil), first responder \(String(describing: toast.firstResponder))")
         }
 
         let first = try saved("Snug 2026-11-14 at 18.03.12")
@@ -109,6 +111,21 @@ extension DebugRun {
         stillBehind(escaping, "after a click away")
         escaping.dismiss()
 
+        if let reason = CaptureNamer.unavailableReason {
+            print("rename-live          skipped the on-device model: \(reason)")
+        } else {
+            defaults.set(true, forKey: Pref.aiNames)
+            await Output.publish(png: png, detail: "1200 x 700", copy: false, save: true, context: CaptureContext(app: "Safari", title: nil),
+                                 pasteboard: board, defaults: defaults)
+            let shown = Toast.shown.last!
+            let original = shown.file!
+            let started = ContinuousClock.now
+            let moved = await CaptureNamer.lastRename?.value
+            require(moved != nil && moved != original && moved!.lastPathComponent.hasPrefix("Safari - ") && exists(moved!) && !exists(original) && shown.file == moved,
+                    "the on-device model renames a real save in \(Int(started.duration(to: .now).milliseconds)) ms and its toast follows: "
+                        + "\(original.lastPathComponent) -> \(moved?.lastPathComponent ?? "nothing")")
+            shown.dismiss()
+        }
         print("rename-live          \(passed) checks passed")
         exit(EXIT_SUCCESS)
     }

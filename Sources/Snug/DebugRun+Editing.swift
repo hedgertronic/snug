@@ -727,6 +727,63 @@ extension DebugRun {
         require(Toast.opened?.file.lastPathComponent == "Safari - Lisbon flight.png", "an unsaved capture's own file takes its name: \(String(describing: Toast.opened))")
         unsaved.dismiss()
 
+        // AI names, with a stand-in for the model: a save under the usual name is renamed to "App - Description" with its stamp and the
+        // pasteboard follows; no description, a Save As, or a file the user renamed first are left alone.
+        let ai = folder.appending(path: "ai")
+        try FileManager.default.createDirectory(at: ai, withIntermediateDirectories: true)
+        defaults.set(ai.path, forKey: Pref.saveFolder)
+        defaults.set(true, forKey: Pref.aiNames)
+        @MainActor final class Count { var value = 0 }
+        let count = Count()
+        var described: Int { count.value }
+        func describing(_ reply: String?, after delay: Duration = .zero) {
+            CaptureNamer.describer = { _, _ in
+                await MainActor.run { count.value += 1 }
+                try? await Task.sleep(for: delay)
+                return reply
+            }
+        }
+        func aiFiles() throws -> [String] { try FileManager.default.contentsOfDirectory(atPath: ai.path).filter { !$0.hasPrefix(".") }.sorted() }
+        describing("Flight Confirmation")
+        await Output.publish(png: Data("ai".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
+        let aiRenamed = await CaptureNamer.lastRename?.value
+        let afterAI = try aiFiles()
+        require(described == 1 && afterAI.count == 1 && afterAI[0].hasPrefix("Safari - Flight Confirmation 20") && aiRenamed?.lastPathComponent == afterAI[0],
+                "with AI names on, a saved capture is renamed to the model's description after its app: \(afterAI)")
+        require(afterAI[0].wholeMatch(of: /Safari - Flight Confirmation \d{4}-\d{2}-\d{2} at \d{2}\.\d{2}\.\d{2}\.png/) != nil,
+                "the AI name keeps the stamp and extension: \(afterAI[0])")
+        try FileManager.default.removeItem(at: ai.appending(path: afterAI[0]))
+        defaults.set("{date} {title}", forKey: Pref.fileNamePattern)
+        await Output.publish(png: Data("ai".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
+        _ = await CaptureNamer.lastRename?.value
+        let patternedAI = try aiFiles()
+        require(patternedAI.count == 1 && patternedAI[0].wholeMatch(of: /\d{4}-\d{2}-\d{2} Flight Confirmation\.png/) != nil,
+                "an AI name fills {title} in a custom pattern: \(patternedAI)")
+        try FileManager.default.removeItem(at: ai.appending(path: patternedAI[0]))
+        defaults.removeObject(forKey: Pref.fileNamePattern)
+        describing(nil)
+        await Output.publish(png: Data("ai".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
+        let untitled = await CaptureNamer.lastRename?.value
+        let kept = try aiFiles()
+        require(untitled == nil && kept.count == 1 && kept[0].hasPrefix("Safari - Lisbon flight 20"), "no description keeps the context name: \(kept)")
+        try FileManager.default.removeItem(at: ai.appending(path: kept[0]))
+        describing("Slow Title", after: .milliseconds(300))
+        await Output.publish(png: Data("ai".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
+        let first = ai.appending(path: try aiFiles()[0])
+        let mine = Toast(png: Data("ai".utf8), message: "Saved to ai", detail: "1 x 1", file: first, color: nil, defaults: defaults, pasteboard: pasteboard)
+        mine.commitRename("Mine")
+        let late = await CaptureNamer.lastRename?.value
+        let afterMine = try aiFiles()
+        require(late == nil && afterMine == ["Mine.png"], "a name typed before the model answers stands: \(afterMine)")
+        mine.dismiss()
+        let calls = described
+        _ = await Output.publish(png: Data("ai".utf8), detail: "1 x 1", copy: false, save: true, destination: ai.appending(path: "Chosen.png"), context: context,
+                                 pasteboard: pasteboard, defaults: defaults)
+        require(described == calls && FileManager.default.fileExists(atPath: ai.appending(path: "Chosen.png").path), "a Save As name is never replaced")
+        defaults.set(false, forKey: Pref.aiNames)
+        _ = await Output.publish(png: Data("off".utf8), detail: "1 x 1", copy: false, save: true, context: context, pasteboard: pasteboard, defaults: defaults)
+        require(described == calls, "with AI names off, the model is never asked")
+        CaptureNamer.describer = { await CaptureNamer.describe(png: $0, context: $1) }
         defaults.set(folder.path, forKey: Pref.saveFolder)
         return passed
     }

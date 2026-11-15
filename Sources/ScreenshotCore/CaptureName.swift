@@ -11,7 +11,8 @@ public struct CaptureContext: Sendable, Equatable {
     }
 }
 
-/// File names for captures, from a pattern of literal text and tokens: {app} (the app's name), {title} (the window's title), {date} (yyyy-MM-dd) and {time} (HH.mm.ss). The default, "{app} - {title} {date} at {time}", gives
+/// File names for captures, from a pattern of literal text and tokens: {app} (the app's name), {title} (the window's title, or the title
+/// the on-device model wrote), {date} (yyyy-MM-dd) and {time} (HH.mm.ss). The default, "{app} - {title} {date} at {time}", gives
 /// "Safari - Lisbon flight 2026-11-14 at 18.03.12"; a capture with neither app nor title takes "Snug" for its app.
 public enum CaptureName {
     /// The longest description kept, in characters; a longer one is cut at a word break.
@@ -24,7 +25,7 @@ public enum CaptureName {
     static let separators = CharacterSet(charactersIn: " -–—_|,")
 
     /// The name, without extension, `pattern` gives a capture of `app` described by `description` (a window title already cleaned with
-    /// `description(fromWindowTitle:app:)`) taken at `date`. A description that only repeats the app is left out. An
+    /// `description(fromWindowTitle:app:)`, or the model's) taken at `date`. A description that only repeats the app is left out. An
     /// empty pattern, or one that renders to nothing, uses `defaultPattern`.
     public static func name(pattern: String, app: String?, description: String?, date: Date, timeZone: TimeZone = .current) -> String {
         let app = app.map(sanitized).flatMap { $0.isEmpty ? nil : $0 }
@@ -92,6 +93,19 @@ public enum CaptureName {
             if title.caseInsensitiveCompare(app) == .orderedSame { return nil }
         }
         return shortened(title)
+    }
+
+    /// The description from the model's reply: its first non-empty line without a "Title:" label, quotes, Markdown emphasis, a file
+    /// extension, or end punctuation, cut to `maxDescription`. Nil when nothing usable is left or the reply runs past 12 words.
+    public static func description(fromModel raw: String) -> String? {
+        guard var line = raw.split(whereSeparator: \.isNewline).map({ $0.trimmingCharacters(in: .whitespaces) }).first(where: { !$0.isEmpty }) else { return nil }
+        line = line.replacing(/^(?i:title|name|file ?name)\s*:\s*/, with: "")
+        line = line.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`*_“”‘’ "))
+        line = line.replacing(/(?i)\.(png|jpe?g|mov)$/, with: "")
+        line = line.trimmingCharacters(in: CharacterSet(charactersIn: ".!?,;: "))
+        let cleaned = sanitized(line)
+        guard !cleaned.isEmpty, cleaned.split(separator: " ").count <= 12 else { return nil }
+        return shortened(cleaned)
     }
 
     /// The file a typed name renames `file` to, in the same folder with the same extension; nil when the name is empty or unchanged. A
